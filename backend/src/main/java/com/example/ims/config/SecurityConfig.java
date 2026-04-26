@@ -61,7 +61,7 @@ public class SecurityConfig {
                         .logoutUrl("/api/auth/logout")
                         .invalidateHttpSession(true)
                         .clearAuthentication(true) 
-                        .deleteCookies("QMS_SESSION", "JSESSIONID", "SESSION")
+                        .deleteCookies("QMS_SESSION", "QMS_SESSION_V2", "JSESSIONID", "SESSION")
                         .logoutSuccessHandler((request, response, authentication) -> {
                             response.setStatus(HttpStatus.OK.value());
                         })

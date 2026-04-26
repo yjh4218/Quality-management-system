@@ -32,8 +32,8 @@ public class SessionConfig {
         // -1로 설정하면 브라우저 종료 시 쿠키가 삭제되어 자동 로그인을 방지합니다.
         serializer.setCookieMaxAge(-1);
 
-        // 6. [인코딩 패치] 쿠키 값을 Base64로 인코딩하여 UTF-8 0x00(Null) 에러 방지
-        serializer.setUseBase64Encoding(true);
+        // 6. [인코딩 패치] 쿠키 값을 Base64로 인코딩하는 기능은 레이턴시 및 호환성을 위해 끕니다. (V2 이름 변경으로 충분)
+        serializer.setUseBase64Encoding(false);
         
         return serializer;
     }
