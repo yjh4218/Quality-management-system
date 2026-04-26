@@ -17,7 +17,7 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
 
     @org.springframework.data.jpa.repository.Query("SELECT a FROM AuditLog a WHERE " +
             "(:entityType IS NULL OR a.entityType = :entityType) AND " +
-            "(:search IS NULL OR CAST(a.entityId AS string) LIKE :search OR LOWER(CAST(a.description AS string)) LIKE LOWER(:search)) AND " +
+            "(:search IS NULL OR CAST(a.entityId AS string) LIKE :search OR LOWER(a.description) LIKE LOWER(:search)) AND " +
             "(:start IS NULL OR a.modifiedAt >= :start) AND " +
             "(:end IS NULL OR a.modifiedAt <= :end) " +
             "ORDER BY a.modifiedAt DESC")
