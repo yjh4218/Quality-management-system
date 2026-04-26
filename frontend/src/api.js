@@ -6,8 +6,9 @@ const getBaseURL = () => {
     if (import.meta.env.VITE_API_BASE_URL) {
         return import.meta.env.VITE_API_BASE_URL;
     }
-    // 기본값 설정
-    return "http://localhost:8080/api";
+    // 기본값 설정 (Hugging Face Spaces API 주소)
+    return "https://yjh332123-qms.hf.space/api";
+    // return "http://localhost:8080/api";
 };
 
 // [고도화 3] 전역 로딩 상태 (글로벌 스피너) 제어 함수
