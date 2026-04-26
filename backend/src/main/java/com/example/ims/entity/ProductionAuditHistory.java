@@ -20,6 +20,11 @@ public class ProductionAuditHistory {
 
     private String modifier;
 
+    private Long modifierId;
+    private String modifierUsername;
+    private String modifierName;
+    private String modifierCompany;
+
     private LocalDateTime modifiedAt;
 
     private String fieldName;

@@ -3,12 +3,18 @@ import { toast } from 'react-toastify';
 
 // [고도화 1] 환경 변수(.env) 기반 주소 관리
 const getBaseURL = () => {
+    // 1. .env 파일의 VITE_API_BASE_URL 우선 사용
     if (import.meta.env.VITE_API_BASE_URL) {
         return import.meta.env.VITE_API_BASE_URL;
     }
-    // 기본값 설정 (도메인 루트만 지정)
+    
+    // 2. 로컬 개발 환경인 경우 백엔드 포트 기본값 사용
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return "http://localhost:8080";
+    }
+
+    // 3. 배포(HF) 환경 기본값
     return "https://yjh332123-qms.hf.space";
-    // return "http://localhost:8080";
 };
 
 // [고도화 3] 전역 로딩 상태 (글로벌 스피너) 제어 함수
@@ -22,6 +28,38 @@ const setGlobalLoading = (isLoading) => {
     // Only dispatch if it's the first request or the last one finishing
     // Use a small delay to prevent rapid toggle flickering which causes re-mount loops
     window.dispatchEvent(new CustomEvent('qms-api-loading', { detail: activeRequests > 0 }));
+};
+
+/**
+ * [공통 유틸] Blob 데이터를 파일로 다운로드합니다.
+ */
+export const downloadBlob = (response, defaultFileName) => {
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    
+    // Content-Disposition 헤더에서 파일명 추출 시도
+    const contentDisposition = response.headers['content-disposition'];
+    let fileName = defaultFileName;
+    if (contentDisposition) {
+        const fileNameMatch = contentDisposition.match(/filename=(.+)/);
+        if (fileNameMatch.length === 2) fileName = fileNameMatch[1];
+    }
+    
+    // 파일명에 오늘 날짜 추가 (예: filename_2026-04-26.xlsx)
+    const today = new Date().toISOString().split('T')[0];
+    const dotIndex = fileName.lastIndexOf('.');
+    if (dotIndex > -1) {
+        fileName = fileName.substring(0, dotIndex) + "_" + today + fileName.substring(dotIndex);
+    } else {
+        fileName = fileName + "_" + today;
+    }
+
+    link.setAttribute('download', fileName);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
 };
 
 const api = axios.create({
@@ -86,8 +124,13 @@ export const login = (username, password) => {
 export const getCurrentUser = (config = {}) => api.get('/api/auth/me', config);
 export const checkUsername = (username) => api.post('/api/auth/check-username', { username });
 export const registerUser = (userData) => api.post('/api/auth/register', userData);
+export const verifyEmail = (token) => api.get(`/api/auth/verify-email?token=${encodeURIComponent(token)}`);
 export const findPassword = (data) => api.post('/api/auth/find-password', data);
 export const changePassword = (data) => api.post('/api/auth/change-password', data);
+
+// System Settings
+export const getSystemSettings = () => api.get('/api/settings').then(res => res.data);
+export const saveSystemSettings = (settings) => api.post('/api/settings', settings).then(res => res.data);
 
 // Admin APIs
 export const getUsers = (params = {}) => {
@@ -137,6 +180,17 @@ export const uploadCoaFile = (file, productName = '') => {
 };
 export const submitQualityReport = (report) => api.post('/api/quality/report', report);
 export const triggerWmsFetch = () => api.post('/api/quality/fetch-wms');
+export const exportInboundExcel = (params) => {
+    const queryParams = new URLSearchParams();
+    if (params.startDate) queryParams.append('startDate', params.startDate);
+    if (params.endDate) queryParams.append('endDate', params.endDate);
+    if (params.itemCode) queryParams.append('itemCode', params.itemCode);
+    if (params.productName) queryParams.append('productName', params.productName);
+    if (params.lotNumber) queryParams.append('lotNumber', params.lotNumber);
+    if (params.manufacturer) queryParams.append('manufacturer', params.manufacturer);
+    if (params.grnNumber) queryParams.append('grnNumber', params.grnNumber);
+    return api.get(`/api/quality/export?${queryParams.toString()}`, { responseType: 'blob' });
+};
 
 // Manufacturer APIs
 export const getManufacturers = () => api.get('/api/manufacturers');
@@ -149,7 +203,7 @@ export const hardDeleteManufacturer = (id) => api.delete(`/api/manufacturers/${i
 // Brand APIs
 export const getBrands = () => api.get('/api/brands');
 export const createBrand = (brand) => api.post('/api/brands', brand);
-export const deleteBrand = (id) => api.delete(`/brands/${id}`);
+export const deleteBrand = (id) => api.delete(`/api/brands/${id}`);
 
 // Product APIs
 export const getProducts = () => api.get('/api/products');
@@ -189,6 +243,16 @@ export const searchProducts = (params) => {
     if (params.size !== undefined) queryParams.append('size', params.size);
     return api.get(`/api/products/search?${queryParams.toString()}`);
 };
+export const exportProductsExcel = (params) => {
+    const queryParams = new URLSearchParams();
+    if (params.itemCode) queryParams.append('itemCode', params.itemCode);
+    if (params.productName) queryParams.append('productName', params.productName);
+    if (params.englishProductName) queryParams.append('englishProductName', params.englishProductName);
+    if (params.brand) queryParams.append('brand', params.brand);
+    if (params.manufacturer) queryParams.append('manufacturer', params.manufacturer);
+    if (params.ingredients) queryParams.append('ingredients', params.ingredients);
+    return api.get(`/api/products/export?${queryParams.toString()}`, { responseType: 'blob' });
+};
 export const downloadIngredientTemplate = () => api.get('/api/products/ingredient-template', { responseType: 'blob' });
 
 // Packaging Spec APIs
@@ -211,6 +275,13 @@ export const deleteProductionAudit = (id) => api.delete(`/api/production-audits/
 export const toggleProductDisclosure = (itemCode, isDisclosed) => 
     api.patch(`/api/production-audits/pending/${encodeURIComponent(itemCode)}/disclosure`, { isDisclosed });
 export const getProductionAuditHistory = (id) => api.get(`/api/production-audits/${id}/history`);
+export const exportAuditsExcel = (params) => {
+    const queryParams = new URLSearchParams();
+    if (params.manufacturerName) queryParams.append('manufacturerName', params.manufacturerName);
+    if (params.itemCode) queryParams.append('itemCode', params.itemCode);
+    if (params.productName) queryParams.append('productName', params.productName);
+    return api.get(`/api/production-audits/export?${queryParams.toString()}`, { responseType: 'blob' });
+};
 
 // Master Data APIs (Feature 2, 3, 4, 11)
 export const getMasterTemplates = () => api.get('/api/admin/master-data/templates');
@@ -288,7 +359,7 @@ export const getClaims = (params = {}, config = {}) => {
 };
 export const getDebugStatus = () => api.get('/api/claims/debug/status');
 export const getClaimDashboard = (params = {}, config = {}) => {
-    let url = '/claims/dashboard';
+    let url = '/api/claims/dashboard';
     const queryParams = new URLSearchParams();
     if (params.startDate) queryParams.append('startDate', params.startDate);
     if (params.endDate) queryParams.append('endDate', params.endDate);
@@ -314,6 +385,18 @@ export const uploadClaimPhoto = (file) => {
     formData.append('file', file);
     return api.post(`/api/claims/upload-photo`, formData, { headers: { 'Content-Type': 'multipart/form-data' }});
 };
+export const exportClaimsExcel = (params) => {
+    const queryParams = new URLSearchParams();
+    if (params.startDate) queryParams.append('startDate', params.startDate);
+    if (params.endDate) queryParams.append('endDate', params.endDate);
+    if (params.itemCode) queryParams.append('itemCode', params.itemCode);
+    if (params.productName) queryParams.append('productName', params.productName);
+    if (params.lotNumber) queryParams.append('lotNumber', params.lotNumber);
+    if (params.country) queryParams.append('country', params.country);
+    if (params.qualityStatus) queryParams.append('qualityStatus', params.qualityStatus);
+    if (params.claimNumber) queryParams.append('claimNumber', params.claimNumber);
+    return api.get(`/api/claims/export?${queryParams.toString()}`, { responseType: 'blob' });
+};
 export const getClaimDashboardStats = (startDate, endDate, itemCode, productName, manufacturer) => {
     const params = new URLSearchParams();
     if (startDate) params.append('startDate', startDate);
@@ -329,7 +412,7 @@ export const getClaimHistory = (id) => api.get(`/api/claims/${id}/history`);
 // Dashboard Layout APIs
 export const getDashboardLayouts = () => api.get('/api/dashboard-layouts').then(res => res.data);
 export const createDashboardLayout = (data) => api.post('/api/dashboard-layouts', data).then(res => res.data);
-export const updateDashboardLayout = (id, data) => api.put(`/dashboard-layouts/${id}`, data).then(res => res.data);
+export const updateDashboardLayout = (id, data) => api.put(`/api/dashboard-layouts/${id}`, data).then(res => res.data);
 export const deleteDashboardLayout = (id) => api.delete(`/api/dashboard-layouts/${id}`);
 
 // Page Guide Management

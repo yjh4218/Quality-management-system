@@ -19,19 +19,23 @@ public class ManufacturerController {
     private final ManufacturerService manufacturerService;
 
     @GetMapping
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<Manufacturer>> getAll(@AuthenticationPrincipal UserDetails userDetails) {
+        if (userDetails == null) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
+        }
         return ResponseEntity.ok(manufacturerService.getAll(userDetails.getUsername()));
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
     public ResponseEntity<Manufacturer> create(@RequestBody Manufacturer manufacturer,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(manufacturerService.save(manufacturer, userDetails.getUsername()));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
     public ResponseEntity<Manufacturer> update(@PathVariable Long id, @RequestBody Manufacturer manufacturer,
             @AuthenticationPrincipal UserDetails userDetails) {
         manufacturer.setId(id);

@@ -11,7 +11,7 @@ const MarketReleaseRecordPage = ({ user }) => {
 
     const fetchRecords = async () => {
         try {
-            const response = await api.get(`/quality/inbound/release-record?date=${releaseDate}`);
+            const response = await api.get(`/api/quality/inbound/release-record?date=${releaseDate}`);
             setRecords(response.data || []);
         } catch (e) {
             alert("데이터를 불러오는데 실패했습니다.");

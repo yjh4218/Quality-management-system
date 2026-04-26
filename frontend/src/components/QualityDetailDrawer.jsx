@@ -582,7 +582,11 @@ const QualityDetailDrawer = ({
                                 Object.entries(
                                     history.reduce((acc, rec) => {
                                         const timeKey = rec.modifiedAt ? rec.modifiedAt.substring(0, 19).replace('T', ' ') : '알 수 없는 시간';
-                                        const groupKey = `${rec.modifier} | ${timeKey}`;
+                                        // [고도화] 상세 사용자 정보 우선 노출, 없으면 기존 modifier 필드 사용
+                                        const mName = rec.modifierName || rec.modifier || '시스템';
+                                        const mId = rec.modifierUsername ? `(${rec.modifierUsername})` : '';
+                                        const mComp = rec.modifierCompany ? ` [${rec.modifierCompany}]` : '';
+                                        const groupKey = `${mName}${mId}${mComp} | ${timeKey}`;
                                         if (!acc[groupKey]) acc[groupKey] = [];
                                         acc[groupKey].push(rec);
                                         return acc;

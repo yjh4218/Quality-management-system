@@ -14,12 +14,14 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import com.example.ims.entity.ClaimHistory;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/claims")
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class ClaimController {
 
     private final ClaimService claimService;
@@ -149,5 +151,41 @@ public class ClaimController {
 
         String fileName = fileStorageService.storeFile(file, "claim_photo_" + System.currentTimeMillis());
         return ResponseEntity.ok("/uploads/" + fileName);
+    }
+
+    @GetMapping("/export")
+    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','SALES','MANUFACTURER','RESPONSIBLE_SALES')")
+    public ResponseEntity<byte[]> exportClaims(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
+            @RequestParam(required = false) String itemCode,
+            @RequestParam(required = false) String productName,
+            @RequestParam(required = false) String lotNumber,
+            @RequestParam(required = false) String country,
+            @RequestParam(required = false) String qualityStatus,
+            @RequestParam(required = false) String claimNumber,
+            @RequestParam(required = false) String sharedWithManufacturer) throws java.io.IOException {
+        
+        String username = userDetails.getUsername();
+        log.info(">>>> [EXPORT] Claim Excel - User: {}", username);
+        
+        try {
+            User user = getUser(userDetails);
+            String roleStr = user.getRole();
+            if (roleStr != null && !roleStr.startsWith("ROLE_")) {
+                roleStr = "ROLE_" + roleStr;
+            }
+    
+            byte[] excelFile = claimService.exportClaims(username, roleStr, user.getCompanyName(), startDate, endDate, itemCode, productName, lotNumber, country, qualityStatus, claimNumber, sharedWithManufacturer);
+            
+            return ResponseEntity.ok()
+                    .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=Claim_Export.xlsx")
+                    .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                    .body(excelFile);
+        } catch (Exception e) {
+            log.error(">>>> [EXPORT] [ERROR] Claim Excel failed for user {}: {}", username, e.getMessage(), e);
+            throw e;
+        }
     }
 }

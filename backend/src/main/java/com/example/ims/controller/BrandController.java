@@ -28,6 +28,7 @@ public class BrandController {
     public ResponseEntity<Brand> create(@RequestBody Brand brand, @AuthenticationPrincipal UserDetails userDetails) {
         Brand saved = brandRepository.save(brand);
         auditLogService.logEntityChange("BRAND", saved.getId(), "CREATE", userDetails.getUsername(),
+                null, userDetails.getUsername(), null, null,
                 "신규 브랜드 등록: " + saved.getName(), null, saved);
         return ResponseEntity.ok(saved);
     }
@@ -39,8 +40,9 @@ public class BrandController {
         if (brand != null) {
             String oldJson = auditLogService.toCompactJson(brand);
             brandRepository.deleteById(id);
-            auditLogService.logEntityChange("BRAND", id, "DELETE", userDetails.getUsername(), "브랜드 삭제: " + brand.getName(),
-                    oldJson, null);
+            auditLogService.logEntityChange("BRAND", id, "DELETE", userDetails.getUsername(), 
+                    null, userDetails.getUsername(), null, null,
+                    "브랜드 삭제: " + brand.getName(), oldJson, null);
         }
         return ResponseEntity.ok().build();
     }

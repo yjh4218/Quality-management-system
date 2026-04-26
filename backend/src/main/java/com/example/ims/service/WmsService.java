@@ -175,8 +175,10 @@ public class WmsService {
             
             if (groupedMap.containsKey(key)) {
                 WmsInbound existing = groupedMap.get(key);
-                // Sum quantity
-                existing.setQuantity(existing.getQuantity() + record.getQuantity());
+                // Sum quantity with null-safe check (Integrity)
+                int currentQty = existing.getQuantity() != null ? existing.getQuantity() : 0;
+                int addQty = record.getQuantity() != null ? record.getQuantity() : 0;
+                existing.setQuantity(currentQty + addQty);
                 
                 // Merge TR Numbers if they exist and are different
                 String existingTr = existing.getTestReportNumbers();

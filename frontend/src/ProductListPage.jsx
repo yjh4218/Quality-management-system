@@ -6,7 +6,8 @@ import ProductSearchPopup from './ProductSearchPopup';
 import { usePermissions } from './usePermissions';
 
 const ProductListPage = ({ user, navigationData, onNavigated }) => {
-    const { canEdit: canEditProduct, hasPerm } = usePermissions(user);
+    const defaultPageSize = 100;
+    const { canView, canEdit: canEditProduct, hasPerm } = usePermissions(user);
     const gridRef = useRef(null);
     const [rowData, setRowData] = useState([]);
     const [selectedProduct, setSelectedProduct] = useState(null);
@@ -57,7 +58,7 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
 
     const fetchProducts = async (pageNum = 0) => {
         try {
-            const response = await api.searchProducts({ ...searchFields, page: pageNum, size: 50 });
+            const response = await api.searchProducts({ ...searchFields, page: pageNum, size: defaultPageSize });
             setRowData(response.data.content || []);
             setTotalPages(response.data.totalPages || 1);
             setPage(pageNum);
@@ -75,12 +76,16 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
         return rowData.filter(p => p.isMaster);
     }, [rowData, showOnlyMaster]);
 
-    const handleExportCsv = () => {
-        if (gridRef.current && gridRef.current.api) {
-            gridRef.current.api.exportDataAsCsv({
-                fileName: "제품목록_검색결과.csv",
-                utf8WithBom: true, // 한글 깨짐 방지
-            });
+    const handleExportExcel = async () => {
+        if (!rowData || rowData.length === 0) {
+            alert("조회 내역이 없습니다.");
+            return;
+        }
+        try {
+            const response = await api.exportProductsExcel(searchFields);
+            api.downloadBlob(response, "ProductMaster_Export.xlsx");
+        } catch (error) {
+            alert("엑셀 다운로드 중 오류가 발생했습니다.");
         }
     };
 
@@ -266,7 +271,9 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
                     <p style={{ fontSize: '13px', color: '#666', margin: 0 }}>전체 제품의 마스터 정보를 관리하고 상세 스펙 및 인증 서류를 확인합니다.</p>
                 </div>
                 <div className="button-group">
-                    <button onClick={handleExportCsv} className="outline" style={{ border: '1px solid #107c41', color: '#107c41' }}>⬇️ 엑셀 다운로드</button>
+                    {canView('products') && (
+                        <button onClick={handleExportExcel} className="outline" style={{ border: '1px solid #107c41', color: '#107c41' }}>📊 엑셀 다운로드</button>
+                    )}
                     <button 
                         onClick={() => setShowOnlyMaster(!showOnlyMaster)} 
                         className="outline" 

@@ -16,6 +16,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs from 'dayjs';
 import { IconButton, InputAdornment } from '@mui/material';
 import ProductSearchPopup from '../ProductSearchPopup';
+import * as api from '../api';
 
 
 const QualitySearchFilter = ({
@@ -26,7 +27,9 @@ const QualitySearchFilter = ({
     onSync,
     onBatchSave,
     isInternalQuality,
-    manufacturers
+    manufacturers,
+    canViewInbound,
+    inboundCount
 }) => {
     const [showSearchPopup, setShowSearchPopup] = React.useState(false);
     const handleChange = (field) => (event) => {
@@ -58,6 +61,20 @@ const QualitySearchFilter = ({
                         <button className="secondary" onClick={onSync} style={{ whiteSpace: 'nowrap' }}>🔄 WMS 동기화</button>
                     )}
                     <button className="primary" onClick={onSearch} style={{ backgroundColor: '#2563eb', whiteSpace: 'nowrap' }}>🔍 조회</button>
+                    {canViewInbound && (
+                        <button className="outline" onClick={async () => {
+                            if (!inboundCount || inboundCount === 0) {
+                                alert("조회 내역이 없습니다.");
+                                return;
+                            }
+                            try {
+                                const response = await api.exportInboundExcel(searchParams);
+                                api.downloadBlob(response, "InboundInspection_Export.xlsx");
+                            } catch (e) {
+                                alert("엑셀 다운로드 실패");
+                            }
+                        }} style={{ border: '1px solid #107c41', color: '#107c41', whiteSpace: 'nowrap' }}>📊 엑셀 다운로드</button>
+                    )}
                     <button className="secondary" onClick={onReset} style={{ whiteSpace: 'nowrap' }}>♻️ 초기화</button>
                 </div>
             </div>

@@ -45,6 +45,10 @@ public class AuditLogService {
                 event.getEntityId(),
                 event.getAction(),
                 event.getModifier(),
+                event.getModifierId(),
+                event.getModifierUsername(),
+                event.getModifierName(),
+                event.getModifierCompany(),
                 event.getDescription(),
                 event.getOldEntity(),
                 event.getNewEntity()
@@ -52,13 +56,18 @@ public class AuditLogService {
     }
 
     @Transactional
-    public void log(String entityType, Long entityId, String action, String modifier, String description,
-            String oldValue, String newValue) {
+    public void log(String entityType, Long entityId, String action, String modifier, 
+            Long modifierId, String modifierUsername, String modifierName, String modifierCompany,
+            String description, String oldValue, String newValue) {
         AuditLog auditLog = AuditLog.builder()
                 .entityType(entityType)
                 .entityId(entityId)
                 .action(action)
                 .modifier(modifier)
+                .modifierId(modifierId)
+                .modifierUsername(modifierUsername)
+                .modifierName(modifierName)
+                .modifierCompany(modifierCompany)
                 .description(description)
                 .oldValue(oldValue)
                 .newValue(newValue)
@@ -68,12 +77,13 @@ public class AuditLogService {
     }
 
     @Transactional
-    public void logEntityChange(String entityType, Long entityId, String action, String modifier, String description,
-            Object oldEntity, Object newEntity) {
+    public void logEntityChange(String entityType, Long entityId, String action, String modifier,
+            Long modifierId, String modifierUsername, String modifierName, String modifierCompany,
+            String description, Object oldEntity, Object newEntity) {
         String oldJson = (oldEntity instanceof String) ? (String) oldEntity : toCompactJson(oldEntity);
         String newJson = (newEntity instanceof String) ? (String) newEntity : toCompactJson(newEntity);
 
-        log(entityType, entityId, action, modifier, description, oldJson, newJson);
+        log(entityType, entityId, action, modifier, modifierId, modifierUsername, modifierName, modifierCompany, description, oldJson, newJson);
     }
 
     /**
@@ -165,6 +175,7 @@ public class AuditLogService {
             }
 
             log(logEntry.getEntityType(), entityId, "RESTORE", modifier, 
+                null, modifier, null, null,
                 "Restored from Log ID: " + logId, "-", "Restored to previous state");
             
         } catch (Exception e) {

@@ -68,10 +68,17 @@ const SignUpModal = ({ isOpen, onClose }) => {
         setLoading(true);
         try {
             await registerUser(formData);
-            alert("회원가입 신청이 완료되었습니다. 관리자 승인 후 이용 가능합니다.");
+            alert("회원가입 신청이 완료되었습니다. 입력하신 이메일의 인증 링크를 클릭하셔야 정상 신청되며, 이후 관리자 승인을 통해 이용이 가능합니다.");
             onClose();
         } catch (err) {
-            alert(err.response?.data || "회원가입 중 오류가 발생했습니다.");
+            const errorData = err.response?.data;
+            if (errorData && typeof errorData === 'object') {
+                // validation errors (Map<String, String>) or structured error
+                const messages = Object.values(errorData).join('\n');
+                alert(messages || "입력 정보를 다시 확인해주세요.");
+            } else {
+                alert(errorData || "회원가입 중 오류가 발생했습니다.");
+            }
         } finally {
             setLoading(false);
         }

@@ -42,7 +42,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/system/**").authenticated()
                         
                         .requestMatchers("/", "/api/auth/login", "/api/auth/logout").permitAll()
-                        .requestMatchers("/api/auth/register", "/api/auth/check-username", "/api/auth/find-password", "/api/manufacturers").permitAll()
+                        .requestMatchers("/api/auth/register", "/api/auth/check-username", "/api/auth/find-password", "/api/auth/verify-email").permitAll()
                         .requestMatchers("/api/auth/unlock/**", "/api/auth/reset-password/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )

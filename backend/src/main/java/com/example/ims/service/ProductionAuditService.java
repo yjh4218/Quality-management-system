@@ -42,6 +42,7 @@ public class ProductionAuditService {
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
     private final FileStorageService fileStorageService;
+    private final ExcelExportService excelExportService;
 
     @Transactional(readOnly = true)
     public List<ProductionAuditDTO> getAllAudits(String username, String manufacturerName) {
@@ -120,6 +121,10 @@ public class ProductionAuditService {
                 .entityId(savedAudit.getId())
                 .action("CREATE")
                 .modifier(modifierName)
+                .modifierId(user.getId())
+                .modifierUsername(user.getUsername())
+                .modifierName(user.getName())
+                .modifierCompany(user.getCompanyName())
                 .description("생산감리 신규 등록: " + savedAudit.getProductName())
                 .newEntity(savedAudit)
                 .build());
@@ -179,13 +184,17 @@ public class ProductionAuditService {
         String modifierName = user.getName() + " (" + (user.getCompanyName() != null ? user.getCompanyName() : "시스템") + ")";
         
         // 기록을 위해 상세 변경사항(ProductionAuditHistory) 자동 생성
-        logChanges(oldAuditClone, savedAudit, modifierName);
+        logChanges(oldAuditClone, savedAudit, user);
 
         eventPublisher.publishEvent(EntityChangeEvent.builder()
                 .entityType("PRODUCTION_AUDIT")
                 .entityId(savedAudit.getId())
                 .action("UPDATE")
                 .modifier(modifierName)
+                .modifierId(user.getId())
+                .modifierUsername(user.getUsername())
+                .modifierName(user.getName())
+                .modifierCompany(user.getCompanyName())
                 .description("생산감리 정보 수정: " + savedAudit.getProductName() + " (" + savedAudit.getStatus() + ")")
                 .oldEntity(oldJson)
                 .newEntity(captureJson(savedAudit))
@@ -211,6 +220,10 @@ public class ProductionAuditService {
                 .entityId(id)
                 .action("DELETE")
                 .modifier(modifierName)
+                .modifierId(user.getId())
+                .modifierUsername(user.getUsername())
+                .modifierName(user.getName())
+                .modifierCompany(user.getCompanyName())
                 .description("생산감리 삭제: " + audit.getProductName())
                 .oldEntity(oldJson)
                 .newEntity("-")
@@ -228,22 +241,22 @@ public class ProductionAuditService {
         return historyRepository.findByAuditIdOrderByModifiedAtDesc(auditId);
     }
 
-    private void logChanges(ProductionAudit oldA, ProductionAudit newA, String modifier) {
+    private void logChanges(ProductionAudit oldA, ProductionAudit newA, User user) {
         List<ProductionAuditHistory> batch = new ArrayList<>();
-        compareAndAdd(batch, oldA.getId(), modifier, "productionDate", oldA.getProductionDate(), newA.getProductionDate());
-        compareAndAdd(batch, oldA.getId(), modifier, "status", oldA.getStatus(), newA.getStatus());
-        compareAndAdd(batch, oldA.getId(), modifier, "isDisclosed", oldA.isDisclosed(), newA.isDisclosed());
-        compareAndAdd(batch, oldA.getId(), modifier, "rejectionReason", oldA.getRejectionReason(), newA.getRejectionReason());
-        compareAndAdd(batch, oldA.getId(), modifier, "containerImages", oldA.getContainerImages(), newA.getContainerImages());
-        compareAndAdd(batch, oldA.getId(), modifier, "boxImages", oldA.getBoxImages(), newA.getBoxImages());
-        compareAndAdd(batch, oldA.getId(), modifier, "loadImages", oldA.getLoadImages(), newA.getLoadImages());
+        compareAndAdd(batch, oldA.getId(), user, "productionDate", oldA.getProductionDate(), newA.getProductionDate());
+        compareAndAdd(batch, oldA.getId(), user, "status", oldA.getStatus(), newA.getStatus());
+        compareAndAdd(batch, oldA.getId(), user, "isDisclosed", oldA.isDisclosed(), newA.isDisclosed());
+        compareAndAdd(batch, oldA.getId(), user, "rejectionReason", oldA.getRejectionReason(), newA.getRejectionReason());
+        compareAndAdd(batch, oldA.getId(), user, "containerImages", oldA.getContainerImages(), newA.getContainerImages());
+        compareAndAdd(batch, oldA.getId(), user, "boxImages", oldA.getBoxImages(), newA.getBoxImages());
+        compareAndAdd(batch, oldA.getId(), user, "loadImages", oldA.getLoadImages(), newA.getLoadImages());
 
         if (!batch.isEmpty()) {
             historyRepository.saveAll(batch);
         }
     }
 
-    private void compareAndAdd(List<ProductionAuditHistory> batch, Long auditId, String modifier, String field, Object oldVal, Object newVal) {
+    private void compareAndAdd(List<ProductionAuditHistory> batch, Long auditId, User user, String field, Object oldVal, Object newVal) {
         String sOld = (oldVal == null) ? "-" : oldVal.toString();
         String sNew = (newVal == null) ? "-" : newVal.toString();
         if ("true".equals(sOld)) sOld = "공개";
@@ -252,9 +265,15 @@ public class ProductionAuditService {
         if ("false".equals(sNew)) sNew = "비공개";
 
         if (!Objects.equals(sOld, sNew)) {
+            String company = user.getCompanyName() != null ? user.getCompanyName() : "시스템";
+            String modifierName = user.getName() + " (" + company + ")";
             batch.add(ProductionAuditHistory.builder()
                     .auditId(auditId)
-                    .modifier(modifier)
+                    .modifier(modifierName)
+                    .modifierId(user.getId())
+                    .modifierUsername(user.getUsername())
+                    .modifierName(user.getName())
+                    .modifierCompany(user.getCompanyName())
                     .fieldName(field)
                     .oldValue(sOld)
                     .newValue(sNew)
@@ -305,5 +324,55 @@ public class ProductionAuditService {
                 fileStorageService.deleteFile(trimmedPath);
             }
         }
+    }
+    /**
+     * [고도화] 생산감리 목록을 엑셀 파일로 추출합니다.
+     */
+    public byte[] exportAudits(String username, String manufacturerName, String itemCode, String productName) throws java.io.IOException {
+        List<ProductionAuditDTO> audits = getAllAudits(username, manufacturerName);
+        
+        // 추가 필터링 (품목코드, 제품명)
+        if ((itemCode != null && !itemCode.isEmpty()) || (productName != null && !productName.isEmpty())) {
+            audits = audits.stream().filter(a -> {
+                boolean matchesItem = (itemCode == null || itemCode.isEmpty()) || (a.getItemCode() != null && a.getItemCode().contains(itemCode));
+                boolean matchesProduct = (productName == null || productName.isEmpty()) || (a.getProductName() != null && a.getProductName().contains(productName));
+                return matchesItem && matchesProduct;
+            }).collect(java.util.stream.Collectors.toList());
+        }
+
+        // [감사 로그] 엑셀 다운로드 이력 기록
+        User userObj = userRepository.findByUsername(username).orElse(null);
+        String modifierName = username;
+        Long modifierId = null;
+        String modifierNameOnly = null;
+        String modifierCompany = null;
+        
+        if (userObj != null) {
+            modifierName = userObj.getName() + " (" + (userObj.getCompanyName() != null ? userObj.getCompanyName() : "시스템") + ")";
+            modifierId = userObj.getId();
+            modifierNameOnly = userObj.getName();
+            modifierCompany = userObj.getCompanyName();
+        }
+
+        eventPublisher.publishEvent(EntityChangeEvent.builder()
+                .entityType("PRODUCTION_AUDIT")
+                .entityId(0L)
+                .action("EXPORT")
+                .modifier(modifierName)
+                .modifierId(modifierId)
+                .modifierUsername(username)
+                .modifierName(modifierNameOnly)
+                .modifierCompany(modifierCompany)
+                .description("신제품 생산감리(사진감리) 엑셀 다운로드 수행 (내역: " + audits.size() + "건)")
+                .build());
+
+        String[] headers = {
+            "ID", "상태", "품목코드", "제품명", "제조사", "생산일자", "업로드일시", "제조사공개", "반려사유"
+        };
+        
+        return excelExportService.exportToExcel("생산감리", headers, audits, a -> new Object[]{
+            a.getId(), a.getStatus(), a.getItemCode(), a.getProductName(), a.getManufacturerName(),
+            a.getProductionDate(), a.getUploadDate(), a.isDisclosed(), a.getRejectionReason()
+        });
     }
 }

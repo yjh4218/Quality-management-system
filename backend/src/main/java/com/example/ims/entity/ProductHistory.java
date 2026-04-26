@@ -25,7 +25,12 @@ public class ProductHistory {
     private Long productId;
 
     @Column(nullable = false)
-    private String modifier; // Username
+    private String modifier; // Login ID
+
+    private Long modifierId;
+    private String modifierUsername;
+    private String modifierName;
+    private String modifierCompany;
 
     @CreationTimestamp
     private LocalDateTime modifiedAt;

@@ -10,6 +10,7 @@ import com.example.ims.repository.WmsInboundRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import com.example.ims.repository.UserRepository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -23,6 +24,10 @@ public class QualityReportService {
     private final WmsInboundHistoryRepository historyRepository;
     private final ObjectMapper objectMapper;
     private final AuditLogService auditLogService;
+    private final WmsService wmsService;
+    private final ExcelExportService excelExportService;
+    private final UserRepository userRepository;
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public QualityReport submitReport(QualityReport report) {
@@ -74,28 +79,28 @@ public class QualityReportService {
             String oldJson = auditLogService.toCompactJson(original);
             
             // 변경 이력 기록 (필드별 비교)
-            compareAndSave(id, modifier, "itemCode", original.getItemCode(), updatedData.getItemCode());
-            compareAndSave(id, modifier, "productName", original.getProductName(), updatedData.getProductName());
-            compareAndSave(id, modifier, "manufacturer", original.getManufacturer(), updatedData.getManufacturer());
-            compareAndSave(id, modifier, "quantity", original.getQuantity(), updatedData.getQuantity());
-            compareAndSave(id, modifier, "inboundDate", original.getInboundDate(), updatedData.getInboundDate());
-            compareAndSave(id, modifier, "overallStatus", original.getOverallStatus(), updatedData.getOverallStatus());
-            compareAndSave(id, modifier, "lotNumber", original.getLotNumber(), updatedData.getLotNumber());
-            compareAndSave(id, modifier, "expirationDate", original.getExpirationDate(), updatedData.getExpirationDate());
-            compareAndSave(id, modifier, "specificGravity", original.getSpecificGravity(), updatedData.getSpecificGravity());
-            compareAndSave(id, modifier, "remark", original.getRemark(), updatedData.getRemark());
-            compareAndSave(id, modifier, "coaFileUrl", original.getCoaFileUrl(), updatedData.getCoaFileUrl());
-            compareAndSave(id, modifier, "coaFileUrlEng", original.getCoaFileUrlEng(), updatedData.getCoaFileUrlEng());
-            compareAndSave(id, modifier, "testReportNumbers", original.getTestReportNumbers(), updatedData.getTestReportNumbers());
-            compareAndSave(id, modifier, "inboundInspectionStatus", original.getInboundInspectionStatus(), updatedData.getInboundInspectionStatus());
-            compareAndSave(id, modifier, "inboundInspectionResult", original.getInboundInspectionResult(), updatedData.getInboundInspectionResult());
-            compareAndSave(id, modifier, "controlSampleStatus", original.getControlSampleStatus(), updatedData.getControlSampleStatus());
-            compareAndSave(id, modifier, "finalInspectionResult", original.getFinalInspectionResult(), updatedData.getFinalInspectionResult());
-            compareAndSave(id, modifier, "qualityDecisionDate", original.getQualityDecisionDate(), updatedData.getQualityDecisionDate());
-            compareAndSave(id, modifier, "coaDecisionDate", original.getCoaDecisionDate(), updatedData.getCoaDecisionDate());
-            compareAndSave(id, modifier, "controlSampleRemarks", original.getControlSampleRemarks(), updatedData.getControlSampleRemarks());
-            compareAndSave(id, modifier, "finalInspectionRemarks", original.getFinalInspectionRemarks(), updatedData.getFinalInspectionRemarks());
-            compareAndSave(id, modifier, "mfrRemarks", original.getMfrRemarks(), updatedData.getMfrRemarks());
+            compareAndSave(id, modifierUser, "itemCode", original.getItemCode(), updatedData.getItemCode());
+            compareAndSave(id, modifierUser, "productName", original.getProductName(), updatedData.getProductName());
+            compareAndSave(id, modifierUser, "manufacturer", original.getManufacturer(), updatedData.getManufacturer());
+            compareAndSave(id, modifierUser, "quantity", original.getQuantity(), updatedData.getQuantity());
+            compareAndSave(id, modifierUser, "inboundDate", original.getInboundDate(), updatedData.getInboundDate());
+            compareAndSave(id, modifierUser, "overallStatus", original.getOverallStatus(), updatedData.getOverallStatus());
+            compareAndSave(id, modifierUser, "lotNumber", original.getLotNumber(), updatedData.getLotNumber());
+            compareAndSave(id, modifierUser, "expirationDate", original.getExpirationDate(), updatedData.getExpirationDate());
+            compareAndSave(id, modifierUser, "specificGravity", original.getSpecificGravity(), updatedData.getSpecificGravity());
+            compareAndSave(id, modifierUser, "remark", original.getRemark(), updatedData.getRemark());
+            compareAndSave(id, modifierUser, "coaFileUrl", original.getCoaFileUrl(), updatedData.getCoaFileUrl());
+            compareAndSave(id, modifierUser, "coaFileUrlEng", original.getCoaFileUrlEng(), updatedData.getCoaFileUrlEng());
+            compareAndSave(id, modifierUser, "testReportNumbers", original.getTestReportNumbers(), updatedData.getTestReportNumbers());
+            compareAndSave(id, modifierUser, "inboundInspectionStatus", original.getInboundInspectionStatus(), updatedData.getInboundInspectionStatus());
+            compareAndSave(id, modifierUser, "inboundInspectionResult", original.getInboundInspectionResult(), updatedData.getInboundInspectionResult());
+            compareAndSave(id, modifierUser, "controlSampleStatus", original.getControlSampleStatus(), updatedData.getControlSampleStatus());
+            compareAndSave(id, modifierUser, "finalInspectionResult", original.getFinalInspectionResult(), updatedData.getFinalInspectionResult());
+            compareAndSave(id, modifierUser, "qualityDecisionDate", original.getQualityDecisionDate(), updatedData.getQualityDecisionDate());
+            compareAndSave(id, modifierUser, "coaDecisionDate", original.getCoaDecisionDate(), updatedData.getCoaDecisionDate());
+            compareAndSave(id, modifierUser, "controlSampleRemarks", original.getControlSampleRemarks(), updatedData.getControlSampleRemarks());
+            compareAndSave(id, modifierUser, "finalInspectionRemarks", original.getFinalInspectionRemarks(), updatedData.getFinalInspectionRemarks());
+            compareAndSave(id, modifierUser, "mfrRemarks", original.getMfrRemarks(), updatedData.getMfrRemarks());
 
             // 필드 업데이트
             original.setItemCode(updatedData.getItemCode());
@@ -132,9 +137,20 @@ public class QualityReportService {
 
             WmsInbound saved = inboundRepository.save(original);
             
-            // 글로벌 감사 로그 추가 (이건 전체 JSON 유지)
-            auditLogService.logEntityChange("INBOUND", id, "UPDATE", modifier, 
-                "입고 품질 정보 수정: " + saved.getItemCode(), oldJson, saved);
+            // 글로벌 감사 로그 추가 (상세 정보 포함)
+            eventPublisher.publishEvent(com.example.ims.event.EntityChangeEvent.builder()
+                    .entityType("INBOUND")
+                    .entityId(id)
+                    .action("UPDATE")
+                    .modifier(modifier)
+                    .modifierId(modifierUser.getId())
+                    .modifierUsername(modifierUser.getUsername())
+                    .modifierName(modifierUser.getName())
+                    .modifierCompany(modifierUser.getCompanyName())
+                    .description("입고 품질 정보 수정: " + saved.getItemCode())
+                    .oldEntity(oldJson)
+                    .newEntity(saved)
+                    .build());
 
             return saved;
         } catch (Exception e) {
@@ -143,14 +159,20 @@ public class QualityReportService {
         }
     }
 
-    private void compareAndSave(Long inboundId, String modifier, String field, Object oldVal, Object newVal) {
+    private void compareAndSave(Long inboundId, User user, String field, Object oldVal, Object newVal) {
         String sOld = (oldVal == null || oldVal.toString().trim().isEmpty()) ? "" : oldVal.toString().trim();
         String sNew = (newVal == null || newVal.toString().trim().isEmpty()) ? "" : newVal.toString().trim();
 
         if (!sOld.equals(sNew)) {
+            String company = user.getCompanyName() != null ? user.getCompanyName() : "시스템";
+            String modifierName = user.getName() + " (" + company + ")";
             WmsInboundHistory history = WmsInboundHistory.builder()
                     .wmsInboundId(inboundId)
-                    .modifier(modifier)
+                    .modifier(modifierName)
+                    .modifierId(user.getId())
+                    .modifierUsername(user.getUsername())
+                    .modifierName(user.getName())
+                    .modifierCompany(user.getCompanyName())
                     .fieldName(field)
                     .oldValue(sOld)
                     .newValue(sNew)
@@ -214,13 +236,40 @@ public class QualityReportService {
         inbound.setLastModifiedBy(modifier);
         WmsInbound saved = inboundRepository.save(inbound);
 
+        User user = userRepository.findByUsername(modifier).orElse(null);
+        Long modifierId = null;
+        String modifierNameOnly = null;
+        String modifierCompany = null;
+        if (user != null) {
+            modifierId = user.getId();
+            modifierNameOnly = user.getName();
+            modifierCompany = user.getCompanyName();
+        }
+
         // [추가] 글로벌 감사 로그 기록
-        auditLogService.logEntityChange("INBOUND", id, "FINAL_DECISION", modifier, 
-            "시장출하 적부 판정 완료 (Step 5)", oldJson, saved);
+        eventPublisher.publishEvent(com.example.ims.event.EntityChangeEvent.builder()
+                .entityType("INBOUND")
+                .entityId(id)
+                .action("FINAL_DECISION")
+                .modifier(inbound.getLastModifiedBy())
+                .modifierId(modifierId)
+                .modifierUsername(modifier)
+                .modifierName(modifierNameOnly)
+                .modifierCompany(modifierCompany)
+                .description("시장출하 적부 판정 완료 (Step 5)")
+                .oldEntity(oldJson)
+                .newEntity(saved)
+                .build());
 
         WmsInboundHistory history = WmsInboundHistory.builder()
                 .wmsInboundId(id)
-                .modifier(modifier)
+                .modifier(inbound.getLastModifiedBy())
+                .modifierId(modifierId)
+                .modifierUsername(modifier)
+                .modifierName(modifierNameOnly)
+                .modifierCompany(modifierCompany)
+                .fieldName("STATUS")
+                .newValue("STEP5_FINAL_COMPLETE")
                 .changeLog("최종 검사 완료 처리 (수정 잠금)")
                 .build();
         historyRepository.save(history);
@@ -241,5 +290,64 @@ public class QualityReportService {
 
     public QualityReport getReportByInboundId(Long inboundId) {
         return qualityReportRepository.findByWmsInboundId(inboundId).orElse(null);
+    }
+
+    /**
+     * [고도화] 입고 품질 검사 목록을 엑셀 파일로 추출합니다.
+     */
+    public byte[] exportInbound(String username, String companyName, String startDate, String endDate, String itemCode, String productName, String lotNumber, String manufacturer, String grnNumber) throws java.io.IOException {
+        java.time.LocalDateTime start = null;
+        java.time.LocalDateTime end = null;
+        java.time.ZoneId kst = java.time.ZoneId.of("Asia/Seoul");
+        
+        if (startDate != null && !startDate.isEmpty()) {
+            start = java.time.LocalDate.parse(startDate).atStartOfDay(kst).toLocalDateTime();
+        }
+        if (endDate != null && !endDate.isEmpty()) {
+            end = java.time.LocalDate.parse(endDate).atTime(23, 59, 59, 999999999).atZone(kst).toLocalDateTime();
+        }
+
+        List<WmsInbound> data = wmsService.searchInbound(companyName, start, end, itemCode, productName, lotNumber, manufacturer, "", grnNumber);
+        
+        // [감사 로그] 엑셀 다운로드 이력 기록
+        User userObj = userRepository.findByUsername(username).orElse(null);
+        String modifierName = username;
+        Long modifierId = null;
+        String modifierNameOnly = null;
+        String modifierCompany = null;
+        
+        if (userObj != null) {
+            modifierName = userObj.getName() + " (" + (userObj.getCompanyName() != null ? userObj.getCompanyName() : "시스템") + ")";
+            modifierId = userObj.getId();
+            modifierNameOnly = userObj.getName();
+            modifierCompany = userObj.getCompanyName();
+        }
+
+        eventPublisher.publishEvent(com.example.ims.event.EntityChangeEvent.builder()
+                .entityType("QUALITY_INBOUND")
+                .entityId(0L)
+                .action("EXPORT")
+                .modifier(modifierName)
+                .modifierId(modifierId)
+                .modifierUsername(username)
+                .modifierName(modifierNameOnly)
+                .modifierCompany(modifierCompany)
+                .description("입고 품질 검사 엑셀 다운로드 수행 (내역: " + data.size() + "건)")
+                .build());
+
+        String[] headers = {
+            "상태", "입고번호", "입고일자", "품목코드", "제품명", "제조사", "수량", "LOT번호",
+            "비중", "성적서번호", "성적서판정일", "입고검사단계", "입고검사결과", "관리품확인", "완제품결과", "판정일"
+        };
+        
+        return excelExportService.exportToExcel("입고품질검사", headers, data, i -> new Object[]{
+            i.getOverallStatus() != null ? i.getOverallStatus().toString() : "-", 
+            i.getGrnNumber(), i.getInboundDate() != null ? i.getInboundDate().toString() : "-",
+            i.getItemCode(), i.getProductName(), i.getManufacturer(), i.getQuantity(), i.getLotNumber(), 
+            i.getSpecificGravity() != null ? i.getSpecificGravity() : "-", 
+            i.getTestReportNumbers(), i.getCoaDecisionDate() != null ? i.getCoaDecisionDate().toString() : "-",
+            i.getInboundInspectionStatus(), i.getInboundInspectionResult(), i.getControlSampleStatus(), i.getFinalInspectionResult(),
+            i.getQualityDecisionDate() != null ? i.getQualityDecisionDate().toString() : "-"
+        });
     }
 }

@@ -47,16 +47,36 @@ public class User {
 
     // Admin approval required
     @Column(nullable = false)
-    private boolean enabled;
+    private Boolean enabled;
 
     @Builder.Default
     private Integer failedAttempts = 0;
 
     @Builder.Default
-    private boolean locked = false;
+    private Boolean locked = false;
 
     @Builder.Default
     private Boolean passwordResetRequired = false;
 
     private LocalDateTime lastLogin;
+
+    @Builder.Default
+    @Column(name = "email_verified")
+    private Boolean emailVerified = false;
+
+    @Column(name = "verification_token")
+    private String verificationToken;
+
+    // --- Compatibility Getters for Boolean wrappers ---
+    public boolean isEnabled() {
+        return Boolean.TRUE.equals(enabled);
+    }
+
+    public boolean isLocked() {
+        return Boolean.TRUE.equals(locked);
+    }
+
+    public boolean isEmailVerified() {
+        return Boolean.TRUE.equals(emailVerified);
+    }
 }

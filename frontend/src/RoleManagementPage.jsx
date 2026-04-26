@@ -33,8 +33,20 @@ const FUNCTIONAL_PERMISSIONS = [
     { key: 'DASHBOARD_QUALITY_VIEW', label: '📊 품질 대시보드 조회 권한', description: '품질 지표, 입고 현황, 체적 가안/확정 등 품질팀용 대시보드를 조회합니다.' },
     { key: 'DASHBOARD_SALES_VIEW', label: '📈 영업 대시보드 조회 권한', description: '신제품 현황, 체적 확정 내역 등 영업팀용 대시보드를 조회합니다.' },
     { key: 'SENSITIVE_DATA_VIEW', label: '🕵️ 민감 정보(BOM/원가) 조회', description: '제품의 원재료 및 단가 등 민감한 비즈니스 데이터를 조회할 수 있습니다.' },
-    { key: 'PRODUCT_PACKAGING_VIEW', label: '📦 제품 포장재/사양서 조회 권한', description: '제품 마스터에서 포장재 정보 및 사양서 탭을 조회할 수 있는 권한입니다.' }
+    { key: 'PRODUCT_PACKAGING_VIEW', label: '📦 제품 포장재/사양서 조회 권한', description: '제품 마스터에서 포장재 정보 및 사양서 탭을 조회할 수 있는 권한입니다.' },
+    { key: 'AUDIT_EDIT_APPROVED', label: '🛡️ 승인된 생산감리 수정 권한', description: '이미 [승인됨] 상태인 생산감리 항목을 예외적으로 수정할 수 있는 권한입니다.' }
 ];
+
+const FP_DEPENDENCIES = {
+    'AUDIT_DISCLOSE_MANAGE': 'qualityPhotoAudit',
+    'PRODUCT_DISCLOSE_MANAGE': 'products',
+    'PRODUCT_MASTER_MANAGE': 'products',
+    'DASHBOARD_QUALITY_VIEW': 'dashboard',
+    'DASHBOARD_SALES_VIEW': 'dashboard',
+    'SENSITIVE_DATA_VIEW': 'bomMaster',
+    'PRODUCT_PACKAGING_VIEW': 'products',
+    'AUDIT_EDIT_APPROVED': 'qualityPhotoAudit'
+};
 
 // DASHBOARD_WIDGET_OPTIONS removed - now using DashboardLayout templates
 
@@ -178,6 +190,22 @@ const RoleManagementPage = ({ user }) => {
         
         if (menuActions.length === 0) {
             delete currentPermissions[menuKey];
+            
+            // Clean up dependent functional permissions
+            const currentFuncPerms = getParsedPermissions(selectedRole.allowedPermissions, true);
+            const dependentFPKeys = Object.entries(FP_DEPENDENCIES)
+                .filter(([fpKey, depMenu]) => depMenu === menuKey)
+                .map(([fpKey]) => fpKey);
+            
+            const filteredFuncPerms = currentFuncPerms.filter(p => !dependentFPKeys.includes(p));
+            if (filteredFuncPerms.length !== currentFuncPerms.length) {
+                setSelectedRole({ 
+                    ...selectedRole, 
+                    allowedMenus: JSON.stringify(currentPermissions),
+                    allowedPermissions: JSON.stringify(filteredFuncPerms)
+                });
+                return;
+            }
         } else {
             currentPermissions[menuKey] = menuActions;
         }
@@ -217,6 +245,16 @@ const RoleManagementPage = ({ user }) => {
 
     const toggleFunctionalPermission = (permissionKey) => {
         if (selectedRole.isSystemRole && isInitialSystemRole && !isAdmin) return;
+
+        const depMenu = FP_DEPENDENCIES[permissionKey];
+        if (depMenu) {
+            const currentMenus = getParsedPermissions(selectedRole.allowedMenus);
+            if (!currentMenus[depMenu] || !currentMenus[depMenu].includes('VIEW')) {
+                const menuLabel = MENU_OPTIONS.find(m => m.key === depMenu)?.label || depMenu;
+                toast.warn(`[${menuLabel}] 메뉴 조회 권한이 있어야 이 기능을 활성화할 수 있습니다.`);
+                return;
+            }
+        }
 
         const currentFuncPerms = getParsedPermissions(selectedRole.allowedPermissions, true);
         let updated;
@@ -529,7 +567,9 @@ const RoleManagementPage = ({ user }) => {
                                                     display: 'flex',
                                                     alignItems: 'flex-start',
                                                     gap: '10px',
-                                                    opacity: (canEdit && (!isInitialSystemRole || isAdmin)) ? 1 : 0.6
+                                                    opacity: (canEdit && (!isInitialSystemRole || isAdmin)) ? (
+                                                        (FP_DEPENDENCIES[fp.key] && (!getParsedPermissions(selectedRole.allowedMenus)[FP_DEPENDENCIES[fp.key]] || !getParsedPermissions(selectedRole.allowedMenus)[FP_DEPENDENCIES[fp.key]].includes('VIEW'))) ? 0.4 : 1
+                                                    ) : 0.6
                                                 }}
                                             >
                                                 <input 

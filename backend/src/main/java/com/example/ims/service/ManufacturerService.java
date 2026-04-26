@@ -47,8 +47,9 @@ public class ManufacturerService {
         String action = isNew ? "CREATE" : "UPDATE";
         String description = (isNew ? "신규 제조사 등록: " : "제조사 정보 수정: ") + saved.getName();
         
-        auditLogService.logEntityChange("MANUFACTURER", saved.getId(), action, username, description, 
-                oldManufacturer, saved);
+        auditLogService.logEntityChange("MANUFACTURER", saved.getId(), action, username, 
+                null, username, null, null,
+                description, oldManufacturer, saved);
         return saved;
     }
 
@@ -58,8 +59,9 @@ public class ManufacturerService {
         String oldJson = auditLogService.toCompactJson(manufacturer);
         manufacturer.setActive(false);
         Manufacturer saved = manufacturerRepository.save(manufacturer);
-        auditLogService.logEntityChange("MANUFACTURER", id, "DELETE", username, "제조사 삭제(비활성화): " + manufacturer.getName(),
-                oldJson, saved);
+        auditLogService.logEntityChange("MANUFACTURER", id, "DELETE", username, 
+                null, username, null, null,
+                "제조사 삭제(비활성화): " + manufacturer.getName(), oldJson, saved);
     }
 
     @Transactional
@@ -67,8 +69,9 @@ public class ManufacturerService {
         Manufacturer manufacturer = getById(id);
         manufacturer.setActive(true);
         Manufacturer saved = manufacturerRepository.save(manufacturer);
-        auditLogService.logEntityChange("MANUFACTURER", id, "RESTORE", username, "제조사 복구: " + manufacturer.getName(), 
-                manufacturer, saved);
+        auditLogService.logEntityChange("MANUFACTURER", id, "RESTORE", username, 
+                null, username, null, null,
+                "제조사 복구: " + manufacturer.getName(), manufacturer, saved);
     }
 
     @Transactional
@@ -81,8 +84,9 @@ public class ManufacturerService {
         }
         Manufacturer manufacturer = getById(id);
         manufacturerRepository.delete(manufacturer);
-        auditLogService.logEntityChange("MANUFACTURER", id, "HARD_DELETE", username, "제조사 완전 삭제: " + manufacturer.getName(),
-                manufacturer, null);
+        auditLogService.logEntityChange("MANUFACTURER", id, "HARD_DELETE", username, 
+                null, username, null, null,
+                "제조사 완전 삭제: " + manufacturer.getName(), manufacturer, null);
     }
 
     public Manufacturer getById(Long id) {

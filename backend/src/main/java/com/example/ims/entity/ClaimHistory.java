@@ -27,6 +27,11 @@ public class ClaimHistory {
     @Column(nullable = false)
     private String modifier; // Username or actual name
 
+    private Long modifierId;
+    private String modifierUsername;
+    private String modifierName;
+    private String modifierCompany;
+
     @CreationTimestamp
     private LocalDateTime modifiedAt;
 

@@ -382,7 +382,7 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
                     font-weight: bold;
                 }
             `}</style>
-            <QualitySearchFilter
+            <QualitySearchFilter 
                 searchParams={searchParams}
                 setSearchParams={setSearchParams}
                 onSearch={fetchInboundData}
@@ -394,6 +394,8 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
                 onBatchSave={handleBatchSave}
                 isInternalQuality={isInternalQuality}
                 manufacturers={manufacturers}
+                canViewInbound={true}
+                inboundCount={rowData.length}
             />
 
             <div className="ag-theme-alpine" style={{ flex: 1, width: '100%', fontSize: '12px' }}>

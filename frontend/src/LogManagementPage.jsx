@@ -122,9 +122,11 @@ const LogManagementPage = ({ user }) => {
 
     const colDefs = useMemo(() => [
         { field: "modifiedAt", headerName: "변경 일시", width: 180, valueFormatter: p => p.value?.replace('T', ' ') },
-        { field: "modifier", headerName: "변경자", width: 120 },
+        { field: "modifierName", headerName: "변경자 성함", width: 120 },
+        { field: "modifierUsername", headerName: "ID (로그인)", width: 120 },
+        { field: "modifierCompany", headerName: "소속(업체명)", width: 150 },
         {
-            field: "entityType", headerName: "유형", width: 120, cellStyle: p => {
+            field: "entityType", headerName: "유형", width: 110, cellStyle: p => {
                 if (p.value === 'PRODUCT') return { color: '#003366', fontWeight: 'bold' };
                 if (p.value === 'CLAIM') return { color: '#e67e22', fontWeight: 'bold' };
                 if (p.value === 'INBOUND') return { color: '#27ae60', fontWeight: 'bold' };
@@ -138,6 +140,7 @@ const LogManagementPage = ({ user }) => {
                 if (p.value === 'CREATE') return { color: 'green', fontWeight: 'bold' };
                 if (p.value === 'UPDATE') return { color: 'blue', fontWeight: 'bold' };
                 if (p.value === 'DELETE') return { color: 'red', fontWeight: 'bold' };
+                if (p.value === 'EXPORT') return { color: '#8e44ad', fontWeight: 'bold' };
                 return null;
             }
         },
@@ -362,7 +365,7 @@ const LogManagementPage = ({ user }) => {
                         </h3>
                         <div style={{ fontSize: '13px', marginBottom: '15px' }}>
                             <strong>대상:</strong> {selectedLog.entityType} (ID: {selectedLog.entityId}) <br/>
-                            <strong>변경자:</strong> {selectedLog.modifier} <br/>
+                            <strong>변경자:</strong> {selectedLog.modifierName || selectedLog.modifier} (ID: {selectedLog.modifierUsername || '-'}, 소속: {selectedLog.modifierCompany || '시스템'}) <br/>
                             <strong>변경일시:</strong> {selectedLog.modifiedAt?.replace('T', ' ')} <br/>
                             <strong>설명:</strong> {selectedLog.description}
                         </div>

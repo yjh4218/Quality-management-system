@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AgGridReact } from 'ag-grid-react'; // React Grid Logic
-import { getUsers, getRoles, approveUser, toggleUserStatus, updateUserRole, unlockUser, resetUserPassword } from './api';
+import { getUsers, getRoles, approveUser, toggleUserStatus, updateUserRole, unlockUser, resetUserPassword, getSystemSettings, saveSystemSettings } from './api';
 import { usePermissions } from './usePermissions';
 
 const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) => {
@@ -15,6 +15,13 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
     const [roles, setRoles] = useState([]);
     const [quickFilterText, setQuickFilterText] = useState('');
     const [showRoleGuide, setShowRoleGuide] = useState(false);
+    const [activeTab, setActiveTab] = useState('users'); // 'users' or 'settings'
+    const [settings, setSettings] = useState({
+        SMTP_HOST: '',
+        SMTP_PORT: '587',
+        SMTP_USERNAME: '',
+        SMTP_PASSWORD: ''
+    });
 
     const [confirmModal, setConfirmModal] = useState({ isOpen: false, message: '', onConfirm: null });
     const [alertModal, setAlertModal] = useState({ isOpen: false, message: '' });
@@ -38,7 +45,29 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
         }
         fetchUsers();
         fetchRoles();
-    }, [navigationData]);
+        if (activeTab === 'settings') {
+            fetchSettings();
+        }
+    }, [navigationData, activeTab]);
+
+    const fetchSettings = async () => {
+        try {
+            const data = await getSystemSettings();
+            setSettings(prev => ({ ...prev, ...data }));
+        } catch (error) {
+            showAlert("설정을 불러오는데 실패했습니다.");
+        }
+    };
+
+    const handleSaveSettings = async () => {
+        try {
+            await saveSystemSettings(settings);
+            showAlert("설정이 성공적으로 저장되었습니다.");
+            fetchSettings();
+        } catch (error) {
+            showAlert("설정 저장에 실패했습니다.");
+        }
+    };
 
     const fetchRoles = async () => {
         try {
@@ -217,9 +246,10 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
                 return roleObj ? roleObj.displayName : p.value;
             }
         },
-        { field: "locked", headerName: "잠금상태", cellRenderer: (params) => params.value ? "🔒 잠김" : "🔓 정상", width: 140 },
-        { field: "failedAttempts", headerName: "실패횟수", width: 120 },
-        { field: "enabled", headerName: "승인여부", cellRenderer: (params) => params.value ? "✅ 승인" : "❌ 대기", width: 130 },
+        { field: "locked", headerName: "잠금상태", cellRenderer: (params) => params.value ? "🔒 잠김" : "🔓 정상", width: 100 },
+        { field: "failedAttempts", headerName: "실패횟수", width: 90 },
+        { field: "emailVerified", headerName: "이메일인증", cellRenderer: (params) => params.value ? "✅ 완료" : "⏳ 미인증", width: 100 },
+        { field: "enabled", headerName: "승인여부", cellRenderer: (params) => params.value ? "✅ 승인" : "❌ 대기", width: 100 },
         {
             headerName: "관리 작업",
             cellRenderer: ActionsRenderer,
@@ -237,12 +267,33 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
                     <p style={{ fontSize: '14px', color: '#666' }}>신규 가입자의 승인 처리 및 계정 잠금 해제, 시스템 권한 설정을 관리합니다.</p>
                 </div>
                 <div style={{ display: 'flex', gap: '10px' }}>
-                    <button onClick={() => setShowRoleGuide(!showRoleGuide)} className="secondary outline" style={{ padding: '10px 16px', fontWeight: '600' }}>
-                        {showRoleGuide ? '💡 권한 가이드라인 숨기기' : '💡 시스템 권한표 보기'}
+                    <button 
+                        onClick={() => setActiveTab('users')}
+                        className={activeTab === 'users' ? 'primary' : 'outline'}
+                        style={{ padding: '10px 16px', fontWeight: '600' }}
+                    >
+                        👥 사용자 목록
                     </button>
-                    <button onClick={fetchUsers} className="primary" style={{ padding: '10px 24px', fontWeight: '600', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '4px' }}>🔍 조회</button>
+                    <button 
+                        onClick={() => setActiveTab('settings')}
+                        className={activeTab === 'settings' ? 'primary' : 'outline'}
+                        style={{ padding: '10px 16px', fontWeight: '600' }}
+                    >
+                        ⚙️ 메일 발송 설정
+                    </button>
+                    {activeTab === 'users' && (
+                        <>
+                            <button onClick={() => setShowRoleGuide(!showRoleGuide)} className="secondary outline" style={{ padding: '10px 16px', fontWeight: '600' }}>
+                                {showRoleGuide ? '💡 권한 가이드라인 숨기기' : '💡 시스템 권한표 보기'}
+                            </button>
+                            <button onClick={fetchUsers} className="primary" style={{ padding: '10px 24px', fontWeight: '600', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '4px' }}>🔍 조회</button>
+                        </>
+                    )}
                 </div>
             </div>
+
+            {activeTab === 'users' && (
+                <>
 
             {showRoleGuide && (
                 <div style={{ marginBottom: '25px', padding: '20px', backgroundColor: '#FCFFFF', borderRadius: '10px', border: '1px solid #cce5df', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
@@ -333,6 +384,67 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
                     quickFilterText={quickFilterText}
                 />
             </div>
+            </>)}
+
+            {activeTab === 'settings' && (
+                <div className="card" style={{ padding: '30px', maxWidth: '800px', margin: '0 auto', border: '1px solid #eef2f6', borderRadius: '12px' }}>
+                    <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#fffaf0', borderLeft: '4px solid #f6e05e', borderRadius: '4px' }}>
+                        <h4 style={{ margin: '0 0 10px 0', color: '#b7791f' }}>⚠️ 메일 발송 계정 설정 안내</h4>
+                        <p style={{ margin: 0, fontSize: '13px', color: '#718096' }}>
+                            신규 사용자 가입 시 자동 발송되는 알림 이메일의 발송자 정보를 입력합니다.<br />
+                            Gmail을 추천하며, Gmail 계정 사용 시 <strong>[보안] ➔ [2단계 인증] ➔ [앱 비밀번호]</strong>를 생성하여 비밀번호 칸에 입력하셔야 합니다.
+                        </p>
+                    </div>
+
+                    <div style={{ display: 'grid', gap: '20px' }}>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                            <label style={{ fontWeight: '700' }}>SMTP 서버 주소 (Host)</label>
+                            <input 
+                                type="text" 
+                                value={settings.SMTP_HOST || ''} 
+                                onChange={e => setSettings({...settings, SMTP_HOST: e.target.value})} 
+                                placeholder="예: smtp.gmail.com"
+                            />
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                            <label style={{ fontWeight: '700' }}>SMTP 서버 포트 (Port)</label>
+                            <input 
+                                type="text" 
+                                value={settings.SMTP_PORT || ''} 
+                                onChange={e => setSettings({...settings, SMTP_PORT: e.target.value})} 
+                                placeholder="예: 587"
+                            />
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                            <label style={{ fontWeight: '700' }}>이메일 계정 (Username)</label>
+                            <input 
+                                type="text" 
+                                value={settings.SMTP_USERNAME || ''} 
+                                onChange={e => setSettings({...settings, SMTP_USERNAME: e.target.value})} 
+                                placeholder="예: admin@example.com"
+                            />
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                            <label style={{ fontWeight: '700' }}>이메일 비밀번호 (App Password)</label>
+                            <input 
+                                type="password" 
+                                value={settings.SMTP_PASSWORD || ''} 
+                                onChange={e => setSettings({...settings, SMTP_PASSWORD: e.target.value})} 
+                                placeholder="기존 값이 유지됩니다. 변경하려면 입력하세요."
+                            />
+                            <small style={{ color: '#a0aec0', display: 'block', marginTop: '5px' }}>
+                                ※ 일반 비밀번호가 아닌 '앱 비밀번호'를 입력하세요. 입력한 내용은 안전하게 암호화되어 저장됩니다.
+                            </small>
+                        </div>
+                    </div>
+
+                    <div style={{ marginTop: '30px', textAlign: 'right' }}>
+                        <button className="primary" onClick={handleSaveSettings} style={{ padding: '12px 30px', fontSize: '15px' }}>
+                            💾 설정 저장
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* 커스텀 Confirm 모달 */}
             {confirmModal.isOpen && (

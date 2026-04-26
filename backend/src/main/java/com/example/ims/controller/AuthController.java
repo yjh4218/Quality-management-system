@@ -31,6 +31,7 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final ManufacturerRepository manufacturerRepository;
     private final MailService mailService;
+    private final com.example.ims.service.EmailService emailService;
     private final RoleRepository roleRepository;
 
     @PostMapping("/check-username")
@@ -45,7 +46,7 @@ public class AuthController {
      * DTO와 @Valid를 사용하여 입력 무결성을 검증합니다.
      */
     @PostMapping("/register")
-    public ResponseEntity<String> registerUser(@Valid @RequestBody RegisterRequestDto dto) {
+    public ResponseEntity<?> registerUser(@Valid @RequestBody RegisterRequestDto dto, jakarta.servlet.http.HttpServletRequest request) {
         if (userRepository.findByUsername(dto.username()).isPresent()) {
             return ResponseEntity.badRequest().body("이미 존재하는 아이디입니다.");
         }
@@ -71,12 +72,53 @@ public class AuthController {
                 .enabled(false)     // 관리자 승인 전까지 비활성화
                 .locked(false)
                 .failedAttempts(0)
+                .emailVerified(false)
+                .verificationToken(UUID.randomUUID().toString())
                 .build();
 
         userRepository.save(newUser);
         log.info("[AUTH] New registration request: {}", dto.username());
         
-        return ResponseEntity.ok("회원가입 신청이 완료되었습니다. 관리자 승인 후 로그인 가능합니다.");
+        try {
+            String baseUrl = org.springframework.web.servlet.support.ServletUriComponentsBuilder.fromCurrentContextPath().build().toUriString() + "/api/auth";
+            emailService.sendVerificationEmail(newUser.getEmail(), newUser.getVerificationToken(), baseUrl);
+        } catch (Exception e) {
+            log.error("Failed to send verification email: ", e);
+            // We still proceed, but admin might need to use resend flow or we just return ok anyway
+        }
+        
+        return ResponseEntity.ok("회원가입 신청이 완료되었습니다. 이메일 인증 후 관리자 승인이 필요합니다.");
+    }
+
+    @GetMapping(value = "/verify-email", produces = "text/html;charset=UTF-8")
+    public ResponseEntity<String> verifyEmail(@RequestParam String token) {
+        User user = userRepository.findAll().stream()
+                .filter(u -> token.equals(u.getVerificationToken()))
+                .findFirst()
+                .orElse(null);
+
+        String failHtml = "<html><body style='font-family: sans-serif; text-align: center; margin-top: 50px; background-color: #f4f6f8;'>" +
+                          "<div style='background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: inline-block;'>" +
+                          "<h1 style='color: #d9534f;'>❌ 인증 실패</h1>" +
+                          "<p>유효하지 않은 인증 토큰이거나 이미 인증이 완료되었습니다.</p>" +
+                          "</div></body></html>";
+
+        if (user == null) {
+            return ResponseEntity.badRequest().body(failHtml);
+        }
+
+        user.setEmailVerified(true);
+        user.setVerificationToken(null);
+        userRepository.save(user);
+
+        String successHtml = "<html><body style='font-family: sans-serif; text-align: center; margin-top: 50px; background-color: #f4f6f8;'>" +
+                             "<div style='background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: inline-block;'>" +
+                             "<h1 style='color: #5cb85c;'>✅ 이메일 인증 완료</h1>" +
+                             "<p>성공적으로 인증되었습니다. 이제 관리자 승인을 기다려주세요.</p>" +
+                             "<p>승인이 완료되면 시스템을 이용하실 수 있습니다.</p>" +
+                             "</div></body></html>";
+
+        return ResponseEntity.ok(successHtml);
     }
 
     @PostMapping("/find-password")

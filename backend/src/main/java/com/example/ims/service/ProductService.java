@@ -35,10 +35,11 @@ public class ProductService {
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
     private final BrandRepository brandRepository;
     private final ManufacturerRepository manufacturerRepository;
-    private final ExcelParsingService excelParsingService;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     private final RoleService roleService;
     private final FileStorageService fileStorageService;
+    private final ExcelExportService excelExportService;
+    private final ExcelParsingService excelParsingService;
 
     /**
      * Helper to initialize shelf life for existing products if missing.
@@ -983,5 +984,57 @@ public class ProductService {
                 .map(i -> i.getKorName() != null ? i.getKorName().trim() : (i.getEngName() != null ? i.getEngName().trim() : ""))
                 .filter(name -> !name.isEmpty())
                 .collect(java.util.stream.Collectors.joining(", "));
+    }
+    
+    /**
+     * [고도화] 제품 목록을 엑셀 파일로 추출합니다.
+     */
+    public byte[] exportProducts(String username, String itemCode, String productName, String englishProductName,
+            String brand, String manufacturer, String ingredients) throws java.io.IOException {
+        // 검색 필터 적용 (페이지네이션 없이 전체 조회를 위해 큰 사이즈 지정)
+        org.springframework.data.domain.Page<com.example.ims.dto.ProductSummaryRecord> pageResult = searchProducts(
+                username, itemCode, productName, englishProductName, brand, manufacturer, ingredients,
+                org.springframework.data.domain.PageRequest.of(0, 100000));
+
+        java.util.List<com.example.ims.dto.ProductSummaryRecord> data = pageResult.getContent();
+
+        // [감사 로그] 엑셀 다운로드 이력 기록
+        com.example.ims.entity.User user = userRepository.findByUsername(username).orElse(null);
+        String modifierName = username;
+        Long modifierId = null;
+        String modifierNameOnly = null;
+        String modifierCompany = null;
+        
+        if (user != null) {
+            modifierName = user.getName() + " (" + (user.getCompanyName() != null ? user.getCompanyName() : "시스템") + ")";
+            modifierId = user.getId();
+            modifierNameOnly = user.getName();
+            modifierCompany = user.getCompanyName();
+        }
+
+        eventPublisher.publishEvent(com.example.ims.event.EntityChangeEvent.builder()
+                .entityType("PRODUCT")
+                .entityId(0L) // 전역 엑셀 다운로드는 ID 0
+                .action("EXPORT")
+                .modifier(modifierName)
+                .modifierId(modifierId)
+                .modifierUsername(username)
+                .modifierName(modifierNameOnly)
+                .modifierCompany(modifierCompany)
+                .description("제품 마스터 엑셀 다운로드 수행 (내역: " + data.size() + "건)")
+                .build());
+
+        String[] headers = {
+                "ID", "품목코드", "제품명", "영문제품명", "제품유형", "브랜드", "제조사",
+                "유통기한(개월)", "전성분 요약", "마스터여부", "활성여부", "기획세트", "등록일",
+                "가로(mm)", "세로(mm)", "높이(mm)", "중량(g)", "인박스수량", "아웃박스수량", "팔레트적재수량"
+        };
+
+        return excelExportService.exportToExcel("제품마스터", headers, data, p -> new Object[] {
+                p.id(), p.itemCode(), p.productName(), p.englishProductName(), p.productType(), p.brandName(),
+                p.manufacturerName(),
+                p.shelfLifeMonths(), p.ingredients(), p.isMaster(), p.active(), p.isPlanningSet(), p.createdAt(),
+                p.width(), p.length(), p.height(), p.weight(), p.inboxQuantity(), p.outboxWeight(), p.palletQuantity()
+        });
     }
 }

@@ -321,7 +321,7 @@ public class SystemInitializationService {
         }
     }
 
-    private void repairAllSequences() {
+    public void repairAllSequences() {
         log.info(">>>> [SYSTEM INIT] Repairing AUTO_INCREMENT sequences after potential bulk inserts...");
         boolean isPostgres = env.getProperty("spring.datasource.url", "").contains("postgresql");
         

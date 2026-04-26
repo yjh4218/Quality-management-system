@@ -36,26 +36,19 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
         canViewHistory: false
     });
 
-    const { canEdit, isAdmin } = usePermissions(user);
+    const { canEdit, isAdmin, hasPerm } = usePermissions(user);
     const canRegister = canEdit('qualityPhotoAudit');
 
     useEffect(() => {
-        setIsQualityUser(isAdmin || user?.roles?.some(r => r.authority?.includes('QUALITY')));
+        setIsQualityUser(isAdmin || user?.roles?.some(r => r.authority?.includes('QUALITY') || r.authority?.includes('RESPONSIBLE_SALES')));
         setIsManufacturer(user?.roles?.some(r => r.authority?.includes('MANUFACTURER')));
         
-        // 상세 기능 권한 체크 헬퍼
-        const hasPermission = (permissionKey) => {
-            return user?.roles?.some(r => {
-                const perms = r.allowedPermissions ? JSON.parse(r.allowedPermissions) : [];
-                return perms.includes(permissionKey);
-            });
-        };
-        
         // 세부 기능 권한 기반 플래그
-        const canManageDisclosure = isAdmin || hasPermission('AUDIT_DISCLOSE_MANAGE');
-        const canViewHistory = isAdmin || isQuality || user?.roles?.some(r => r.authority?.includes('RESPONSIBLE_SALES'));
+        const canManageDisclosure = isAdmin || hasPerm('AUDIT_DISCLOSE_MANAGE');
+        const canViewHistory = isAdmin || isQualityUser || user?.roles?.some(r => r.authority?.includes('RESPONSIBLE_SALES'));
+        const canEditApproved = isAdmin || hasPerm('AUDIT_EDIT_APPROVED');
         
-        setPermissions({ canManageDisclosure, canViewHistory });
+        setPermissions({ canManageDisclosure, canViewHistory, canEditApproved });
 
         if (audit) {
             setFormData({
@@ -191,7 +184,7 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
 
     const isEditMode = !!audit;
     const isApproved = formData.status === 'APPROVED';
-    const canEditForm = !isApproved; // Not approved means we can attach photos or save drafts
+    const canEditForm = !isApproved || permissions.canEditApproved; // Not approved OR has special permission
 
     const renderImageSection = (title, field, limitLabel) => {
         const images = formData[field] ? formData[field].split(',').filter(p => p) : [];
@@ -199,14 +192,14 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
             <div className="card" style={{ marginBottom: '20px', border: '1px solid #edf2f7' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                     <h4 style={{ margin: 0, fontSize: '15px', color: '#2d3748', fontWeight: '800' }}>{title} <span style={{ color: '#e53e3e', fontSize: '13px' }}>(필수)</span> <span style={{ fontSize: '12px', fontWeight: 'normal', color: '#718096' }}>({limitLabel})</span></h4>
-                    {canEditForm && !isApproved && canRegister && (
+                    {canEditForm && canRegister && (
                         <label className="secondary" style={{ padding: '6px 12px', fontSize: '12px', cursor: 'pointer', borderRadius: '6px', border: '1px solid #cbd5e0', background: '#fff' }}>
                             📸 사진 추가
                             <input type="file" multiple accept="image/*" onChange={(e) => handleFileUpload(e, field)} style={{ display: 'none' }} />
                         </label>
                     )}
                 </div>
-                {canEditForm && !isApproved && (
+                {canEditForm && (
                     <div style={{ marginBottom: '12px', padding: '10px 15px', background: '#fffaf0', border: '1px solid #feebc8', borderRadius: '10px', fontSize: '12px', color: '#c05621', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span>💡</span>
@@ -224,7 +217,7 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
                     {images.map((path, idx) => (
                         <div key={idx} style={{ position: 'relative', aspectRatio: '1/1', borderRadius: '12px', overflow: 'hidden', border: '2px solid #f1f5f9', transition: 'transform 0.2s', cursor: 'pointer' }} className="image-hover">
                             <img src={path} alt="audit" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onClick={() => window.open(path, '_blank')} />
-                            {canEditForm && !isApproved && canRegister && (
+                            {canEditForm && canRegister && (
                                 <button 
                                     onClick={() => removeImage(field, idx)}
                                     style={{ position: 'absolute', top: '6px', right: '6px', background: 'rgba(231, 76, 60, 0.9)', color: 'white', border: 'none', borderRadius: '50%', width: '22px', height: '22px', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -325,6 +318,9 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
                             <span className={`badge ${formData.status === 'APPROVED' ? 'success' : formData.status === 'REJECTED' ? 'secondary' : formData.status === 'PENDING' ? 'warning' : 'info'}`} style={{ padding: '8px 20px', fontSize: '14px', borderRadius: '8px', fontWeight: '800' }}>
                                 {formData.status === 'SUBMITTED' ? '제출됨' : formData.status === 'APPROVED' ? '승인됨' : formData.status === 'PENDING' ? '미진행' : '반려됨'}
                             </span>
+                            {isApproved && permissions.canEditApproved && (
+                                <span style={{ fontSize: '12px', color: '#3182ce', fontWeight: 'bold' }}>(🛡️ 수정 권한 활성화됨)</span>
+                            )}
                         </div>
                     </div>
 
@@ -349,7 +345,7 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
                             </div>
                             <div className="form-group" style={{ marginBottom: 0 }}>
                                 <label style={{ fontWeight: '700' }}>생산일자</label>
-                                <input type="date" value={formData.productionDate} onChange={(e) => setFormData({...formData, productionDate: e.target.value})} disabled={!canEditForm || isApproved} style={{ height: '45px' }} />
+                                <input type="date" value={formData.productionDate} onChange={(e) => setFormData({...formData, productionDate: e.target.value})} disabled={!canEditForm} style={{ height: '45px' }} />
                             </div>
                         </div>
                     </div>
@@ -368,9 +364,9 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
                                 value={formData.rejectionReason}
                                 onChange={(e) => setFormData({...formData, rejectionReason: e.target.value})}
                                 placeholder="반려 시 사유를 입력해주세요."
-                                disabled={!isQualityUser || isApproved}
+                                disabled={!isQualityUser || (isApproved && !permissions.canEditApproved)}
                                 style={{ 
-                                    background: (!isQualityUser || isApproved) ? 'transparent' : '#fff', 
+                                    background: (!isQualityUser || (isApproved && !permissions.canEditApproved)) ? 'transparent' : '#fff', 
                                     width: '100%',
                                     padding: '15px',
                                     resize: 'vertical',
@@ -378,7 +374,7 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
                                     lineHeight: '1.5',
                                     minHeight: '120px',
                                     borderRadius: '8px',
-                                    border: (!isQualityUser || isApproved) ? 'none' : '1px solid #cbd5e0',
+                                    border: (!isQualityUser || (isApproved && !permissions.canEditApproved)) ? 'none' : '1px solid #cbd5e0',
                                     boxSizing: 'border-box'
                                 }}
                             />
@@ -396,9 +392,12 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
                             ) : (
                                 Object.entries(
                                     history.reduce((acc, rec) => {
-                                        const date = rec.modifiedAt ? rec.modifiedAt.substring(0, 10) : '알 수 없음';
-                                        const time = rec.modifiedAt ? rec.modifiedAt.substring(11, 19) : '';
-                                        const groupKey = `${rec.modifier} | ${date} ${time}`;
+                                        const timeKey = rec.modifiedAt ? rec.modifiedAt.substring(0, 19).replace('T', ' ') : '알 수 없는 시간';
+                                        // [고도화] 상세 사용자 정보 우선 노출, 없으면 기존 modifier 필드 사용
+                                        const mName = rec.modifierName || rec.modifier || '시스템';
+                                        const mId = rec.modifierUsername ? `(${rec.modifierUsername})` : '';
+                                        const mComp = rec.modifierCompany ? ` [${rec.modifierCompany}]` : '';
+                                        const groupKey = `${mName}${mId}${mComp} | ${timeKey}`;
                                         if (!acc[groupKey]) acc[groupKey] = [];
                                         acc[groupKey].push(rec);
                                         return acc;
@@ -455,50 +454,52 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
                             </button>
                         )}
 
-                        {/* Quality Team Action Buttons */}
+                        {/* Quality Team Actions */}
                         {isQualityUser && (
                             <>
-                                <button 
-                                    onClick={() => setIsConfirmOpen(true)} 
-                                    className="outline" 
-                                    style={{ padding: '10px 25px', borderColor: '#4a5568', color: '#4a5568', opacity: (canRegister && !isApproved) ? 1 : 0.5, cursor: (canRegister && !isApproved) ? 'pointer' : 'not-allowed' }} 
-                                    disabled={!canRegister || isApproved}
-                                >
-                                    💾 내역 저장
-                                </button>
-                                {isEditMode && formData.status === 'SUBMITTED' && (
+                                {/* Case: Edit Approved Item (Only Save button) */}
+                                {isEditMode && isApproved && permissions.canEditApproved ? (
+                                    <button 
+                                        onClick={() => setIsConfirmOpen(true)} 
+                                        className="primary" 
+                                        style={{ padding: '10px 35px', fontWeight: '800' }}
+                                    >
+                                        💾 내역 저장 (승인됨)
+                                    </button>
+                                ) : (
+                                    /* Case: Normal Edit/Create */
                                     <>
                                         <button 
-                                            onClick={() => handleStatusUpdate('REJECTED')} 
+                                            onClick={() => setIsConfirmOpen(true)} 
                                             className="outline" 
-                                            style={{ borderColor: '#e53e3e', color: '#e53e3e', padding: '10px 25px', opacity: canRegister ? 1 : 0.5, cursor: canRegister ? 'pointer' : 'not-allowed' }} 
-                                            disabled={!canRegister}
+                                            style={{ padding: '10px 25px', borderColor: '#4a5568', color: '#4a5568', opacity: canEditForm ? 1 : 0.5, cursor: canEditForm ? 'pointer' : 'not-allowed' }} 
+                                            disabled={!canEditForm}
                                         >
-                                            🚫 반려 처리
+                                            💾 내역 저장
                                         </button>
-                                        <button 
-                                            onClick={() => handleStatusUpdate('APPROVED')} 
-                                            className="primary" 
-                                            style={{ padding: '10px 30px', fontWeight: '800', opacity: canRegister ? 1 : 0.5, cursor: canRegister ? 'pointer' : 'not-allowed' }} 
-                                            disabled={!canRegister}
-                                        >
-                                            ✅ 최종 승인
-                                        </button>
+                                        {isEditMode && formData.status === 'SUBMITTED' && (
+                                            <>
+                                                <button 
+                                                    onClick={() => handleStatusUpdate('REJECTED')} 
+                                                    className="outline" 
+                                                    style={{ borderColor: '#e53e3e', color: '#e53e3e', padding: '10px 25px', opacity: canRegister ? 1 : 0.5, cursor: canRegister ? 'pointer' : 'not-allowed' }} 
+                                                    disabled={!canRegister}
+                                                >
+                                                    🚫 반려 처리
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleStatusUpdate('APPROVED')} 
+                                                    className="primary" 
+                                                    style={{ padding: '10px 30px', fontWeight: '800', opacity: canRegister ? 1 : 0.5, cursor: canRegister ? 'pointer' : 'not-allowed' }} 
+                                                    disabled={!canRegister}
+                                                >
+                                                    ✅ 최종 승인
+                                                </button>
+                                            </>
+                                        )}
                                     </>
                                 )}
                             </>
-                        )}
-                        
-                        {/* Quality Team can also save simple field updates */}
-                        {isQualityUser && isEditMode && isApproved && (
-                            <button 
-                                onClick={() => setIsConfirmOpen(true)} 
-                                className="primary" 
-                                style={{ padding: '10px 30px', fontWeight: '800', opacity: canRegister ? 1 : 0.5, cursor: canRegister ? 'pointer' : 'not-allowed' }} 
-                                disabled={!canRegister}
-                            >
-                                상세 저장
-                            </button>
                         )}
                     </div>
                 </div>

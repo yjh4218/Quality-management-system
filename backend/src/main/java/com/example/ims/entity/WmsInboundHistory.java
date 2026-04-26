@@ -27,6 +27,11 @@ public class WmsInboundHistory {
     @Column(nullable = false)
     private String modifier;
 
+    private Long modifierId;
+    private String modifierUsername;
+    private String modifierName;
+    private String modifierCompany;
+
     @Column
     private String fieldName;
 

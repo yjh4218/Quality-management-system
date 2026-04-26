@@ -15,12 +15,15 @@ import java.util.stream.Collectors;
 @Slf4j
 public class DataSyncDownService {
 
+    private final com.example.ims.service.SystemInitializationService systemInitializationService;
     private final JdbcTemplate h2JdbcTemplate;
     private final JdbcTemplate supabaseJdbcTemplate;
 
     public DataSyncDownService(
+            com.example.ims.service.SystemInitializationService systemInitializationService,
             JdbcTemplate h2JdbcTemplate,
             @Qualifier("supabaseJdbcTemplate") JdbcTemplate supabaseJdbcTemplate) {
+        this.systemInitializationService = systemInitializationService;
         this.h2JdbcTemplate = h2JdbcTemplate;
         this.supabaseJdbcTemplate = supabaseJdbcTemplate;
     }
@@ -62,6 +65,10 @@ public class DataSyncDownService {
 
             // 3. Re-enable constraints
             h2JdbcTemplate.execute("SET REFERENTIAL_INTEGRITY TRUE");
+            
+            // 4. Critical: Repair sequences in H2 so identity columns don't clash with imported data
+            systemInitializationService.repairAllSequences();
+            
             log.info(">>>> [SYNC-DOWN] Full migration completed successfully.");
 
         } catch (Exception e) {

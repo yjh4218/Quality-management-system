@@ -14,7 +14,7 @@ import { usePermissions } from './usePermissions';
  * @param {Object} props.user - 현재 로그인한 사용자의 정보
  */
 const ProductionAuditPage = ({ user }) => {
-    const { canEdit } = usePermissions(user);
+    const { canView, canEdit } = usePermissions(user);
     const isManufacturer = user?.roles?.some(r => r.authority?.includes('MANUFACTURER'));
     const canRegister = canEdit('qualityPhotoAudit');
     const gridRef = useRef(null);
@@ -123,6 +123,20 @@ const ProductionAuditPage = ({ user }) => {
         setIsDrawerOpen(true);
     };
 
+    const handleExportExcel = async () => {
+        if (!rowData || rowData.length === 0) {
+            alert("조회 내역이 없습니다.");
+            return;
+        }
+        try {
+            const mfrFilter = isManufacturer ? user.companyName : searchFields.manufacturerName;
+            const response = await api.exportAuditsExcel({ ...searchFields, manufacturerName: mfrFilter });
+            api.downloadBlob(response, "ProductionAudit_Export.xlsx");
+        } catch (error) {
+            alert("엑셀 다운로드 중 오류가 발생했습니다.");
+        }
+    };
+
     const handleProductSelect = (product) => {
         setSearchFields(prev => ({
             ...prev,
@@ -195,6 +209,9 @@ const ProductionAuditPage = ({ user }) => {
                     <p style={{ fontSize: '13px', color: '#666', margin: 0 }}>제조사 생산 시 촬영한 용기, 단상자, 적재 사진 품질 감리 내역을 관리합니다.</p>
                 </div>
                 <div className="button-group">
+                    {canView('productionAudit') && (
+                        <button onClick={handleExportExcel} className="outline" style={{ border: '1px solid #107c41', color: '#107c41', marginRight: '10px' }}>📊 엑셀 다운로드</button>
+                    )}
                     <div style={{ display: 'inline-flex', background: '#f1f5f9', padding: '4px', borderRadius: '8px', marginRight: '10px' }}>
                         <button 
                             onClick={() => setViewMode('all')}

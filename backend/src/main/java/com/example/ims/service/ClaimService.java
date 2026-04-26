@@ -28,6 +28,8 @@ public class ClaimService {
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
     private final AuditLogService auditLogService;
     private final FileStorageService fileStorageService;
+    private final ExcelExportService excelExportService;
+    private final com.example.ims.repository.UserRepository userRepository;
 
     @Transactional(readOnly = true)
     public List<Claim> getClaims(String role, String companyName) {
@@ -251,15 +253,21 @@ public class ClaimService {
         return claimHistoryRepository.findByClaimIdOrderByModifiedAtDesc(claimId);
     }
 
-    private void compareAndSave(Long claimId, String modifier, String field, String oldVal, String newVal) {
+    private void compareAndSave(Long claimId, User user, String field, String oldVal, String newVal) {
         // [보정] null과 ""를 동일하게 취급하여 불필요한 이력 방지 및 데이터 누락 방지 통합
         String nOld = (oldVal == null || oldVal.trim().isEmpty()) ? "" : oldVal.trim();
         String nNew = (newVal == null || newVal.trim().isEmpty()) ? "" : newVal.trim();
 
         if (!nOld.equals(nNew)) {
+            String company = user.getCompanyName() != null ? user.getCompanyName() : "시스템";
+            String modifierName = user.getName() + " (" + company + ")";
             claimHistoryRepository.save(ClaimHistory.builder()
                     .claimId(claimId)
-                    .modifier(modifier)
+                    .modifier(modifierName)
+                    .modifierId(user.getId())
+                    .modifierUsername(user.getUsername())
+                    .modifierName(user.getName())
+                    .modifierCompany(user.getCompanyName())
                     .fieldName(field)
                     .oldValue(nOld)
                     .newValue(nNew)
@@ -283,7 +291,7 @@ public class ClaimService {
 
         // [고도화 3] 공유 토글 필드 업데이트
         if (updatedData.isSharedWithManufacturer() != existing.isSharedWithManufacturer()) {
-            compareAndSave(id, modifierName, "SharedWithManufacturer",
+            compareAndSave(id, user, "SharedWithManufacturer",
                     String.valueOf(existing.isSharedWithManufacturer()),
                     String.valueOf(updatedData.isSharedWithManufacturer()));
             existing.setSharedWithManufacturer(updatedData.isSharedWithManufacturer());
@@ -291,7 +299,7 @@ public class ClaimService {
 
         // 종결일 업데이트
         if (updatedData.getTerminationDate() != null) {
-            compareAndSave(id, modifierName, "TerminationDate",
+            compareAndSave(id, user, "TerminationDate",
                     existing.getTerminationDate() != null ? existing.getTerminationDate().toString() : null,
                     updatedData.getTerminationDate().toString());
             existing.setTerminationDate(updatedData.getTerminationDate());
@@ -299,73 +307,73 @@ public class ClaimService {
 
         // CS fields...
         if (updatedData.getReceiptDate() != null) {
-            compareAndSave(id, modifierName, "ReceiptDate",
+            compareAndSave(id, user, "ReceiptDate",
                     existing.getReceiptDate() != null ? existing.getReceiptDate().toString() : null,
                     updatedData.getReceiptDate().toString());
             existing.setReceiptDate(updatedData.getReceiptDate());
         }
         if (updatedData.getCountry() != null) {
-            compareAndSave(id, modifierName, "Country", existing.getCountry(), updatedData.getCountry());
+            compareAndSave(id, user, "Country", existing.getCountry(), updatedData.getCountry());
             existing.setCountry(updatedData.getCountry());
         }
         if (updatedData.getItemCode() != null) {
-            compareAndSave(id, modifierName, "ItemCode", existing.getItemCode(), updatedData.getItemCode());
+            compareAndSave(id, user, "ItemCode", existing.getItemCode(), updatedData.getItemCode());
             existing.setItemCode(updatedData.getItemCode());
         }
         if (updatedData.getProductName() != null) {
-            compareAndSave(id, modifierName, "ProductName", existing.getProductName(), updatedData.getProductName());
+            compareAndSave(id, user, "ProductName", existing.getProductName(), updatedData.getProductName());
             existing.setProductName(updatedData.getProductName());
         }
         if (updatedData.getLotNumber() != null) {
-            compareAndSave(id, modifierName, "LotNumber", existing.getLotNumber(), updatedData.getLotNumber());
+            compareAndSave(id, user, "LotNumber", existing.getLotNumber(), updatedData.getLotNumber());
             existing.setLotNumber(updatedData.getLotNumber());
         }
         if (updatedData.getManufacturer() != null) {
-            compareAndSave(id, modifierName, "Manufacturer", existing.getManufacturer(), updatedData.getManufacturer());
+            compareAndSave(id, user, "Manufacturer", existing.getManufacturer(), updatedData.getManufacturer());
             existing.setManufacturer(updatedData.getManufacturer());
         }
         if (updatedData.getOccurrenceQty() != null) {
-            compareAndSave(id, modifierName, "OccurrenceQty",
+            compareAndSave(id, user, "OccurrenceQty",
                     existing.getOccurrenceQty() != null ? String.valueOf(existing.getOccurrenceQty()) : null,
                     String.valueOf(updatedData.getOccurrenceQty()));
             existing.setOccurrenceQty(updatedData.getOccurrenceQty());
         }
         if (updatedData.getPrimaryCategory() != null) {
-            compareAndSave(id, modifierName, "PrimaryCategory", existing.getPrimaryCategory(),
+            compareAndSave(id, user, "PrimaryCategory", existing.getPrimaryCategory(),
                     updatedData.getPrimaryCategory());
             existing.setPrimaryCategory(updatedData.getPrimaryCategory());
         }
         if (updatedData.getSecondaryCategory() != null) {
-            compareAndSave(id, modifierName, "SecondaryCategory", existing.getSecondaryCategory(),
+            compareAndSave(id, user, "SecondaryCategory", existing.getSecondaryCategory(),
                     updatedData.getSecondaryCategory());
             existing.setSecondaryCategory(updatedData.getSecondaryCategory());
         }
         if (updatedData.getTertiaryCategory() != null) {
-            compareAndSave(id, modifierName, "TertiaryCategory", existing.getTertiaryCategory(),
+            compareAndSave(id, user, "TertiaryCategory", existing.getTertiaryCategory(),
                     updatedData.getTertiaryCategory());
             existing.setTertiaryCategory(updatedData.getTertiaryCategory());
         }
         if (updatedData.getClaimContent() != null) {
-            compareAndSave(id, modifierName, "ClaimContent", existing.getClaimContent(), updatedData.getClaimContent());
+            compareAndSave(id, user, "ClaimContent", existing.getClaimContent(), updatedData.getClaimContent());
             existing.setClaimContent(updatedData.getClaimContent());
         }
         if (updatedData.getQualityCheckNeeded() != null) {
-            compareAndSave(id, modifierName, "QualityCheckNeeded", existing.getQualityCheckNeeded(),
+            compareAndSave(id, user, "QualityCheckNeeded", existing.getQualityCheckNeeded(),
                     updatedData.getQualityCheckNeeded());
             existing.setQualityCheckNeeded(updatedData.getQualityCheckNeeded());
         }
         if (updatedData.getConsumerReplyNeeded() != null) {
-            compareAndSave(id, modifierName, "ConsumerReplyNeeded", existing.getConsumerReplyNeeded(),
+            compareAndSave(id, user, "ConsumerReplyNeeded", existing.getConsumerReplyNeeded(),
                     updatedData.getConsumerReplyNeeded());
             existing.setConsumerReplyNeeded(updatedData.getConsumerReplyNeeded());
         }
         if (updatedData.getProductRetrievalNeeded() != null) {
-            compareAndSave(id, modifierName, "ProductRetrievalNeeded", existing.getProductRetrievalNeeded(),
+            compareAndSave(id, user, "ProductRetrievalNeeded", existing.getProductRetrievalNeeded(),
                     updatedData.getProductRetrievalNeeded());
             existing.setProductRetrievalNeeded(updatedData.getProductRetrievalNeeded());
         }
         if (updatedData.getExpectedRetrievalDate() != null) {
-            compareAndSave(id, modifierName, "ExpectedRetrievalDate",
+            compareAndSave(id, user, "ExpectedRetrievalDate",
                     existing.getExpectedRetrievalDate() != null ? existing.getExpectedRetrievalDate().toString() : null,
                     updatedData.getExpectedRetrievalDate().toString());
             existing.setExpectedRetrievalDate(updatedData.getExpectedRetrievalDate());
@@ -382,25 +390,25 @@ public class ClaimService {
                 }
             }
 
-            compareAndSave(id, modifierName, "ClaimPhotos", getListString(existing.getClaimPhotos()),
+            compareAndSave(id, user, "ClaimPhotos", getListString(existing.getClaimPhotos()),
                     getListString(updatedData.getClaimPhotos()));
             existing.setClaimPhotos(updatedData.getClaimPhotos());
         }
 
         // Quality/Manufacturer fields...
         if (updatedData.getRecallDate() != null) {
-            compareAndSave(id, modifierName, "RecallDate",
+            compareAndSave(id, user, "RecallDate",
                     existing.getRecallDate() != null ? existing.getRecallDate().toString() : null,
                     updatedData.getRecallDate().toString());
             existing.setRecallDate(updatedData.getRecallDate());
         }
         if (updatedData.getRootCauseAnalysis() != null) {
-            compareAndSave(id, modifierName, "RootCauseAnalysis", existing.getRootCauseAnalysis(),
+            compareAndSave(id, user, "RootCauseAnalysis", existing.getRootCauseAnalysis(),
                     updatedData.getRootCauseAnalysis());
             existing.setRootCauseAnalysis(updatedData.getRootCauseAnalysis());
         }
         if (updatedData.getPreventativeAction() != null) {
-            compareAndSave(id, modifierName, "PreventativeAction", existing.getPreventativeAction(),
+            compareAndSave(id, user, "PreventativeAction", existing.getPreventativeAction(),
                     updatedData.getPreventativeAction());
             existing.setPreventativeAction(updatedData.getPreventativeAction());
         }
@@ -410,19 +418,19 @@ public class ClaimService {
                     && !existing.getManufacturerResponsePdf().equals(updatedData.getManufacturerResponsePdf())) {
                 fileStorageService.deleteFile(existing.getManufacturerResponsePdf());
             }
-            compareAndSave(id, modifierName, "ManufacturerResponsePdf", existing.getManufacturerResponsePdf(),
+            compareAndSave(id, user, "ManufacturerResponsePdf", existing.getManufacturerResponsePdf(),
                     updatedData.getManufacturerResponsePdf());
             existing.setManufacturerResponsePdf(updatedData.getManufacturerResponsePdf());
         }
 
         // [수정] 품질팀 회수 제품 수령 필드 업데이트 누락분 추가
         if (updatedData.getQualityReceivedReturnedProduct() != null) {
-            compareAndSave(id, modifierName, "QualityReceivedReturnedProduct",
+            compareAndSave(id, user, "QualityReceivedReturnedProduct",
                     existing.getQualityReceivedReturnedProduct(), updatedData.getQualityReceivedReturnedProduct());
             existing.setQualityReceivedReturnedProduct(updatedData.getQualityReceivedReturnedProduct());
         }
         if (updatedData.getQualityReceivedDate() != null) {
-            compareAndSave(id, modifierName, "QualityReceivedDate",
+            compareAndSave(id, user, "QualityReceivedDate",
                     existing.getQualityReceivedDate() != null ? existing.getQualityReceivedDate().toString() : null,
                     updatedData.getQualityReceivedDate().toString());
             existing.setQualityReceivedDate(updatedData.getQualityReceivedDate());
@@ -430,40 +438,40 @@ public class ClaimService {
 
         // [추가] 제조사 전용 기입 필드 업데이트
         if (updatedData.getMfrRootCauseAnalysis() != null) {
-            compareAndSave(id, modifierName, "MfrRootCauseAnalysis", existing.getMfrRootCauseAnalysis(),
+            compareAndSave(id, user, "MfrRootCauseAnalysis", existing.getMfrRootCauseAnalysis(),
                     updatedData.getMfrRootCauseAnalysis());
             existing.setMfrRootCauseAnalysis(updatedData.getMfrRootCauseAnalysis());
         }
         if (updatedData.getMfrPreventativeAction() != null) {
-            compareAndSave(id, modifierName, "MfrPreventativeAction", existing.getMfrPreventativeAction(),
+            compareAndSave(id, user, "MfrPreventativeAction", existing.getMfrPreventativeAction(),
                     updatedData.getMfrPreventativeAction());
             existing.setMfrPreventativeAction(updatedData.getMfrPreventativeAction());
         }
         if (updatedData.getMfrRecallDate() != null) {
-            compareAndSave(id, modifierName, "MfrRecallDate",
+            compareAndSave(id, user, "MfrRecallDate",
                     existing.getMfrRecallDate() != null ? existing.getMfrRecallDate().toString() : null,
                     updatedData.getMfrRecallDate().toString());
             existing.setMfrRecallDate(updatedData.getMfrRecallDate());
         }
         if (updatedData.getMfrRecallStatus() != null) {
-            compareAndSave(id, modifierName, "MfrRecallStatus", existing.getMfrRecallStatus(),
+            compareAndSave(id, user, "MfrRecallStatus", existing.getMfrRecallStatus(),
                     updatedData.getMfrRecallStatus());
             existing.setMfrRecallStatus(updatedData.getMfrRecallStatus());
         }
         if (updatedData.getMfrTerminationDate() != null) {
-            compareAndSave(id, modifierName, "MfrTerminationDate",
+            compareAndSave(id, user, "MfrTerminationDate",
                     existing.getMfrTerminationDate() != null ? existing.getMfrTerminationDate().toString() : null,
                     updatedData.getMfrTerminationDate().toString());
             existing.setMfrTerminationDate(updatedData.getMfrTerminationDate());
         }
         // [수정] 비고 및 대책 항목들은 null이 아닌 이상(빈 문자열 포함) 저장되도록 보장
         if (updatedData.getQualityRemarks() != null) {
-            compareAndSave(id, modifierName, "QualityRemarks", existing.getQualityRemarks(),
+            compareAndSave(id, user, "QualityRemarks", existing.getQualityRemarks(),
                     updatedData.getQualityRemarks());
             existing.setQualityRemarks(updatedData.getQualityRemarks());
         }
         if (updatedData.getMfrRemarks() != null) {
-            compareAndSave(id, modifierName, "MfrRemarks", existing.getMfrRemarks(), updatedData.getMfrRemarks());
+            compareAndSave(id, user, "MfrRemarks", existing.getMfrRemarks(), updatedData.getMfrRemarks());
             existing.setMfrRemarks(updatedData.getMfrRemarks());
         }
 
@@ -479,6 +487,10 @@ public class ClaimService {
                 .entityId(id)
                 .action("UPDATE")
                 .modifier(modifierName)
+                .modifierId(user.getId())
+                .modifierUsername(user.getUsername())
+                .modifierName(user.getName())
+                .modifierCompany(user.getCompanyName())
                 .description("클레임 상세 정보 수정: " + existing.getClaimNumber())
                 .oldEntity(oldJson)
                 .newEntity(saved)
@@ -645,5 +657,49 @@ public class ClaimService {
                 .unclosedClaims(unclosedClaims)
                 .allClaims(chartClaims)
                 .build();
+    }
+    /**
+     * [고도화] 클레임 목록을 엑셀 파일로 추출합니다.
+     */
+    public byte[] exportClaims(String username, String role, String companyName, String startDate, String endDate, String itemCode, String productName, String lotNumber, String country, String qualityStatus, String claimNumber, String sharedFilterStr) throws java.io.IOException {
+        List<Claim> data = searchClaims(role, companyName, startDate, endDate, itemCode, productName, lotNumber, country, qualityStatus, claimNumber, sharedFilterStr);
+        
+        // [감사 로그] 엑셀 다운로드 이력 기록
+        User userObj = userRepository.findByUsername(username).orElse(null);
+        String modifierName = username;
+        Long modifierId = null;
+        String modifierNameOnly = null;
+        String modifierCompany = null;
+        
+        if (userObj != null) {
+            modifierName = userObj.getName() + " (" + (userObj.getCompanyName() != null ? userObj.getCompanyName() : "시스템") + ")";
+            modifierId = userObj.getId();
+            modifierNameOnly = userObj.getName();
+            modifierCompany = userObj.getCompanyName();
+        }
+
+        eventPublisher.publishEvent(com.example.ims.event.EntityChangeEvent.builder()
+                .entityType("CLAIM")
+                .entityId(0L)
+                .action("EXPORT")
+                .modifier(modifierName)
+                .modifierId(modifierId)
+                .modifierUsername(username)
+                .modifierName(modifierNameOnly)
+                .modifierCompany(modifierCompany)
+                .description("클레임 관리 엑셀 다운로드 수행 (내역: " + data.size() + "건)")
+                .build());
+
+        String[] headers = {
+            "클레임번호", "접수일", "국가", "품목코드", "제품명", "LOT번호", "제조사", "발생수량",
+            "대분류", "중분류", "품질상태", "제조사상태", "공유여부"
+        };
+        
+        return excelExportService.exportToExcel("클레임내역", headers, data, c -> new Object[]{
+            c.getClaimNumber(), c.getReceiptDate() != null ? c.getReceiptDate().toString() : "-",
+            c.getCountry(), c.getItemCode(), c.getProductName(), c.getLotNumber(), c.getManufacturer(),
+            c.getOccurrenceQty(), c.getPrimaryCategory(), c.getSecondaryCategory(),
+            c.getQualityStatus(), c.getMfrStatus(), c.isSharedWithManufacturer()
+        });
     }
 }

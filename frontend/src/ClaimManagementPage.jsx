@@ -8,6 +8,7 @@ import ProductSearchPopup from './ProductSearchPopup';
 import { usePermissions } from './usePermissions';
 
 const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) => {
+    const { canView } = usePermissions(user);
     const gridRef = useRef(null);
     const [actualClaims, setActualClaims] = useState([]);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -141,13 +142,21 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
         return null;
     };
 
-    const { canView, canEdit: canEditClaim } = usePermissions(user);
+    const { canEdit: canEditClaim } = usePermissions(user);
     const canCreate = canEditClaim('claims');
     const canViewDashboard = canView('claimDashboard');
 
-    const handleExport = () => {
-        if (gridRef.current) {
-            gridRef.current.api.exportDataAsCsv({ fileName: 'claim_list.csv', allColumns: true });
+    const handleExportExcel = async () => {
+        if (!actualClaims || actualClaims.length === 0) {
+            alert("조회 내역이 없습니다.");
+            return;
+        }
+        try {
+            const { exportClaimsExcel, downloadBlob } = await import('./api');
+            const response = await exportClaimsExcel(searchParams);
+            downloadBlob(response, "Claim_Export.xlsx");
+        } catch (error) {
+            alert("엑셀 다운로드 중 오류가 발생했습니다.");
         }
     };
 
@@ -159,7 +168,9 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
                     {canViewDashboard && (
                         <button className="secondary" onClick={() => onNavigate('claimDashboard')}>📊 클레임 대시보드 보기</button>
                     )}
-                    <button className="primary" onClick={handleExport} style={{ backgroundColor: '#28a745', borderColor: '#28a745' }}>📥 엑셀(CSV) 다운로드</button>
+                    {canView('claims') && (
+                        <button className="primary" onClick={handleExportExcel} style={{ backgroundColor: '#107c41', borderColor: '#107c41' }}>📊 엑셀 다운로드</button>
+                    )}
                     <button className="primary" onClick={handleCreateNew} disabled={!canCreate} style={{ opacity: canCreate ? 1 : 0.5 }}>+ 신규 클레임 접수</button>
                 </div>
             </div>

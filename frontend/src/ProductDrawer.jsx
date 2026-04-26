@@ -104,7 +104,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
     const [masterTemplates, setMasterTemplates] = useState([]);
     const [masterRules, setMasterRules] = useState([]);
 
-    const { canEdit: canEditProduct, canDelete: canDeleteProduct } = usePermissions(user);
+    const { canEdit: canEditProduct, canDelete: canDeleteProduct, isAdmin } = usePermissions(user);
     const canEdit = canEditProduct('products');
     const isDimensionsConfirmed = formData.dimensions?.status === '확정';
     const canEditBoxes = canEdit && !isDimensionsConfirmed;
@@ -1450,7 +1450,11 @@ const ProductDrawer = ({ product, onClose, user }) => {
                         {history.length === 0 ? <p style={{ padding: '20px', color: '#777' }}>변경 이력이 없습니다.</p> : Object.entries(
                             history.reduce((acc, rec) => {
                                 const timeKey = rec.modifiedAt ? rec.modifiedAt.substring(0, 19).replace('T', ' ') : '알 수 없는 시간';
-                                const groupKey = `${rec.modifier} | ${timeKey}`;
+                                // [고도화] 상세 사용자 정보 우선 노출, 없으면 기존 modifier 필드 사용
+                                const mName = rec.modifierName || rec.modifier || '시스템';
+                                const mId = rec.modifierUsername ? `(${rec.modifierUsername})` : '';
+                                const mComp = rec.modifierCompany ? ` [${rec.modifierCompany}]` : '';
+                                const groupKey = `${mName}${mId}${mComp} | ${timeKey}`;
                                 if (!acc[groupKey]) acc[groupKey] = [];
                                 acc[groupKey].push(rec);
                                 return acc;

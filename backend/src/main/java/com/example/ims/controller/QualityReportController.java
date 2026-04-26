@@ -22,6 +22,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/quality")
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class QualityReportController {
 
     private final WmsService wmsService;
@@ -64,12 +65,49 @@ public class QualityReportController {
         return ResponseEntity.ok(wmsService.searchInbound(companyFilter, start, end, itemCode, productName, lotNumber, manufacturer, excludeStatus, grnNumber));
     }
 
+    @GetMapping("/export")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'MANUFACTURER', 'SALES', 'RESPONSIBLE_SALES')")
+    public ResponseEntity<byte[]> exportInbound(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
+            @RequestParam(required = false) String itemCode,
+            @RequestParam(required = false) String productName,
+            @RequestParam(required = false) String lotNumber,
+            @RequestParam(required = false) String manufacturer,
+            @RequestParam(required = false) String grnNumber) throws java.io.IOException {
+        
+        String username = userDetails.getUsername();
+        log.info(">>>> [EXPORT] Quality Excel Request - User: {}", username);
+        
+        try {
+            User user = userRepository.findByUsername(username)
+                    .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+            
+            String role = user.getRole();
+            String companyFilter = (role != null && role.toUpperCase().contains("MANUFACTURER")) 
+                    ? user.getCompanyName() : null;
+            
+            log.info(">>>> [EXPORT] Quality Excel - Role: {}, CompanyFilter: {}", role, companyFilter);
+            
+            byte[] excelFile = qualityReportService.exportInbound(username, companyFilter, startDate, endDate, itemCode, productName, lotNumber, manufacturer, grnNumber);
+            
+            return ResponseEntity.ok()
+                    .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=InboundInspection_Export.xlsx")
+                    .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                    .body(excelFile);
+        } catch (Exception e) {
+            log.error(">>>> [EXPORT] [ERROR] Quality Excel failed for user {}: {}", username, e.getMessage(), e);
+            throw e;
+        }
+    }
+
     @GetMapping("/inbound/release-record")
     public ResponseEntity<List<WmsInbound>> getReleaseRecords(@RequestParam String date) {
         return ResponseEntity.ok(wmsService.getReleaseRecords(date));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'MANUFACTURER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'MANUFACTURER', 'RESPONSIBLE_SALES')")
     @PutMapping("/inbound/{id}")
     public ResponseEntity<WmsInbound> updateInbound(@PathVariable Long id, @RequestBody WmsInbound updatedData,
                                                    @AuthenticationPrincipal UserDetails userDetails) {
@@ -84,7 +122,7 @@ public class QualityReportController {
         return ResponseEntity.ok(qualityReportService.updateInbound(id, updatedData, user, isAdmin));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
     @PostMapping("/inbound/{id}/complete")
     public ResponseEntity<Void> completeInspection(@PathVariable Long id, @AuthenticationPrincipal UserDetails userDetails) {
         checkQualityAuthority(userDetails);
@@ -99,7 +137,7 @@ public class QualityReportController {
         return ResponseEntity.ok(qualityReportService.getInboundHistory(id, user));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'MANUFACTURER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'MANUFACTURER', 'RESPONSIBLE_SALES')")
     @PostMapping("/inbound/upload-coa")
     public ResponseEntity<String> uploadCoa(@RequestParam("file") MultipartFile file,
                                              @RequestParam(value = "productName", required = false) String productName) {
@@ -119,7 +157,7 @@ public class QualityReportController {
         return ResponseEntity.ok(qualityReportService.submitReport(report));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
     @PostMapping("/fetch-wms")
     public ResponseEntity<String> triggerWmsFetch() {
         wmsService.fetchAndSaveInboundData();
@@ -131,8 +169,9 @@ public class QualityReportController {
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
         boolean isACompanyQuality = "더파운더즈".equals(user.getCompanyName()) && "Quality".equals(user.getDepartment());
-        if (!user.getRole().contains("ADMIN") && !isACompanyQuality) {
-            throw new RuntimeException("품질 검사 및 수정을 위한 권한이 없습니다. (더파운더즈 품질팀만 가능)");
+        boolean isResponsibleSales = user.getRole().contains("RESPONSIBLE_SALES");
+        if (!user.getRole().contains("ADMIN") && !isACompanyQuality && !isResponsibleSales) {
+            throw new RuntimeException("품질 검사 및 수정을 위한 권한이 없습니다. (더파운더즈 품질팀 또는 책임판매관리자만 가능)");
         }
     }
 }

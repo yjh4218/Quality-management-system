@@ -15,7 +15,11 @@ public class EntityChangeEvent {
     private final String entityType;
     private final Long entityId;
     private final String action;
-    private final String modifier;
+    private final String modifier; // Login ID (Backward compatibility)
+    private final Long modifierId;
+    private final String modifierUsername;
+    private final String modifierName;
+    private final String modifierCompany;
     private final String description;
     private final Object oldEntity;
     private final Object newEntity;

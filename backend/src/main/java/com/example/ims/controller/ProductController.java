@@ -22,10 +22,12 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/products")
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class ProductController {
 
     private final ProductService productService;
     private final FileStorageService fileStorageService;
+    private final com.example.ims.service.ExcelExportService excelExportService;
 
     @GetMapping
     public ResponseEntity<org.springframework.data.domain.Page<com.example.ims.dto.ProductSummaryRecord>> getProducts(
@@ -67,6 +69,7 @@ public class ProductController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
     public ResponseEntity<Product> updateProduct(@PathVariable Long id, @RequestBody Product product,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(productService.updateProduct(id, product, userDetails.getUsername()));
@@ -101,7 +104,7 @@ public class ProductController {
 
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
     public ResponseEntity<Void> deleteProduct(@PathVariable Long id, @AuthenticationPrincipal UserDetails userDetails) {
         productService.deleteProduct(id, userDetails.getUsername());
         return ResponseEntity.ok().build();
@@ -145,6 +148,33 @@ public class ProductController {
             org.springframework.data.domain.Pageable pageable) {
         return ResponseEntity
                 .ok(productService.searchProducts(userDetails.getUsername(), itemCode, productName, englishProductName, brand, manufacturer, ingredients, pageable));
+    }
+
+    @GetMapping("/export")
+    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','SALES','MANUFACTURER','RESPONSIBLE_SALES')")
+    public ResponseEntity<byte[]> exportProducts(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestParam(required = false) String itemCode,
+            @RequestParam(required = false) String productName,
+            @RequestParam(required = false) String englishProductName,
+            @RequestParam(required = false) String brand,
+            @RequestParam(required = false) String manufacturer,
+            @RequestParam(required = false) String ingredients) throws IOException {
+        
+        String username = userDetails.getUsername();
+        log.info(">>>> [EXPORT] Product Excel - User: {}, Filters: itemCode={}, productName={}", username, itemCode, productName);
+        
+        try {
+            byte[] excelFile = productService.exportProducts(username, itemCode, productName, englishProductName, brand, manufacturer, ingredients);
+            
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=Product_Master_Export.xlsx")
+                    .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                    .body(excelFile);
+        } catch (Exception e) {
+            log.error(">>>> [EXPORT] [ERROR] Product Excel generation failed for user {}: {}", username, e.getMessage(), e);
+            throw e;
+        }
     }
 
 }

@@ -31,7 +31,12 @@ public class AuditLog {
     private String action; // CREATE, UPDATE, DELETE, RESTORE
 
     @Column(nullable = false)
-    private String modifier; // Username
+    private String modifier; // Login ID (for backward compatibility)
+
+    private Long modifierId;
+    private String modifierUsername;
+    private String modifierName;
+    private String modifierCompany;
 
     @CreationTimestamp
     private LocalDateTime modifiedAt;

@@ -50,7 +50,7 @@ export const usePermissions = (user) => {
         });
     };
 
-    return {
+    return useMemo(() => ({
         isAdmin,
         canView: (menuKey) => hasPermission(menuKey, 'VIEW'),
         canEdit: (menuKey) => hasPermission(menuKey, 'EDIT'),
@@ -61,5 +61,5 @@ export const usePermissions = (user) => {
             disabled: !hasPermission(menuKey, action),
             style: !hasPermission(menuKey, action) ? { opacity: 0.5, cursor: 'not-allowed' } : {}
         })
-    };
+    }), [user, isAdmin]);
 };

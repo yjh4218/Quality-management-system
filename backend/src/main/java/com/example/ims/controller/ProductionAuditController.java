@@ -28,7 +28,7 @@ public class ProductionAuditController {
      * 감리 목록 조회 (모든 역할 허용)
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','SALES','MANUFACTURER')")
+    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','SALES','MANUFACTURER','RESPONSIBLE_SALES')")
     public ResponseEntity<List<ProductionAuditDTO>> getAllAudits(
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestParam(required = false) String manufacturerName) {
@@ -39,7 +39,7 @@ public class ProductionAuditController {
      * 대기 중인 감리 목록 조회 (모든 역할 허용)
      */
     @GetMapping("/pending")
-    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','SALES','MANUFACTURER')")
+    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','SALES','MANUFACTURER','RESPONSIBLE_SALES')")
     public ResponseEntity<List<ProductionAuditDTO>> getAllPendingAudits(
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestParam(required = false) String manufacturerName) {
@@ -50,7 +50,7 @@ public class ProductionAuditController {
      * 신규 감리 생성 (관리자, 품질팀 권한)
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','QUALITY')")
+    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','RESPONSIBLE_SALES')")
     public ResponseEntity<ProductionAuditDTO> createAudit(@RequestBody ProductionAuditDTO dto,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(service.createAudit(dto, userDetails.getUsername()));
@@ -60,7 +60,7 @@ public class ProductionAuditController {
      * 감리 정보 수정 (관리자, 품질팀 권한)
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','QUALITY')")
+    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','RESPONSIBLE_SALES')")
     public ResponseEntity<ProductionAuditDTO> updateAudit(@PathVariable Long id, @RequestBody ProductionAuditDTO dto,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(service.updateAudit(id, dto, userDetails.getUsername()));
@@ -71,7 +71,7 @@ public class ProductionAuditController {
      * [무결성] 서비스 레이어에서 소프트 딜리트(is_deleted=true)로 처리됩니다.
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','QUALITY')")
+    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','RESPONSIBLE_SALES')")
     public ResponseEntity<Void> deleteAudit(@PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails) {
         service.deleteAudit(id, userDetails.getUsername());
@@ -82,7 +82,7 @@ public class ProductionAuditController {
      * 감리 변경 이력 조회 (모든 역할 허용)
      */
     @GetMapping("/{id}/history")
-    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','SALES','MANUFACTURER')")
+    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','SALES','MANUFACTURER','RESPONSIBLE_SALES')")
     public ResponseEntity<List<com.example.ims.entity.ProductionAuditHistory>> getHistory(@PathVariable Long id) {
         return ResponseEntity.ok(service.getHistory(id));
     }
@@ -91,7 +91,7 @@ public class ProductionAuditController {
      * 감리 공개/비공개 토글 (관리자, 품질팀 권한)
      */
     @PatchMapping("/pending/{itemCode}/disclosure")
-    @PreAuthorize("hasAnyRole('ADMIN','QUALITY')")
+    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','RESPONSIBLE_SALES')")
     public ResponseEntity<Void> toggleProductDisclosure(
             @PathVariable String itemCode,
             @RequestBody Map<String, Boolean> body) {
@@ -99,5 +99,29 @@ public class ProductionAuditController {
         log.info("[CONTROLLER] Toggle Disclosure - ItemCode: {}, isDisclosed: {}", itemCode, isDisclosed);
         service.toggleProductDisclosure(itemCode, isDisclosed);
         return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/export")
+    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','SALES','MANUFACTURER','RESPONSIBLE_SALES')")
+    public ResponseEntity<byte[]> exportAudits(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestParam(required = false) String manufacturerName,
+            @RequestParam(required = false) String itemCode,
+            @RequestParam(required = false) String productName) throws java.io.IOException {
+        
+        String username = userDetails.getUsername();
+        log.info(">>>> [EXPORT] Production Audit Excel - User: {}, FilterMfr: {}", username, manufacturerName);
+        
+        try {
+            byte[] excelFile = service.exportAudits(username, manufacturerName, itemCode, productName);
+            
+            return ResponseEntity.ok()
+                    .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=Production_Audit_Export.xlsx")
+                    .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                    .body(excelFile);
+        } catch (Exception e) {
+            log.error(">>>> [EXPORT] [ERROR] Production Audit Excel failed for user {}: {}", username, e.getMessage(), e);
+            throw e;
+        }
     }
 }
