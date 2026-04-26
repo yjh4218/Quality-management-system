@@ -118,6 +118,12 @@
 			<artifactId>flyway-core</artifactId>
 		</dependency>
 
+		<!-- Spring Session JDBC for persistent sessions -->
+		<dependency>
+			<groupId>org.springframework.session</groupId>
+			<artifactId>spring-session-jdbc</artifactId>
+		</dependency>
+
 	</dependencies>
 
 	<build>
