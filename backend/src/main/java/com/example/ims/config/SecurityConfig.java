@@ -83,22 +83,17 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         
-        // [SECURITY PATCH] 와일드카드 + Credentials 동시 사용 불가 해결
-        List<String> origins = Arrays.stream(allowedOrigins.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty() && !s.equals("*"))
-                .collect(Collectors.toList());
-        
-        if (origins.isEmpty()) {
-            // 운영 안정성을 위한 최소한의 로컬 폴백
-            configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:5173"));
-        } else {
-            configuration.setAllowedOrigins(origins);
-        }
+        // [CORS PATCH] 운영 환경 확장성 및 보안 강화
+        configuration.setAllowedOriginPatterns(List.of(
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "https://*.hf.space",
+            "https://*.pages.dev"
+        ));
 
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"));
-        configuration.setExposedHeaders(List.of("Authorization"));
+        configuration.setAllowedHeaders(List.of("*")); // 모든 헤더 허용
+        configuration.setExposedHeaders(List.of("Set-Cookie", "Authorization"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 
