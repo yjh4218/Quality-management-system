@@ -18,6 +18,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.beans.factory.annotation.Value;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Configuration
 @EnableWebSecurity
@@ -28,18 +29,18 @@ public class SecurityConfig {
     private final CustomAuthenticationFailureHandler failureHandler;
     private final CustomAuthenticationSuccessHandler successHandler;
 
-    @Value("${cors.allowed-origins:*}")
+    @Value("${cors.allowed-origins:}")
     private String allowedOrigins;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf.disable()) // 테스트를 위해 CSRF 비활성화 (필요시 설정)
+                .csrf(AbstractHttpConfigurer::disable) 
                 .authorizeHttpRequests(auth -> auth
-                        // [Task 1] 관리자 시스템 경로 잠금
+                        // [SECURITY PATCH] 관리자 시스템 경로 권한 강화
                         .requestMatchers("/api/admin/system/health").permitAll() 
-                        .requestMatchers("/api/admin/system/**").authenticated()
+                        .requestMatchers("/api/admin/system/**").hasRole("ADMIN")
                         
                         .requestMatchers("/", "/api/auth/login", "/api/auth/logout").permitAll()
                         .requestMatchers("/api/auth/register", "/api/auth/check-username", "/api/auth/find-password", "/api/auth/verify-email").permitAll()
@@ -54,12 +55,13 @@ public class SecurityConfig {
                 )
                 .sessionManagement(session -> session
                         .sessionFixation().migrateSession() // [보안] 세션 고정 보호 강화
+                        .maximumSessions(5) // [추가] 동시 세션 제한 추가
                 )
                 .logout(logout -> logout
                         .logoutUrl("/api/auth/logout")
                         .invalidateHttpSession(true)
-                        .clearAuthentication(true) // [보안] 인증 정보 초기화
-                        .deleteCookies("QMS_SESSION", "JSESSIONID")
+                        .clearAuthentication(true) 
+                        .deleteCookies("QMS_SESSION", "JSESSIONID", "SESSION")
                         .logoutSuccessHandler((request, response, authentication) -> {
                             response.setStatus(HttpStatus.OK.value());
                         })
@@ -68,7 +70,8 @@ public class SecurityConfig {
                         .authenticationEntryPoint((request, response, authException) -> {
                             response.setStatus(HttpStatus.UNAUTHORIZED.value());
                             response.setContentType("application/json;charset=UTF-8");
-                            response.getWriter().write("{\"error\": \"Unauthorized\", \"message\": \"" + authException.getMessage() + "\"}");
+                            // [SECURITY PATCH] 상세 오류 메시지 제거
+                            response.getWriter().write("{\"error\": \"Unauthorized\", \"message\": \"Full authentication is required to access this resource.\"}");
                         })
                 )
                 .httpBasic(AbstractHttpConfigurer::disable);
@@ -79,9 +82,20 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // 프롭스에서 받은 허용 도메인 설정 (콤마 단위 분리)
-        List<String> origins = Arrays.asList(allowedOrigins.split(","));
-        configuration.setAllowedOrigins(origins);
+        
+        // [SECURITY PATCH] 와일드카드 + Credentials 동시 사용 불가 해결
+        List<String> origins = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty() && !s.equals("*"))
+                .collect(Collectors.toList());
+        
+        if (origins.isEmpty()) {
+            // 운영 안정성을 위한 최소한의 로컬 폴백
+            configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:5173"));
+        } else {
+            configuration.setAllowedOrigins(origins);
+        }
+
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"));
         configuration.setExposedHeaders(List.of("Authorization"));

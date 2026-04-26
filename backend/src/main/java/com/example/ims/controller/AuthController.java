@@ -92,9 +92,8 @@ public class AuthController {
 
     @GetMapping(value = "/verify-email", produces = "text/html;charset=UTF-8")
     public ResponseEntity<String> verifyEmail(@RequestParam String token) {
-        User user = userRepository.findAll().stream()
-                .filter(u -> token.equals(u.getVerificationToken()))
-                .findFirst()
+        // [보안 패치] Full Scan 제거 및 전용 메서드 사용
+        User user = userRepository.findByVerificationToken(token)
                 .orElse(null);
 
         String failHtml = "<html><body style='font-family: sans-serif; text-align: center; margin-top: 50px; background-color: #f4f6f8;'>" +
@@ -127,20 +126,28 @@ public class AuthController {
         String name = body.get("name");
         String email = body.get("email");
 
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("해당 정보를 가진 사용자를 찾을 수 없습니다."));
+        // [보안 패치] User Enumeration 방어: 성공/실패 여부를 노출하지 않고 일관된 메시지 반환
+        try {
+            User user = userRepository.findByUsername(username).orElse(null);
+            
+            if (user != null && user.getName().equals(name) && user.getEmail().equals(email)) {
+                // 보안 정책: 길고 복잡한 영숫자 16자리 임시 비밀번호 생성 (UUID에서 특수기호 제거)
+                String tempPwFull = UUID.randomUUID().toString().replace("-", "");
+                String tempPw = tempPwFull.substring(0, 8) + tempPwFull.substring(10, 18); // 16자 조합
+                
+                user.setPassword(passwordEncoder.encode(tempPw));
+                user.setPasswordResetRequired(true);
+                userRepository.save(user);
 
-        if (!user.getName().equals(name) || !user.getEmail().equals(email)) {
-            return ResponseEntity.badRequest().body("입력하신 정보가 일치하지 않습니다.");
+                mailService.sendTemporaryPassword(email, name, tempPw);
+                log.info("[SECURITY] Temporary password issued for user: {}", username);
+            }
+        } catch (Exception e) {
+            log.error("[SECURITY] Error during find-password process for user: {}", username, e);
         }
 
-        String tempPw = UUID.randomUUID().toString().substring(0, 8);
-        user.setPassword(passwordEncoder.encode(tempPw));
-        user.setPasswordResetRequired(true);
-        userRepository.save(user);
-
-        mailService.sendTemporaryPassword(email, name, tempPw);
-        return ResponseEntity.ok("임시 비밀번호가 메일로 발송되었습니다.");
+        // 항상 동일한 성공 메시지 반환
+        return ResponseEntity.ok(Map.of("message", "입력하신 정보가 회원 정보와 일치하는 경우 등록된 메일로 임시 비밀번호를 발송합니다."));
     }
 
     @GetMapping("/me")

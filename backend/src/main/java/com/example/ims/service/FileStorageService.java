@@ -49,45 +49,51 @@ public class FileStorageService {
     }
 
     /**
-     * [Task 6] 파일 MIME 타입 검증 (Whitelist 방식)
-     * [보안] octet-stream을 제거하고 엑셀/이미지/PDF만 허용합니다.
+     * [Task 6] 파일 MIME 타입 및 무결성 검증 (Whitelist 방식)
+     * [보안] 실행 파일 및 알 수 없는 바이너리(octet-stream) 차단
      */
     private void validateFile(MultipartFile file) {
-        // 1. 용량 재검증
+        // 1. 서비스 레이어 용량 재검증 (10MB)
         if (file.getSize() > MAX_FILE_SIZE) {
-            throw new RuntimeException("파일 크기는 10MB를 초과할 수 없습니다.");
+            throw new RuntimeException("보안 경고: 파일 크기가 허용 범위를 초과했습니다. (Max 10MB)");
         }
 
         try {
+            // Tika를 이용한 실제 컨텐츠 분석
             String detectedType = tika.detect(file.getInputStream());
-            log.debug("[FILE] Detected MIME type: {}", detectedType);
+            log.debug("[SECURITY] Content detection: {}", detectedType);
 
-            Set<String> allowedTypes = Set.of(
+            Set<String> safeTypes = Set.of(
                     "application/pdf",
-                    "image/jpeg",
-                    "image/png",
-                    "image/gif",
-                    "image/webp",
+                    "image/jpeg", "image/png", "image/gif", "image/webp",
                     "application/vnd.ms-excel",
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             );
 
-            // 엑셀 파일의 경우 때때로 octet-stream으로 감지될 수 있으나, 
-            // 보안을 위해 octet-stream을 직접 허용하는 대신 확장자와 결합하여 판단하거나
-            // Tika가 정확히 인자하도록 유도함. 여기선 화이트리스트만 엄격히 적용.
-            if (!allowedTypes.contains(detectedType)) {
-                // 확장자 기반 추가 확인 (Tika가 놓치는 일부 엑셀 케이스 대응)
-                String fileName = file.getOriginalFilename();
-                if (fileName != null && (fileName.endsWith(".xlsx") || fileName.endsWith(".xls"))) {
-                    log.info("[FILE] Excel file detected via extension: {}", fileName);
+            // 2. MIME 타입 검증
+            if (!safeTypes.contains(detectedType)) {
+                // [Edge Case] Tika가 .xlsx를 octet-stream으로 오진하는 경우에만 확장자 추가 검증
+                if ("application/octet-stream".equals(detectedType)) {
+                    validateByExtension(file.getOriginalFilename());
                 } else {
-                    log.warn("[SECURITY] Blocked invalid file upload: type={}", detectedType);
-                    throw new RuntimeException("허용되지 않은 파일 형식입니다. (PDF, 이미지, 엑셀 파일만 가능)");
+                    log.warn("[SECURITY] Blocked malicious file type: {}", detectedType);
+                    throw new RuntimeException("허용되지 않은 파일 규격입니다. (PDF, 이미지, 엑셀만 가능)");
                 }
             }
         } catch (IOException e) {
-            log.warn("MIME type detection failed: {}", e.getMessage());
-            throw new RuntimeException("파일 형식 검증 중 오류가 발생했습니다.");
+            log.error("[SECURITY] File validation failed: {}", e.getMessage());
+            throw new RuntimeException("파일 무결성 검증 중 오류가 발생했습니다.");
+        }
+    }
+
+    /**
+     * 확장자 이중 검증 (MIME 추론 실패 시 보조 수단)
+     */
+    private void validateByExtension(String originalFilename) {
+        if (originalFilename == null) throw new RuntimeException("파일명이 존재하지 않습니다.");
+        String ext = originalFilename.toLowerCase();
+        if (!(ext.endsWith(".xlsx") || ext.endsWith(".xls"))) {
+            throw new RuntimeException("보안 위험: 바이너리 파일 업로드가 금지되어 있습니다.");
         }
     }
 

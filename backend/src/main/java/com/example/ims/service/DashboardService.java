@@ -54,6 +54,7 @@ public class DashboardService {
      * @param user 현재 세션의 사용자 엔티티
      * @return 위젯 데이터 및 레이아웃 설정이 포함된 DashboardDTO
      */
+    @org.springframework.cache.annotation.Cacheable(value = "dashboard", key = "#user.username + ':' + #user.role")
     public DashboardDTO getDashboardData(User user) {
         String role = user.getRole();
         String company = user.getCompanyName();

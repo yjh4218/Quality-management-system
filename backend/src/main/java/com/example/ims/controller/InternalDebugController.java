@@ -1,7 +1,10 @@
 package com.example.ims.controller;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -11,13 +14,16 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Temporary Production Debug Controller to audit Supabase data state.
- * SECURED by a simple check (can be extended).
+ * [SECURITY HARDENED] 시스템 내부 진단용 컨트롤러
+ * 1. ADMIN 권한 필수 (RBAC)
+ * 2. 운영 환경에서의 위험한 복구 기능 제한
+ * 3. 민감 정보 노출 원천 차단
  */
 @RestController
 @RequestMapping("/api/internal")
 @RequiredArgsConstructor
-@lombok.extern.slf4j.Slf4j
+@Slf4j
+@PreAuthorize("hasRole('ADMIN')") // 모든 엔드포인트 관리자 전용
 public class InternalDebugController {
 
     private final JdbcTemplate jdbcTemplate;
@@ -28,54 +34,48 @@ public class InternalDebugController {
 
     @GetMapping("/db-audit")
     public Map<String, Object> auditDatabase() {
+        log.info("[SECURITY] Admin database audit triggered by authorized user");
         Map<String, Object> audit = new HashMap<>();
         
         try {
-            // Environment Verification (Masked)
-            Map<String, Object> env = new HashMap<>();
-            if (adminInitialPassword == null || adminInitialPassword.isEmpty()) {
-                env.put("ADMIN_INITIAL_PASSWORD", "NOT_SET");
-            } else {
-                String masked = adminInitialPassword.charAt(0) + "****" + adminInitialPassword.charAt(adminInitialPassword.length() - 1);
-                env.put("ADMIN_INITIAL_PASSWORD", masked);
-                env.put("length", adminInitialPassword.length());
-            }
-            audit.put("environment", env);
-
-            // 1. Table Counts
+            // 1. Table Counts (요약 정보만 제공)
             Map<String, Long> counts = new HashMap<>();
-            counts.put("users", getCount("users"));
-            counts.put("roles", getCount("roles"));
-            counts.put("products", getCount("products"));
-            counts.put("claims", getCount("claims"));
-            counts.put("dashboard_layouts", getCount("dashboard_layouts"));
-            counts.put("page_guides", getCount("page_guides"));
-            counts.put("wms_inbound", getCount("wms_inbound"));
+            String[] tables = {"users", "roles", "products", "claims", "wms_inbound"};
+            for (String table : tables) {
+                counts.put(table, getCount(table));
+            }
             audit.put("table_counts", counts);
 
-            // 2. Admin User Status
+            // 2. Admin Status Check (민감 필드 제외)
             List<Map<String, Object>> adminStatus = jdbcTemplate.queryForList(
-                "SELECT id, username, name, company_name, role, enabled FROM users WHERE username = 'admin'"
+                "SELECT username, role, enabled FROM users WHERE username = 'admin'"
             );
-            audit.put("admin_status", adminStatus);
-
-            // 3. Roles Status
-            List<Map<String, Object>> rolesStatus = jdbcTemplate.queryForList(
-                "SELECT role_key, display_name, dashboard_layout_id FROM roles"
-            );
-            audit.put("roles_status", rolesStatus);
+            audit.put("admin_account_exists", !adminStatus.isEmpty());
+            audit.put("admin_enabled", !adminStatus.isEmpty() && (Boolean) adminStatus.get(0).get("enabled"));
 
             audit.put("status", "HEALTHY");
+            audit.put("timestamp", new java.util.Date());
         } catch (Exception e) {
+            log.error("Audit failed", e);
             audit.put("status", "ERROR");
-            audit.put("error", e.getMessage());
         }
         
         return audit;
     }
 
+    /**
+     * [DANGER] 시스템 강제 복구 기능
+     * 운영 프로파일(prod)에서는 절대 실행되지 않도록 제한
+     */
     @GetMapping("/force-repair")
     public Map<String, Object> forceRepair() {
+        // 코드 레벨 프로파일 체크 추가 보안
+        String activeProfile = System.getProperty("spring.profiles.active", "default");
+        if ("prod".equalsIgnoreCase(activeProfile)) {
+            log.error("[SECURITY] COUNTER-MEASURE: Blocked force-repair in production environment!");
+            return Map.of("error", "Access Denied: This operation is strictly forbidden in production.");
+        }
+
         Map<String, Object> result = new HashMap<>();
         try {
             initializationService.seedAndRepairData(adminInitialPassword);
@@ -84,66 +84,29 @@ public class InternalDebugController {
         } catch (Exception e) {
             log.error(">>>> [FORCE REPAIR ERROR]", e);
             result.put("status", "ERROR");
-            result.put("error", e.getMessage());
-            result.put("cause", e.getCause() != null ? e.getCause().getMessage() : "Unknown");
         }
         return result;
     }
 
     @GetMapping("/check-schema")
     public List<Map<String, Object>> checkSchema() {
+        log.info("[SECURITY] Schema verification by admin");
+        // 핵심 테이블 존재 여부만 확인 (상세 컬럼 정보 노출 방지)
         return jdbcTemplate.queryForList(
-            "SELECT table_name, column_name, data_type, is_nullable " +
-            "FROM information_schema.columns " +
+            "SELECT table_name FROM information_schema.tables " +
             "WHERE table_schema = 'public' " +
-            "AND table_name IN ('products', 'users', 'roles') " +
-            "ORDER BY table_name, ordinal_position"
+            "AND table_name IN ('products', 'users', 'roles', 'audit_logs') "
         );
     }
 
-    @GetMapping("/test-product-query")
-    public Map<String, Object> testProductQuery() {
-        Map<String, Object> result = new HashMap<>();
-        try {
-            List<Map<String, Object>> sample = jdbcTemplate.queryForList("SELECT id, item_code, product_name FROM products LIMIT 5");
-            result.put("sample_data", sample);
-            result.put("total_count", getCount("products"));
-            result.put("status", "SUCCESS");
-        } catch (Exception e) {
-            result.put("status", "ERROR");
-            result.put("message", e.getMessage());
-        }
-        return result;
-    }
-
     @GetMapping("/session-check")
-    public Map<String, Object> sessionCheck() {
+    public Map<String, Object> sessionCheck(@org.springframework.security.core.annotation.AuthenticationPrincipal org.springframework.security.core.userdetails.UserDetails userDetails) {
         Map<String, Object> result = new HashMap<>();
-        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        
-        if (auth == null || auth instanceof org.springframework.security.authentication.AnonymousAuthenticationToken) {
-            result.put("authenticated", false);
-            result.put("principal", "anonymous");
-        } else {
-            result.put("authenticated", true);
-            result.put("principal", auth.getName());
-            result.put("authorities", auth.getAuthorities());
-            result.put("details", auth.getDetails() != null ? auth.getDetails().toString() : "null");
+        if (userDetails != null) {
+            result.put("username", userDetails.getUsername());
+            result.put("roles", userDetails.getAuthorities());
+            result.put("session_valid", true);
         }
-        
-        // Check if session exists in request
-        try {
-            jakarta.servlet.http.HttpServletRequest request = ((org.springframework.web.context.request.ServletRequestAttributes) org.springframework.web.context.request.RequestContextHolder.currentRequestAttributes()).getRequest();
-            jakarta.servlet.http.HttpSession session = request.getSession(false);
-            result.put("session_exists", session != null);
-            if (session != null) {
-                result.put("session_id", session.getId());
-                result.put("session_created", new java.util.Date(session.getCreationTime()));
-            }
-        } catch (Exception e) {
-            result.put("session_check_error", e.getMessage());
-        }
-        
         return result;
     }
 
