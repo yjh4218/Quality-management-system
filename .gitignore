@@ -1,0 +1,45 @@
+# Build artifacts
+target/
+backend/target/
+frontend/dist/
+*.jar
+*.war
+*.ear
+
+# Dependencies
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+
+# IDE / Editor
+.idea/
+.vscode/
+*.iml
+*.swp
+.DS_Store
+
+# Sensitive / Temporary Data
+.env
+.env.local
+backend/products.json
+h2_migration_data.json
+backend/h2_migration_data.json
+
+# Local Storage / Uploads
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/data/
+*.db
+
+# Logs & Scripts
+*.log
+backend/CheckRolesDb.java
+backend/DbTest.java
+backend/test.js
+*.diff
+*.patch
+
+# Plan & Tasks
+implementation_plan.md
+task.md
+walkthrough.md

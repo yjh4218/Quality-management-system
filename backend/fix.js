@@ -1,0 +1,1 @@
+const fs=require('fs'); let data=fs.readFileSync('h2_migration_data.json', 'utf8'); data=data.split('"parent" :').join('"isParent" :'); data=data.split('"master" :').join('"isMaster" :'); data=data.split('"planningSet" :').join('"isPlanningSet" :'); fs.writeFileSync('h2_migration_data.json', data, 'utf8');

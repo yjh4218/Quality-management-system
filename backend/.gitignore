@@ -1,0 +1,50 @@
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+# --- 바이너리 및 불필요 파일 차단 ---
+backend/test_output.xlsx
+backend/src/main/resources/templates/packaging_spec_template.xlsx
+docs/*.xlsx
+backend/data/
+backend/uploads/
+backend/*.log
+backend/*.txt
+node_modules/
+frontend/node_modules/
+*.db
+*.mv.db
+*.exe
+*.pdf
+*.png
+*.jpg
