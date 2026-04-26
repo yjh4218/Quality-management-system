@@ -266,27 +266,33 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
                     <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#1a1a1a', marginBottom: '8px' }}>👥 사용자 관리 및 승인</h2>
                     <p style={{ fontSize: '14px', color: '#666' }}>신규 가입자의 승인 처리 및 계정 잠금 해제, 시스템 권한 설정을 관리합니다.</p>
                 </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                    <button 
-                        onClick={() => setActiveTab('users')}
-                        className={activeTab === 'users' ? 'primary' : 'outline'}
-                        style={{ padding: '10px 16px', fontWeight: '600' }}
-                    >
-                        👥 사용자 목록
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('settings')}
-                        className={activeTab === 'settings' ? 'primary' : 'outline'}
-                        style={{ padding: '10px 16px', fontWeight: '600' }}
-                    >
-                        ⚙️ 메일 발송 설정
-                    </button>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                    {/* 관리자에게만 탭 메뉴 노출 (roles 배열 내 ROLE_ADMIN 여부 확인) */}
+                    {currentUser?.roles?.some(r => (r.authority || r).includes('ROLE_ADMIN')) && (
+                        <div style={{ display: 'flex', gap: '5px', marginRight: '15px', paddingRight: '15px', borderRight: '1px solid #eee' }}>
+                            <button 
+                                onClick={() => setActiveTab('users')}
+                                className={activeTab === 'users' ? 'primary' : 'outline'}
+                                style={{ padding: '8px 16px', fontWeight: '600', height: '40px' }}
+                            >
+                                👥 사용자 목록
+                            </button>
+                            <button 
+                                onClick={() => setActiveTab('settings')}
+                                className={activeTab === 'settings' ? 'primary' : 'outline'}
+                                style={{ padding: '8px 16px', fontWeight: '600', height: '40px' }}
+                            >
+                                ⚙️ 메일 발송 설정
+                            </button>
+                        </div>
+                    )}
+
                     {activeTab === 'users' && (
                         <>
-                            <button onClick={() => setShowRoleGuide(!showRoleGuide)} className="secondary outline" style={{ padding: '10px 16px', fontWeight: '600' }}>
+                            <button onClick={() => setShowRoleGuide(!showRoleGuide)} className="secondary outline" style={{ padding: '8px 16px', fontWeight: '600', height: '40px' }}>
                                 {showRoleGuide ? '💡 권한 가이드라인 숨기기' : '💡 시스템 권한표 보기'}
                             </button>
-                            <button onClick={fetchUsers} className="primary" style={{ padding: '10px 24px', fontWeight: '600', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '4px' }}>🔍 조회</button>
+                            <button onClick={fetchUsers} className="primary" style={{ padding: '8px 24px', fontWeight: '600', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '4px', height: '40px' }}>🔍 조회</button>
                         </>
                     )}
                 </div>
