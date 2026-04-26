@@ -17,7 +17,7 @@ public class SessionConfig {
         DefaultCookieSerializer serializer = new DefaultCookieSerializer();
         
         // 1. 쿠키 이름 설정 (application.properties와 통일)
-        serializer.setCookieName("QMS_SESSION");
+        serializer.setCookieName("QMS_SESSION_V2");
         
         // 2. 쿠키 경로 설정
         serializer.setCookiePath("/");
@@ -31,6 +31,9 @@ public class SessionConfig {
         // 5. [핵심] 쿠키 유효기간 설정
         // -1로 설정하면 브라우저 종료 시 쿠키가 삭제되어 자동 로그인을 방지합니다.
         serializer.setCookieMaxAge(-1);
+
+        // 6. [인코딩 패치] 쿠키 값을 Base64로 인코딩하여 UTF-8 0x00(Null) 에러 방지
+        serializer.setUseBase64Encoding(true);
         
         return serializer;
     }
