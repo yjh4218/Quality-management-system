@@ -127,7 +127,7 @@ public class AuditLogService {
         LocalDateTime end = null;
         
         String processedType = (entityType == null || entityType.trim().isEmpty() || entityType.equals("ALL")) ? null : entityType;
-        String processedSearch = (search != null && !search.trim().isEmpty()) ? "%" + search.trim() + "%" : null;
+        String processedSearch = (search != null && !search.trim().isEmpty()) ? "%" + search.trim().toLowerCase() + "%" : null;
 
         try {
             if (startDate != null && !startDate.trim().isEmpty()) start = java.time.LocalDate.parse(startDate).atStartOfDay();
