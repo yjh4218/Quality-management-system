@@ -34,6 +34,11 @@ public class SessionConfig {
 
         // 6. [인코딩 패치] 쿠키 값을 Base64로 인코딩하는 기능은 레이턴시 및 호환성을 위해 끕니다. (V2 이름 변경으로 충분)
         serializer.setUseBase64Encoding(false);
+
+        // 7. [핵심] SameSite 및 Secure 설정 강제 (HTTPS/Iframe 지원)
+        // HF 환경에서는 SameSite=None, Secure=true가 필수입니다.
+        serializer.setSameSite("None");
+        serializer.setUseSecureCookie(true);
         
         return serializer;
     }
