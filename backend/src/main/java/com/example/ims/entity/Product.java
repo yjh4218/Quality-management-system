@@ -145,7 +145,7 @@ public class Product {
     private PackagingMaterial packagingMaterial = new PackagingMaterial();
 
     // File Paths
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "product_images", joinColumns = @JoinColumn(name = "product_id"))
     @Column(name = "image_path")
     @Builder.Default
@@ -223,7 +223,7 @@ public class Product {
     @Builder.Default
     private java.util.List<ProductComponent> components = new java.util.ArrayList<>();
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "product_packaging_certificates", joinColumns = @JoinColumn(name = "product_id"))
     @Column(name = "certificate_path")
     @Builder.Default

@@ -99,6 +99,7 @@ public class ProductService {
      * @param id Product ID (제품 식별자)
      * @return Optional wrapping the Product (제품 객체 또는 Empty)
      */
+    @Transactional(readOnly = true)
     public java.util.Optional<Product> getProductById(Long id, String username) {
         Product product = productRepository.findById(id).orElse(null);
         if (product == null) return java.util.Optional.empty();

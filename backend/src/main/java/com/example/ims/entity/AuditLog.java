@@ -42,11 +42,14 @@ public class AuditLog {
     private LocalDateTime modifiedAt;
 
     @Column(columnDefinition = "TEXT")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.LONGVARCHAR)
     private String description; // Summary of changes
 
     @Column(columnDefinition = "TEXT")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.LONGVARCHAR)
     private String oldValue;
 
     @Column(columnDefinition = "TEXT")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.LONGVARCHAR)
     private String newValue;
 }

@@ -97,7 +97,7 @@ api.interceptors.response.use(
 
         const isLoginRequest = error.config && error.config.url && (error.config.url.endsWith('/auth/login') || error.config.url.includes('/auth/login'));
         
-        if (error.response && (error.response.status === 401 || error.response.status === 403) && !isLoginRequest) {
+        if (error.response && error.response.status === 401 && !isLoginRequest) {
             window.dispatchEvent(new Event('auth-unauthorized'));
         } else if (!isLoginRequest) {
             // [에어백] 모든 실패한 요청에 대해 사용자에게 즉시 토스트 알림

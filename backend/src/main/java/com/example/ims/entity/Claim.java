@@ -51,6 +51,7 @@ public class Claim {
     private String tertiaryCategory;
     
     @Column(columnDefinition = "TEXT")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.LONGVARCHAR)
     private String claimContent;
     
     @Builder.Default
@@ -71,13 +72,16 @@ public class Claim {
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "claim_photos", joinColumns = @JoinColumn(name = "claim_id"))
     @Column(name = "photo_url", columnDefinition = "TEXT")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.LONGVARCHAR)
     @Builder.Default
     private java.util.List<String> claimPhotos = new java.util.ArrayList<>();
     
     @Column(columnDefinition = "TEXT")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.LONGVARCHAR)
     private String rootCauseAnalysis;
     
     @Column(columnDefinition = "TEXT")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.LONGVARCHAR)
     private String preventativeAction;
     
     @Builder.Default
@@ -88,9 +92,11 @@ public class Claim {
 
     // [추가] 제조사 담당자 기재 및 상태 필드
     @Column(columnDefinition = "TEXT")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.LONGVARCHAR)
     private String mfrRootCauseAnalysis;
     
     @Column(columnDefinition = "TEXT")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.LONGVARCHAR)
     private String mfrPreventativeAction;
     
     @Builder.Default
@@ -102,9 +108,11 @@ public class Claim {
     private LocalDate mfrTerminationDate; // [추가] 제조사 측 클레임 종결 일자
 
     @Column(columnDefinition = "TEXT")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.LONGVARCHAR)
     private String qualityRemarks; // [신설] 품질팀 비고
 
     @Column(columnDefinition = "TEXT")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.LONGVARCHAR)
     private String mfrRemarks; // [신설] 제조사 비고
 
     @CreationTimestamp
