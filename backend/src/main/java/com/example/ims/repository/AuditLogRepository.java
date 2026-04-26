@@ -16,10 +16,10 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
     List<AuditLog> findByModifiedAtBetweenOrderByModifiedAtDesc(LocalDateTime start, LocalDateTime end);
 
     @org.springframework.data.jpa.repository.Query("SELECT a FROM AuditLog a WHERE " +
-            "(:entityType IS NULL OR a.entityType = :entityType) AND " +
-            "(:search IS NULL OR CAST(a.entityId AS String) LIKE :search OR LOWER(CAST(a.description AS String)) LIKE :search) AND " +
-            "(:start IS NULL OR a.modifiedAt >= :start) AND " +
-            "(:end IS NULL OR a.modifiedAt <= :end) " +
+            "(CAST(:entityType AS String) IS NULL OR a.entityType = :entityType) AND " +
+            "(CAST(:search AS String) IS NULL OR CAST(a.entityId AS String) LIKE :search OR LOWER(CAST(a.description AS String)) LIKE :search) AND " +
+            "(a.modifiedAt >= COALESCE(:start, a.modifiedAt)) AND " +
+            "(a.modifiedAt <= COALESCE(:end, a.modifiedAt)) " +
             "ORDER BY a.modifiedAt DESC")
     org.springframework.data.domain.Page<AuditLog> searchLogs(
             @org.springframework.data.repository.query.Param("entityType") String entityType,
