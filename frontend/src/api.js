@@ -6,9 +6,9 @@ const getBaseURL = () => {
     if (import.meta.env.VITE_API_BASE_URL) {
         return import.meta.env.VITE_API_BASE_URL;
     }
-    // 기본값 설정 (Hugging Face Spaces로 고정)
-    return "https://yjh332123-qms.hf.space/api";
-    // return "http://localhost:8080/api";
+    // 기본값 설정 (도메인 루트만 지정)
+    return "https://yjh332123-qms.hf.space";
+    // return "http://localhost:8080";
 };
 
 // [고도화 3] 전역 로딩 상태 (글로벌 스피너) 제어 함수
@@ -72,22 +72,22 @@ api.interceptors.response.use(
 
 // Dashboard
 export const getDashboard = () => 
-  api.get('/dashboard').then(res => res.data);
+  api.get('/api/dashboard').then(res => res.data);
 
 // Auth
 export const login = (username, password) => {
     const params = new URLSearchParams();
     params.append('username', username);
     params.append('password', password);
-    return api.post('/auth/login', params, {
+    return api.post('/api/auth/login', params, {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     });
 };
-export const getCurrentUser = (config = {}) => api.get('/auth/me', config);
-export const checkUsername = (username) => api.post('/auth/check-username', { username });
-export const registerUser = (userData) => api.post('/auth/register', userData);
-export const findPassword = (data) => api.post('/auth/find-password', data);
-export const changePassword = (data) => api.post('/auth/change-password', data);
+export const getCurrentUser = (config = {}) => api.get('/api/auth/me', config);
+export const checkUsername = (username) => api.post('/api/auth/check-username', { username });
+export const registerUser = (userData) => api.post('/api/auth/register', userData);
+export const findPassword = (data) => api.post('/api/auth/find-password', data);
+export const changePassword = (data) => api.post('/api/auth/change-password', data);
 
 // Admin APIs
 export const getUsers = (params = {}) => {
@@ -96,21 +96,21 @@ export const getUsers = (params = {}) => {
     if (params.companyName) queryParams.append('companyName', params.companyName);
     if (params.department) queryParams.append('department', params.department);
     if (params.role) queryParams.append('role', params.role);
-    return api.get(`/admin/users?${queryParams.toString()}`);
+    return api.get(`/api/admin/users?${queryParams.toString()}`);
 };
 
 // Role Management APIs
-export const getRoles = () => api.get('/admin/roles');
-export const createRole = (data) => api.post('/admin/roles', data);
-export const updateRole = (id, data) => api.put(`/admin/roles/${id}`, data);
-export const deleteRole = (id) => api.delete(`/admin/roles/${id}`);
-export const getRoleLogs = (id) => api.get(`/admin/roles/${id}/logs`);
+export const getRoles = () => api.get('/api/admin/roles');
+export const createRole = (data) => api.post('/api/admin/roles', data);
+export const updateRole = (id, data) => api.put(`/api/admin/roles/${id}`, data);
+export const deleteRole = (id) => api.delete(`/api/admin/roles/${id}`);
+export const getRoleLogs = (id) => api.get(`/api/admin/roles/${id}/logs`);
 
-export const approveUser = (id) => api.post(`/admin/users/${id}/approve`);
-export const toggleUserStatus = (id) => api.post(`/admin/users/${id}/toggle-status`);
-export const updateUserRole = (id, role) => api.put(`/admin/users/${id}/role`, { role });
-export const unlockUser = (id) => api.put(`/auth/unlock/${id}`, {});
-export const resetUserPassword = (id, newPassword) => api.put(`/auth/reset-password/${id}`, { newPassword });
+export const approveUser = (id) => api.post(`/api/admin/users/${id}/approve`);
+export const toggleUserStatus = (id) => api.post(`/api/admin/users/${id}/toggle-status`);
+export const updateUserRole = (id, role) => api.put(`/api/admin/users/${id}/role`, { role });
+export const unlockUser = (id) => api.put(`/api/auth/unlock/${id}`, {});
+export const resetUserPassword = (id, newPassword) => api.put(`/api/auth/reset-password/${id}`, { newPassword });
 
 // Quality & WMS
 export const getInboundData = (params = {}) => {
@@ -123,59 +123,59 @@ export const getInboundData = (params = {}) => {
     if (params.manufacturer) queryParams.append('manufacturer', params.manufacturer);
     if (params.excludeStatus) queryParams.append('excludeStatus', params.excludeStatus);
     if (params.grnNumber) queryParams.append('grnNumber', params.grnNumber);
-    return api.get(`/quality/inbound?${queryParams.toString()}`);
+    return api.get(`/api/quality/inbound?${queryParams.toString()}`);
 };
-export const updateInboundData = (id, data) => api.put(`/quality/inbound/${id}`, data);
-export const completeInboundInspection = (id) => api.post(`/quality/inbound/${id}/complete`);
-export const getInboundHistory = (id) => api.get(`/quality/inbound/${id}/history`);
+export const updateInboundData = (id, data) => api.put(`/api/quality/inbound/${id}`, data);
+export const completeInboundInspection = (id) => api.post(`/api/quality/inbound/${id}/complete`);
+export const getInboundHistory = (id) => api.get(`/api/quality/inbound/${id}/history`);
 export const uploadCoaFile = (file, productName = '') => {
     const formData = new FormData();
     formData.append('file', file);
-    return api.post(`/quality/inbound/upload-coa?productName=${encodeURIComponent(productName)}`, formData, {
+    return api.post(`/api/quality/inbound/upload-coa?productName=${encodeURIComponent(productName)}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
     });
 };
-export const submitQualityReport = (report) => api.post('/quality/report', report);
-export const triggerWmsFetch = () => api.post('/quality/fetch-wms');
+export const submitQualityReport = (report) => api.post('/api/quality/report', report);
+export const triggerWmsFetch = () => api.post('/api/quality/fetch-wms');
 
 // Manufacturer APIs
-export const getManufacturers = () => api.get('/manufacturers');
-export const createManufacturer = (m) => api.post('/manufacturers', m);
-export const updateManufacturer = (id, m) => api.put(`/manufacturers/${id}`, m);
-export const deleteManufacturer = (id) => api.delete(`/manufacturers/${id}`);
-export const restoreManufacturer = (id) => api.post(`/manufacturers/${id}/restore`);
-export const hardDeleteManufacturer = (id) => api.delete(`/manufacturers/${id}/hard`);
+export const getManufacturers = () => api.get('/api/manufacturers');
+export const createManufacturer = (m) => api.post('/api/manufacturers', m);
+export const updateManufacturer = (id, m) => api.put(`/api/manufacturers/${id}`, m);
+export const deleteManufacturer = (id) => api.delete(`/api/manufacturers/${id}`);
+export const restoreManufacturer = (id) => api.post(`/api/manufacturers/${id}/restore`);
+export const hardDeleteManufacturer = (id) => api.delete(`/api/manufacturers/${id}/hard`);
 
 // Brand APIs
-export const getBrands = () => api.get('/brands');
-export const createBrand = (brand) => api.post('/brands', brand);
+export const getBrands = () => api.get('/api/brands');
+export const createBrand = (brand) => api.post('/api/brands', brand);
 export const deleteBrand = (id) => api.delete(`/brands/${id}`);
 
 // Product APIs
-export const getProducts = () => api.get('/products');
-export const createProduct = (product) => api.post('/products', product);
-export const updateProduct = (id, product) => api.put(`/products/${id}`, product);
-export const getProductById = (id) => api.get(`/products/${id}`);
+export const getProducts = () => api.get('/api/products');
+export const createProduct = (product) => api.post('/api/products', product);
+export const updateProduct = (id, product) => api.put(`/api/products/${id}`, product);
+export const getProductById = (id) => api.get(`/api/products/${id}`);
 export const uploadFile = (file, productName = '') => {
     const formData = new FormData();
     formData.append('file', file);
-    return api.post(`/products/upload?productName=${encodeURIComponent(productName)}`, formData, {
+    return api.post(`/api/products/upload?productName=${encodeURIComponent(productName)}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
     });
 };
 export const uploadIngredients = (file) => {
     const formData = new FormData();
     formData.append('file', file);
-    return api.post('/products/upload-ingredients', formData, {
+    return api.post('/api/products/upload-ingredients', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
     });
 };
-export const getProductHistory = (id) => api.get(`/products/${id}/history`);
-export const deleteProduct = (id) => api.delete(`/products/${id}`);
-export const restoreProduct = (id) => api.post(`/products/${id}/restore`);
-export const hardDeleteProduct = (id) => api.delete(`/products/${id}/hard`);
-export const checkDuplicateItemCode = (itemCode) => api.get(`/products/check-duplicate/${itemCode}`);
-export const loadMasterProduct = (itemCode) => api.get(`/products/master/${itemCode}`);
+export const getProductHistory = (id) => api.get(`/api/products/${id}/history`);
+export const deleteProduct = (id) => api.delete(`/api/products/${id}`);
+export const restoreProduct = (id) => api.post(`/api/products/${id}/restore`);
+export const hardDeleteProduct = (id) => api.delete(`/api/products/${id}/hard`);
+export const checkDuplicateItemCode = (itemCode) => api.get(`/api/products/check-duplicate/${itemCode}`);
+export const loadMasterProduct = (itemCode) => api.get(`/api/products/master/${itemCode}`);
 export const getProductByItemCode = loadMasterProduct;
 export const searchProducts = (params) => {
     const queryParams = new URLSearchParams();
@@ -187,37 +187,37 @@ export const searchProducts = (params) => {
     if (params.ingredients) queryParams.append('ingredients', params.ingredients);
     if (params.page !== undefined) queryParams.append('page', params.page);
     if (params.size !== undefined) queryParams.append('size', params.size);
-    return api.get(`/products/search?${queryParams.toString()}`);
+    return api.get(`/api/products/search?${queryParams.toString()}`);
 };
-export const downloadIngredientTemplate = () => api.get('/products/ingredient-template', { responseType: 'blob' });
+export const downloadIngredientTemplate = () => api.get('/api/products/ingredient-template', { responseType: 'blob' });
 
 // Packaging Spec APIs
-export const getPackagingSpecs = (productId) => api.get(`/packaging-specs/product/${productId}`);
-export const createPackagingSpec = (productId) => api.post(`/packaging-specs/product/${productId}`);
-export const savePackagingSpec = (spec) => api.post('/packaging-specs', spec); // This might be used for updates
+export const getPackagingSpecs = (productId) => api.get(`/api/packaging-specs/product/${productId}`);
+export const createPackagingSpec = (productId) => api.post(`/api/packaging-specs/product/${productId}`);
+export const savePackagingSpec = (spec) => api.post('/api/packaging-specs', spec); // This might be used for updates
 export const copyMasterPackagingSpec = (productId, masterProductId) => 
-    api.post(`/packaging-specs/copy-master?productId=${productId}&masterProductId=${masterProductId}`);
-export const downloadPackagingSpecExcel = (productId) => api.get(`/packaging-specs/export-excel/${productId}`, { responseType: 'blob' });
-export const downloadPackagingSpecPdf = (productId) => api.get(`/packaging-specs/export-pdf/${productId}`, { responseType: 'blob' });
+    api.post(`/api/packaging-specs/copy-master?productId=${productId}&masterProductId=${masterProductId}`);
+export const downloadPackagingSpecExcel = (productId) => api.get(`/api/packaging-specs/export-excel/${productId}`, { responseType: 'blob' });
+export const downloadPackagingSpecPdf = (productId) => api.get(`/api/packaging-specs/export-pdf/${productId}`, { responseType: 'blob' });
 
 // Production Audit (Photo Audit) APIs
 export const getProductionAudits = (manufacturerName) => 
-    api.get(`/production-audits${manufacturerName ? `?manufacturerName=${encodeURIComponent(manufacturerName)}` : ''}`);
+    api.get(`/api/production-audits${manufacturerName ? `?manufacturerName=${encodeURIComponent(manufacturerName)}` : ''}`);
 export const getPendingProductionAudits = (manufacturerName) => 
-    api.get(`/production-audits/pending${manufacturerName ? `?manufacturerName=${encodeURIComponent(manufacturerName)}` : ''}`);
-export const createProductionAudit = (data) => api.post(`/production-audits`, data);
-export const updateProductionAudit = (id, data) => api.put(`/production-audits/${id}`, data);
-export const deleteProductionAudit = (id) => api.delete(`/production-audits/${id}`);
+    api.get(`/api/production-audits/pending${manufacturerName ? `?manufacturerName=${encodeURIComponent(manufacturerName)}` : ''}`);
+export const createProductionAudit = (data) => api.post(`/api/production-audits`, data);
+export const updateProductionAudit = (id, data) => api.put(`/api/production-audits/${id}`, data);
+export const deleteProductionAudit = (id) => api.delete(`/api/production-audits/${id}`);
 export const toggleProductDisclosure = (itemCode, isDisclosed) => 
-    api.patch(`/production-audits/pending/${encodeURIComponent(itemCode)}/disclosure`, { isDisclosed });
-export const getProductionAuditHistory = (id) => api.get(`/production-audits/${id}/history`);
+    api.patch(`/api/production-audits/pending/${encodeURIComponent(itemCode)}/disclosure`, { isDisclosed });
+export const getProductionAuditHistory = (id) => api.get(`/api/production-audits/${id}/history`);
 
 // Master Data APIs (Feature 2, 3, 4, 11)
-export const getMasterTemplates = () => api.get('/admin/master-data/templates');
-export const saveMasterTemplate = (template) => api.post('/admin/master-data/templates', template);
-export const getMasterRules = () => api.get('/admin/master-data/rules');
-export const saveMasterRule = (rule) => api.post('/admin/master-data/rules', rule);
-export const getMasterMaterials = () => api.get('/admin/master-data/materials');
+export const getMasterTemplates = () => api.get('/api/admin/master-data/templates');
+export const saveMasterTemplate = (template) => api.post('/api/admin/master-data/templates', template);
+export const getMasterRules = () => api.get('/api/admin/master-data/rules');
+export const saveMasterRule = (rule) => api.post('/api/admin/master-data/rules', rule);
+export const getMasterMaterials = () => api.get('/api/admin/master-data/materials');
 export const getMasterMaterialsSearch = (params = {}) => {
     const queryParams = new URLSearchParams();
     if (params.bomCode) queryParams.append('bomCode', params.bomCode);
@@ -225,35 +225,35 @@ export const getMasterMaterialsSearch = (params = {}) => {
     if (params.type) queryParams.append('type', params.type);
     if (params.detailedType) queryParams.append('detailedType', params.detailedType);
     if (params.manufacturer) queryParams.append('manufacturer', params.manufacturer);
-    return api.get(`/admin/master-data/materials/search?${queryParams.toString()}`);
+    return api.get(`/api/admin/master-data/materials/search?${queryParams.toString()}`);
 };
-export const saveMasterMaterial = (material) => api.post('/admin/master-data/materials', material);
-export const checkBomCodeExists = (bomCode) => api.get(`/admin/master-data/materials/check-bom-code?bomCode=${bomCode}`);
-export const getMasterStickers = () => api.get('/admin/master-data/stickers');
-export const saveMasterSticker = (sticker) => api.post('/admin/master-data/stickers', sticker);
+export const saveMasterMaterial = (material) => api.post('/api/admin/master-data/materials', material);
+export const checkBomCodeExists = (bomCode) => api.get(`/api/admin/master-data/materials/check-bom-code?bomCode=${bomCode}`);
+export const getMasterStickers = () => api.get('/api/admin/master-data/stickers');
+export const saveMasterSticker = (sticker) => api.post('/api/admin/master-data/stickers', sticker);
 
 // --- Sales Channels (Distribution Channel Management) ---
-export const getSalesChannels = () => api.get('/admin/master-data/sales-channels');
-export const getActiveSalesChannels = () => api.get('/admin/master-data/sales-channels/active');
-export const saveSalesChannel = (channel) => api.post('/admin/master-data/sales-channels', channel);
-export const toggleSalesChannel = (id) => api.post(`/admin/master-data/sales-channels/${id}/toggle`);
-export const deleteSalesChannel = (id) => api.delete(`/admin/master-data/sales-channels/${id}`);
+export const getSalesChannels = () => api.get('/api/admin/master-data/sales-channels');
+export const getActiveSalesChannels = () => api.get('/api/admin/master-data/sales-channels/active');
+export const saveSalesChannel = (channel) => api.post('/api/admin/master-data/sales-channels', channel);
+export const toggleSalesChannel = (id) => api.post(`/api/admin/master-data/sales-channels/${id}/toggle`);
+export const deleteSalesChannel = (id) => api.delete(`/api/admin/master-data/sales-channels/${id}`);
 
 // Master Data Upload (Common)
 export const uploadMasterFile = (file, prefix = 'MASTER') => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('prefix', prefix);
-    return api.post('/admin/master-data/upload', formData, {
+    return api.post('/api/admin/master-data/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
     });
 };
 
 // BOM Category APIs (New - Relocated to stable MasterDataController)
-export const getActiveBomCategories = () => api.get('/admin/master-data/bom-categories/active');
-export const getAllBomCategories = () => api.get('/admin/master-data/bom-categories/all');
-export const saveBomCategory = (category) => api.post('/admin/master-data/bom-categories', category);
-export const softDeleteBomCategory = (id) => api.delete(`/admin/master-data/bom-categories/${id}/soft`);
+export const getActiveBomCategories = () => api.get('/api/admin/master-data/bom-categories/active');
+export const getAllBomCategories = () => api.get('/api/admin/master-data/bom-categories/all');
+export const saveBomCategory = (category) => api.post('/api/admin/master-data/bom-categories', category);
+export const softDeleteBomCategory = (id) => api.delete(`/api/admin/master-data/bom-categories/${id}/soft`);
 export const hardDeleteBomCategory = (id) => api.delete(`/api/admin/system/bom-categories/${id}/hard`); // Placeholder if needed
 
 // Global Admin & Profile APIs
@@ -265,10 +265,10 @@ export const getAdminLogs = (params = {}) => {
     if (params.endDate) queryParams.append('endDate', params.endDate);
     if (params.page !== undefined) queryParams.append('page', params.page);
     if (params.size !== undefined) queryParams.append('size', params.size);
-    return api.get(`/admin/logs?${queryParams.toString()}`);
+    return api.get(`/api/admin/logs?${queryParams.toString()}`);
 };
-export const rollbackAuditLog = (logId) => api.post(`/admin/logs/${logId}/restore`);
-export const updateProfile = (profileData) => api.put('/auth/profile', profileData);
+export const rollbackAuditLog = (logId) => api.post(`/api/admin/logs/${logId}/restore`);
+export const updateProfile = (profileData) => api.put('/api/auth/profile', profileData);
 
 // Claim APIs
 export const getClaims = (params = {}, config = {}) => {
@@ -284,9 +284,9 @@ export const getClaims = (params = {}, config = {}) => {
     if (params.sharedWithManufacturer !== undefined && params.sharedWithManufacturer !== '') {
         queryParams.append('sharedWithManufacturer', params.sharedWithManufacturer);
     }
-    return api.get(`/claims?${queryParams.toString()}`, config);
+    return api.get(`/api/claims?${queryParams.toString()}`, config);
 };
-export const getDebugStatus = () => api.get('/claims/debug/status');
+export const getDebugStatus = () => api.get('/api/claims/debug/status');
 export const getClaimDashboard = (params = {}, config = {}) => {
     let url = '/claims/dashboard';
     const queryParams = new URLSearchParams();
@@ -301,18 +301,18 @@ export const getClaimDashboard = (params = {}, config = {}) => {
     
     return api.get(url, config);
 };
-export const createClaim = (claim) => api.post('/claims', claim);
-export const updateClaim = (id, data) => api.put(`/claims/${id}`, data);
+export const createClaim = (claim) => api.post('/api/claims', claim);
+export const updateClaim = (id, data) => api.put(`/api/claims/${id}`, data);
 export const uploadClaimResponse = (id, file, productName) => {
     const formData = new FormData();
     formData.append('file', file);
     if (productName) formData.append('productName', productName);
-    return api.post(`/claims/${id}/upload-response`, formData, { headers: { 'Content-Type': 'multipart/form-data' }});
+    return api.post(`/api/claims/${id}/upload-response`, formData, { headers: { 'Content-Type': 'multipart/form-data' }});
 };
 export const uploadClaimPhoto = (file) => {
     const formData = new FormData();
     formData.append('file', file);
-    return api.post(`/claims/upload-photo`, formData, { headers: { 'Content-Type': 'multipart/form-data' }});
+    return api.post(`/api/claims/upload-photo`, formData, { headers: { 'Content-Type': 'multipart/form-data' }});
 };
 export const getClaimDashboardStats = (startDate, endDate, itemCode, productName, manufacturer) => {
     const params = new URLSearchParams();
@@ -321,26 +321,26 @@ export const getClaimDashboardStats = (startDate, endDate, itemCode, productName
     if (itemCode) params.append('itemCode', itemCode);
     if (productName) params.append('productName', productName);
     if (manufacturer) params.append('manufacturer', manufacturer);
-    return api.get(`/claims/dashboard?${params.toString()}`);
+    return api.get(`/api/claims/dashboard?${params.toString()}`);
 };
 
-export const getClaimHistory = (id) => api.get(`/claims/${id}/history`);
+export const getClaimHistory = (id) => api.get(`/api/claims/${id}/history`);
 
 // Dashboard Layout APIs
-export const getDashboardLayouts = () => api.get('/dashboard-layouts').then(res => res.data);
-export const createDashboardLayout = (data) => api.post('/dashboard-layouts', data).then(res => res.data);
+export const getDashboardLayouts = () => api.get('/api/dashboard-layouts').then(res => res.data);
+export const createDashboardLayout = (data) => api.post('/api/dashboard-layouts', data).then(res => res.data);
 export const updateDashboardLayout = (id, data) => api.put(`/dashboard-layouts/${id}`, data).then(res => res.data);
-export const deleteDashboardLayout = (id) => api.delete(`/dashboard-layouts/${id}`);
+export const deleteDashboardLayout = (id) => api.delete(`/api/dashboard-layouts/${id}`);
 
 // Page Guide Management
-export const getPageGuides = () => api.get('/guides').then(res => res.data);
-export const getPageGuide = (pageKey) => api.get(`/guides/${pageKey}`).then(res => res.data);
-export const savePageGuide = (data) => api.post('/guides', data).then(res => res.data);
-export const deletePageGuide = (id) => api.delete(`/guides/${id}`);
+export const getPageGuides = () => api.get('/api/guides').then(res => res.data);
+export const getPageGuide = (pageKey) => api.get(`/api/guides/${pageKey}`).then(res => res.data);
+export const savePageGuide = (data) => api.post('/api/guides', data).then(res => res.data);
+export const deletePageGuide = (id) => api.delete(`/api/guides/${id}`);
 
 // [휴지통 관련]
-export const getTrashItems = () => api.get('/admin/trash');
-export const restoreTrashItem = (type, id) => api.post(`/admin/trash/${type}/${id}/restore`);
-export const hardDeleteTrashItem = (type, id) => api.delete(`/admin/trash/${type}/${id}`);
+export const getTrashItems = () => api.get('/api/admin/trash');
+export const restoreTrashItem = (type, id) => api.post(`/api/admin/trash/${type}/${id}/restore`);
+export const hardDeleteTrashItem = (type, id) => api.delete(`/api/admin/trash/${type}/${id}`);
 
 export default api;
