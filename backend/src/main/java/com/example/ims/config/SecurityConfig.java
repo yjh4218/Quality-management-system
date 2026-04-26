@@ -15,6 +15,8 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import org.springframework.beans.factory.annotation.Value;
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -26,11 +28,14 @@ public class SecurityConfig {
     private final CustomAuthenticationFailureHandler failureHandler;
     private final CustomAuthenticationSuccessHandler successHandler;
 
+    @Value("${cors.allowed-origins:*}")
+    private String allowedOrigins;
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/**", "/uploads/**")) // API와 업로드는 CSRF 토큰 검증 제외
+                .csrf(csrf -> csrf.disable()) // 테스트를 위해 CSRF 비활성화 (필요시 설정)
                 .authorizeHttpRequests(auth -> auth
                         // [Task 1] 관리자 시스템 경로 잠금
                         .requestMatchers("/api/admin/system/health").permitAll() 
@@ -74,11 +79,9 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of(
-                "http://localhost:*",
-                "http://127.0.0.1:*",
-                "https://*.onrender.com"
-        ));
+        // 프롭스에서 받은 허용 도메인 설정 (콤마 단위 분리)
+        List<String> origins = Arrays.asList(allowedOrigins.split(","));
+        configuration.setAllowedOrigins(origins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"));
         configuration.setExposedHeaders(List.of("Authorization"));
