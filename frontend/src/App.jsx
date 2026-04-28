@@ -24,27 +24,68 @@ import HelpCenterModal from './components/HelpCenterModal';
 import ProfileModal from './ProfileModal';
 import { getCurrentUser } from './api';
 
+const PAGE_INFO = {
+    dashboard: { title: '📊 시스템 대시보드' },
+    users: { title: '👥 사용자 승인 관리' },
+    logs: { title: '📜 시스템 변경 이력' },
+    roles: { title: '🔐 권한 관리' },
+    guideManagement: { title: '📖 가이드 관리' },
+    dashboardMgmt: { title: '🎨 대시보드 관리' },
+    trashBin: { title: '🗑️ 데이터 복구' },
+    brands: { title: '🏷️ 브랜드 마스터' },
+    manufacturers: { title: '🏭 제조사 정보' },
+    salesChannels: { title: '🌐 유통 채널 관리' },
+    products: { title: '📦 제품코드 마스터' },
+    bomMaster: { title: '📏 BOM 마스터' },
+    bomCategories: { title: '⚙️ BOM 유형 설정' },
+    packagingTemplates: { title: '📋 포장공정 템플릿' },
+    packagingRules: { title: '⚖️ 채널별 포장 규칙' },
+    quality: { title: '📦 입고 품질 관리' },
+    releaseRecord: { title: '📄 시장출하 기록' },
+    qualityPhotoAudit: { title: '📸 신제품 생산감리' },
+    claims: { title: '🔍 클레임 조회/입력' },
+    claimDashboard: { title: '📈 클레임 대시보드' }
+};
+
 const App = () => {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [user, setUser] = useState(null);
-    const [currentPage, setCurrentPage] = useState('dashboard');
-    const [navigationData, setNavigationData] = useState(null);
+    const [tabs, setTabs] = useState([
+        { id: 'dashboard', page: 'dashboard', title: '📊 시스템 대시보드', data: null }
+    ]);
+    const [activeTabId, setActiveTabId] = useState('dashboard');
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [isHelpOpen, setIsHelpOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false); 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-    // [고도화 1] 사이드바 그룹 열림/닫힘 상태 관리
+    // [고도화 1] 사이드바 그룹 열림/닫힘 상태 관리 (Accordion Behavior)
     const [openSections, setOpenSections] = useState({
         system: true,
-        quality: true,
-        claim: true,
-        master: true,
-        category: false
+        category: false,
+        master: false,
+        quality: false,
+        claim: false
     });
 
     const toggleSection = (section) => {
-        setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
+        setOpenSections(prev => {
+            const isOpening = !prev[section];
+            if (isOpening) {
+                // Close all other sections
+                return {
+                    system: false,
+                    category: false,
+                    master: false,
+                    quality: false,
+                    claim: false,
+                    [section]: true
+                };
+            } else {
+                // Just toggle this one off
+                return { ...prev, [section]: false };
+            }
+        });
     };
 
     useEffect(() => {
@@ -69,20 +110,40 @@ const App = () => {
             console.log(">>>> [DEBUG] Current User Data:", response.data);
             setUser(response.data);
             setIsLoggedIn(true);
-            if (!currentPage || currentPage === 'login') setCurrentPage('dashboard');
         } catch (err) {
             setIsLoggedIn(false);
         }
     };
 
     const handleNavigate = (page, data = null) => {
-        setCurrentPage(page);
-        setNavigationData(data);
-        setIsMobileMenuOpen(false); // Close menu after navigation on mobile
+        const pageTitle = PAGE_INFO[page]?.title || page;
+        
+        setTabs(prev => {
+            const exists = prev.find(t => t.page === page);
+            if (exists) {
+                // If it exists, we might want to update its data if new data is provided
+                if (data) {
+                    return prev.map(t => t.page === page ? { ...t, data } : t);
+                }
+                return prev;
+            }
+            return [...prev, { id: page, page, title: pageTitle, data }];
+        });
+        
+        setActiveTabId(page);
+        setIsMobileMenuOpen(false);
     };
 
-    const clearNavigationData = () => {
-        setNavigationData(null);
+    const handleCloseTab = (tabId, e) => {
+        e.stopPropagation();
+        if (tabs.length === 1) return; // Don't close the last tab
+        
+        const newTabs = tabs.filter(t => t.id !== tabId);
+        setTabs(newTabs);
+        
+        if (activeTabId === tabId) {
+            setActiveTabId(newTabs[newTabs.length - 1].id);
+        }
     };
 
     const handleLoginSuccess = () => {
@@ -92,7 +153,8 @@ const App = () => {
     const handleLogout = () => {
         setIsLoggedIn(false);
         setUser(null);
-        setCurrentPage('dashboard');
+        setTabs([{ id: 'dashboard', page: 'dashboard', title: '📊 시스템 대시보드', data: null }]);
+        setActiveTabId('dashboard');
         setIsMobileMenuOpen(false);
     };
 
@@ -160,12 +222,13 @@ const App = () => {
 
     // [고도화 5] 현재 활성화된 섹션 판단 로직
     const isSectionActive = (section) => {
+        const activePage = tabs.find(t => t.id === activeTabId)?.page;
         switch(section) {
-            case 'system': return ['dashboard', 'users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin'].includes(currentPage);
-            case 'category': return ['brands', 'manufacturers', 'salesChannels'].includes(currentPage);
-            case 'master': return ['products', 'bomMaster', 'bomCategories', 'packagingTemplates', 'packagingRules'].includes(currentPage);
-            case 'quality': return ['quality', 'releaseRecord', 'qualityPhotoAudit'].includes(currentPage);
-            case 'claim': return ['claims', 'claimDashboard'].includes(currentPage);
+            case 'system': return ['dashboard', 'users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin'].includes(activePage);
+            case 'category': return ['brands', 'manufacturers', 'salesChannels'].includes(activePage);
+            case 'master': return ['products', 'bomMaster', 'bomCategories', 'packagingTemplates', 'packagingRules'].includes(activePage);
+            case 'quality': return ['quality', 'releaseRecord', 'qualityPhotoAudit'].includes(activePage);
+            case 'claim': return ['claims', 'claimDashboard'].includes(activePage);
             default: return false;
         }
     };
@@ -216,37 +279,37 @@ const App = () => {
                         {openSections.system && (
                             <div className="sidebar-group-content">
                                 {canAccess('dashboard') && (
-                                    <button className={`sidebar-item ${currentPage === 'dashboard' ? 'active' : ''}`} onClick={() => setCurrentPage('dashboard')}>
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'dashboard' ? 'active' : ''}`} onClick={() => handleNavigate('dashboard')}>
                                         📊 시스템 대시보드
                                     </button>
                                 )}
                                 {canAccess('users') && (
-                                    <button className={`sidebar-item ${currentPage === 'users' ? 'active' : ''}`} onClick={() => setCurrentPage('users')}>
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'users' ? 'active' : ''}`} onClick={() => handleNavigate('users')}>
                                         👥 사용자 승인 관리
                                     </button>
                                 )}
                                 {canAccess('logs') && (
-                                    <button className={`sidebar-item ${currentPage === 'logs' ? 'active' : ''}`} onClick={() => setCurrentPage('logs')}>
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'logs' ? 'active' : ''}`} onClick={() => handleNavigate('logs')}>
                                         📜 시스템 변경 이력
                                     </button>
                                 )}
                                 {canAccess('roles') && (
-                                    <button className={`sidebar-item ${currentPage === 'roles' ? 'active' : ''}`} onClick={() => setCurrentPage('roles')}>
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'roles' ? 'active' : ''}`} onClick={() => handleNavigate('roles')}>
                                         🔐 권한 관리
                                     </button>
                                 )}
                                 {canAccess('guideManagement') && (
-                                    <button className={`sidebar-item ${currentPage === 'guideManagement' ? 'active' : ''}`} onClick={() => setCurrentPage('guideManagement')}>
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'guideManagement' ? 'active' : ''}`} onClick={() => handleNavigate('guideManagement')}>
                                         📖 가이드 관리
                                     </button>
                                 )}
                                 {canAccess('dashboardMgmt') && (
-                                    <button className={`sidebar-item ${currentPage === 'dashboardMgmt' ? 'active' : ''}`} onClick={() => setCurrentPage('dashboardMgmt')}>
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'dashboardMgmt' ? 'active' : ''}`} onClick={() => handleNavigate('dashboardMgmt')}>
                                         🎨 대시보드 제작/관리
                                     </button>
                                 )}
                                 {canAccess('trashBin') && (
-                                    <button className={`sidebar-item ${currentPage === 'trashBin' ? 'active' : ''}`} onClick={() => setCurrentPage('trashBin')}>
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'trashBin' ? 'active' : ''}`} onClick={() => handleNavigate('trashBin')}>
                                         🗑️ 데이터 복구 (휴지통)
                                     </button>
                                 )}
@@ -268,17 +331,17 @@ const App = () => {
                         {openSections.category && (
                             <div className="sidebar-group-content">
                                 {canAccess('brands') && (
-                                    <button className={`sidebar-item ${currentPage === 'brands' ? 'active' : ''}`} onClick={() => setCurrentPage('brands')}>
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'brands' ? 'active' : ''}`} onClick={() => handleNavigate('brands')}>
                                         🏷️ 브랜드 마스터 관리
                                     </button>
                                 )}
                                 {canAccess('manufacturers') && (
-                                    <button className={`sidebar-item ${currentPage === 'manufacturers' ? 'active' : ''}`} onClick={() => setCurrentPage('manufacturers')}>
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'manufacturers' ? 'active' : ''}`} onClick={() => handleNavigate('manufacturers')}>
                                         🏭 제조사 정보 관리
                                     </button>
                                 )}
                                 {canAccess('salesChannels') && (
-                                    <button className={`sidebar-item ${currentPage === 'salesChannels' ? 'active' : ''}`} onClick={() => setCurrentPage('salesChannels')}>
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'salesChannels' ? 'active' : ''}`} onClick={() => handleNavigate('salesChannels')}>
                                         🌐 유통 채널 관리
                                     </button>
                                 )}
@@ -300,27 +363,27 @@ const App = () => {
                         {openSections.master && (
                             <div className="sidebar-group-content">
                                 {canAccess('products') && (
-                                    <button className={`sidebar-item ${currentPage === 'products' ? 'active' : ''}`} onClick={() => setCurrentPage('products')}>
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'products' ? 'active' : ''}`} onClick={() => handleNavigate('products')}>
                                         📦 제품코드 마스터
                                     </button>
                                 )}
                                 {canAccess('bomMaster') && (
-                                    <button className={`sidebar-item ${currentPage === 'bomMaster' ? 'active' : ''}`} onClick={() => setCurrentPage('bomMaster')}>
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'bomMaster' ? 'active' : ''}`} onClick={() => handleNavigate('bomMaster')}>
                                         📏 구성품 BOM 마스터 관리
                                     </button>
                                 )}
                                 {canAccess('bomCategories') && (
-                                    <button className={`sidebar-item ${currentPage === 'bomCategories' ? 'active' : ''}`} onClick={() => setCurrentPage('bomCategories')}>
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'bomCategories' ? 'active' : ''}`} onClick={() => handleNavigate('bomCategories')}>
                                         ⚙️ BOM 유형 설정/관리
                                     </button>
                                 )}
                                 {canAccess('packagingTemplates') && (
-                                    <button className={`sidebar-item ${currentPage === 'packagingTemplates' ? 'active' : ''}`} onClick={() => setCurrentPage('packagingTemplates')}>
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'packagingTemplates' ? 'active' : ''}`} onClick={() => handleNavigate('packagingTemplates')}>
                                         📋 포장공정 템플릿 관리
                                     </button>
                                 )}
                                 {canAccess('packagingRules') && (
-                                    <button className={`sidebar-item ${currentPage === 'packagingRules' ? 'active' : ''}`} onClick={() => setCurrentPage('packagingRules')}>
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'packagingRules' ? 'active' : ''}`} onClick={() => handleNavigate('packagingRules')}>
                                         ⚖️ 채널별 포장 규칙 관리
                                     </button>
                                 )}
@@ -342,17 +405,17 @@ const App = () => {
                         {openSections.quality && (
                             <div className="sidebar-group-content">
                                 {canAccess('quality') && (
-                                    <button className={`sidebar-item ${currentPage === 'quality' ? 'active' : ''}`} onClick={() => setCurrentPage('quality')}>
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'quality' ? 'active' : ''}`} onClick={() => handleNavigate('quality')}>
                                         📦 입고 품질 관리
                                     </button>
                                 )}
                                 {canAccess('releaseRecord') && (
-                                    <button className={`sidebar-item ${currentPage === 'releaseRecord' ? 'active' : ''}`} onClick={() => setCurrentPage('releaseRecord')}>
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'releaseRecord' ? 'active' : ''}`} onClick={() => handleNavigate('releaseRecord')}>
                                         📄 시장출하 적부판정 기록
                                     </button>
                                 )}
                                 {canAccess('qualityPhotoAudit') && (
-                                    <button className={`sidebar-item ${currentPage === 'qualityPhotoAudit' ? 'active' : ''}`} onClick={() => setCurrentPage('qualityPhotoAudit')}>
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'qualityPhotoAudit' ? 'active' : ''}`} onClick={() => handleNavigate('qualityPhotoAudit')}>
                                         📸 신제품 생산감리 (사진감리)
                                     </button>
                                 )}
@@ -374,12 +437,12 @@ const App = () => {
                         {openSections.claim && (
                             <div className="sidebar-group-content">
                                 {canAccess('claims') && (
-                                    <button className={`sidebar-item ${currentPage === 'claims' ? 'active' : ''}`} onClick={() => setCurrentPage('claims')}>
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'claims' ? 'active' : ''}`} onClick={() => handleNavigate('claims')}>
                                         🔍 클레임 조회 및 입력
                                     </button>
                                 )}
                                 {canAccess('claimDashboard') && (
-                                    <button className={`sidebar-item ${currentPage === 'claimDashboard' ? 'active' : ''}`} onClick={() => setCurrentPage('claimDashboard')}>
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'claimDashboard' ? 'active' : ''}`} onClick={() => handleNavigate('claimDashboard')}>
                                         📈 클레임 대시보드
                                     </button>
                                 )}
@@ -414,63 +477,90 @@ const App = () => {
 
             {/* Main Content Area */}
             <main className="main-content">
-                {currentPage === 'users' && (
-                    <UserManagementPage 
-                        user={user}
-                        navigationData={navigationData} 
-                        onNavigated={clearNavigationData} 
-                    />
-                )}
-                {currentPage === 'logs' && <LogManagementPage user={user} />}
-                {currentPage === 'roles' && <RoleManagementPage user={user} />}
-                {canAccess('guideManagement') && currentPage === 'guideManagement' && <GuideManagementPage user={user} />}
-                {canAccess('dashboardMgmt') && currentPage === 'dashboardMgmt' && <DashboardManagementPage user={user} />}
-                {currentPage === 'brands' && <BrandManagementPage user={user} />}
-                {currentPage === 'manufacturers' && <ManufacturerManagementPage user={user} />}
-                {currentPage === 'salesChannels' && <SalesChannelManagement user={user} />}
-                {currentPage === 'products' && (
-                    <ProductListPage 
-                        user={user} 
-                        navigationData={navigationData} 
-                        onNavigated={clearNavigationData} 
-                    />
-                )}
-                {currentPage === 'quality' && (
-                    <QualityManagementPage 
-                        user={user} 
-                        navigationData={navigationData} 
-                        onNavigated={clearNavigationData} 
-                    />
-                )}
-                {canAccess('releaseRecord') && currentPage === 'releaseRecord' && (
-                    <MarketReleaseRecordPage user={user} />
-                )}
-                {canAccess('qualityPhotoAudit') && currentPage === 'qualityPhotoAudit' && <ProductionAuditPage user={user} />}
-                {currentPage === 'dashboard' && (
-                    <DashboardPage 
-                        user={user} 
-                        onNavigate={handleNavigate} 
-                    />
-                )}
-                {currentPage === 'claims' && (
-                    <ClaimManagementPage 
-                        user={user} 
-                        navigationData={navigationData}
-                        onNavigated={clearNavigationData}
-                        onNavigate={handleNavigate}
-                    />
-                )}
-                {currentPage === 'claimDashboard' && (
-                    <ClaimDashboardPage 
-                        user={user}
-                        onNavigate={handleNavigate}
-                    />
-                )}
-                {currentPage === 'bomMaster' && <BomMasterPage user={user} />}
-                {currentPage === 'bomCategories' && <BomCategoryManagementPage user={user} />}
-                {currentPage === 'packagingTemplates' && <PackagingTemplatePage user={user} />}
-                {currentPage === 'packagingRules' && <PackagingRulePage user={user} />}
-                {canAccess('trashBin') && currentPage === 'trashBin' && <TrashBinPage user={user} />}
+                <div className="tab-bar">
+                    {tabs.map(tab => (
+                        <div 
+                            key={tab.id} 
+                            className={`tab-item ${tab.id === activeTabId ? 'active' : ''}`}
+                            onClick={() => setActiveTabId(tab.id)}
+                        >
+                            <span className="tab-title">{tab.title}</span>
+                            {tabs.length > 1 && (
+                                <span className="tab-close" onClick={(e) => handleCloseTab(tab.id, e)}>&times;</span>
+                            )}
+                        </div>
+                    ))}
+                </div>
+
+                <div className="tab-content-container">
+                    {tabs.map(tab => (
+                        <div 
+                            key={tab.id} 
+                            className="tab-page-wrapper"
+                            style={{ display: tab.id === activeTabId ? 'flex' : 'none' }}
+                        >
+                            <div className="page-container-inner">
+                                {tab.page === 'users' && (
+                                    <UserManagementPage 
+                                        user={user}
+                                        navigationData={tab.data} 
+                                        onNavigated={() => {}} // No-op as data is stored in tab
+                                    />
+                                )}
+                                {tab.page === 'logs' && <LogManagementPage user={user} />}
+                                {tab.page === 'roles' && <RoleManagementPage user={user} />}
+                                {canAccess('guideManagement') && tab.page === 'guideManagement' && <GuideManagementPage user={user} />}
+                                {canAccess('dashboardMgmt') && tab.page === 'dashboardMgmt' && <DashboardManagementPage user={user} />}
+                                {tab.page === 'brands' && <BrandManagementPage user={user} />}
+                                {tab.page === 'manufacturers' && <ManufacturerManagementPage user={user} />}
+                                {tab.page === 'salesChannels' && <SalesChannelManagement user={user} />}
+                                {tab.page === 'products' && (
+                                    <ProductListPage 
+                                        user={user} 
+                                        navigationData={tab.data} 
+                                        onNavigated={() => {}} 
+                                    />
+                                )}
+                                {tab.page === 'quality' && (
+                                    <QualityManagementPage 
+                                        user={user} 
+                                        navigationData={tab.data} 
+                                        onNavigated={() => {}} 
+                                    />
+                                )}
+                                {canAccess('releaseRecord') && tab.page === 'releaseRecord' && (
+                                    <MarketReleaseRecordPage user={user} />
+                                )}
+                                {canAccess('qualityPhotoAudit') && tab.page === 'qualityPhotoAudit' && <ProductionAuditPage user={user} />}
+                                {tab.page === 'dashboard' && (
+                                    <DashboardPage 
+                                        user={user} 
+                                        onNavigate={handleNavigate} 
+                                    />
+                                )}
+                                {tab.page === 'claims' && (
+                                    <ClaimManagementPage 
+                                        user={user} 
+                                        navigationData={tab.data}
+                                        onNavigated={() => {}}
+                                        onNavigate={handleNavigate}
+                                    />
+                                )}
+                                {tab.page === 'claimDashboard' && (
+                                    <ClaimDashboardPage 
+                                        user={user}
+                                        onNavigate={handleNavigate}
+                                    />
+                                )}
+                                {tab.page === 'bomMaster' && <BomMasterPage user={user} />}
+                                {tab.page === 'bomCategories' && <BomCategoryManagementPage user={user} />}
+                                {tab.page === 'packagingTemplates' && <PackagingTemplatePage user={user} />}
+                                {tab.page === 'packagingRules' && <PackagingRulePage user={user} />}
+                                {canAccess('trashBin') && tab.page === 'trashBin' && <TrashBinPage user={user} />}
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </main>
 
             {/* Global floating help button */}
@@ -484,7 +574,7 @@ const App = () => {
 
             {isHelpOpen && (
                 <HelpCenterModal 
-                    currentPage={currentPage} 
+                    currentPage={tabs.find(t => t.id === activeTabId)?.page} 
                     onClose={() => setIsHelpOpen(false)} 
                 />
             )}

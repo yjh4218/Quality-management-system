@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { getClaimDashboard } from './api';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid, PieChart, Pie, Cell, Legend } from 'recharts';
 import { AgGridReact } from 'ag-grid-react';
+import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
 import ClaimDrawer from './ClaimDrawer';
 
@@ -20,6 +21,7 @@ function ClaimDashboardPage({ user, onNavigate }) {
     
     const [stats, setStats] = useState(globalDashboardData.stats);
     const [claims, setClaims] = useState(globalDashboardData.claims);
+    const [loading, setLoading] = useState(false);
     
     const [startDate, setStartDate] = useState(() => {
         const d = new Date(); d.setMonth(d.getMonth() - 3); return d.toISOString().split('T')[0];
@@ -54,13 +56,14 @@ function ClaimDashboardPage({ user, onNavigate }) {
 
         const fetchFunc = async () => {
             const params = { startDate, endDate, itemCode, productName, manufacturer };
-            const response = await getClaimDashboard(params, { skipLoading: true });
+            const response = await getClaimDashboard(params); // Remove skipLoading
             return response.data;
         };
 
         globalDashboardPromise = fetchFunc();
         
         try {
+            setLoading(true);
             const result = await globalDashboardPromise;
             globalDashboardData = { stats: result, claims: result.allClaims || [], key: currentKey };
             setStats(result);
@@ -68,6 +71,7 @@ function ClaimDashboardPage({ user, onNavigate }) {
         } catch (e) {
             // Silently fail
         } finally {
+            setLoading(false);
             globalDashboardPromise = null;
         }
     }, [startDate, endDate, itemCode, productName, manufacturer]);
@@ -161,7 +165,16 @@ function ClaimDashboardPage({ user, onNavigate }) {
 
     const isManufacturer = user?.roles?.some(r => r.authority?.includes('MANUFACTURER'));
 
-    if (!stats) return <div style={{ padding: '20px' }}>Loading Dashboard...</div>;
+    if (!stats && loading) return (
+        <div style={{ padding: '20px', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0f2f5' }}>
+            <div style={{ textAlign: 'center' }}>
+                <div className="spinner-ring" style={{ width: '40px', height: '40px', margin: '0 auto 15px' }}></div>
+                <div style={{ fontSize: '18px', color: '#666' }}>데이터를 분석 중입니다...</div>
+            </div>
+        </div>
+    );
+
+    if (!stats) return <div style={{ padding: '20px', textAlign: 'center', color: '#888' }}>대시보드 데이터를 불러올 수 없습니다.</div>;
 
     const countryMap = {};
     const monthlyMap = {};
@@ -214,8 +227,8 @@ function ClaimDashboardPage({ user, onNavigate }) {
                             <input type="text" placeholder="제조사명" value={manufacturer} onChange={e => setManufacturer(e.target.value)} style={{padding:'8px', border:'1px solid #ced4da', borderRadius:'4px', width: '130px'}} />
                         </div>
                     )}
-                    <button className="primary" onClick={handleSearch}>조회</button>
-                    <button className="secondary" onClick={handleReset}>초기화</button>
+                    <button className="primary" onClick={handleSearch} disabled={loading}>{loading ? '조회 중...' : '조회'}</button>
+                    <button className="secondary" onClick={handleReset} disabled={loading}>초기화</button>
                 </div>
             </div>
 
@@ -305,13 +318,13 @@ function ClaimDashboardPage({ user, onNavigate }) {
                 </div>
             </div>
 
-            {/* Grid Area - Unclosed Claims */}
-            <div className="card" style={{ marginTop: '20px', flex: 1, minHeight: '300px', display: 'flex', flexDirection: 'column' }}>
-                <h3 style={{ margin: '0 0 10px 0', fontSize: '16px' }}>🚨 미종결 클레임 (총 {stats.unclosedClaims?.length || 0}건)</h3>
+            {/* Grid Area - Search Results */}
+            <div className="card" style={{ marginTop: '20px', flex: 1, minHeight: '400px', display: 'flex', flexDirection: 'column' }}>
+                <h3 style={{ margin: '0 0 10px 0', fontSize: '16px' }}>📋 클레임 조회 결과 목록 (총 {claims?.length || 0}건)</h3>
                 <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
                     <AgGridReact
                         theme="legacy"
-                        rowData={stats.unclosedClaims || []}
+                        rowData={claims || []}
                         columnDefs={columnDefs}
                         pagination={true}
                         paginationPageSize={10}

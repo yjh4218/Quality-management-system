@@ -255,9 +255,9 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
         padding: '15px',
         display: 'flex', 
         flexDirection: 'column', 
-        height: isMobile ? 'auto' : 'calc(100vh - 60px)',
+        height: '100%',
         minHeight: isMobile ? '700px' : 'auto', /* Ensure enough space for filter + grid */
-        overflow: 'visible'
+        overflow: 'hidden'
     };
 
     /** 

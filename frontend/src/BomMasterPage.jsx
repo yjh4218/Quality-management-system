@@ -110,7 +110,7 @@ const BomMasterPage = ({ user }) => {
     ], []);
 
     return (
-        <div className="page-container" style={{ padding: '24px', display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+        <div className="page-container" style={{ padding: '24px', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
             <header className="page-header" style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
                 <div>
                     <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1a202c' }}>📏 구성품 BOM 마스터 관리</h1>

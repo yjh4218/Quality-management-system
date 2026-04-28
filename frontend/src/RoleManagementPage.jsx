@@ -338,7 +338,7 @@ const RoleManagementPage = ({ user }) => {
     ], []);
 
     return (
-        <div className="card" style={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column' }}>
+        <div className="card" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <div>
                     <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#1a1a1a', marginBottom: '8px' }}>🔐 시스템 권한 관리</h2>
