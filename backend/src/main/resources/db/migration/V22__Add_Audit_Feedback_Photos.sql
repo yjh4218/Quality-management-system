@@ -19,4 +19,4 @@ CREATE TABLE manufacturer_audit_negative_photos (
 );
 
 -- 4. 기존 제조사 데이터 보정 (빈 문자열 ''을 M-id 형식으로 강제 치환)
-UPDATE manufacturers SET manufacturerCode = 'M-' || id WHERE manufacturerCode IS NULL OR manufacturerCode = '';
+UPDATE manufacturers SET manufacturer_code = 'M-' || id WHERE manufacturer_code IS NULL OR manufacturer_code = '';
