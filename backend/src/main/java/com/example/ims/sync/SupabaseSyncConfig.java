@@ -22,12 +22,13 @@ public class SupabaseSyncConfig {
 
     private DataSource supabaseDataSource() {
         if (url == null || url.isEmpty()) {
-            // Return a dummy datasource if not configured yet to avoid boot errors
-            return DataSourceBuilder.create()
-                    .url("jdbc:postgresql://localhost:5432/dummy")
-                    .username("dummy")
-                    .password("dummy")
-                    .build();
+            // Return a non-pooling dummy datasource to prevent HikariCP eager connection failures
+            org.springframework.jdbc.datasource.DriverManagerDataSource dummy = new org.springframework.jdbc.datasource.DriverManagerDataSource();
+            dummy.setDriverClassName("org.postgresql.Driver");
+            dummy.setUrl("jdbc:postgresql://localhost:5432/dummy");
+            dummy.setUsername("dummy");
+            dummy.setPassword("dummy");
+            return dummy;
         }
         return DataSourceBuilder.create()
                 .url(url)
