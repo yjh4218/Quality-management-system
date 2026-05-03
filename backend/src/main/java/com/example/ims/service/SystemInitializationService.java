@@ -25,6 +25,14 @@ public class SystemInitializationService {
 
     @Transactional
     public void seedAndRepairData(String adminInitialPassword) {
+        // Quick connection check to avoid log spam if env vars are missing
+        try {
+            jdbcTemplate.queryForObject("SELECT 1", Integer.class);
+        } catch (Exception e) {
+            log.error(">>>> [SYSTEM INIT] [ABORTED] Database is unreachable. Please check your Environment Variables (SPRING_DATASOURCE_URL, etc.) in Space Settings.");
+            return;
+        }
+
         log.info(">>>> [SYSTEM INIT] Starting Data Seeding & Repair...");
 
         repairProductTableSchema();

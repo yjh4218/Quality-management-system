@@ -59,10 +59,12 @@ public class SystemStartupRunner implements CommandLineRunner {
 
     private boolean isDatabaseReachable() {
         try {
+            log.info(">>>> [SYSTEM STARTUP] Verifying database connection...");
             jdbcTemplate.queryForObject("SELECT 1", Integer.class);
             return true;
         } catch (Exception e) {
-            log.warn("Database connection check failed: {}", e.getMessage());
+            log.error(">>>> [SYSTEM STARTUP] Database connection check failed! (URL might be wrong or Env Vars missing)");
+            log.error(">>>> [SYSTEM STARTUP] Error details: {}", e.getMessage());
             return false;
         }
     }
