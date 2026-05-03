@@ -29,9 +29,13 @@ public class SystemStartupRunner implements CommandLineRunner {
     @org.springframework.beans.factory.annotation.Value("${ADMIN_INITIAL_PASSWORD:}")
     private String adminInitialPassword;
 
+    @org.springframework.beans.factory.annotation.Value("${spring.datasource.url:}")
+    private String dbUrl;
+
     @Override
     public void run(String... args) {
-        log.info(">>>> [SYSTEM STARTUP] Main thread starting. Port listening will follow context refresh.");
+        log.info(">>>> [SYSTEM STARTUP] Main thread starting. Using DB URL: {}", dbUrl);
+        log.info(">>>> [SYSTEM STARTUP] Port listening will follow context refresh.");
         
         // Run in background to prevent blocking the main Spring context thread
         java.util.concurrent.CompletableFuture.runAsync(() -> {
