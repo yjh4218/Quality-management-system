@@ -90,12 +90,22 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         
-        // [CORS PATCH] 운영 환경 확장성 및 보안 강화
-        configuration.setAllowedOrigins(List.of(
-            "http://localhost:3000",
-            "http://localhost:5173",
-            "http://127.0.0.1:5173"
-        ));
+        // [CORS PATCH] Use configurable allowed origins
+        if (allowedOrigins != null && !allowedOrigins.trim().isEmpty()) {
+            configuration.setAllowedOrigins(Arrays.stream(allowedOrigins.split(","))
+                    .map(String::trim)
+                    .collect(Collectors.toList()));
+        } else {
+            configuration.setAllowedOrigins(List.of(
+                "http://localhost:3000",
+                "http://localhost:5173",
+                "http://127.0.0.1:5173"
+            ));
+        }
+        
+        // Allow all Hugging Face and Render subdomains to prevent strict CORS blocks in deployment
+        configuration.addAllowedOriginPattern("https://*.hf.space");
+        configuration.addAllowedOriginPattern("https://*.onrender.com");
 
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*")); // 모든 헤더 허용
