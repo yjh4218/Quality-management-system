@@ -1,0 +1,31 @@
+services:
+  # Backend Service
+  - type: web
+    name: quality-management-backend
+    env: docker
+    plan: free
+    dockerContext: .
+    dockerfilePath: Dockerfile
+    healthCheckPath: /api/admin/system/health
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - fromGroup: supabase
+
+  # Frontend Service (Static Site in Render Blueprints is type: web with env: static)
+  - type: web
+    name: quality-management-frontend
+    env: static
+    buildCommand: cd frontend && npm ci && node node_modules/vite/bin/vite.js build
+    staticPublishPath: frontend/dist
+    envVars:
+      - key: NODE_VERSION
+        value: 20.12.2
+      - key: VITE_API_BASE_URL
+        value: https://quality-management-backend.onrender.com/api
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

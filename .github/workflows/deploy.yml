@@ -1,0 +1,30 @@
+name: Sync to Hugging Face
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Clean up unwanted files before push
+        run: |
+          # 로그, DB, 업로드 폴더 등 바이너리 파일 강제 삭제
+          rm -rf backend/data/*.db
+          rm -rf backend/uploads/*
+          rm -rf backend/*.log
+          rm -rf backend/*.txt
+          find . -name "*.xlsx" -type f -delete
+          find . -name "*.pdf" -type f -delete
+
+      - name: Push to Hub
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          # 원격 저장소를 강제로 덮어씌워 과거의 바이너리 기록을 제거합니다.
+          git push --force https://yjh332123:$HF_TOKEN@huggingface.co/spaces/yjh332123/qms main
+

@@ -1,0 +1,56 @@
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+# --- [SECURITY PATCH] 바이너리, 임시파일, 민감 로그 차단 ---
+*.class
+*.log
+*.txt
+*.db
+*.mv.db
+*.exe
+diff.txt
+fix*.js
+backend/data/
+backend/uploads/
+node_modules/
+frontend/node_modules/
+
+# --- 문서 작업 및 미디어 (필요시 수동 등록) ---
+*.xlsx
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
