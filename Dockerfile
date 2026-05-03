@@ -20,5 +20,12 @@ COPY --from=build /app/backend/target/*.jar app.jar
 # Hugging Face용 포트 설정
 EXPOSE 7860
 
-# 메모리 최적화 및 실행 설정 (운영 프로필 활성화)
-ENTRYPOINT ["java", "-Xmx512m", "-Dspring.profiles.active=prod", "-Dserver.port=7860", "-jar", "app.jar"]
+# 메모리 최적화 및 실행 설정 (운영 프로필 활성화 및 DB 정보 강제 주입)
+# 주의: 보안을 위해 나중에는 다시 환경 변수 방식으로 복구 권장
+ENTRYPOINT ["java", "-Xmx512m", \
+            "-Dspring.profiles.active=prod", \
+            "-Dserver.port=7860", \
+            "-Dspring.datasource.url=jdbc:postgresql://db.tizmjqreozfipdfpuxof.supabase.co:5432/postgres", \
+            "-Dspring.datasource.username=postgres", \
+            "-Dspring.datasource.password=A1s2d3f4g5!@", \
+            "-jar", "app.jar"]
