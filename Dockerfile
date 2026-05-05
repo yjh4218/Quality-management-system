@@ -23,6 +23,9 @@ RUN useradd -m -s /bin/bash qmsuser
 # 빌드 스테이지에서 생성된 JAR 파일만 복사
 COPY --from=build /app/backend/target/*.jar app.jar
 
+# [보안] 파일 업로드 디렉토리 사전 생성 (qmsuser 전환 전에 root 권한으로 생성)
+RUN mkdir -p /app/uploads && chown -R qmsuser:qmsuser /app/uploads
+
 # [보안] 파일 소유권을 일반 사용자에게 할당
 RUN chown qmsuser:qmsuser app.jar
 
