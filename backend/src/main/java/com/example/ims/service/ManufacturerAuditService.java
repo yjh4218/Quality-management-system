@@ -2,9 +2,6 @@ package com.example.ims.service;
 
 import com.example.ims.entity.*;
 import com.example.ims.repository.*;
-import com.itextpdf.text.Document;
-import com.itextpdf.text.Paragraph;
-import com.itextpdf.text.pdf.PdfWriter;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -268,22 +265,8 @@ public class ManufacturerAuditService {
         double percentage = (maxPossible > 0) ? (double) totalScore / maxPossible * 100 : 0;
         audit.setTotalScore((int) Math.round(percentage));
 
-        // [고도화] 그룹별 점수 계산
-        if (audit.getGroupResults() != null && audit.getResults() != null) {
-            audit.getGroupResults().forEach(gr -> {
-                Long groupId = gr.getGroup() != null ? gr.getGroup().getId() : null;
-                if (groupId != null) {
-                    List<ManufacturerAuditResult> items = audit.getResults().stream()
-                            .filter(r -> r.getItem() != null && r.getItem().getGroup() != null && groupId.equals(r.getItem().getGroup().getId()))
-                            .toList();
-                    int grScore = items.stream().mapToInt(ManufacturerAuditResult::getScore).sum();
-                    int grMax = items.size() * 5;
-                    
-                    // The frontend now dynamically calculates and displays the score.
-                    // We DO NOT save the score text directly into the feedback database field to prevent duplication/accumulation.
-                }
-            });
-        }
+        // [고도화] 그룹별 점수 계산 로직 (필요 시 gr 객체에 데이터 저장 가능)
+        // 현재는 프론트엔드에서 실시간으로 계산하여 표시함
 
         // Load dynamic thresholds
         int thresholdA = 90, thresholdB = 80, thresholdC = 70, thresholdD = 60;

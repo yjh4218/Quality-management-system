@@ -32,7 +32,6 @@ public class AuditLogService {
     private final ClaimRepository claimRepository;
     private final WmsInboundRepository wmsInboundRepository;
     private final ProductionAuditRepository productionAuditRepository;
-    private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
     
     // 순환 참조 방지를 위해 서비스 대신 레포지토리 직접 사용 또는 이벤트 핸들링만 수행
@@ -80,6 +79,17 @@ public class AuditLogService {
         auditLogRepository.save(auditLog);
     }
 
+    /**
+     * [추가] 하위 호환성을 위한 오버로딩 메서드 (changeDetail 누락 대응)
+     */
+    @Transactional
+    public void log(String entityType, Long entityId, String action, String modifier, 
+            Long modifierId, String modifierUsername, String modifierName, String modifierCompany,
+            String description, String oldValue, String newValue) {
+        log(entityType, entityId, action, modifier, modifierId, modifierUsername, modifierName, modifierCompany, 
+            description, oldValue, newValue, null);
+    }
+
     @Transactional
     public void logEntityChange(String entityType, Long entityId, String action, String modifier,
             Long modifierId, String modifierUsername, String modifierName, String modifierCompany,
@@ -89,6 +99,17 @@ public class AuditLogService {
 
         log(entityType, entityId, action, modifier, modifierId, modifierUsername, modifierName, modifierCompany, 
             description, oldJson, newJson, changeDetail);
+    }
+
+    /**
+     * [추가] 하위 호환성을 위한 오버로딩 메서드 (changeDetail 누락 대응)
+     */
+    @Transactional
+    public void logEntityChange(String entityType, Long entityId, String action, String modifier,
+            Long modifierId, String modifierUsername, String modifierName, String modifierCompany,
+            String description, Object oldEntity, Object newEntity) {
+        logEntityChange(entityType, entityId, action, modifier, modifierId, modifierUsername, modifierName, modifierCompany, 
+            description, oldEntity, newEntity, null);
     }
 
     /**

@@ -14,10 +14,10 @@ import java.security.SecureRandom;
 import java.util.Base64;
 
 /**
- * [SECURITY PATCH] AES-GCM 인증 암호화 유틸리티
- * 1. AES/ECB -> AES/GCM/NoPadding (IV 사용)
- * 2. 매 암호화 시 랜덤 IV 생성 및 결합
- * 3. 키 미설정 시 구동 차단
+ * [SECURITY UPGRADE] AES-GCM 인증 암호화 (IV 사용)
+ * 1. AES/ECB -> AES/GCM/NoPadding (무결성 검증 포함)
+ * 2. 매 암호화마다 SecureRandom으로 12바이트 IV 생성
+ * 3. 키 길이 검증 및 초기화 차단 (16자 미만 금지)
  */
 @Component
 @Slf4j
@@ -33,12 +33,8 @@ public class EncryptionUtil {
     @PostConstruct
     public void validateKey() {
         if (secretKeyString == null || secretKeyString.length() < 16) {
-            log.error("[CRITICAL] Encryption secret key is missing or too short! App will stop.");
-            // 운영 환경에서는 예외를 던져 구동을 차단해야 하나, 개발 편의상 로깅 후 기본값 설정 로직만 경고
-            if (secretKeyString == null || secretKeyString.isEmpty()) {
-                log.warn("[SECURITY] Using temporary development key. DO NOT USE IN PRODUCTION.");
-                secretKeyString = "DevelopmentKey_1234567890";
-            }
+            log.error("[CRITICAL] Encryption secret key is missing or too short! Minimum 16 characters required.");
+            throw new IllegalStateException("암호화 키가 설정되지 않았거나 너무 짧습니다. (최소 16자)");
         }
     }
 
@@ -72,9 +68,9 @@ public class EncryptionUtil {
         try {
             byte[] combined = Base64.getDecoder().decode(combinedText);
             
-            // 이전 ECB 방식 데이터와의 호환성을 위한 체크
+            // 데이터 길이 확인 (최소 IV 길이)
             if (combined.length < IV_LENGTH_BYTE) {
-                log.warn("Legacy encrypted data detected or data too short.");
+                log.warn("Encrypted data too short. Checking legacy format...");
                 return decryptLegacy(combinedText);
             }
 
@@ -91,12 +87,14 @@ public class EncryptionUtil {
 
             return new String(cipher.doFinal(cipherText), StandardCharsets.UTF_8);
         } catch (Exception e) {
-            log.error("Decryption failed. Data might be corrupted or using old format.", e);
-            // 복호화 실패 시 원본 혹은 하위 호환 시도
+            log.error("Decryption failed. Attempting legacy recovery...", e);
             return decryptLegacy(combinedText);
         }
     }
 
+    /**
+     * [마이그레이션] 이전 ECB 암호화 데이터를 위한 폴백 메서드
+     */
     private String decryptLegacy(String encryptedText) {
         try {
             Cipher cipher = Cipher.getInstance("AES");
@@ -104,6 +102,7 @@ public class EncryptionUtil {
             byte[] decryptedBytes = cipher.doFinal(Base64.getDecoder().decode(encryptedText));
             return new String(decryptedBytes, StandardCharsets.UTF_8);
         } catch (Exception ex) {
+            // 복호화가 완전히 불가능한 경우 원본 반환
             return encryptedText; 
         }
     }

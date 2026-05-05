@@ -1,47 +1,45 @@
-# Build artifacts
-target/
-backend/target/
-frontend/dist/
-*.jar
-*.war
-*.ear
+# [SECURITY] Compiled and sensitive files
+*.class
+*.log
+*.env
+.env
+.env.*
+!.env.example
+backend/.env
+frontend/.env
 
-# Dependencies
-node_modules/
-backend/node_modules/
-frontend/node_modules/
+# [SECURITY] Temporary or debug files
+diff.txt
+error_list_*.txt
+*.diff
+temp/
+tmp/
+*.tmp
+backend/h2_migration_data.json
+backend/DbTest.java
+backend/DbTest.class
 
-# IDE / Editor
+# IDE & Build
 .idea/
 .vscode/
 *.iml
-*.swp
 .DS_Store
+target/
+build/
+node_modules/
+dist/
+.gradle/
+.settings/
+.project/
+.classpath/
 
-# Sensitive / Temporary Data
-.env
-.env.local
-backend/products.json
-h2_migration_data.json
-backend/h2_migration_data.json
+# System specific
+Thumbs.db
+desktop.ini
 
-# Local Storage / Uploads
-backend/uploads/*
-!backend/uploads/.gitkeep
-backend/data/
-*.db
-
-# Logs & Scripts
-*.log
-backend/CheckRolesDb.java
-backend/DbTest.java
-backend/test.js
-*.diff
-*.patch
-
-# Plan & Tasks
-implementation_plan.md
-task.md
-walkthrough.md
-frontend/temp_audit_page.txt
-frontend/temp_audit_page.txt
+# Deployment artifacts
+.vercel
+.netlify
+.hf.space/
+out/
+.next/

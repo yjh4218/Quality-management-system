@@ -132,22 +132,25 @@ public class AuthController {
             User user = userRepository.findByUsername(username).orElse(null);
             
             if (user != null && user.getName().equals(name) && user.getEmail().equals(email)) {
-                // 보안 정책: 길고 복잡한 영숫자 16자리 임시 비밀번호 생성 (UUID에서 특수기호 제거)
-                String tempPwFull = UUID.randomUUID().toString().replace("-", "");
-                String tempPw = tempPwFull.substring(0, 8) + tempPwFull.substring(10, 18); // 16자 조합
+                // 보안 정책: 강력한 16자리 영숫자+특수문자 임시 비밀번호 생성
+                String chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$";
+                java.security.SecureRandom rnd = new java.security.SecureRandom();
+                String tempPw = java.util.stream.IntStream.range(0, 16)
+                    .mapToObj(i -> String.valueOf(chars.charAt(rnd.nextInt(chars.length()))))
+                    .collect(java.util.stream.Collectors.joining());
                 
                 user.setPassword(passwordEncoder.encode(tempPw));
                 user.setPasswordResetRequired(true);
                 userRepository.save(user);
 
                 mailService.sendTemporaryPassword(email, name, tempPw);
-                log.info("[SECURITY] Temporary password issued for user: {}", username);
+                log.info("[SECURITY] High-entropy temporary password issued for user: {}", username);
             }
         } catch (Exception e) {
             log.error("[SECURITY] Error during find-password process for user: {}", username, e);
         }
 
-        // 항상 동일한 성공 메시지 반환
+        // 항상 동일한 성공 메시지 반환 (User Enumeration 방지)
         return ResponseEntity.ok(Map.of("message", "입력하신 정보가 회원 정보와 일치하는 경우 등록된 메일로 임시 비밀번호를 발송합니다."));
     }
 

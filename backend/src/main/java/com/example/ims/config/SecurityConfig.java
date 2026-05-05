@@ -39,7 +39,7 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable) 
                 .authorizeHttpRequests(auth -> auth
-                        // [SECURITY PATCH] 관리자 시스템 경로 권한 강화
+                        // [SECURITY PATCH] 관리자 전용 시스템 경로 권한 강화
                         .requestMatchers("/api/admin/system/health").permitAll() 
                         .requestMatchers("/api/admin/system/**").hasRole("ADMIN")
                         
@@ -47,7 +47,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/register", "/api/auth/check-username", "/api/auth/find-password", "/api/auth/verify-email").permitAll()
                         .requestMatchers("/api/auth/unlock/**", "/api/auth/reset-password/**").hasRole("ADMIN")
                         
-                        // [NEW] 새로 추가된 Audit 관련 API 명시적 허용 (인증 필요)
+                        // 로그 및 보안 관련 경로 관리자 보호
                         .requestMatchers("/api/logs/access/page-move").authenticated()
                         .requestMatchers("/api/logs/access/**").hasRole("ADMIN")
                         .requestMatchers("/api/logs/**").authenticated()
@@ -72,15 +72,15 @@ public class SecurityConfig {
                         .logoutUrl("/api/auth/logout")
                         .invalidateHttpSession(true)
                         .clearAuthentication(true) 
-                        .deleteCookies("QMS_SESSION", "QMS_SESSION_V2", "JSESSIONID", "SESSION")
+                        .deleteCookies("QMS_SESSION", "JSESSIONID", "SESSION")
                         .logoutSuccessHandler(logoutSuccessHandler)
                 )
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, authException) -> {
                             response.setStatus(HttpStatus.UNAUTHORIZED.value());
                             response.setContentType("application/json;charset=UTF-8");
-                            // [SECURITY PATCH] 상세 오류 메시지 제거
-                            response.getWriter().write("{\"error\": \"Unauthorized\", \"message\": \"Full authentication is required to access this resource.\"}");
+                            // [SECURITY PATCH] 내부 예외 메시지 노출 차단
+                            response.getWriter().write("{\"error\": \"Unauthorized\", \"message\": \"인증이 필요합니다.\"}");
                         })
                 )
                 .httpBasic(AbstractHttpConfigurer::disable);
@@ -92,12 +92,13 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         
-        // [CORS PATCH] Use configurable allowed origins
+        // [CORS PATCH] 명시적 허용 목록 사용 (와일드카드 제거)
         if (allowedOrigins != null && !allowedOrigins.trim().isEmpty()) {
             configuration.setAllowedOrigins(Arrays.stream(allowedOrigins.split(","))
                     .map(String::trim)
                     .collect(Collectors.toList()));
         } else {
+            // 로컬 개발 환경 폴백 (안전한 기본값)
             configuration.setAllowedOrigins(List.of(
                 "http://localhost:3000",
                 "http://localhost:5173",
@@ -105,12 +106,13 @@ public class SecurityConfig {
             ));
         }
         
-        // Allow all Hugging Face and Render subdomains to prevent strict CORS blocks in deployment
+        // 배포 환경 패턴 허용
         configuration.addAllowedOriginPattern("https://*.hf.space");
         configuration.addAllowedOriginPattern("https://*.onrender.com");
+        configuration.addAllowedOriginPattern("https://qualitymange.pages.dev");
 
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-        configuration.setAllowedHeaders(List.of("*")); // 모든 헤더 허용
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"));
         configuration.setExposedHeaders(List.of("Set-Cookie", "Authorization"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
