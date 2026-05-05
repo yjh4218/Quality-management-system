@@ -27,8 +27,13 @@ public class ManufacturerAuditService {
     private final ManufacturerAuditHistoryRepository historyRepository;
     private final AuditLogService auditLogService;
 
+    @Transactional(readOnly = true)
     public List<AuditTemplate> getAllTemplates() {
-        return templateRepository.findAllByActiveTrueOrderByClassificationNameAsc();
+        List<AuditTemplate> templates = templateRepository.findAllByActiveTrueOrderByClassificationNameAsc();
+        templates.forEach(t -> {
+            if (t.getGroups() != null) t.getGroups().size();
+        });
+        return templates;
     }
 
     @Transactional(readOnly = true)
@@ -64,7 +69,12 @@ public class ManufacturerAuditService {
         List<ManufacturerAudit> audits = auditRepository.searchAudits(startDate, endDate, manufacturerName);
         audits.forEach(audit -> {
             if (audit.getManufacturer() != null) audit.getManufacturer().getName();
-            if (audit.getTemplate() != null) audit.getTemplate().getClassificationName();
+            if (audit.getTemplate() != null) {
+                audit.getTemplate().getClassificationName();
+                if (audit.getTemplate().getGroups() != null) {
+                    audit.getTemplate().getGroups().size();
+                }
+            }
         });
         return audits;
     }

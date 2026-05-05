@@ -12,9 +12,9 @@ public interface ManufacturerAuditRepository extends JpaRepository<ManufacturerA
     @Query("SELECT DISTINCT ma FROM ManufacturerAudit ma " +
            "JOIN FETCH ma.manufacturer " +
            "JOIN FETCH ma.template " +
-           "WHERE (:startDate IS NULL OR ma.auditDate >= :startDate) " +
-           "AND (:endDate IS NULL OR ma.auditDate <= :endDate) " +
-           "AND (:manufacturerName IS NULL OR ma.manufacturer.name LIKE %:manufacturerName%) " +
+           "WHERE (CAST(:startDate AS localdate) IS NULL OR ma.auditDate >= :startDate) " +
+           "AND (CAST(:endDate AS localdate) IS NULL OR ma.auditDate <= :endDate) " +
+           "AND (CAST(:manufacturerName AS string) IS NULL OR ma.manufacturer.name LIKE %:manufacturerName%) " +
            "ORDER BY ma.auditDate DESC, ma.manufacturer.manufacturerCode ASC, ma.manufacturer.name ASC")
     List<ManufacturerAudit> searchAudits(
             @Param("startDate") LocalDate startDate,

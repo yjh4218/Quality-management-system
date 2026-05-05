@@ -112,7 +112,11 @@ public class ProductService {
         }
 
         // [FIX] LAZY 컬렉션 강제 초기화 - JSON 직렬화 시 세션 종료로 인한 LazyInitializationException 방지
-        product.getImagePaths().size();
+        if (product.getImagePaths() != null) product.getImagePaths().size();
+        if (product.getProductIngredients() != null) product.getProductIngredients().size();
+        if (product.getChannels() != null) product.getChannels().size();
+        if (product.getComponents() != null) product.getComponents().size();
+
         return java.util.Optional.of(product);
     }
     
