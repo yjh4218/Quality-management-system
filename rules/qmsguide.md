@@ -25,3 +25,8 @@
 - **UX/UI Focus**: 비동기 작업 시 로딩 스피너와 토스트 알림 필수 적용.
 - **Popup/Drawer Standard**: 모든 상세 수정 및 등록 팝업은 **[제품 마스터 수정]** 화면(Drawer 또는 중앙 모달)의 디자인과 레이아웃(그룹화, 가독성, 반응형)을 표준으로 하여 작성 및 관리함.
 - **Professional UX**: 디자인은 항상 프리미엄하고 모던한 스타일(Inter 폰트, 세련된 색상 조합)을 유지할 것.
+
+## 5. Git & Version Control (New)
+- **Branch Strategy**: 모든 커밋 후에는 반드시 `main` 브랜치에 푸시(`push`)를 완료함.
+- **Commit Reporting**: 작업 완료 보고 시에는 항상 해당 작업의 **커밋 번호(Hash)**를 사용자에게 명시적으로 안내함.
+- **Commit Message**: 커밋 메시지는 `type: description` 형식(예: `feat: add cache logic`)으로 명확하게 작성함.
