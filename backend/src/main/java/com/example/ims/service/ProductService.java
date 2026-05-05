@@ -111,6 +111,8 @@ public class ProductService {
             throw new RuntimeException("해당 제품에 대한 접근 권한이 없습니다.");
         }
 
+        // [FIX] LAZY 컬렉션 강제 초기화 - JSON 직렬화 시 세션 종료로 인한 LazyInitializationException 방지
+        product.getImagePaths().size();
         return java.util.Optional.of(product);
     }
     

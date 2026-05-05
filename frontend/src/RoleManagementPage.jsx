@@ -448,19 +448,19 @@ const RoleManagementPage = ({ user }) => {
                                 </div>
 
                                 {/* Right Side: Permissions Matrix */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '25px', overflowY: 'auto' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '25px', overflowY: 'auto', maxHeight: 'calc(100vh - 200px)' }}>
                                     <div className="card" style={{ padding: '35px', borderRadius: '24px', border: '1px solid #e2e8f0' }}>
                                         <h3 style={{ fontSize: '19px', fontWeight: '900', marginBottom: '30px', color: 'var(--primary-color)', borderBottom: '2px solid #f1f5f9', paddingBottom: '15px' }}>
                                             🧩 메뉴 접근 및 액션 권한 매트릭스
                                         </h3>
-                                        <div style={{ maxHeight: '500px', overflowY: 'auto', paddingRight: '15px' }}>
+                                        <div>
                                             <table className="qms-table" style={{ fontSize: '14px' }}>
-                                                <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                                                <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: 'white' }}>
                                                     <tr>
-                                                        <th style={{ textAlign: 'left', padding: '15px 20px' }}>메뉴 경로</th>
-                                                        <th style={{ width: '100px' }}>조회(V)</th>
-                                                        <th style={{ width: '100px' }}>편집(E)</th>
-                                                        <th style={{ width: '100px' }}>삭제(D)</th>
+                                                        <th style={{ textAlign: 'left', padding: '15px 20px', background: '#f1f5f9', borderBottom: '2px solid #e2e8f0' }}>메뉴 경로</th>
+                                                        <th style={{ width: '100px', background: '#f1f5f9', borderBottom: '2px solid #e2e8f0', textAlign: 'center' }}>조회(V)</th>
+                                                        <th style={{ width: '100px', background: '#f1f5f9', borderBottom: '2px solid #e2e8f0', textAlign: 'center' }}>편집(E)</th>
+                                                        <th style={{ width: '100px', background: '#f1f5f9', borderBottom: '2px solid #e2e8f0', textAlign: 'center' }}>삭제(D)</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -468,11 +468,26 @@ const RoleManagementPage = ({ user }) => {
                                                         const currentAllowedMenus = getParsedPermissions(selectedRole.allowedMenus);
                                                         return ['시스템', '마스터', '운영', '클레임'].map(cat => (
                                                             <React.Fragment key={cat}>
-                                                                <tr style={{ background: '#f8fafc' }}>
-                                                                    <td style={{ fontWeight: '900', color: 'var(--primary-color)', padding: '15px 20px' }}>📁 {cat} 관리 그룹</td>
-                                                                    <td style={{ textAlign: 'center' }}><button type="button" onClick={() => handleBatchPermission(cat, 'VIEW')} className="secondary" style={{ fontSize: '11px', padding: '4px 10px', fontWeight: '800' }}>ALL</button></td>
-                                                                    <td style={{ textAlign: 'center' }}><button type="button" onClick={() => handleBatchPermission(cat, 'EDIT')} className="secondary" style={{ fontSize: '11px', padding: '4px 10px', fontWeight: '800' }}>ALL</button></td>
-                                                                    <td style={{ textAlign: 'center' }}><button type="button" onClick={() => handleBatchPermission(cat, 'DELETE')} className="secondary" style={{ fontSize: '11px', padding: '4px 10px', fontWeight: '800' }}>ALL</button></td>
+                                                                <tr style={{ background: '#eef2ff', borderTop: '2px solid #c7d2fe' }}>
+                                                                    <td style={{ fontWeight: '900', color: 'var(--primary-color)', padding: '12px 20px', fontSize: '14px' }}>📁 {cat} 관리 그룹</td>
+                                                                    <td style={{ textAlign: 'center', fontWeight: '700', fontSize: '11px', color: '#6366f1' }}>
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                                                            <span style={{ color: '#64748b', fontSize: '10px' }}>조회(V)</span>
+                                                                            <button type="button" onClick={() => handleBatchPermission(cat, 'VIEW')} className="secondary" style={{ fontSize: '11px', padding: '3px 12px', fontWeight: '800', borderRadius: '6px' }}>ALL</button>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td style={{ textAlign: 'center', fontWeight: '700', fontSize: '11px', color: '#6366f1' }}>
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                                                            <span style={{ color: '#64748b', fontSize: '10px' }}>편집(E)</span>
+                                                                            <button type="button" onClick={() => handleBatchPermission(cat, 'EDIT')} className="secondary" style={{ fontSize: '11px', padding: '3px 12px', fontWeight: '800', borderRadius: '6px' }}>ALL</button>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td style={{ textAlign: 'center', fontWeight: '700', fontSize: '11px', color: '#6366f1' }}>
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                                                            <span style={{ color: '#64748b', fontSize: '10px' }}>삭제(D)</span>
+                                                                            <button type="button" onClick={() => handleBatchPermission(cat, 'DELETE')} className="secondary" style={{ fontSize: '11px', padding: '3px 12px', fontWeight: '800', borderRadius: '6px' }}>ALL</button>
+                                                                        </div>
+                                                                    </td>
                                                                 </tr>
                                                                 {MENU_OPTIONS.filter(m => m.category === cat).map(menu => {
                                                                     const permissions = currentAllowedMenus[menu.key] || [];

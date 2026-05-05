@@ -20,15 +20,20 @@ export const getBaseURL = () => {
 
 // [고도화 3] 전역 로딩 상태 (글로벌 스피너) 제어 함수
 let activeRequests = 0;
+let loadingTimeout = null;
 const setGlobalLoading = (isLoading) => {
     if (isLoading) {
         activeRequests++;
+        clearTimeout(loadingTimeout);
+        window.dispatchEvent(new CustomEvent('qms-api-loading', { detail: true }));
     } else {
         activeRequests = Math.max(0, activeRequests - 1);
+        // [FIX] 로딩 종료 시 debounce 적용 - 동시 다발 API 호출 시 모달 중복/깜빡임 방지
+        clearTimeout(loadingTimeout);
+        loadingTimeout = setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('qms-api-loading', { detail: activeRequests > 0 }));
+        }, 100);
     }
-    // Only dispatch if it's the first request or the last one finishing
-    // Use a small delay to prevent rapid toggle flickering which causes re-mount loops
-    window.dispatchEvent(new CustomEvent('qms-api-loading', { detail: activeRequests > 0 }));
 };
 
 /**
