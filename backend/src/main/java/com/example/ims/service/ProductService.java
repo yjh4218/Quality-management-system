@@ -116,6 +116,7 @@ public class ProductService {
         if (product.getProductIngredients() != null) product.getProductIngredients().size();
         if (product.getChannels() != null) product.getChannels().size();
         if (product.getComponents() != null) product.getComponents().size();
+        if (product.getPackagingCertificates() != null) product.getPackagingCertificates().size();
 
         return java.util.Optional.of(product);
     }

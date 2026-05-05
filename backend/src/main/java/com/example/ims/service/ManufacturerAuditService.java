@@ -31,7 +31,11 @@ public class ManufacturerAuditService {
     public List<AuditTemplate> getAllTemplates() {
         List<AuditTemplate> templates = templateRepository.findAllByActiveTrueOrderByClassificationNameAsc();
         templates.forEach(t -> {
-            if (t.getGroups() != null) t.getGroups().size();
+            if (t.getGroups() != null) {
+                t.getGroups().forEach(g -> {
+                    if (g.getItems() != null) g.getItems().size();
+                });
+            }
         });
         return templates;
     }
@@ -72,7 +76,9 @@ public class ManufacturerAuditService {
             if (audit.getTemplate() != null) {
                 audit.getTemplate().getClassificationName();
                 if (audit.getTemplate().getGroups() != null) {
-                    audit.getTemplate().getGroups().size();
+                    audit.getTemplate().getGroups().forEach(g -> {
+                        if (g.getItems() != null) g.getItems().size();
+                    });
                 }
             }
         });
