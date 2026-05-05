@@ -7,7 +7,6 @@ import com.example.ims.entity.WmsInboundHistory;
 import com.example.ims.repository.QualityReportRepository;
 import com.example.ims.repository.WmsInboundHistoryRepository;
 import com.example.ims.repository.WmsInboundRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import com.example.ims.repository.UserRepository;
@@ -22,7 +21,6 @@ public class QualityReportService {
     private final QualityReportRepository qualityReportRepository;
     private final WmsInboundRepository inboundRepository;
     private final WmsInboundHistoryRepository historyRepository;
-    private final ObjectMapper objectMapper;
     private final AuditLogService auditLogService;
     private final WmsService wmsService;
     private final ExcelExportService excelExportService;

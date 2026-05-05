@@ -25,7 +25,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
-import com.example.ims.entity.ProductionAudit;
 
 /**
  * 시스템 대시보드 데이터 처리를 담당하는 핵심 서비스 클래스입니다.
@@ -58,7 +57,6 @@ public class DashboardService {
     public DashboardDTO getDashboardData(User user) {
         String role = user.getRole();
         String company = user.getCompanyName();
-        String dept = user.getDepartment();
 
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime oneMonthAgo = now.minusMonths(1);
@@ -243,13 +241,9 @@ public class DashboardService {
     }
 
     // Mapping Helpers
+    @SuppressWarnings("deprecation")
     private DashboardItemDTO mapProductToItem(Product p) {
-        String mName = "";
-        if (p.getManufacturerInfo() != null) {
-            mName = p.getManufacturerInfo().getName();
-        } else if (p.getManufacturer() != null) {
-            mName = p.getManufacturer();
-        }
+        String mName = p.getManufacturerInfo() != null ? p.getManufacturerInfo().getName() : (p.getManufacturer() != null ? p.getManufacturer() : "");
 
         return DashboardItemDTO.builder()
                 .id(p.getId())

@@ -8,6 +8,25 @@ const LogManagementPage = ({ user }) => {
     const [rowData, setRowData] = useState([]);
     const [selectedLog, setSelectedLog] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+
+    const fieldTranslations = {
+        'AuditDate': '점검 일자',
+        'AuditType': '점검 유형',
+        'Auditor': '점검 담당자',
+        'TotalScore': '총점 (%)',
+        'Grade': '등급',
+        'PositiveFeedback': '긍정적 피드백',
+        'NegativeFeedback': '부적합 항목',
+        'FinalEvaluation': '최종 평가',
+        'results': '점검 결과',
+        'groupResults': '그룹 총평',
+        'Score': '점수',
+        'MaxScore': '배점',
+        'Status': '상태',
+        'Comment': '비고',
+        'GroupFeedback': '그룹별 총평',
+        'Manufacturer': '제조사'
+    };
     
     // [추가] 필터 상태 (기본값: 최근 7일)
     const [filters, setFilters] = useState(() => {
@@ -203,11 +222,10 @@ const LogManagementPage = ({ user }) => {
             'sharedWithManufacturer': '제조사 공유 여부', 'qualityRemarks': '품질 비고', 'mfrRemarks': '제조사 비고',
             'rootCauseAnalysis': '원인 분석(품질)', 'preventativeAction': '재발 방지(품질)',
             'mfrRootCauseAnalysis': '원인 분석(제조사)', 'mfrPreventativeAction': '재발 방지(제조사)',
-            // Inbound fields
-            'overallStatus': '통합 진행 상태', 'inboundInspectionStatus': '입고 검사 상태', 'inboundInspectionResult': '입고 검사 결과',
-            'controlSampleStatus': '관리품 상태', 'finalInspectionResult': '최종 판정 결과', 'qualityDecisionDate': '판정 일자',
-            'quantity': '입고 수량', 'inboundDate': '입고일', 'coaFileUrl': 'COA (URL)', 'remark': '비고',
-            'registrationDate': '등록일'
+            'registrationDate': '등록일',
+            // Manufacturer Audit fields
+            'auditDate': '점검일자', 'auditType': '점검구분', 'auditor': '점검자', 'totalScore': '총점', 'grade': '등급',
+            'positiveFeedback': '긍정적 부분', 'negativeFeedback': '부적합 항목', 'finalEvaluation': '최종평가'
         };
 
         const formatFriendly = (val, key) => {
@@ -378,7 +396,30 @@ const LogManagementPage = ({ user }) => {
                         </div>
                         
                         <div style={{ flex: 1, overflowY: 'auto', border: '1px solid #ddd', borderRadius: '8px', backgroundColor: '#fafafa' }}>
-                            <JsonDiffViewer oldStr={selectedLog.oldValue} newStr={selectedLog.newValue} />
+                            {selectedLog.changeDetail && selectedLog.changeDetail !== '[]' ? (
+                                <div style={{ padding: '15px' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                                        <thead>
+                                            <tr style={{ background: '#f8fafc', borderBottom: '2px solid #3b82f6' }}>
+                                                <th style={{ padding: '10px', textAlign: 'left', width: '30%' }}>항목</th>
+                                                <th style={{ padding: '10px', textAlign: 'left', width: '35%' }}>변경 전</th>
+                                                <th style={{ padding: '10px', textAlign: 'left', width: '35%' }}>변경 후</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {JSON.parse(selectedLog.changeDetail).map((c, i) => (
+                                                <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                    <td style={{ padding: '10px', fontWeight: 'bold' }}>{fieldTranslations[c.field] || c.field}</td>
+                                                    <td style={{ padding: '10px', color: '#ef4444', textDecoration: 'line-through' }}>{c.oldValue || '-'}</td>
+                                                    <td style={{ padding: '10px', color: '#10b981', fontWeight: 'bold' }}>{c.newValue || '-'}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : (
+                                <JsonDiffViewer oldStr={selectedLog.oldValue} newStr={selectedLog.newValue} />
+                            )}
                         </div>
 
                         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px', gap: '15px' }}>

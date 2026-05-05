@@ -18,7 +18,6 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -67,6 +66,7 @@ public class ProductionAuditService {
         return audits.stream().map(this::convertToDTO).collect(Collectors.toList());
     }
 
+    @SuppressWarnings("deprecation")
     @Transactional(readOnly = true)
     public List<ProductionAuditDTO> getPendingAudits(String username, String manufacturerName) {
         User user = userRepository.findByUsername(username)
@@ -91,7 +91,7 @@ public class ProductionAuditService {
             ProductionAuditDTO dto = new ProductionAuditDTO();
             dto.setItemCode(p.getItemCode());
             dto.setProductName(p.getProductName());
-            String mfrName = (p.getManufacturerInfo() != null) ? p.getManufacturerInfo().getName() : p.getManufacturer();
+            String mfrName = (p.getManufacturerInfo() != null) ? p.getManufacturerInfo().getName() : (p.getManufacturer() != null ? p.getManufacturer() : "");
             dto.setManufacturerName(mfrName);
             dto.setDisclosed(p.isPhotoAuditDisclosed());
             dto.setStatus("PENDING");

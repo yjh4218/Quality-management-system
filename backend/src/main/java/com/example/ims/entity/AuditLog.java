@@ -52,4 +52,8 @@ public class AuditLog {
     @Column(columnDefinition = "TEXT")
     @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.LONGVARCHAR)
     private String newValue;
+
+    @Column(columnDefinition = "TEXT")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.LONGVARCHAR)
+    private String changeDetail;
 }

@@ -1,6 +1,5 @@
 package com.example.ims.config;
 
-import com.example.ims.service.AuditLogService;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -16,14 +15,20 @@ import java.io.IOException;
 @RequiredArgsConstructor
 public class CustomLogoutSuccessHandler implements LogoutSuccessHandler {
 
-    private final AuditLogService auditLogService;
+    private final com.example.ims.service.AccessLogService accessLogService;
+    private final com.example.ims.repository.UserRepository userRepository;
 
     @Override
     public void onLogoutSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) 
             throws IOException, ServletException {
         
         if (authentication != null && authentication.getName() != null) {
-            auditLogService.logAccess(authentication.getName(), "LOGOUT");
+            String username = authentication.getName();
+            String name = userRepository.findByUsername(username)
+                    .map(u -> u.getName())
+                    .orElse(username);
+                    
+            accessLogService.log(username, name, "LOGOUT", "/", "로그아웃", request);
         }
 
         response.setStatus(HttpStatus.OK.value());

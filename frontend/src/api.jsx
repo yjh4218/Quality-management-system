@@ -1,3 +1,4 @@
+import React from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 
@@ -100,9 +101,73 @@ api.interceptors.response.use(
         if (error.response && error.response.status === 401 && !isLoginRequest) {
             window.dispatchEvent(new Event('auth-unauthorized'));
         } else if (!isLoginRequest) {
-            // [에어백] 모든 실패한 요청에 대해 사용자에게 즉시 토스트 알림
+            // [에어백] 모든 실패한 요청에 대해 사용자에게 즉시 토스트 알림 (버그 신고 버튼 포함)
             const errorMsg = error.response?.data?.message || "서버와 통신 중 문제가 발생했습니다.";
-            toast.error(`⚠️ ${errorMsg}`);
+            
+            toast.error(
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '20px' }}>⚠️</span>
+                        <span style={{ fontWeight: 600 }}>{errorMsg}</span>
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#666' }}>
+                        증상이 지속되면 관리자에게 문의하세요.
+                    </div>
+                    <button 
+                        onClick={async (e) => {
+                            e.stopPropagation();
+                            const btn = e.currentTarget;
+                            btn.disabled = true;
+                            btn.innerText = "⏳ 전송 중...";
+                            
+                            try {
+                                // [수정] responseType: 'blob'인 경우 에러 데이터가 Blob 객체로 오므로 텍스트로 변환 필요
+                                let serverErrorData = error.response?.data;
+                                if (serverErrorData instanceof Blob) {
+                                    try {
+                                        const blobText = await serverErrorData.text();
+                                        serverErrorData = JSON.parse(blobText);
+                                    } catch (parseError) {
+                                        serverErrorData = "Blob data (not JSON)";
+                                    }
+                                }
+
+                                await axios.post(`${getBaseURL()}/api/bug-reports`, {
+                                    description: `[자동 전송] 에러 발생: ${errorMsg}`,
+                                    steps: error.stack || 'API 요청 중 에러 발생',
+                                    screenName: window.__QMS_ACTIVE_PAGE__ || window.location.pathname,
+                                    url: window.location.href,
+                                    severity: 'HIGH',
+                                    serverError: serverErrorData ? JSON.stringify(serverErrorData, null, 2) : 'N/A'
+                                }, { withCredentials: true });
+                                
+                                toast.success("✅ 버그 리포트가 관리자에게 즉시 전달되었습니다.");
+                                btn.innerText = "✅ 전달 완료";
+                            } catch (err) {
+                                toast.error("❌ 리포트 전송에 실패했습니다.");
+                                btn.disabled = false;
+                                btn.innerText = "🐞 다시 시도";
+                            }
+                        }}
+                        style={{
+                            backgroundColor: '#e74c3c',
+                            color: 'white',
+                            border: 'none',
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            alignSelf: 'flex-start',
+                            marginTop: '4px',
+                            boxShadow: '0 2px 4px rgba(231, 76, 60, 0.2)'
+                        }}
+                    >
+                        🐞 버그 리포트 즉시 전달하기
+                    </button>
+                </div>,
+                { autoClose: 10000 } // 사용자가 클릭할 시간을 충분히 확보
+            );
         }
         return Promise.reject(error);
     }
@@ -113,6 +178,7 @@ export const getDashboard = () =>
   api.get('/api/dashboard').then(res => res.data);
 
 // Auth
+export const logout = () => api.post('/api/auth/logout');
 export const login = (username, password) => {
     const params = new URLSearchParams();
     params.append('username', username);
@@ -342,7 +408,15 @@ export const rollbackAuditLog = (logId) => api.post(`/api/admin/logs/${logId}/re
 export const updateProfile = (profileData) => api.put('/api/auth/profile', profileData);
 
 // Page View Logging
-export const logPageView = (data) => api.post('/api/logs/page-view', data, { skipLoading: true });
+export const logPageView = (data) => api.post('/api/logs/access/page-move', data, { skipLoading: true });
+
+// User Access Logs
+export const getAccessLogs = () => api.get('/api/logs/access').then(res => res.data);
+
+// Bug Reports
+export const submitBugReport = (report) => api.post('/api/bug-reports', report).then(res => res.data);
+export const getBugReports = () => api.get('/api/bug-reports').then(res => res.data);
+export const updateBugReportStatus = (id, status) => api.patch(`/api/bug-reports/${id}/status`, { status }).then(res => res.data);
 
 // Claim APIs
 export const getClaims = (params = {}, config = {}) => {
@@ -454,8 +528,10 @@ export const saveManufacturerAudit = (data) => {
     return api.post('/api/manufacturer-audits', data).then(res => res.data);
 };
 export const deleteManufacturerAudit = (id) => api.delete(`/api/manufacturer-audits/${id}`);
-export const exportAuditToExcel = (id) => api.get(`/api/manufacturer-audits/${id}/export/excel`, { responseType: 'blob' });
-export const exportAuditToPdf = (id) => api.get(`/api/manufacturer-audits/${id}/export/pdf`, { responseType: 'blob' });
+export const exportAuditToExcel = (id) => api.get(`/api/manufacturer-audits/${id}/export/excel`, { responseType: 'blob' }).then(res => res.data);
+export const getManufacturerAuditHistory = (id) => api.get(`/api/manufacturer-audits/${id}/history`).then(res => res.data);
+
+// export const exportAuditToPdf = (id) => api.get(`/api/manufacturer-audits/${id}/export/pdf`, { responseType: 'blob' }).then(res => res.data);
 
 // --- Manufacturer Categories ---
 export const getManufacturerCategories = () => api.get('/api/manufacturer-categories').then(res => res.data);

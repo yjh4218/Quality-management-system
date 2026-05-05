@@ -4,8 +4,6 @@ import com.example.ims.dto.TrashItemDto;
 import com.example.ims.entity.Claim;
 import com.example.ims.entity.Manufacturer;
 import com.example.ims.entity.Product;
-import com.example.ims.entity.ProductionAudit;
-import com.example.ims.entity.WmsInbound;
 import com.example.ims.repository.ClaimRepository;
 import com.example.ims.repository.ManufacturerRepository;
 import com.example.ims.repository.ProductRepository;

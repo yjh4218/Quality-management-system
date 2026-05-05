@@ -48,11 +48,13 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/unlock/**", "/api/auth/reset-password/**").hasRole("ADMIN")
                         
                         // [NEW] 새로 추가된 Audit 관련 API 명시적 허용 (인증 필요)
-                        .requestMatchers("/api/audit-templates/**").authenticated()
-                        .requestMatchers("/api/manufacturer-audits/**").authenticated()
-                        .requestMatchers("/api/manufacturer-categories/**").authenticated()
-                        .requestMatchers("/api/system-settings/**").authenticated()
+                        .requestMatchers("/api/logs/access/page-move").authenticated()
+                        .requestMatchers("/api/logs/access/**").hasRole("ADMIN")
                         .requestMatchers("/api/logs/**").authenticated()
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/bug-reports").authenticated()
+                        .requestMatchers("/api/bug-reports/**").hasAnyRole("ADMIN", "QUALITY_TEAM")
+                        
+                        .requestMatchers("/api/audit-templates/**").authenticated()
                         
                         .anyRequest().authenticated()
                 )

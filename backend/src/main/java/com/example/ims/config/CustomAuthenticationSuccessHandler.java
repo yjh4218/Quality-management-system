@@ -16,7 +16,7 @@ import java.io.IOException;
 public class CustomAuthenticationSuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
 
     private final UserRepository userRepository;
-    private final com.example.ims.service.AuditLogService auditLogService;
+    private final com.example.ims.service.AccessLogService accessLogService;
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
@@ -24,10 +24,11 @@ public class CustomAuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         String username = authentication.getName();
         userRepository.findByUsername(username).ifPresent(user -> {
             user.setFailedAttempts(0);
+            user.setLastLogin(java.time.LocalDateTime.now()); // Update last login
             userRepository.save(user);
+            
+            accessLogService.log(username, user.getName(), "LOGIN", "/", "로그인", request);
         });
-
-        auditLogService.logAccess(username, "LOGIN");
 
         response.setStatus(HttpServletResponse.SC_OK);
         response.getWriter().write("Login successful");

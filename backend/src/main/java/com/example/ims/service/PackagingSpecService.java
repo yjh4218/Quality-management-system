@@ -139,7 +139,6 @@ public class PackagingSpecService {
                 case "LABELING":
                 case "PROMOTION":
                     // 착인/라벨링 관련 규칙 반영
-                    String existingFormat = spec.getLotAndExpiryFormat() != null ? spec.getLotAndExpiryFormat() : "";
                     spec.setLotAndExpiryFormat(rule.getWarningMessage()); // 완전 대체
                     break;
                 case "LOGISTICS":

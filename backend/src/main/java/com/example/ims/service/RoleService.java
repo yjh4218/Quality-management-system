@@ -3,7 +3,6 @@ package com.example.ims.service;
 import com.example.ims.entity.Role;
 import com.example.ims.event.EntityChangeEvent;
 import com.example.ims.repository.RoleRepository;
-import com.example.ims.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -19,7 +18,6 @@ import java.util.Optional;
 public class RoleService {
 
     private final RoleRepository roleRepository;
-    private final UserRepository userRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final AuditLogService auditLogService;
 

@@ -18,7 +18,7 @@ import java.util.LinkedHashMap;
 @RequiredArgsConstructor
 public class WmsService {
 
-    private final com.example.ims.repository.WmsInboundRepository inboundRepository;
+    private final WmsInboundRepository inboundRepository;
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     /**

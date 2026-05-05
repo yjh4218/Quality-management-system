@@ -28,6 +28,20 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
             @org.springframework.data.repository.query.Param("end") LocalDateTime end,
             org.springframework.data.domain.Pageable pageable);
 
+    @org.springframework.data.jpa.repository.Query("SELECT a FROM AuditLog a WHERE " +
+            "(CAST(:entityType AS String) IS NULL OR a.entityType = :entityType) AND " +
+            "(a.entityType NOT IN ('ACCESS', 'VIEW')) AND " +
+            "(CAST(:search AS String) IS NULL OR CAST(a.entityId AS String) LIKE :search OR LOWER(CAST(a.description AS String)) LIKE :search) AND " +
+            "(a.modifiedAt >= COALESCE(:start, a.modifiedAt)) AND " +
+            "(a.modifiedAt <= COALESCE(:end, a.modifiedAt)) " +
+            "ORDER BY a.modifiedAt DESC")
+    org.springframework.data.domain.Page<AuditLog> searchDataLogs(
+            @org.springframework.data.repository.query.Param("entityType") String entityType,
+            @org.springframework.data.repository.query.Param("search") String search,
+            @org.springframework.data.repository.query.Param("start") LocalDateTime start,
+            @org.springframework.data.repository.query.Param("end") LocalDateTime end,
+            org.springframework.data.domain.Pageable pageable);
+
     List<AuditLog> findByModifiedAtAfter(LocalDateTime modifiedAt);
 
     List<AuditLog> findTop50ByModifiedAtAfterOrderByModifiedAtDesc(LocalDateTime modifiedAt);

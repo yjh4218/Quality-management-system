@@ -1,10 +1,5 @@
 package com.example.ims.dto;
 
-import com.example.ims.entity.AuditLog;
-import com.example.ims.entity.Claim;
-import com.example.ims.entity.Product;
-import com.example.ims.entity.User;
-import com.example.ims.entity.WmsInbound;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

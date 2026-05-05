@@ -67,6 +67,10 @@ const ManufacturerAuditItemPage = () => {
 
     const handleSave = async () => {
         if (!selectedTemplate) return;
+        if (!selectedTemplate.classificationName) {
+            toast.warning('분류명을 입력해주세요.');
+            return;
+        }
         setIsLoading(true);
         try {
             await saveAuditTemplate(selectedTemplate);
@@ -79,20 +83,64 @@ const ManufacturerAuditItemPage = () => {
         }
     };
 
-    const updateGroup = (groupId, name) => {
+    const addNewTemplate = () => {
+        const name = window.prompt('새 점검 양식 분류명을 입력하세요 (예: 식품 제조사 Audit)');
+        if (!name) return;
+        
+        const newT = {
+            classificationName: name,
+            groups: [],
+            active: true
+        };
+        setTemplates([...templates, newT]);
+        setSelectedTemplate(newT);
+    };
+
+    const addGroup = () => {
+        if (!selectedTemplate) return;
         const updated = { ...selectedTemplate };
-        const group = updated.groups.find(g => g.id === groupId);
-        if (group) group.groupName = name;
+        if (!updated.groups) updated.groups = [];
+        updated.groups.push({
+            groupName: '새 점검항목',
+            displayOrder: updated.groups.length + 1,
+            items: []
+        });
         setSelectedTemplate(updated);
     };
 
-    const updateItem = (groupId, itemId, content) => {
-        const updated = { ...selectedTemplate };
-        const group = updated.groups.find(g => g.id === groupId);
-        if (group) {
-            const item = group.items.find(i => i.id === itemId);
-            if (item) item.itemContent = content;
+    const removeGroup = (gIdx) => {
+        if (window.confirm('이 점검항목을 삭제하시겠습니까? 관련 세부항목도 모두 삭제됩니다.')) {
+            const updated = { ...selectedTemplate };
+            updated.groups.splice(gIdx, 1);
+            setSelectedTemplate(updated);
         }
+    };
+
+    const addItem = (gIdx) => {
+        const updated = { ...selectedTemplate };
+        if (!updated.groups[gIdx].items) updated.groups[gIdx].items = [];
+        updated.groups[gIdx].items.push({
+            itemContent: '',
+            displayOrder: updated.groups[gIdx].items.length + 1
+        });
+        setSelectedTemplate(updated);
+    };
+
+    const removeItem = (gIdx, iIdx) => {
+        const updated = { ...selectedTemplate };
+        updated.groups[gIdx].items.splice(iIdx, 1);
+        setSelectedTemplate(updated);
+    };
+
+    const updateGroup = (gIdx, name) => {
+        const updated = { ...selectedTemplate };
+        updated.groups[gIdx].groupName = name;
+        setSelectedTemplate(updated);
+    };
+
+    const updateItem = (gIdx, iIdx, content) => {
+        const updated = { ...selectedTemplate };
+        updated.groups[gIdx].items[iIdx].itemContent = content;
         setSelectedTemplate(updated);
     };
 
@@ -100,10 +148,14 @@ const ManufacturerAuditItemPage = () => {
 
     return (
         <div className="page-container-inner" style={{ padding: '20px' }}>
-            <div className="page-header">
-                <h2>⚙️ 제조사 점검항목 관리</h2>
-                <div className="button-group">
-                    <button className="primary" onClick={handleSave}>전체 저장</button>
+            <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <div>
+                    <h2 style={{ margin: 0 }}>⚙️ 제조사 점검항목 관리</h2>
+                    <p style={{ color: '#666', fontSize: '14px', marginTop: '5px' }}>제조사 Audit에 사용되는 점검 양식과 항목을 설정합니다.</p>
+                </div>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                    <button className="secondary" onClick={addNewTemplate}>+ 새 양식 만들기</button>
+                    <button className="primary" onClick={handleSave} style={{ padding: '8px 25px', fontWeight: 'bold' }}>전체 저장</button>
                 </div>
             </div>
 
@@ -147,16 +199,20 @@ const ManufacturerAuditItemPage = () => {
                 </div>
             </div>
 
-            <div className="card" style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '20px' }}>
+            <div className="card" style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '20px', background: '#f8fafc' }}>
                 <div>
                     <label style={{ fontWeight: 'bold', marginRight: '10px' }}>점검 양식 선택:</label>
                     <select 
                         value={selectedTemplate?.id || ''} 
-                        onChange={(e) => setSelectedTemplate(templates.find(t => t.id === parseInt(e.target.value)))}
-                        style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ddd', minWidth: '200px' }}
+                        onChange={(e) => {
+                            const id = parseInt(e.target.value);
+                            setSelectedTemplate(templates.find(t => t.id === id) || templates.find(t => !t.id && t.classificationName === e.target.value));
+                        }}
+                        style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ddd', minWidth: '250px' }}
                     >
+                        <option value="">양식 선택</option>
                         {templates.map(t => (
-                            <option key={t.id} value={t.id}>{t.classificationName}</option>
+                            <option key={t.id || t.classificationName} value={t.id || t.classificationName}>{t.classificationName}</option>
                         ))}
                     </select>
                 </div>
@@ -173,7 +229,6 @@ const ManufacturerAuditItemPage = () => {
                                 <option key={cat.id} value={cat.name}>{cat.name}</option>
                             ))}
                         </select>
-                        <span style={{ fontSize: '12px', color: '#718096' }}>* 제조사의 분류가 일치할 때 이 양식이 자동 선택됩니다.</span>
                     </div>
                 )}
             </div>
@@ -181,31 +236,52 @@ const ManufacturerAuditItemPage = () => {
             {selectedTemplate && (
                 <div className="audit-config-container">
                     {selectedTemplate.groups.map((group, gIdx) => (
-                        <div key={group.id || gIdx} className="card" style={{ marginBottom: '30px', borderLeft: '5px solid var(--primary-color)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '15px', gap: '15px' }}>
+                        <div key={group.id || gIdx} className="card" style={{ marginBottom: '30px', borderLeft: '5px solid var(--primary-color)', position: 'relative' }}>
+                            <div style={{ position: 'absolute', top: '15px', right: '15px' }}>
+                                <button className="danger" onClick={() => removeGroup(gIdx)} style={{ padding: '4px 10px', fontSize: '12px' }}>항목 삭제</button>
+                            </div>
+                            
+                            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '15px', gap: '15px', paddingRight: '100px' }}>
                                 <span style={{ fontWeight: '800', color: 'var(--primary-color)', fontSize: '18px' }}>점검항목 {gIdx + 1}:</span>
                                 <input 
                                     type="text" 
                                     value={group.groupName} 
-                                    onChange={(e) => updateGroup(group.id, e.target.value)}
-                                    style={{ flex: 1, fontSize: '16px', fontWeight: 'bold', padding: '8px' }}
+                                    onChange={(e) => updateGroup(gIdx, e.target.value)}
+                                    style={{ flex: 1, fontSize: '16px', fontWeight: 'bold', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                                    placeholder="그룹 명칭 입력 (예: 운영관리)"
                                 />
                             </div>
                             
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '15px' }}>
                                 {group.items.map((item, iIdx) => (
-                                    <div key={item.id || iIdx} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#f8f9fa', padding: '10px', borderRadius: '8px' }}>
-                                        <span style={{ width: '80px', fontSize: '13px', color: '#666' }}>세부항목 {iIdx + 1}</span>
+                                    <div key={item.id || iIdx} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #f1f5f9' }}>
+                                        <span style={{ width: '80px', fontSize: '12px', color: '#64748b', marginTop: '10px' }}>세부항목 {iIdx + 1}</span>
                                         <textarea 
                                             value={item.itemContent} 
-                                            onChange={(e) => updateItem(group.id, item.id, e.target.value)}
-                                            style={{ flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid #eee', minHeight: '40px' }}
+                                            onChange={(e) => updateItem(gIdx, iIdx, e.target.value)}
+                                            style={{ flex: 1, padding: '10px', borderRadius: '4px', border: '1px solid #e2e8f0', minHeight: '60px', fontSize: '14px' }}
+                                            placeholder="세부 점검 내용을 입력하세요."
                                         />
+                                        <button 
+                                            onClick={() => removeItem(gIdx, iIdx)} 
+                                            style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '18px', padding: '5px' }}
+                                            title="세부항목 삭제"
+                                        >
+                                            &times;
+                                        </button>
                                     </div>
                                 ))}
                             </div>
+                            
+                            <div style={{ textAlign: 'center' }}>
+                                <button className="outline" onClick={() => addItem(gIdx)} style={{ padding: '6px 20px', fontSize: '13px', color: '#4a5568' }}>+ 세부항목 추가</button>
+                            </div>
                         </div>
                     ))}
+                    
+                    <div style={{ textAlign: 'center', padding: '40px', background: '#f8fafc', border: '2px dashed #e2e8f0', borderRadius: '12px', marginBottom: '40px' }}>
+                        <button className="primary" onClick={addGroup} style={{ padding: '10px 30px', fontWeight: 'bold' }}>+ 새로운 점검항목(그룹) 추가</button>
+                    </div>
                 </div>
             )}
         </div>

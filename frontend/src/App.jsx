@@ -22,11 +22,13 @@ import DashboardManagementPage from './DashboardManagementPage.jsx';
 import TrashBinPage from './TrashBinPage.jsx';
 import HelpCenterModal from './components/HelpCenterModal';
 import ProfileModal from './ProfileModal';
-import { getCurrentUser } from './api';
+import { getCurrentUser, logout } from './api';
 import ManufacturerAuditItemPage from './ManufacturerAuditItemPage';
 import ManufacturerAuditPage from './ManufacturerAuditPage';
 import ManufacturerAuditDashboard from './ManufacturerAuditDashboard';
 import ManufacturerCategoryPage from './ManufacturerCategoryPage';
+import AccessLogPage from './AccessLogPage.jsx';
+import BugReportPage from './BugReportPage.jsx';
 
 const PAGE_INFO = {
     dashboard: { title: '📊 시스템 대시보드' },
@@ -52,8 +54,102 @@ const PAGE_INFO = {
     manufacturerAuditItems: { title: '📋 제조사 점검항목 관리' },
     manufacturerAudits: { title: '📝 제조사 Audit 관리' },
     manufacturerAuditDashboard: { title: '📊 제조사 Audit 대시보드' },
-    manufacturerCategories: { title: '📂 제조사 구분 관리' }
+    manufacturerCategories: { title: '📂 제조사 구분 관리' },
+    accessLogs: { title: '🕒 사용자 접근 로그' },
+    bugReports: { title: '🐞 버그 리포트 관리' }
 };
+
+// [추가] 글로벌 에러 핸들링을 위한 Error Boundary 컴포넌트
+class ErrorBoundary extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = { hasError: false, error: null, errorInfo: null, isReporting: false };
+    }
+
+    static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+    }
+
+    componentDidCatch(error, errorInfo) {
+        this.setState({ errorInfo });
+        console.error(">>>> [FATAL ERROR] Captured by ErrorBoundary:", error, errorInfo);
+        // 자동 리포팅 시도 (선택 사항)
+        // this.sendAutoReport(error, errorInfo);
+    }
+
+    sendAutoReport = async () => {
+        const { error, errorInfo } = this.state;
+        if (!error) return;
+
+        this.setState({ isReporting: true });
+        try {
+            const { submitBugReport } = await import('./api');
+            await submitBugReport({
+                screenName: window.__QMS_ACTIVE_PAGE__ || '전역 에러',
+                url: window.location.href,
+                severity: 'CRITICAL',
+                description: `[자동 감지] 시스템 치명적 오류 발생: ${error.message}`,
+                steps: `사용자 활동 중 예기치 않은 오류가 발생하여 화면이 중단되었습니다.\n\n[Stack Trace]\n${error.stack}\n\n[Component Stack]\n${errorInfo?.componentStack}`,
+                reporterName: this.props.user?.name || '알 수 없는 사용자',
+                reporterUsername: this.props.user?.username || 'unknown'
+            });
+            alert("버그 리포트가 개발팀에 성공적으로 전달되었습니다. 시스템을 새로고침합니다.");
+            window.location.reload();
+        } catch (err) {
+            console.error("Bug report failed", err);
+            alert("리포트 전송에 실패했습니다. 수동으로 새로고침해 주세요.");
+            this.setState({ isReporting: false });
+        }
+    };
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div style={{ 
+                    height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', 
+                    backgroundColor: '#f8fafc', padding: '20px', textAlign: 'center' 
+                }}>
+                    <div style={{ fontSize: '60px', marginBottom: '20px' }}>🚧</div>
+                    <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1e293b', marginBottom: '10px' }}>
+                        시스템에 일시적인 오류가 발생했습니다.
+                    </h1>
+                    <p style={{ color: '#64748b', marginBottom: '30px', maxWidth: '500px', lineHeight: '1.6' }}>
+                        화면을 렌더링하는 중 예상치 못한 오류가 발견되어 보호 모드로 전환되었습니다.<br/>
+                        아래 버튼을 눌러 버그를 신고하시면 개발팀에서 즉시 확인하겠습니다.
+                    </p>
+                    <div style={{ display: 'flex', gap: '15px' }}>
+                        <button 
+                            className="primary" 
+                            onClick={this.sendAutoReport}
+                            disabled={this.state.isReporting}
+                            style={{ padding: '12px 30px', fontWeight: 'bold' }}
+                        >
+                            {this.state.isReporting ? '전송 중...' : '🐞 버그 리포트 전송 및 새로고침'}
+                        </button>
+                        <button 
+                            className="secondary" 
+                            onClick={() => window.location.reload()}
+                            style={{ padding: '12px 30px' }}
+                        >
+                            새로고침
+                        </button>
+                    </div>
+                    {process.env.NODE_ENV === 'development' && (
+                        <pre style={{ 
+                            marginTop: '40px', padding: '20px', background: '#fff', border: '1px solid #e2e8f0', 
+                            borderRadius: '8px', textAlign: 'left', maxWidth: '800px', overflow: 'auto', fontSize: '12px' 
+                        }}>
+                            {this.state.error && this.state.error.toString()}
+                            <br />
+                            {this.state.errorInfo && this.state.errorInfo.componentStack}
+                        </pre>
+                    )}
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
 
 const App = () => {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -92,6 +188,25 @@ const App = () => {
         tabBar.addEventListener('wheel', handleWheel, { passive: false });
         return () => tabBar.removeEventListener('wheel', handleWheel);
     }, [isLoggedIn]); // Re-attach when logged in state changes and UI renders
+
+    // [고도화] 현재 활성 화면 정보를 전역 객체에 기록 (버그 리포트 연동용)
+    useEffect(() => {
+        if (!isLoggedIn) return;
+        
+        let currentPageName = '';
+        if (isProfileOpen) {
+            currentPageName = '개인정보 수정 화면';
+        } else if (isHelpOpen) {
+            currentPageName = '도움말 센터';
+        } else {
+            const activeTab = tabs.find(t => t.id === activeTabId);
+            currentPageName = activeTab ? (PAGE_INFO[activeTab.page]?.title || activeTab.title || activeTab.page) : '알 수 없음';
+            // 이모지 제거 (DB 저장 시 깨짐 방지 및 가독성)
+            currentPageName = currentPageName.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|^[^\w\s\uAC00-\uD7A3]+ /g, '').trim();
+        }
+        
+        window.__QMS_ACTIVE_PAGE__ = currentPageName;
+    }, [isLoggedIn, activeTabId, tabs, isProfileOpen, isHelpOpen]);
 
     // [추가] 활성 탭 자동 스크롤
     useEffect(() => {
@@ -152,7 +267,7 @@ const App = () => {
 
         // 1. 사이드바 그룹 자동 열기
         let targetSection = null;
-        if (['dashboard', 'users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin'].includes(pageKey)) targetSection = 'system';
+        if (['dashboard', 'users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin', 'accessLogs', 'bugReports'].includes(pageKey)) targetSection = 'system';
         else if (['brands', 'manufacturers', 'salesChannels', 'manufacturerCategories'].includes(pageKey)) targetSection = 'category';
         else if (['products', 'bomMaster', 'bomCategories', 'packagingTemplates', 'packagingRules', 'manufacturerAuditItems'].includes(pageKey)) targetSection = 'master';
         else if (['quality', 'releaseRecord', 'qualityPhotoAudit', 'manufacturerAudits', 'manufacturerAuditDashboard'].includes(pageKey)) targetSection = 'quality';
@@ -222,13 +337,45 @@ const App = () => {
         fetchUser();
     };
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
+        try {
+            await logout();
+        } catch (err) {
+            console.error("Logout failed", err);
+        }
         setIsLoggedIn(false);
         setUser(null);
         setTabs([{ id: 'dashboard', page: 'dashboard', title: '📊 시스템 대시보드', data: null }]);
         setActiveTabId('dashboard');
         setIsMobileMenuOpen(false);
     };
+
+    // [보안] 30분 동안 활동이 없으면 자동 로그아웃 (Idle Timer)
+    useEffect(() => {
+        if (!isLoggedIn) return;
+
+        let idleTimer;
+        const IDLE_TIMEOUT = 30 * 60 * 1000; // 30분
+
+        const resetTimer = () => {
+            if (idleTimer) clearTimeout(idleTimer);
+            idleTimer = setTimeout(() => {
+                console.log(">>>> [SECURITY] Idle timeout - triggering auto-logout");
+                handleLogout();
+            }, IDLE_TIMEOUT);
+        };
+
+        // 감지할 사용자 활동 이벤트
+        const events = ['mousemove', 'keypress', 'touchstart', 'scroll', 'click'];
+        events.forEach(evt => window.addEventListener(evt, resetTimer));
+
+        resetTimer();
+
+        return () => {
+            if (idleTimer) clearTimeout(idleTimer);
+            events.forEach(evt => window.removeEventListener(evt, resetTimer));
+        };
+    }, [isLoggedIn]);
 
     // Permission check helper
     const allowedMenus = React.useMemo(() => {
@@ -286,7 +433,7 @@ const App = () => {
 
     const canAccess = (menuKey) => hasPermission(menuKey, 'VIEW');
 
-    const hasSystemAccess = canAccess('dashboard') || canAccess('users') || canAccess('logs') || canAccess('roles') || canAccess('guideManagement') || canAccess('dashboardMgmt') || canAccess('trashBin');
+    const hasSystemAccess = canAccess('dashboard') || canAccess('users') || canAccess('logs') || canAccess('roles') || canAccess('guideManagement') || canAccess('dashboardMgmt') || canAccess('trashBin') || canAccess('accessLogs') || canAccess('bugReports');
     const hasCategoryAccess = canAccess('brands') || canAccess('manufacturers') || canAccess('salesChannels');
     const hasMasterAccess = canAccess('products') || canAccess('bomMaster') || canAccess('bomCategories') || canAccess('packagingTemplates') || canAccess('packagingRules');
     const hasQualityAccess = canAccess('quality') || canAccess('releaseRecord') || canAccess('qualityPhotoAudit');
@@ -296,7 +443,7 @@ const App = () => {
     const isSectionActive = (section) => {
         const activePage = tabs.find(t => t.id === activeTabId)?.page;
         switch(section) {
-            case 'system': return ['dashboard', 'users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin'].includes(activePage);
+            case 'system': return ['dashboard', 'users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin', 'accessLogs', 'bugReports'].includes(activePage);
             case 'category': return ['brands', 'manufacturers', 'salesChannels'].includes(activePage);
             case 'master': return ['products', 'bomMaster', 'bomCategories', 'packagingTemplates', 'packagingRules'].includes(activePage);
             case 'quality': return ['quality', 'releaseRecord', 'qualityPhotoAudit'].includes(activePage);
@@ -306,7 +453,8 @@ const App = () => {
     };
 
     return (
-        <div className={`app-container ${isMobileMenuOpen ? 'mobile-menu-active' : ''}`}>
+        <ErrorBoundary user={user}>
+            <div className={`app-container ${isMobileMenuOpen ? 'mobile-menu-active' : ''}`}>
             {isLoading && (
                 <div className="global-loading-overlay">
                     <div className="spinner-ring"></div>
@@ -383,6 +531,16 @@ const App = () => {
                                 {canAccess('trashBin') && (
                                     <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'trashBin' ? 'active' : ''}`} onClick={() => handleNavigate('trashBin')}>
                                         🗑️ 데이터 복구 (휴지통)
+                                    </button>
+                                )}
+                                {canAccess('accessLogs') && (
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'accessLogs' ? 'active' : ''}`} onClick={() => handleNavigate('accessLogs')}>
+                                        🕒 사용자 접근 로그
+                                    </button>
+                                )}
+                                {canAccess('bugReports') && (
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'bugReports' ? 'active' : ''}`} onClick={() => handleNavigate('bugReports')}>
+                                        🐞 버그 리포트 관리
                                     </button>
                                 )}
                             </div>
@@ -653,6 +811,8 @@ const App = () => {
                                 {tab.page === 'manufacturerAudits' && <ManufacturerAuditPage user={user} />}
                                 {tab.page === 'manufacturerAuditDashboard' && <ManufacturerAuditDashboard user={user} onNavigate={handleNavigate} />}
                                 {canAccess('trashBin') && tab.page === 'trashBin' && <TrashBinPage user={user} />}
+                                {canAccess('accessLogs') && tab.page === 'accessLogs' && <AccessLogPage user={user} />}
+                                {canAccess('bugReports') && tab.page === 'bugReports' && <BugReportPage user={user} />}
                             </div>
                         </div>
                     ))}
@@ -674,7 +834,9 @@ const App = () => {
                     onClose={() => setIsHelpOpen(false)} 
                 />
             )}
+
         </div>
+        </ErrorBoundary>
     );
 };
 

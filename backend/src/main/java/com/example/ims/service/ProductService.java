@@ -20,7 +20,6 @@ import com.example.ims.entity.ProductIngredient;
 import java.util.List;
 import java.util.Objects;
 import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 
@@ -500,163 +499,6 @@ public class ProductService {
      * @param newP Updated Product state (업데이트될 신규 데이터)
      * @param modifier Name of the modifier (수정자 실명/소속)
      */
-    private void logChanges(Product oldP, Product newP, String modifier) {
-        java.util.List<ProductHistory> historyBatch = new java.util.ArrayList<>();
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "ProductName", oldP.getProductName(), newP.getProductName());
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "EnglishProductName", oldP.getEnglishProductName(), newP.getEnglishProductName());
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "ProductType", oldP.getProductType(), newP.getProductType());
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Capacity", oldP.getCapacity(), newP.getCapacity());
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Weight", oldP.getWeight(), newP.getWeight());
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "ShelfLifeMonths", oldP.getShelfLifeMonths(), newP.getShelfLifeMonths());
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "OpenedShelfLifeMonths", oldP.getOpenedShelfLifeMonths(), newP.getOpenedShelfLifeMonths());
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "RecycleGrade", oldP.getRecycleGrade(), newP.getRecycleGrade());
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "RecycleEvalNo", oldP.getRecycleEvalNo(), newP.getRecycleEvalNo());
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "RecycleMaterial", oldP.getRecycleMaterial(), newP.getRecycleMaterial());
-
-        // Handle Brand Name for Log
-        String oldBrand = oldP.getBrand() != null ? oldP.getBrand().getName() : null;
-        String newBrand = null;
-        if (newP.getBrand() != null) {
-            if (newP.getBrand().getName() != null) {
-                newBrand = newP.getBrand().getName();
-            } else if (newP.getBrand().getId() != null) {
-                newBrand = brandRepository.findById(newP.getBrand().getId()).map(b -> b.getName()).orElse(null);
-            }
-        }
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Brand", oldBrand, newBrand);
-
-        // Handle Manufacturer Name for Log
-        String oldMfr = oldP.getManufacturerInfo() != null ? oldP.getManufacturerInfo().getName() : null;
-        String newMfr = null;
-        if (newP.getManufacturerInfo() != null) {
-            if (newP.getManufacturerInfo().getName() != null) {
-                newMfr = newP.getManufacturerInfo().getName();
-            } else if (newP.getManufacturerInfo().getId() != null) {
-                newMfr = manufacturerRepository.findById(newP.getManufacturerInfo().getId()).map(m -> m.getName())
-                        .orElse(null);
-            }
-        }
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Manufacturer", oldMfr, newMfr);
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "ParentItemCode", oldP.getParentItemCode(), newP.getParentItemCode());
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "IsParent", oldP.isParent(), newP.isParent());
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "IsMaster", oldP.isMaster(), newP.isMaster());
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Ingredients", oldP.getIngredients(), newP.getIngredients());
-        
-        // Log product ingredients detailed changes
-        List<ProductIngredient> oldIngs = oldP.getProductIngredients() != null ? oldP.getProductIngredients() : java.util.Collections.emptyList();
-        List<ProductIngredient> newIngs = newP.getProductIngredients() != null ? newP.getProductIngredients() : java.util.Collections.emptyList();
-
-        java.util.Map<String, ProductIngredient> oldMap = oldIngs.stream()
-                .filter(i -> i.getKorName() != null)
-                .collect(java.util.stream.Collectors.toMap(ProductIngredient::getKorName, i -> i, (existing, replacement) -> existing));
-        java.util.Map<String, ProductIngredient> newMap = newIngs.stream()
-                .filter(i -> i.getKorName() != null)
-                .collect(java.util.stream.Collectors.toMap(ProductIngredient::getKorName, i -> i, (existing, replacement) -> existing));
-
-        java.util.List<String> details = new java.util.ArrayList<>();
-
-        // Added or Modified
-        for (String name : newMap.keySet()) {
-            ProductIngredient newIng = newMap.get(name);
-            if (!oldMap.containsKey(name)) {
-                details.add("[추가] " + name + " (" + formatValue(newIng.getContentPercent()) + "%)");
-            } else {
-                ProductIngredient oldIng = oldMap.get(name);
-                if (!Objects.equals(oldIng.getContentPercent(), newIng.getContentPercent()) ||
-                    !Objects.equals(oldIng.getContentPpm(), newIng.getContentPpm()) ||
-                    !Objects.equals(oldIng.getContentPpb(), newIng.getContentPpb())) {
-                    details.add("[수정] " + name + ": " + formatValue(oldIng.getContentPercent()) + "% -> " + formatValue(newIng.getContentPercent()) + "%");
-                }
-            }
-        }
-        // Removed
-        for (String name : oldMap.keySet()) {
-            if (!newMap.containsKey(name)) {
-                details.add("[삭제] " + name);
-            }
-        }
-
-        if (!details.isEmpty()) {
-            compareAndAdd(historyBatch, oldP.getId(), modifier, "전성분 변경 요약", "-", String.join(", ", details));
-        }
-
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "ImagePaths", captureJson(oldP.getImagePaths()), captureJson(newP.getImagePaths()));
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "ImagePath", oldP.getImagePath(), newP.getImagePath());
-
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "CertStandard", oldP.getCertStandard(), newP.getCertStandard());
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "CertMsds", oldP.getCertMsds(), newP.getCertMsds());
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "CertFunction", oldP.getCertFunction(), newP.getCertFunction());
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "CertExpiry", oldP.getCertExpiry(), newP.getCertExpiry());
-        
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "InboxInfo", captureJson(oldP.getInboxInfo()), captureJson(newP.getInboxInfo()));
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "OutboxInfo", captureJson(oldP.getOutboxInfo()), captureJson(newP.getOutboxInfo()));
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "PalletInfo", captureJson(oldP.getPalletInfo()), captureJson(newP.getPalletInfo()));
-        
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Channels", captureJson(oldP.getChannels()), captureJson(newP.getChannels()));
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Components", captureJson(oldP.getComponents()), captureJson(newP.getComponents()));
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "PackagingCertificates", captureJson(oldP.getPackagingCertificates()), captureJson(newP.getPackagingCertificates()));
-
-        // Log Dimensions
-        String oldLen = oldP.getDimensions() != null && oldP.getDimensions().getLength() != null ? String.valueOf(oldP.getDimensions().getLength()) : null;
-        String newLen = newP.getDimensions() != null && newP.getDimensions().getLength() != null ? String.valueOf(newP.getDimensions().getLength()) : null;
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Dim.Length", oldLen, newLen);
-
-        String oldWid = oldP.getDimensions() != null && oldP.getDimensions().getWidth() != null ? String.valueOf(oldP.getDimensions().getWidth()) : null;
-        String newWid = newP.getDimensions() != null && newP.getDimensions().getWidth() != null ? String.valueOf(newP.getDimensions().getWidth()) : null;
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Dim.Width", oldWid, newWid);
-
-        String oldHei = oldP.getDimensions() != null && oldP.getDimensions().getHeight() != null ? String.valueOf(oldP.getDimensions().getHeight()) : null;
-        String newHei = newP.getDimensions() != null && newP.getDimensions().getHeight() != null ? String.valueOf(newP.getDimensions().getHeight()) : null;
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Dim.Height", oldHei, newHei);
-
-        // Log Packaging Request
-        String oldLid = oldP.getPackagingRequest() != null ? oldP.getPackagingRequest().getLidMaterial() : null;
-        String newLid = newP.getPackagingRequest() != null ? newP.getPackagingRequest().getLidMaterial() : null;
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Pkg.Lid", oldLid, newLid);
-
-        String oldBody = oldP.getPackagingRequest() != null ? oldP.getPackagingRequest().getBodyMaterial() : null;
-        String newBody = newP.getPackagingRequest() != null ? newP.getPackagingRequest().getBodyMaterial() : null;
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Pkg.Body", oldBody, newBody);
-
-        String oldLabel = oldP.getPackagingRequest() != null ? oldP.getPackagingRequest().getLabelMaterial() : null;
-        String newLabel = newP.getPackagingRequest() != null ? newP.getPackagingRequest().getLabelMaterial() : null;
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Pkg.Label", oldLabel, newLabel);
-
-        String oldOther = oldP.getPackagingRequest() != null ? oldP.getPackagingRequest().getOtherMaterial() : null;
-        String newOther = newP.getPackagingRequest() != null ? newP.getPackagingRequest().getOtherMaterial() : null;
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Pkg.Other", oldOther, newOther);
-
-        // Log Packaging Material
-        PackagingMaterial oldM = oldP.getPackagingMaterial() != null ? oldP.getPackagingMaterial() : new PackagingMaterial();
-        PackagingMaterial newM = newP.getPackagingMaterial() != null ? newP.getPackagingMaterial() : new PackagingMaterial();
-
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Mat.Cap", oldM.getMaterialCap(), newM.getMaterialCap());
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Weight.Cap", oldM.getWeightCap(), newM.getWeightCap());
-        
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Mat.Sealing", oldM.getMaterialSealing(), newM.getMaterialSealing());
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Weight.Sealing", oldM.getWeightSealing(), newM.getWeightSealing());
-        
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Mat.Pump", oldM.getMaterialPump(), newM.getMaterialPump());
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Weight.Pump", oldM.getWeightPump(), newM.getWeightPump());
-        
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Mat.OuterBox", oldM.getMaterialOuterBox(), newM.getMaterialOuterBox());
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Weight.OuterBox", oldM.getWeightOuterBox(), newM.getWeightOuterBox());
-        
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Mat.Tool", oldM.getMaterialTool(), newM.getMaterialTool());
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Weight.Tool", oldM.getWeightTool(), newM.getWeightTool());
-        
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Mat.Packing", oldM.getMaterialPacking(), newM.getMaterialPacking());
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Weight.Packing", oldM.getWeightPacking(), newM.getWeightPacking());
-        
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Mat.Etc", oldM.getMaterialEtc(), newM.getMaterialEtc());
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Weight.Etc", oldM.getWeightEtc(), newM.getWeightEtc());
-        
-        compareAndAdd(historyBatch, oldP.getId(), modifier, "Mat.Remarks", oldM.getMaterialRemarks(), newM.getMaterialRemarks());
-
-        if (!historyBatch.isEmpty()) {
-            historyRepository.saveAll(historyBatch);
-        }
-    }
 
     private String captureJson(Object obj) {
         if (obj == null) return "-";
@@ -682,32 +524,6 @@ public class ProductService {
         }
     }
 
-    private String formatValue(String val) {
-        if (val == null || val.trim().isEmpty()) return "0";
-        try {
-            return new java.math.BigDecimal(val.trim())
-                    .setScale(2, java.math.RoundingMode.HALF_UP)
-                    .stripTrailingZeros()
-                    .toPlainString();
-        } catch (Exception e) {
-            return val;
-        }
-    }
-
-    private void compareAndAdd(java.util.List<ProductHistory> batch, Long productId, String modifier, String field, Object oldVal, Object newVal) {
-        String sOld = (oldVal == null || oldVal.toString().trim().isEmpty()) ? "-" : oldVal.toString();
-        String sNew = (newVal == null || newVal.toString().trim().isEmpty()) ? "-" : newVal.toString();
-
-        if (!Objects.equals(sOld, sNew)) {
-            batch.add(ProductHistory.builder()
-                    .productId(productId)
-                    .modifier(modifier)
-                    .fieldName(field)
-                    .oldValue(sOld)
-                    .newValue(sNew)
-                    .build());
-        }
-    }
 
     public List<ProductHistory> getHistory(Long productId) {
         return historyRepository.findByProductIdOrderByModifiedAtDesc(productId);
@@ -885,67 +701,6 @@ public class ProductService {
      * [성능 최적화] 엔티티를 DTO로 안전하게 변환합니다. 
      * @deprecated 이제 Repository 레벨에서 직접 Project를 수행하므로 사용하지 않습니다.
      */
-    @Deprecated
-    private com.example.ims.dto.ProductSummaryRecord convertToSummaryRecord(Product p) {
-        com.example.ims.entity.Dimensions dim = p.getDimensions() != null ? p.getDimensions() : new com.example.ims.entity.Dimensions();
-        com.example.ims.entity.InboxInfo inbox = p.getInboxInfo() != null ? p.getInboxInfo() : new com.example.ims.entity.InboxInfo();
-        com.example.ims.entity.OutboxInfo outbox = p.getOutboxInfo() != null ? p.getOutboxInfo() : new com.example.ims.entity.OutboxInfo();
-        com.example.ims.entity.PalletInfo pallet = p.getPalletInfo() != null ? p.getPalletInfo() : new com.example.ims.entity.PalletInfo();
-        com.example.ims.entity.PackagingMaterial mat = p.getPackagingMaterial() != null ? p.getPackagingMaterial() : new com.example.ims.entity.PackagingMaterial();
-
-        return new com.example.ims.dto.ProductSummaryRecord(
-            p.getId(),
-            p.getItemCode(),
-            p.getProductName(),
-            p.getEnglishProductName(),
-            p.getProductType(),
-            p.getBrand() != null ? p.getBrand().getName() : "-",
-            p.getManufacturerInfo() != null ? p.getManufacturerInfo().getName() : "-",
-            p.getShelfLifeMonths(),
-            p.getIngredients(),
-            p.isMaster(),
-            p.isActive(),
-            p.isPlanningSet(),
-            p.getCreatedAt(),
-            
-            dim.getStatus() != null ? dim.getStatus() : "\uAC00\uC548",
-            dim.getWidth(),
-            dim.getLength(),
-            dim.getHeight(),
-            p.getWeight(),
-            
-            inbox.getInboxQuantity(),
-            inbox.getInboxWeight(),
-            outbox.getOutboxQuantity(),
-            outbox.getOutboxWeight(),
-            pallet.getPalletQuantity(),
-            
-            mat.getMaterialBody(),
-            mat.getWeightBody(),
-            mat.getMaterialLabel(),
-            mat.getWeightLabel(),
-            mat.getMaterialCap(),
-            mat.getWeightCap(),
-            mat.getMaterialSealing(),
-            mat.getWeightSealing(),
-            mat.getMaterialPump(),
-            mat.getWeightPump(),
-            mat.getMaterialOuterBox(),
-            mat.getWeightOuterBox(),
-            mat.getMaterialTool(),
-            mat.getWeightTool(),
-            mat.getMaterialPacking(),
-            mat.getWeightPacking(),
-            mat.getMaterialEtc(),
-            mat.getWeightEtc(),
-            
-            mat.getManufacturerContainer(),
-            mat.getManufacturerLabel(),
-            mat.getManufacturerOuterBox(),
-            mat.getManufacturerEtc(),
-            mat.getMaterialRemarks()
-        );
-    }
     
 
     @Transactional

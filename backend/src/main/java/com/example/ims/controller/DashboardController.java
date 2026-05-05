@@ -1,6 +1,5 @@
 package com.example.ims.controller;
 
-import com.example.ims.dto.DashboardDTO;
 import com.example.ims.entity.User;
 import com.example.ims.repository.UserRepository;
 import com.example.ims.service.DashboardService;

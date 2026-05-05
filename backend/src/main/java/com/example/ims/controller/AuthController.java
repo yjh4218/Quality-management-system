@@ -1,6 +1,7 @@
 package com.example.ims.controller;
 
 import com.example.ims.dto.RegisterRequestDto;
+import com.example.ims.dto.ProfileUpdateRequestDto;
 import com.example.ims.entity.User;
 import com.example.ims.repository.UserRepository;
 import com.example.ims.repository.ManufacturerRepository;
@@ -180,6 +181,39 @@ public class AuthController {
         response.put("roles", roles);
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * [고도화 11] 사용자 자신의 프로필 정보를 업데이트합니다.
+     */
+    @PutMapping("/profile")
+    public ResponseEntity<?> updateProfile(@Valid @RequestBody ProfileUpdateRequestDto dto) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        User user = userRepository.findByUsername(auth.getName())
+                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+
+        log.info("[AUTH] Updating profile for user: {}", user.getUsername());
+
+        // 기본 정보 업데이트
+        user.setName(dto.name());
+        user.setDepartment(dto.department());
+        user.setPosition(dto.position());
+
+        // 제조사 소속 사용자의 경우 소속 회사 변경 허용 (더파운더즈 본사 직원은 변경 불가)
+        if (!"더파운더즈".equals(user.getCompanyName())) {
+            if (dto.companyName() != null && !dto.companyName().isBlank()) {
+                // 제조사 존재 여부 재검증
+                manufacturerRepository.findByName(dto.companyName())
+                        .ifPresent(mfr -> user.setCompanyName(mfr.getName()));
+            }
+        }
+
+        userRepository.save(user);
+        return ResponseEntity.ok("프로필 정보가 성공적으로 업데이트되었습니다.");
     }
 
     private void validatePasswordComplexity(String password) {

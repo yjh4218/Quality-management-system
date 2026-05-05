@@ -53,14 +53,15 @@ public class AuditLogService {
                 event.getModifierCompany(),
                 event.getDescription(),
                 event.getOldEntity(),
-                event.getNewEntity()
+                event.getNewEntity(),
+                event.getChangeDetail()
         );
     }
 
     @Transactional
     public void log(String entityType, Long entityId, String action, String modifier, 
             Long modifierId, String modifierUsername, String modifierName, String modifierCompany,
-            String description, String oldValue, String newValue) {
+            String description, String oldValue, String newValue, String changeDetail) {
         AuditLog auditLog = AuditLog.builder()
                 .entityType(entityType)
                 .entityId(entityId)
@@ -73,6 +74,7 @@ public class AuditLogService {
                 .description(description)
                 .oldValue(oldValue)
                 .newValue(newValue)
+                .changeDetail(changeDetail)
                 .modifiedAt(LocalDateTime.now())
                 .build();
         auditLogRepository.save(auditLog);
@@ -81,11 +83,12 @@ public class AuditLogService {
     @Transactional
     public void logEntityChange(String entityType, Long entityId, String action, String modifier,
             Long modifierId, String modifierUsername, String modifierName, String modifierCompany,
-            String description, Object oldEntity, Object newEntity) {
+            String description, Object oldEntity, Object newEntity, String changeDetail) {
         String oldJson = (oldEntity instanceof String) ? (String) oldEntity : toCompactJson(oldEntity);
         String newJson = (newEntity instanceof String) ? (String) newEntity : toCompactJson(newEntity);
 
-        log(entityType, entityId, action, modifier, modifierId, modifierUsername, modifierName, modifierCompany, description, oldJson, newJson);
+        log(entityType, entityId, action, modifier, modifierId, modifierUsername, modifierName, modifierCompany, 
+            description, oldJson, newJson, changeDetail);
     }
 
     /**
@@ -138,7 +141,8 @@ public class AuditLogService {
             log.warn("Invalid date format in logs search");
         }
         
-        return auditLogRepository.searchLogs(processedType, processedSearch, start, end, pageable);
+        // 시스템 변경 이력에서는 ACCESS와 VIEW를 제외하고 검색
+        return auditLogRepository.searchDataLogs(processedType, processedSearch, start, end, pageable);
     }
 
     @Transactional
@@ -154,23 +158,23 @@ public class AuditLogService {
         try {
             Long entityId = logEntry.getEntityId();
             if ("PRODUCT".equals(logEntry.getEntityType())) {
-                Product current = productRepository.findById(entityId).orElseThrow();
+                productRepository.findById(entityId).orElseThrow();
                 Product restored = objectMapper.readValue(json, Product.class);
                 // Copy restorable fields... (Simplified for now)
                 restored.setId(entityId); 
                 productRepository.save(restored);
             } else if ("CLAIM".equals(logEntry.getEntityType())) {
-                Claim current = claimRepository.findById(entityId).orElseThrow();
+                claimRepository.findById(entityId).orElseThrow();
                 Claim restored = objectMapper.readValue(json, Claim.class);
                 restored.setId(entityId);
                 claimRepository.save(restored);
             } else if ("WMS_INBOUND".equals(logEntry.getEntityType())) {
-                com.example.ims.entity.WmsInbound current = wmsInboundRepository.findById(entityId).orElseThrow();
+                wmsInboundRepository.findById(entityId).orElseThrow();
                 com.example.ims.entity.WmsInbound restored = objectMapper.readValue(json, com.example.ims.entity.WmsInbound.class);
                 restored.setId(entityId);
                 wmsInboundRepository.save(restored);
             } else if ("PRODUCTION_AUDIT".equals(logEntry.getEntityType())) {
-                com.example.ims.entity.ProductionAudit current = productionAuditRepository.findById(entityId).orElseThrow();
+                productionAuditRepository.findById(entityId).orElseThrow();
                 com.example.ims.entity.ProductionAudit restored = objectMapper.readValue(json, com.example.ims.entity.ProductionAudit.class);
                 restored.setId(entityId);
                 productionAuditRepository.save(restored);
@@ -178,7 +182,7 @@ public class AuditLogService {
 
             log(logEntry.getEntityType(), entityId, "RESTORE", modifier, 
                 null, modifier, null, null,
-                "Restored from Log ID: " + logId, "-", "Restored to previous state");
+                "Restored from Log ID: " + logId, "-", "Restored to previous state", null);
             
         } catch (Exception e) {
             log.error("Restore failed: {}", e.getMessage());
@@ -196,16 +200,8 @@ public class AuditLogService {
      */
     @Transactional
     public void logAccess(String username, String action) {
-        log.info("[AUDIT] Access Log: {} by {}", action, username);
-        
-        userRepository.findByUsername(username).ifPresent(user -> {
-            String company = user.getCompanyName() != null ? user.getCompanyName() : "시스템";
-            String modifierName = user.getName() + " (" + company + ")";
-            
-            log("ACCESS", 0L, action, modifierName, 
-                user.getId(), user.getUsername(), user.getName(), user.getCompanyName(),
-                "사용자 " + action + ": " + user.getName(), "-", "-");
-        });
+        // [수정] 사용자 접근 로그는 AccessLogService에서 관리하므로 AuditLog에서는 기록하지 않음
+        log.info("[AUDIT] Access Log (Skipped in AuditLog): {} by {}", action, username);
     }
 
     /**
@@ -213,16 +209,8 @@ public class AuditLogService {
      */
     @Transactional
     public void logPageView(String username, String pageKey, String pageTitle) {
-        log.debug("[AUDIT] Page View: {} by {}", pageKey, username);
-        
-        userRepository.findByUsername(username).ifPresent(user -> {
-            String company = user.getCompanyName() != null ? user.getCompanyName() : "시스템";
-            String modifierName = user.getName() + " (" + company + ")";
-            
-            log("VIEW", 0L, "OPEN", modifierName,
-                user.getId(), user.getUsername(), user.getName(), user.getCompanyName(),
-                "페이지 열람: " + pageTitle + " (" + pageKey + ")", "-", "-");
-        });
+        // [수정] 페이지 열람 기록은 AccessLogService에서 관리하므로 AuditLog에서는 기록하지 않음
+        log.debug("[AUDIT] Page View (Skipped in AuditLog): {} by {}", pageKey, username);
     }
 
     /**

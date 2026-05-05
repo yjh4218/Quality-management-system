@@ -23,4 +23,5 @@ public class EntityChangeEvent {
     private final String description;
     private final Object oldEntity;
     private final Object newEntity;
+    private final String changeDetail;
 }

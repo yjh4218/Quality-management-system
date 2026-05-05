@@ -27,7 +27,6 @@ public class ProductController {
 
     private final ProductService productService;
     private final FileStorageService fileStorageService;
-    private final com.example.ims.service.ExcelExportService excelExportService;
 
     @GetMapping
     public ResponseEntity<org.springframework.data.domain.Page<com.example.ims.dto.ProductSummaryRecord>> getProducts(

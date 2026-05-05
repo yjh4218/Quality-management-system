@@ -61,6 +61,7 @@ public class ManufacturerAudit {
     private List<String> negativePhotos = new ArrayList<>();
 
     private String reportFileUrl;
+    private String auditor; // 점검 담당자
     private String modifierInfo;
 
     @CreationTimestamp
@@ -73,4 +74,14 @@ public class ManufacturerAudit {
     @Builder.Default
     @com.fasterxml.jackson.annotation.JsonManagedReference("audit-results")
     private List<ManufacturerAuditResult> results = new ArrayList<>();
+
+    @OneToMany(mappedBy = "audit", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    @com.fasterxml.jackson.annotation.JsonManagedReference("audit-group-results")
+    private List<ManufacturerAuditGroupResult> groupResults = new ArrayList<>();
+
+    @OneToMany(fetch = FetchType.LAZY)
+    @JoinColumn(name = "auditId", referencedColumnName = "id", insertable = false, updatable = false)
+    @Builder.Default
+    private List<ManufacturerAuditHistory> history = new ArrayList<>();
 }

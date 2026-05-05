@@ -31,6 +31,7 @@ public class PackagingMethodTemplate {
     @Column(unique = true, nullable = false)
     private ProductType productType;
 
+    @Builder.Default
     @OneToMany(mappedBy = "template", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     @OrderBy("stepNumber ASC")
     private java.util.List<PackagingMethodTemplateStep> steps = new java.util.ArrayList<>();
