@@ -1,9 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { AgGridReact } from 'ag-grid-react';
 import * as api from './api';
 import { toast } from 'react-toastify';
 import SaveConfirmModal from './components/SaveConfirmModal';
 import { usePermissions } from './usePermissions';
 
+/**
+ * 유통 채널 관리 페이지
+ * [디자인 표준화] 제품코드 마스터의 20px 여백 및 표준 그리드 레이아웃을 적용했습니다.
+ * [UX 개선] 기존 카드 형태에서 Ag-Grid 기반의 데이터 중심 레이아웃으로 전환하여 대량의 유통 채널 정보를 효율적으로 관리합니다.
+ */
 const SalesChannelManagement = ({ user }) => {
     const { canEdit: checkEdit, canDelete: checkDelete } = usePermissions(user);
     const canEdit = checkEdit('salesChannels');
@@ -13,6 +19,7 @@ const SalesChannelManagement = ({ user }) => {
     const [editingChannel, setEditingChannel] = useState(null);
     const [formData, setFormData] = useState({ name: '', description: '' });
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+    const [quickFilterText, setQuickFilterText] = useState('');
 
     useEffect(() => {
         fetchChannels();
@@ -59,6 +66,7 @@ const SalesChannelManagement = ({ user }) => {
     const handleToggle = async (id) => {
         try {
             await api.toggleSalesChannel(id);
+            toast.success("채널 상태가 변경되었습니다.");
             fetchChannels();
         } catch (error) {
             toast.error("상태 변경 실패");
@@ -77,95 +85,151 @@ const SalesChannelManagement = ({ user }) => {
         }
     };
 
+    const columnDefs = useMemo(() => [
+        { field: "id", headerName: "ID", width: 80, pinned: 'left' },
+        { field: "name", headerName: "채널 명칭", flex: 1, filter: true, cellStyle: { fontWeight: '800', color: '#1a202c' } },
+        { field: "description", headerName: "상세 설명", flex: 2, filter: true },
+        { field: "active", headerName: "상태", width: 120, filter: true,
+          cellRenderer: (params) => (
+            <span 
+                className={`badge ${params.value ? 'success' : 'warning'}`} 
+                style={{ cursor: canEdit ? 'pointer' : 'default' }} 
+                onClick={() => canEdit && handleToggle(params.data.id)}
+            >
+              {params.value ? 'ACTIVE' : 'INACTIVE'}
+            </span>
+          )
+        },
+        { field: "updatedBy", headerName: "최종 수정자", width: 130 },
+        { field: "updatedAt", headerName: "최종 수정일", width: 150, 
+          valueFormatter: (params) => params.value ? new Date(params.value).toLocaleDateString() : '-' 
+        },
+        {
+            headerName: "관리",
+            width: 140,
+            sortable: false,
+            filter: false,
+            pinned: 'right',
+            cellRenderer: (params) => (
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', height: '100%', alignItems: 'center' }}>
+                    <button 
+                        className="secondary" 
+                        onClick={() => handleOpenDrawer(params.data)}
+                        style={{ padding: '4px 12px', fontSize: '12px', fontWeight: '800' }}
+                    >
+                        수정
+                    </button>
+                    <button 
+                        className="secondary" 
+                        onClick={() => handleDelete(params.data.id)}
+                        style={{ padding: '4px 12px', fontSize: '12px', fontWeight: '800', color: '#e53e3e', background: '#fff5f5' }}
+                        disabled={!canDelete}
+                    >
+                        삭제
+                    </button>
+                </div>
+            )
+        }
+    ], [canEdit, canDelete]);
+
     return (
         <div className="page-container">
-            <div className="page-header">
+            <div className="page-header-standard">
                 <div className="header-title">
                     <h2>🌐 유통 채널 관리</h2>
-                    <p>제품 마스터 및 포장 규칙에서 사용할 유통 채널을 관리합니다.</p>
+                    <p>제품 마스터 및 포장 규칙에서 사용할 글로벌 유통 채널을 통합 관리합니다. (항목 더블클릭 시 상세 정보 확인)</p>
                 </div>
-                <button className="primary" onClick={() => handleOpenDrawer()} style={{ opacity: canEdit ? 1 : 0.5 }} disabled={!canEdit}>+ 신규 채널 등록</button>
+                <button 
+                    className="primary" 
+                    onClick={() => handleOpenDrawer()} 
+                    style={{ 
+                        padding: '12px 28px', 
+                        borderRadius: '12px', 
+                        boxShadow: '0 4px 12px rgba(0, 51, 102, 0.2)',
+                        opacity: canEdit ? 1 : 0.5 
+                    }} 
+                    disabled={!canEdit}
+                >
+                    ➕ 신규 채널 등록
+                </button>
             </div>
 
-            <div className="card">
-                <table className="qms-table">
-                    <thead>
-                        <tr>
-                            <th>채널명</th>
-                            <th>설명</th>
-                            <th>상태</th>
-                            <th>최종 수정</th>
-                            <th>관리</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {channels.map(channel => (
-                            <tr key={channel.id}>
-                                <td style={{ fontWeight: 'bold' }}>{channel.name}</td>
-                                <td>{channel.description || '-'}</td>
-                                <td>
-                                    <span className={`badge ${channel.active ? 'success' : 'warning'}`}>
-                                        {channel.active ? '활성' : '비활성'}
-                                    </span>
-                                </td>
-                                <td style={{ fontSize: '12px', color: '#666' }}>
-                                    {channel.updatedBy}<br/>
-                                    {new Date(channel.updatedAt).toLocaleString()}
-                                </td>
-                                <td>
-                                    <div className="actions">
-                                        <button className="action-btn" onClick={() => handleOpenDrawer(channel)}>{canEdit ? '수정' : '조회'}</button>
-                                        <button className="action-btn" onClick={() => handleToggle(channel.id)} style={{ opacity: canEdit ? 1 : 0.5 }} disabled={!canEdit}>
-                                            {channel.active ? '비활성화' : '활성화'}
-                                        </button>
-                                        <button className="delete-btn" onClick={() => handleDelete(channel.id)} style={{ opacity: canDelete ? 1 : 0.5 }} disabled={!canDelete}>삭제</button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+            <div className="card" style={{ padding: '25px', borderRadius: '24px', flex: 1, display: 'flex', flexDirection: 'column', minHeight: '600px' }}>
+                <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ fontWeight: '800', fontSize: '15px', color: '#475569' }}>
+                        채널 목록 <span style={{ color: 'var(--primary-color)', marginLeft: '8px' }}>{channels.length}</span>
+                    </div>
+                    <div className="search-bar-standard" style={{ padding: '0', border: 'none', boxShadow: 'none', margin: 0, width: '350px' }}>
+                        <div style={{ display: 'flex', width: '100%', position: 'relative' }}>
+                            <input
+                                type="text"
+                                placeholder="채널명으로 빠른 검색..."
+                                value={quickFilterText}
+                                onChange={(e) => setQuickFilterText(e.target.value)}
+                                style={{ padding: '12px 45px 12px 20px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px', width: '100%', fontWeight: '600' }}
+                            />
+                            <span style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', fontSize: '18px' }}>🔍</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
+                    <AgGridReact
+                        theme="legacy"
+                        rowHeight={55}
+                        rowData={channels}
+                        columnDefs={columnDefs}
+                        pagination={true}
+                        paginationPageSize={50}
+                        quickFilterText={quickFilterText}
+                        animateRows={true}
+                        onRowDoubleClicked={(p) => handleOpenDrawer(p.data)}
+                    />
+                </div>
             </div>
 
             {showDrawer && (
-                <div className="drawer-overlay" onClick={() => setShowDrawer(false)}>
-                    <div className="drawer" onClick={e => e.stopPropagation()} style={{ width: '400px' }}>
-                        <div className="page-header">
-                            <h3>{editingChannel ? '📝 채널 수정' : '🆕 신규 채널 등록'}</h3>
-                            <button className="secondary" onClick={() => setShowDrawer(false)}>닫기</button>
+                <div className="drawer-overlay" onClick={() => setShowDrawer(false)} style={{ zIndex: 1000 }}>
+                    <div className="drawer" onClick={e => e.stopPropagation()} style={{ width: '480px', padding: '40px', borderRadius: '24px 0 0 24px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '35px', borderBottom: '1px solid #f1f5f9', paddingBottom: '20px' }}>
+                            <h3 style={{ fontSize: '22px', fontWeight: '800' }}>{editingChannel ? '📝 유통 채널 정보 수정' : '✨ 신규 유통 채널 등록'}</h3>
+                            <button className="secondary" onClick={() => setShowDrawer(false)} style={{ borderRadius: '50%', width: '36px', height: '36px', padding: 0, border: 'none', background: '#f1f5f9' }}>✕</button>
                         </div>
-                        <form onSubmit={handleSave} style={{ marginTop: '20px' }}>
-                            <div className="form-group">
-                                <label>채널명 (Channel Name) *</label>
-                                <input 
-                                    type="text" 
-                                    value={formData.name} 
-                                    onChange={e => setFormData({...formData, name: e.target.value})} 
+                        <form onSubmit={handleSave}>
+                            <div className="form-group" style={{ marginBottom: '25px' }}>
+                                <label style={{ fontWeight: '700', fontSize: '14px', marginBottom: '10px', display: 'block' }}>채널명 (Channel Name) *</label>
+                                <input
+                                    type="text"
+                                    value={formData.name}
+                                    onChange={e => setFormData({ ...formData, name: e.target.value })}
                                     placeholder="예: 올리브영(OY), 아마존(AMZ)"
                                     required
                                     disabled={!canEdit}
+                                    style={{ borderRadius: '12px', padding: '12px', fontWeight: '600' }}
                                 />
                             </div>
-                            <div className="form-group">
-                                <label>설명 (Description)</label>
-                                <textarea 
-                                    value={formData.description} 
-                                    onChange={e => setFormData({...formData, description: e.target.value})} 
-                                    placeholder="해당 유통 채널에 대한 설명을 입력하세요."
-                                    rows={4}
+                            <div className="form-group" style={{ marginBottom: '30px' }}>
+                                <label style={{ fontWeight: '700', fontSize: '14px', marginBottom: '10px', display: 'block' }}>채널 상세 설명 (Description)</label>
+                                <textarea
+                                    value={formData.description}
+                                    onChange={e => setFormData({ ...formData, description: e.target.value })}
+                                    placeholder="해당 유통 채널의 특이사항이나 관리 규칙을 입력하세요."
+                                    rows={6}
                                     disabled={!canEdit}
+                                    style={{ borderRadius: '12px', padding: '15px', resize: 'none', fontWeight: '500' }}
                                 />
                             </div>
-                             <div style={{ marginTop: '30px', display: 'flex', gap: '10px' }}>
-                                 <button type="submit" className="primary" style={{ flex: 1, opacity: canEdit ? 1 : 0.5 }} disabled={!canEdit}>
-                                     {canEdit ? (editingChannel ? '수정' : '저장') : '조회 전용'}
-                                 </button>
-                                 <button type="button" className="secondary" onClick={() => setShowDrawer(false)} style={{ flex: 1 }}>취소</button>
-                             </div>
+                            <div style={{ marginTop: '40px', display: 'flex', gap: '15px' }}>
+                                <button type="submit" className="primary" style={{ flex: 2, padding: '14px', borderRadius: '12px', fontWeight: '800', opacity: canEdit ? 1 : 0.5 }} disabled={!canEdit}>
+                                    {canEdit ? (editingChannel ? '채널 정보 수정' : '채널 등록 완료') : '조회 전용'}
+                                </button>
+                                <button type="button" className="secondary" onClick={() => setShowDrawer(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px' }}>취소</button>
+                            </div>
                         </form>
                     </div>
                 </div>
             )}
+            
             {isConfirmOpen && (
                 <SaveConfirmModal
                     isOpen={isConfirmOpen}

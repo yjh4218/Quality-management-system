@@ -89,6 +89,23 @@ api.interceptors.response.use(
         if (!response.config.skipLoading) {
             setGlobalLoading(false); // 스피너 종료
         }
+
+        // [아키텍처] ApiResponse 표준 규격 대응
+        // 서버에서 { success: true, data: { ... } } 형태로 응답이 오면 내부 data만 추출하여 반환합니다.
+        // 이를 통해 프론트엔드 코드 전반에서 response.data를 기존처럼 투명하게 사용할 수 있습니다.
+        if (response.data && typeof response.data === 'object' && Object.prototype.hasOwnProperty.call(response.data, 'success')) {
+            if (response.data.success === true) {
+                return { ...response, data: response.data.data };
+            } else {
+                // 서버에서 명시적으로 success: false를 보낸 경우 (비즈니스 로직 에러)
+                const errorMsg = response.data.message || "요청 처리 중 오류가 발생했습니다.";
+                if (!response.config.skipLoading) {
+                    toast.error(errorMsg);
+                }
+                return Promise.reject({ response: { data: response.data } });
+            }
+        }
+
         return response;
     },
     (error) => {

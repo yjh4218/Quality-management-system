@@ -161,15 +161,15 @@ const ManufacturerAuditDashboard = ({ user, onNavigate }) => {
                 {/* Filter Bar */}
                 <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-end', background: 'white', padding: '15px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', flexWrap: 'wrap' }}>
                     <div>
-                        <label style={{display:'block', fontSize:'12px', color:'#666', marginBottom:'5px'}}>조회 시작일</label>
-                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{padding:'8px', border:'1px solid #ced4da', borderRadius:'4px'}} />
+                        <label style={{display:'flex', alignItems: 'center', gap: '4px', fontSize:'12px', fontWeight: 'bold', color:'#4b5563', marginBottom:'5px'}}>🗓️ 조회 시작일</label>
+                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{padding:'8px', border:'1px solid #ced4da', borderRadius:'4px', width: '180px'}} />
                     </div>
                     <div>
-                        <label style={{display:'block', fontSize:'12px', color:'#666', marginBottom:'5px'}}>조회 종료일</label>
-                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{padding:'8px', border:'1px solid #ced4da', borderRadius:'4px'}} />
+                        <label style={{display:'flex', alignItems: 'center', gap: '4px', fontSize:'12px', fontWeight: 'bold', color:'#4b5563', marginBottom:'5px'}}>🗓️ 조회 종료일</label>
+                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{padding:'8px', border:'1px solid #ced4da', borderRadius:'4px', width: '180px'}} />
                     </div>
                     <div>
-                        <label style={{display:'block', fontSize:'12px', color:'#666', marginBottom:'5px'}}>제조사 정보</label>
+                        <label style={{display:'flex', alignItems: 'center', gap: '4px', fontSize:'12px', fontWeight: 'bold', color:'#4b5563', marginBottom:'5px'}}>🏭 제조사 정보</label>
                         <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
                             <input 
                                 type="text" 
@@ -190,13 +190,13 @@ const ManufacturerAuditDashboard = ({ user, onNavigate }) => {
                                 readOnly 
                                 placeholder="제조사명"
                                 value={manufacturerName} 
-                                style={{ width: '180px', padding: '8px', background: '#f8fafc', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
+                                style={{ width: '220px', padding: '8px', background: '#f8fafc', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
                             />
                         </div>
                     </div>
                     <div>
-                        <label style={{display:'block', fontSize:'12px', color:'#666', marginBottom:'5px'}}>등급</label>
-                        <select value={grade} onChange={e => setGrade(e.target.value)} style={{padding:'8px', border:'1px solid #ced4da', borderRadius:'4px', width: '100px'}}>
+                        <label style={{display:'flex', alignItems: 'center', gap: '4px', fontSize:'12px', fontWeight: 'bold', color:'#4b5563', marginBottom:'5px'}}>🏆 등급</label>
+                        <select value={grade} onChange={e => setGrade(e.target.value)} style={{padding:'8px', border:'1px solid #ced4da', borderRadius:'4px', width: '100px', height: '37px'}}>
                             <option value="">전체</option>
                             <option value="A">A</option>
                             <option value="B">B</option>
@@ -205,8 +205,8 @@ const ManufacturerAuditDashboard = ({ user, onNavigate }) => {
                         </select>
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                        <button className="primary" onClick={handleSearch} disabled={loading} style={{ padding: '8px 20px' }}>{loading ? '조회 중...' : '조회'}</button>
-                        <button className="secondary" onClick={handleReset} disabled={loading} style={{ padding: '8px 20px' }}>초기화</button>
+                        <button className="primary" onClick={handleSearch} disabled={loading} style={{ padding: '8px 25px', height: '37px', fontWeight: 'bold' }}>{loading ? '조회 중...' : '🔍 조회'}</button>
+                        <button className="secondary" onClick={handleReset} disabled={loading} style={{ padding: '8px 25px', height: '37px' }}>초기화</button>
                     </div>
                 </div>
             </div>

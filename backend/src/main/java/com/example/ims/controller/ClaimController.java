@@ -18,6 +18,10 @@ import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 
+/**
+ * 클레임(Claim) 관리 컨트롤러.
+ * [보안 강화] 제조사와 본사 간의 데이터 접근 권한을 엄격히 분리하며, 상태 변경 및 파일 업로드 시 RBAC 권한을 검증합니다.
+ */
 @RestController
 @RequestMapping("/api/claims")
 @RequiredArgsConstructor
@@ -62,6 +66,7 @@ public class ClaimController {
     }
 
     @GetMapping("/debug/status")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<java.util.Map<String, Object>> getDebugStatus() {
         List<Claim> all = claimService.getClaims(null, null); 
         long total = all.size();
@@ -92,9 +97,10 @@ public class ClaimController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES', 'MANUFACTURER')")
     public ResponseEntity<Claim> updateClaim(
             @PathVariable Long id, 
-            @RequestBody Claim claim, 
+            @jakarta.validation.Valid @RequestBody Claim claim, 
             @AuthenticationPrincipal UserDetails userDetails) {
         
         User user = getUser(userDetails);
@@ -121,6 +127,7 @@ public class ClaimController {
     }
 
     @PostMapping("/{id}/upload-response")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'MANUFACTURER')")
     public ResponseEntity<String> uploadResponse(@PathVariable Long id,
                                                  @RequestParam("file") MultipartFile file,
                                                  @RequestParam(value = "productName", required = false) String productName,
@@ -141,6 +148,7 @@ public class ClaimController {
     }
 
     @PostMapping("/upload-photo")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES', 'MANUFACTURER')")
     public ResponseEntity<String> uploadPhoto(@RequestParam("file") MultipartFile file) {
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().body("File is empty");

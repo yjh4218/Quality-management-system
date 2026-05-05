@@ -2,11 +2,12 @@ package com.example.ims.controller;
 
 import com.example.ims.dto.RegisterRequestDto;
 import com.example.ims.dto.ProfileUpdateRequestDto;
+import com.example.ims.dto.ApiResponse;
 import com.example.ims.entity.User;
 import com.example.ims.repository.UserRepository;
 import com.example.ims.repository.ManufacturerRepository;
 import com.example.ims.repository.RoleRepository;
-import com.example.ims.service.MailService;
+import com.example.ims.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,14 +15,17 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
+/**
+ * 인증 및 사용자 관리 컨트롤러.
+ * [아키텍처] 3계층 구조를 준수하며 실제 비즈니스 로직은 AuthService에서 처리합니다.
+ * [표준화] 모든 응답은 ApiResponse DTO를 통해 일관된 규격으로 반환됩니다.
+ */
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -29,133 +33,72 @@ import java.util.UUID;
 public class AuthController {
 
     private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
     private final ManufacturerRepository manufacturerRepository;
-    private final MailService mailService;
-    private final com.example.ims.service.EmailService emailService;
     private final RoleRepository roleRepository;
+    private final AuthService authService;
 
+    /**
+     * 사용자 아이디 중복 여부를 확인합니다.
+     */
     @PostMapping("/check-username")
-    public ResponseEntity<?> checkUsername(@RequestBody Map<String, String> body) {
+    public ResponseEntity<ApiResponse<Map<String, Boolean>>> checkUsername(@RequestBody Map<String, String> body) {
         String username = body.get("username");
         boolean exists = userRepository.findByUsername(username).isPresent();
-        return ResponseEntity.ok(Map.of("exists", exists));
+        return ResponseEntity.ok(ApiResponse.success(Map.of("exists", exists)));
     }
 
     /**
-     * [Task 11] 신규 회원가입 신청.
-     * DTO와 @Valid를 사용하여 입력 무결성을 검증합니다.
+     * 회원가입 신청을 접수합니다.
      */
     @PostMapping("/register")
-    public ResponseEntity<?> registerUser(@Valid @RequestBody RegisterRequestDto dto, jakarta.servlet.http.HttpServletRequest request) {
-        if (userRepository.findByUsername(dto.username()).isPresent()) {
-            return ResponseEntity.badRequest().body("이미 존재하는 아이디입니다.");
-        }
-
-        // 소속 제조사 존재 여부 검증
-        if (dto.companyName() != null && !"더파운더즈".equals(dto.companyName()) && !dto.companyName().isBlank()) {
-            manufacturerRepository.findByName(dto.companyName())
-                    .orElseThrow(() -> new IllegalArgumentException("등록되지 않은 소속(제조사)입니다."));
-        }
-
-        // 비밀번호 복잡도 추가 검증 (DTO에서 길이 체크 후 로직 보강)
-        validatePasswordComplexity(dto.password());
-
-        User newUser = User.builder()
-                .username(dto.username())
-                .password(passwordEncoder.encode(dto.password()))
-                .name(dto.name())
-                .companyName(dto.companyName())
-                .department(dto.department())
-                .phone(dto.phone())
-                .email(dto.email())
-                .role("ROLE_USER") // 승인 대기 기본 역할
-                .enabled(false)     // 관리자 승인 전까지 비활성화
-                .locked(false)
-                .failedAttempts(0)
-                .emailVerified(false)
-                .verificationToken(UUID.randomUUID().toString())
-                .build();
-
-        userRepository.save(newUser);
-        log.info("[AUTH] New registration request: {}", dto.username());
-        
-        try {
-            String baseUrl = org.springframework.web.servlet.support.ServletUriComponentsBuilder.fromCurrentContextPath().build().toUriString() + "/api/auth";
-            emailService.sendVerificationEmail(newUser.getEmail(), newUser.getVerificationToken(), baseUrl);
-        } catch (Exception e) {
-            log.error("Failed to send verification email: ", e);
-            // We still proceed, but admin might need to use resend flow or we just return ok anyway
-        }
-        
-        return ResponseEntity.ok("회원가입 신청이 완료되었습니다. 이메일 인증 후 관리자 승인이 필요합니다.");
+    public ResponseEntity<ApiResponse<String>> registerUser(@Valid @RequestBody RegisterRequestDto dto, jakarta.servlet.http.HttpServletRequest request) {
+        String baseUrl = org.springframework.web.servlet.support.ServletUriComponentsBuilder.fromCurrentContextPath().build().toUriString();
+        authService.register(dto, baseUrl);
+        return ResponseEntity.ok(ApiResponse.success("회원가입 신청이 완료되었습니다. 이메일 인증 후 관리자 승인이 필요합니다.", null));
     }
 
+    /**
+     * 이메일 링크를 통한 사용자 인증을 처리합니다. (HTML 응답 반환)
+     */
     @GetMapping(value = "/verify-email", produces = "text/html;charset=UTF-8")
     public ResponseEntity<String> verifyEmail(@RequestParam String token) {
-        // [보안 패치] Full Scan 제거 및 전용 메서드 사용
-        User user = userRepository.findByVerificationToken(token)
-                .orElse(null);
-
-        String failHtml = "<html><body style='font-family: sans-serif; text-align: center; margin-top: 50px; background-color: #f4f6f8;'>" +
-                          "<div style='background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: inline-block;'>" +
-                          "<h1 style='color: #d9534f;'>❌ 인증 실패</h1>" +
-                          "<p>유효하지 않은 인증 토큰이거나 이미 인증이 완료되었습니다.</p>" +
-                          "</div></body></html>";
-
-        if (user == null) {
-            return ResponseEntity.badRequest().body(failHtml);
+        try {
+            authService.verifyEmail(token);
+            return ResponseEntity.ok("<html><body style='font-family: sans-serif; text-align: center; margin-top: 50px; background-color: #f4f6f8;'>" +
+                                 "<div style='background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: inline-block;'>" +
+                                 "<h1 style='color: #5cb85c;'>✅ 이메일 인증 완료</h1>" +
+                                 "<p>성공적으로 인증되었습니다. 이제 관리자 승인을 기다려주세요.</p>" +
+                                 "<p>승인이 완료되면 시스템을 이용하실 수 있습니다.</p>" +
+                                 "</div></body></html>");
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("<html><body style='font-family: sans-serif; text-align: center; margin-top: 50px; background-color: #f4f6f8;'>" +
+                              "<div style='background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: inline-block;'>" +
+                              "<h1 style='color: #d9534f;'>❌ 인증 실패</h1>" +
+                              "<p>" + e.getMessage() + "</p>" +
+                              "</div></body></html>");
         }
-
-        user.setEmailVerified(true);
-        user.setVerificationToken(null);
-        userRepository.save(user);
-
-        String successHtml = "<html><body style='font-family: sans-serif; text-align: center; margin-top: 50px; background-color: #f4f6f8;'>" +
-                             "<div style='background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: inline-block;'>" +
-                             "<h1 style='color: #5cb85c;'>✅ 이메일 인증 완료</h1>" +
-                             "<p>성공적으로 인증되었습니다. 이제 관리자 승인을 기다려주세요.</p>" +
-                             "<p>승인이 완료되면 시스템을 이용하실 수 있습니다.</p>" +
-                             "</div></body></html>";
-
-        return ResponseEntity.ok(successHtml);
     }
 
+    /**
+     * 비밀번호 분실 시 임시 비밀번호 발급 절차를 진행합니다.
+     */
     @PostMapping("/find-password")
-    public ResponseEntity<?> findPassword(@RequestBody Map<String, String> body) {
+    public ResponseEntity<ApiResponse<Map<String, String>>> findPassword(@RequestBody Map<String, String> body) {
         String username = body.get("username");
         String name = body.get("name");
         String email = body.get("email");
 
-        // [보안 패치] User Enumeration 방어: 성공/실패 여부를 노출하지 않고 일관된 메시지 반환
-        try {
-            User user = userRepository.findByUsername(username).orElse(null);
-            
-            if (user != null && user.getName().equals(name) && user.getEmail().equals(email)) {
-                // 보안 정책: 강력한 16자리 영숫자+특수문자 임시 비밀번호 생성
-                String chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$";
-                java.security.SecureRandom rnd = new java.security.SecureRandom();
-                String tempPw = java.util.stream.IntStream.range(0, 16)
-                    .mapToObj(i -> String.valueOf(chars.charAt(rnd.nextInt(chars.length()))))
-                    .collect(java.util.stream.Collectors.joining());
-                
-                user.setPassword(passwordEncoder.encode(tempPw));
-                user.setPasswordResetRequired(true);
-                userRepository.save(user);
+        authService.processFindPassword(username, name, email);
 
-                mailService.sendTemporaryPassword(email, name, tempPw);
-                log.info("[SECURITY] High-entropy temporary password issued for user: {}", username);
-            }
-        } catch (Exception e) {
-            log.error("[SECURITY] Error during find-password process for user: {}", username, e);
-        }
-
-        // 항상 동일한 성공 메시지 반환 (User Enumeration 방지)
-        return ResponseEntity.ok(Map.of("message", "입력하신 정보가 회원 정보와 일치하는 경우 등록된 메일로 임시 비밀번호를 발송합니다."));
+        // [보안] 정보 일치 여부와 무관하게 동일한 메시지 반환 (계정 유출 방지)
+        return ResponseEntity.ok(ApiResponse.success("입력하신 정보가 회원 정보와 일치하는 경우 등록된 메일로 임시 비밀번호를 발송합니다.", null));
     }
 
+    /**
+     * 현재 로그인한 사용자의 프로필 및 권한 정보를 조회합니다.
+     */
     @GetMapping("/me")
-    public ResponseEntity<?> getCurrentUser() {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
@@ -171,7 +114,6 @@ public class AuthController {
         response.put("department", user.getDepartment());
         response.put("passwordResetRequired", Boolean.TRUE.equals(user.getPasswordResetRequired()));
 
-        // 권한 정보 보강 (프론트엔드 기대 구조: roles 리스트)
         java.util.List<Map<String, Object>> roles = new java.util.ArrayList<>();
         roleRepository.findByRoleKey(user.getRole()).ifPresent(r -> {
             Map<String, Object> roleMap = new HashMap<>();
@@ -183,14 +125,14 @@ public class AuthController {
         });
         response.put("roles", roles);
 
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     /**
-     * [고도화 11] 사용자 자신의 프로필 정보를 업데이트합니다.
+     * 사용자의 프로필(성명, 부서 등)을 업데이트합니다.
      */
     @PutMapping("/profile")
-    public ResponseEntity<?> updateProfile(@Valid @RequestBody ProfileUpdateRequestDto dto) {
+    public ResponseEntity<ApiResponse<String>> updateProfile(@Valid @RequestBody ProfileUpdateRequestDto dto) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
@@ -199,31 +141,18 @@ public class AuthController {
         User user = userRepository.findByUsername(auth.getName())
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-        log.info("[AUTH] Updating profile for user: {}", user.getUsername());
-
-        // 기본 정보 업데이트
         user.setName(dto.name());
         user.setDepartment(dto.department());
         user.setPosition(dto.position());
 
-        // 제조사 소속 사용자의 경우 소속 회사 변경 허용 (더파운더즈 본사 직원은 변경 불가)
         if (!"더파운더즈".equals(user.getCompanyName())) {
             if (dto.companyName() != null && !dto.companyName().isBlank()) {
-                // 제조사 존재 여부 재검증
                 manufacturerRepository.findByName(dto.companyName())
                         .ifPresent(mfr -> user.setCompanyName(mfr.getName()));
             }
         }
 
         userRepository.save(user);
-        return ResponseEntity.ok("프로필 정보가 성공적으로 업데이트되었습니다.");
-    }
-
-    private void validatePasswordComplexity(String password) {
-        boolean hasLetter = password.matches(".*[a-zA-Z].*");
-        boolean hasDigit = password.matches(".*[0-9].*");
-        if (!hasLetter || !hasDigit) {
-            throw new IllegalArgumentException("비밀번호는 영문과 숫자를 모두 포함해야 합니다.");
-        }
+        return ResponseEntity.ok(ApiResponse.success("프로필 정보가 성공적으로 업데이트되었습니다.", null));
     }
 }

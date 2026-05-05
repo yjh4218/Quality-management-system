@@ -36,9 +36,9 @@ const BugReportPage = ({ user }) => {
 
     const columnDefs = useMemo(() => [
         { field: "id", headerName: "ID", width: 70, sort: 'desc' },
-        { 
-            field: "status", 
-            headerName: "상태", 
+        {
+            field: "status",
+            headerName: "상태",
             width: 120,
             cellRenderer: (params) => {
                 const styles = {
@@ -49,22 +49,22 @@ const BugReportPage = ({ user }) => {
                 };
                 const style = styles[params.value] || styles['OPEN'];
                 return (
-                    <span style={{ 
-                        backgroundColor: style.bg, 
-                        color: style.color, 
-                        padding: '4px 10px', 
-                        borderRadius: '12px', 
-                        fontSize: '12px', 
-                        fontWeight: 'bold' 
+                    <span style={{
+                        backgroundColor: style.bg,
+                        color: style.color,
+                        padding: '4px 10px',
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                        fontWeight: 'bold'
                     }}>
                         {style.text}
                     </span>
                 );
             }
         },
-        { 
-            field: "severity", 
-            headerName: "심각도", 
+        {
+            field: "severity",
+            headerName: "심각도",
             width: 100,
             cellRenderer: (params) => {
                 const colors = { 'LOW': '#868e96', 'MEDIUM': '#339af0', 'HIGH': '#f08c00', 'CRITICAL': '#e03131' };
@@ -94,9 +94,9 @@ const BugReportPage = ({ user }) => {
                     <p style={{ fontSize: '14px', color: '#666' }}>사용자들이 보고한 버그를 확인하고 처리 상태를 관리합니다.</p>
                 </div>
                 <div style={{ display: 'flex', gap: '12px' }}>
-                    <input 
-                        type="text" 
-                        placeholder="화면명, 신고자, 내용 검색..." 
+                    <input
+                        type="text"
+                        placeholder="화면명, 신고자, 내용 검색..."
                         value={quickFilterText}
                         onChange={(e) => setQuickFilterText(e.target.value)}
                         style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '4px', width: '250px' }}
@@ -109,7 +109,7 @@ const BugReportPage = ({ user }) => {
 
             <div style={{ display: 'flex', flex: 1, gap: '20px', minHeight: 0 }}>
                 <div className="ag-theme-alpine" style={{ flex: 1, height: '100%' }}>
-                    <AgGridReact 
+                    <AgGridReact
                         theme="legacy"
                         rowHeight={45}
                         rowData={rowData}
@@ -132,8 +132,8 @@ const BugReportPage = ({ user }) => {
                             <label style={{ fontSize: '12px', color: '#868e96', display: 'block', marginBottom: '4px' }}>상태 변경</label>
                             <div style={{ display: 'flex', gap: '8px' }}>
                                 {['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'].map(s => (
-                                    <button 
-                                        key={s} 
+                                    <button
+                                        key={s}
                                         className={`btn-small ${selectedReport.status === s ? 'primary' : 'outline'}`}
                                         onClick={() => handleUpdateStatus(selectedReport.id, s)}
                                         style={{ flex: 1, fontSize: '10px' }}
@@ -147,7 +147,7 @@ const BugReportPage = ({ user }) => {
                         <div className="info-group" style={{ marginBottom: '15px' }}>
                             <label style={{ fontWeight: 'bold', fontSize: '13px' }}>발생 위치</label>
                             <div style={{ backgroundColor: '#fff', padding: '10px', borderRadius: '4px', border: '1px solid #eee', fontSize: '14px', marginTop: '5px' }}>
-                                {selectedReport.screenName} <br/>
+                                {selectedReport.screenName} <br />
                                 <small style={{ color: '#666', wordBreak: 'break-all' }}>{selectedReport.url}</small>
                             </div>
                         </div>
@@ -159,13 +159,13 @@ const BugReportPage = ({ user }) => {
 
                         <div className="info-group" style={{ marginBottom: '15px' }}>
                             <label style={{ fontWeight: 'bold', fontSize: '13px' }}>재현 경로</label>
-                            <div style={{ 
-                                backgroundColor: '#fff', 
-                                padding: '10px', 
-                                borderRadius: '4px', 
-                                border: '1px solid #eee', 
-                                fontSize: '12px', 
-                                marginTop: '5px', 
+                            <div style={{
+                                backgroundColor: '#fff',
+                                padding: '10px',
+                                borderRadius: '4px',
+                                border: '1px solid #eee',
+                                fontSize: '12px',
+                                marginTop: '5px',
                                 whiteSpace: 'pre-wrap',
                                 wordBreak: 'break-all',
                                 overflowWrap: 'anywhere',
@@ -180,13 +180,13 @@ const BugReportPage = ({ user }) => {
                         {selectedReport.serverError && (
                             <div className="info-group" style={{ marginBottom: '15px' }}>
                                 <label style={{ fontWeight: 'bold', fontSize: '13px', color: '#e03131' }}>서버 오류 내용</label>
-                                <div style={{ 
-                                    backgroundColor: '#fff5f5', 
-                                    padding: '10px', 
-                                    borderRadius: '4px', 
-                                    border: '1px solid #ffa8a8', 
-                                    fontSize: '12px', 
-                                    marginTop: '5px', 
+                                <div style={{
+                                    backgroundColor: '#fff5f5',
+                                    padding: '10px',
+                                    borderRadius: '4px',
+                                    border: '1px solid #ffa8a8',
+                                    fontSize: '12px',
+                                    marginTop: '5px',
                                     whiteSpace: 'pre-wrap',
                                     wordBreak: 'break-all',
                                     overflowWrap: 'anywhere',
@@ -210,7 +210,7 @@ const BugReportPage = ({ user }) => {
                         <div className="info-group">
                             <label style={{ fontWeight: 'bold', fontSize: '13px' }}>신고자 정보</label>
                             <div style={{ marginTop: '5px', fontSize: '14px' }}>
-                                {selectedReport.reporterName} ({selectedReport.reporterUsername}) <br/>
+                                {selectedReport.reporterName} ({selectedReport.reporterUsername}) <br />
                                 <small style={{ color: '#999' }}>{new Date(selectedReport.createdAt).toLocaleString()}</small>
                             </div>
                         </div>

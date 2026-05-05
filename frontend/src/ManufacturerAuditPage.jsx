@@ -383,7 +383,7 @@ const colDefs = useMemo(() => [
             <div className="card" style={{ marginBottom: '20px', padding: '15px', background: 'white' }}>
                 <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                     <div style={{ width: '350px' }}>
-                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563', display: 'block', marginBottom: '5px' }}>제조사 정보 검색</label>
+                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563', display: 'block', marginBottom: '5px' }}>🏭 제조사 정보 검색</label>
                         <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
                             <input 
                                 type="text" 
@@ -412,11 +412,11 @@ const colDefs = useMemo(() => [
                         </div>
                     </div>
                     <div style={{ width: '150px' }}>
-                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563', display: 'block', marginBottom: '5px' }}>시작일</label>
+                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563', display: 'block', marginBottom: '5px' }}>🗓️ 시작일</label>
                         <input type="date" value={searchFields.startDate} onChange={e => setSearchFields({...searchFields, startDate: e.target.value})} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px' }} />
                     </div>
                     <div style={{ width: '150px' }}>
-                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563', display: 'block', marginBottom: '5px' }}>종료일</label>
+                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563', display: 'block', marginBottom: '5px' }}>🗓️ 종료일</label>
                         <input type="date" value={searchFields.endDate} onChange={e => setSearchFields({...searchFields, endDate: e.target.value})} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px' }} />
                     </div>
                     <button className="primary" onClick={handleSearch} style={{ padding: '9px 24px' }}>조회</button>

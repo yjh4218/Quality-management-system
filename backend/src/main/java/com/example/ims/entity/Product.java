@@ -7,6 +7,11 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
+/**
+ * 제품(Product) 엔티티.
+ * [성능 최적화] 대량 데이터 처리 시 메모리 효율을 위해 모든 연관 관계를 LAZY(지연 로딩)로 설정했습니다.
+ * [데이터 무결성] 필드 레벨에서 Bean Validation을 적용하여 잘못된 데이터의 DB 유입을 차단합니다.
+ */
 @Entity
 @Table(name = "products", indexes = {
         @Index(name = "idx_item_code", columnList = "itemCode", unique = true),
@@ -43,6 +48,8 @@ public class Product {
      * 품목코드 (단품, 세트 등 고유 식별자)
      */
     @Column(unique = true, nullable = false)
+    @jakarta.validation.constraints.NotBlank(message = "품목코드는 필수입니다.")
+    @jakarta.validation.constraints.Size(max = 50, message = "품목코드는 50자 이내여야 합니다.")
     private String itemCode;
 
     /**
@@ -50,6 +57,8 @@ public class Product {
      * 국문 제품명
      */
     @Column(nullable = false)
+    @jakarta.validation.constraints.NotBlank(message = "제품명은 필수입니다.")
+    @jakarta.validation.constraints.Size(max = 255, message = "제품명은 255자 이내여야 합니다.")
     private String productName;
 
     /**
@@ -145,7 +154,7 @@ public class Product {
     private PackagingMaterial packagingMaterial = new PackagingMaterial();
 
     // File Paths
-    @ElementCollection(fetch = FetchType.EAGER)
+    @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "product_images", joinColumns = @JoinColumn(name = "product_id"))
     @Column(name = "image_path")
     @Builder.Default
@@ -162,7 +171,7 @@ public class Product {
     @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.LONGVARCHAR)
     private String ingredients; // 전성분 요약 캐시 (List View용 역정규화 필드)
 
-    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private java.util.List<ProductIngredient> productIngredients = new java.util.ArrayList<>();
 
@@ -199,7 +208,7 @@ public class Product {
      * List of distribution channels (ex: Olive Young, Amazon).
      * 유통 채널 목록 (올리브영, 자사몰 등)
      */
-    @ManyToMany(fetch = FetchType.EAGER)
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "product_sales_channels",
         joinColumns = @JoinColumn(name = "product_id"),
@@ -218,12 +227,12 @@ public class Product {
     @Builder.Default
     private boolean photoAuditDisclosed = false;
 
-    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id")
     @Builder.Default
     private java.util.List<ProductComponent> components = new java.util.ArrayList<>();
 
-    @ElementCollection(fetch = FetchType.EAGER)
+    @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "product_packaging_certificates", joinColumns = @JoinColumn(name = "product_id"))
     @Column(name = "certificate_path")
     @Builder.Default

@@ -10,6 +10,11 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+/**
+ * 클레임(Claim) 엔티티.
+ * 품질 사고 및 제조사 피드백 정보를 관리하며, 접수부터 종결까지의 0~5단계 워크플로우를 처리합니다.
+ * [데이터 무결성] 필드별 Bean Validation(@NotBlank, @NotNull)을 통해 데이터 일관성을 유지합니다.
+ */
 @Entity
 @Table(name = "claims", indexes = {
     @Index(name = "idx_claim_number", columnList = "claimNumber"),
@@ -38,11 +43,22 @@ public class Claim {
     private boolean isDeleted = false;
 
     // 접수부서 (CS/영업) 필드
+    @jakarta.validation.constraints.NotNull(message = "접수일자는 필수입니다.")
     private LocalDate receiptDate;
+
+    @jakarta.validation.constraints.NotBlank(message = "국가는 필수입니다.")
     private String country;
+
+    @jakarta.validation.constraints.NotBlank(message = "품목코드는 필수입니다.")
     private String itemCode;
+
+    @jakarta.validation.constraints.NotBlank(message = "제품명은 필수입니다.")
     private String productName;
+
+    @jakarta.validation.constraints.NotBlank(message = "LOT 번호는 필수입니다.")
     private String lotNumber;
+
+    @jakarta.validation.constraints.NotBlank(message = "제조사는 필수입니다.")
     private String manufacturer;
     private Integer occurrenceQty;
     

@@ -252,7 +252,7 @@ const ProductionAuditPage = ({ user }) => {
             <div className="card" style={{ marginBottom: '15px', padding: '20px', flexShrink: 0 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', alignItems: 'end' }}>
                     <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ fontSize: '12px', fontWeight: 'bold' }}>품목코드</label>
+                        <label style={{ fontSize: '12px', fontWeight: 'bold' }}>🏷️ 품목코드</label>
                         <div style={{ display: 'flex', gap: '5px' }}>
                             <input
                                 type="text"
@@ -272,7 +272,7 @@ const ProductionAuditPage = ({ user }) => {
                         </div>
                     </div>
                     <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ fontSize: '12px', fontWeight: 'bold' }}>제품명</label>
+                        <label style={{ fontSize: '12px', fontWeight: 'bold' }}>📦 제품명</label>
                         <input
                             type="text"
                             placeholder="제품명 입력"
@@ -284,7 +284,7 @@ const ProductionAuditPage = ({ user }) => {
                     {!isManufacturer && (
                         <>
                             <div className="form-group" style={{ marginBottom: 0 }}>
-                                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>제조사</label>
+                                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>🏭 제조사</label>
                                 <input
                                     type="text"
                                     placeholder="제조사명 입력"
@@ -294,7 +294,7 @@ const ProductionAuditPage = ({ user }) => {
                                 />
                             </div>
                             <div className="form-group" style={{ marginBottom: 0 }}>
-                                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>제조사 공개 여부</label>
+                                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>🚩 제조사 공개 여부</label>
                                 <select 
                                     value={searchFields.disclosureFilter}
                                     onChange={(e) => setSearchFields({ ...searchFields, disclosureFilter: e.target.value })}

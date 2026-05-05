@@ -22,15 +22,16 @@ const AccessLogPage = () => {
 
     const columnDefs = useMemo(() => [
         { field: "id", headerName: "ID", width: 80, sort: 'desc' },
-        { field: "createdAt", headerName: "일시", width: 180, 
-          valueFormatter: (params) => params.value ? new Date(params.value).toLocaleString() : '' 
+        {
+            field: "createdAt", headerName: "일시", width: 180,
+            valueFormatter: (params) => params.value ? new Date(params.value).toLocaleString() : ''
         },
         { field: "username", headerName: "ID", width: 120, filter: true },
         { field: "name", headerName: "사용자명", width: 120, filter: true },
-        { 
-            field: "action", 
-            headerName: "액션", 
-            width: 120, 
+        {
+            field: "action",
+            headerName: "액션",
+            width: 120,
             filter: true,
             cellRenderer: (params) => {
                 const colors = {
@@ -39,8 +40,8 @@ const AccessLogPage = () => {
                     'PAGE_MOVE': '#3498db'
                 };
                 return (
-                    <span style={{ 
-                        color: colors[params.value] || '#7f8c8d', 
+                    <span style={{
+                        color: colors[params.value] || '#7f8c8d',
                         fontWeight: 'bold',
                         backgroundColor: (colors[params.value] || '#7f8c8d') + '15',
                         padding: '4px 8px',
@@ -65,9 +66,9 @@ const AccessLogPage = () => {
                     <p style={{ fontSize: '14px', color: '#666' }}>사용자의 로그인, 로그아웃 및 페이지 이동 이력을 모니터링합니다.</p>
                 </div>
                 <div style={{ display: 'flex', gap: '12px' }}>
-                    <input 
-                        type="text" 
-                        placeholder="ID, 성명, 액션 검색..." 
+                    <input
+                        type="text"
+                        placeholder="ID, 성명, 액션 검색..."
                         value={quickFilterText}
                         onChange={(e) => setQuickFilterText(e.target.value)}
                         style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '4px', width: '250px' }}
@@ -79,7 +80,7 @@ const AccessLogPage = () => {
             </div>
 
             <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
-                <AgGridReact 
+                <AgGridReact
                     theme="legacy"
                     rowHeight={45}
                     rowData={rowData}

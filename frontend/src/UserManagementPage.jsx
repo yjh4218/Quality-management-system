@@ -164,12 +164,12 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
         return (
             <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '100%', opacity: cannotEdit ? 0.7 : 1 }}>
                 {!user.enabled ? (
-                    <button 
+                    <button
                         disabled={cannotEdit}
                         onClick={(e) => {
                             e.stopPropagation();
                             if (!cannotEdit) handleToggleStatus(user.id, user.enabled);
-                        }} 
+                        }}
                         style={{ ...actionStyle, backgroundColor: '#4CAF50', color: 'white', padding: '4px 8px', border: 'none', borderRadius: '4px', fontSize: '11px' }}
                     >
                         활성화
@@ -208,23 +208,23 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
                     ))}
                 </select>
                 {user.locked && (
-                    <button 
+                    <button
                         disabled={cannotEdit}
                         onClick={(e) => {
                             e.stopPropagation();
                             if (!cannotEdit) handleUnlock(user.id);
-                        }} 
+                        }}
                         style={{ ...actionStyle, backgroundColor: '#ff9800', color: 'white', padding: '4px 8px', border: 'none', borderRadius: '4px', fontSize: '11px' }}
                     >
                         잠금 해제
                     </button>
                 )}
-                <button 
+                <button
                     disabled={cannotEdit}
                     onClick={(e) => {
                         e.stopPropagation();
                         if (!cannotEdit) handleResetPassword(user.id);
-                    }} 
+                    }}
                     style={{ ...actionStyle, backgroundColor: '#2196f3', color: 'white', padding: '4px 8px', border: 'none', borderRadius: '4px', fontSize: '11px' }}
                 >
                     비번 초기화
@@ -270,14 +270,14 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
                     {/* 관리자에게만 탭 메뉴 노출 (roles 배열 내 ROLE_ADMIN 여부 확인) */}
                     {currentUser?.roles?.some(r => (r.authority || r).includes('ROLE_ADMIN')) && (
                         <div style={{ display: 'flex', gap: '5px', marginRight: '15px', paddingRight: '15px', borderRight: '1px solid #eee' }}>
-                            <button 
+                            <button
                                 onClick={() => setActiveTab('users')}
                                 className={activeTab === 'users' ? 'primary' : 'outline'}
                                 style={{ padding: '8px 16px', fontWeight: '600', height: '40px' }}
                             >
                                 👥 사용자 목록
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setActiveTab('settings')}
                                 className={activeTab === 'settings' ? 'primary' : 'outline'}
                                 style={{ padding: '8px 16px', fontWeight: '600', height: '40px' }}
@@ -301,96 +301,96 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
             {activeTab === 'users' && (
                 <>
 
-            {showRoleGuide && (
-                <div style={{ marginBottom: '25px', padding: '20px', backgroundColor: '#FCFFFF', borderRadius: '10px', border: '1px solid #cce5df', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                    <h3 style={{ fontSize: '16px', color: '#0a6c75', marginBottom: '15px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>🔐 시스템 계정별 권한 세부 가이드라인</h3>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                        <thead>
-                            <tr style={{ backgroundColor: '#f4f7f6', borderBottom: '2px solid #ddd' }}>
-                                <th style={{ padding: '10px', textAlign: 'left', width: '20%' }}>접근 권한명 (Role)</th>
-                                <th style={{ padding: '10px', textAlign: 'left', width: '25%' }}>조회 가능 메뉴</th>
-                                <th style={{ padding: '10px', textAlign: 'left', width: '25%' }}>조회 차단 메뉴</th>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>데이터 생성/수정/삭제 등 편집 권한</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {roles.map(r => (
-                                <tr key={r.roleKey} style={{ borderBottom: '1px solid #eee' }}>
-                                    <td style={{ padding: '10px' }}><strong>{r.displayName}</strong><br/><small style={{color:'#666'}}>({r.roleKey})</small></td>
-                                    <td style={{ padding: '10px', color: r.roleKey === 'ROLE_ADMIN' ? '#2ecc71' : '#2ecc71', fontWeight: r.roleKey === 'ROLE_ADMIN' ? 'bold' : 'normal' }}>
-                                        {r.roleKey === 'ROLE_ADMIN' ? '전 메뉴 및 시스템 운영 메뉴' : '기본 업무 메뉴'}
-                                    </td>
-                                    <td style={{ padding: '10px', color: '#e74c3c' }}>
-                                        {r.roleKey === 'ROLE_ADMIN' ? '-' : '사용자 관리 등 일부 메뉴'}
-                                    </td>
-                                    <td style={{ padding: '10px' }}>{r.description || '권한 상세 설명이 없습니다.'}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
+                    {showRoleGuide && (
+                        <div style={{ marginBottom: '25px', padding: '20px', backgroundColor: '#FCFFFF', borderRadius: '10px', border: '1px solid #cce5df', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                            <h3 style={{ fontSize: '16px', color: '#0a6c75', marginBottom: '15px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>🔐 시스템 계정별 권한 세부 가이드라인</h3>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                                <thead>
+                                    <tr style={{ backgroundColor: '#f4f7f6', borderBottom: '2px solid #ddd' }}>
+                                        <th style={{ padding: '10px', textAlign: 'left', width: '20%' }}>접근 권한명 (Role)</th>
+                                        <th style={{ padding: '10px', textAlign: 'left', width: '25%' }}>조회 가능 메뉴</th>
+                                        <th style={{ padding: '10px', textAlign: 'left', width: '25%' }}>조회 차단 메뉴</th>
+                                        <th style={{ padding: '10px', textAlign: 'left' }}>데이터 생성/수정/삭제 등 편집 권한</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {roles.map(r => (
+                                        <tr key={r.roleKey} style={{ borderBottom: '1px solid #eee' }}>
+                                            <td style={{ padding: '10px' }}><strong>{r.displayName}</strong><br /><small style={{ color: '#666' }}>({r.roleKey})</small></td>
+                                            <td style={{ padding: '10px', color: r.roleKey === 'ROLE_ADMIN' ? '#2ecc71' : '#2ecc71', fontWeight: r.roleKey === 'ROLE_ADMIN' ? 'bold' : 'normal' }}>
+                                                {r.roleKey === 'ROLE_ADMIN' ? '전 메뉴 및 시스템 운영 메뉴' : '기본 업무 메뉴'}
+                                            </td>
+                                            <td style={{ padding: '10px', color: '#e74c3c' }}>
+                                                {r.roleKey === 'ROLE_ADMIN' ? '-' : '사용자 관리 등 일부 메뉴'}
+                                            </td>
+                                            <td style={{ padding: '10px' }}>{r.description || '권한 상세 설명이 없습니다.'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
 
-            {/* 검색 필터 영역 */}
-            <div className="card" style={{ marginBottom: '15px', padding: '15px' }}>
-                <div className="responsive-filter-grid">
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>성명</label>
-                        <input
-                            type="text"
-                            placeholder="성명 검색"
-                            value={searchFields.name}
-                            onChange={(e) => setSearchFields({ ...searchFields, name: e.target.value })}
-                            style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
-                        />
+                    {/* 검색 필터 영역 */}
+                    <div className="card" style={{ marginBottom: '15px', padding: '15px' }}>
+                        <div className="responsive-filter-grid">
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                                <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>성명</label>
+                                <input
+                                    type="text"
+                                    placeholder="성명 검색"
+                                    value={searchFields.name}
+                                    onChange={(e) => setSearchFields({ ...searchFields, name: e.target.value })}
+                                    style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
+                                />
+                            </div>
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                                <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>업체명</label>
+                                <input
+                                    type="text"
+                                    placeholder="업체명 검색"
+                                    value={searchFields.companyName}
+                                    onChange={(e) => setSearchFields({ ...searchFields, companyName: e.target.value })}
+                                    style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
+                                />
+                            </div>
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                                <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>부서</label>
+                                <input
+                                    type="text"
+                                    placeholder="부서 검색"
+                                    value={searchFields.department}
+                                    onChange={(e) => setSearchFields({ ...searchFields, department: e.target.value })}
+                                    style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
+                                />
+                            </div>
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                                <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>권한 (Role)</label>
+                                <select
+                                    value={searchFields.role}
+                                    onChange={(e) => setSearchFields({ ...searchFields, role: e.target.value })}
+                                    style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px', backgroundColor: '#fff' }}
+                                >
+                                    <option value="">전체 권한 보기</option>
+                                    {roles.map(r => (
+                                        <option key={r.roleKey} value={r.roleKey}>{r.displayName} ({r.roleKey})</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
                     </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>업체명</label>
-                        <input
-                            type="text"
-                            placeholder="업체명 검색"
-                            value={searchFields.companyName}
-                            onChange={(e) => setSearchFields({ ...searchFields, companyName: e.target.value })}
-                            style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
-                        />
-                    </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>부서</label>
-                        <input
-                            type="text"
-                            placeholder="부서 검색"
-                            value={searchFields.department}
-                            onChange={(e) => setSearchFields({ ...searchFields, department: e.target.value })}
-                            style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
-                        />
-                    </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>권한 (Role)</label>
-                          <select
-                              value={searchFields.role}
-                              onChange={(e) => setSearchFields({ ...searchFields, role: e.target.value })}
-                              style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px', backgroundColor: '#fff' }}
-                          >
-                              <option value="">전체 권한 보기</option>
-                              {roles.map(r => (
-                                  <option key={r.roleKey} value={r.roleKey}>{r.displayName} ({r.roleKey})</option>
-                              ))}
-                          </select>
-                    </div>
-                </div>
-            </div>
 
-            <div className="ag-theme-alpine" style={{ height: 600, width: '100%', marginTop: '10px' }}>
-                <AgGridReact theme="legacy"
-                    rowHeight={50}
-                    rowData={rowData}
-                    columnDefs={colDefs}
-                    pagination={true}
-                    paginationPageSize={100}
-                    quickFilterText={quickFilterText}
-                />
-            </div>
-            </>)}
+                    <div className="ag-theme-alpine" style={{ height: 600, width: '100%', marginTop: '10px' }}>
+                        <AgGridReact theme="legacy"
+                            rowHeight={50}
+                            rowData={rowData}
+                            columnDefs={colDefs}
+                            pagination={true}
+                            paginationPageSize={100}
+                            quickFilterText={quickFilterText}
+                        />
+                    </div>
+                </>)}
 
             {activeTab === 'settings' && (
                 <div className="card" style={{ padding: '30px', maxWidth: '800px', margin: '0 auto', border: '1px solid #eef2f6', borderRadius: '12px' }}>
@@ -405,37 +405,37 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
                     <div style={{ display: 'grid', gap: '20px' }}>
                         <div className="form-group" style={{ marginBottom: 0 }}>
                             <label style={{ fontWeight: '700' }}>SMTP 서버 주소 (Host)</label>
-                            <input 
-                                type="text" 
-                                value={settings.SMTP_HOST || ''} 
-                                onChange={e => setSettings({...settings, SMTP_HOST: e.target.value})} 
+                            <input
+                                type="text"
+                                value={settings.SMTP_HOST || ''}
+                                onChange={e => setSettings({ ...settings, SMTP_HOST: e.target.value })}
                                 placeholder="예: smtp.gmail.com"
                             />
                         </div>
                         <div className="form-group" style={{ marginBottom: 0 }}>
                             <label style={{ fontWeight: '700' }}>SMTP 서버 포트 (Port)</label>
-                            <input 
-                                type="text" 
-                                value={settings.SMTP_PORT || ''} 
-                                onChange={e => setSettings({...settings, SMTP_PORT: e.target.value})} 
+                            <input
+                                type="text"
+                                value={settings.SMTP_PORT || ''}
+                                onChange={e => setSettings({ ...settings, SMTP_PORT: e.target.value })}
                                 placeholder="예: 587"
                             />
                         </div>
                         <div className="form-group" style={{ marginBottom: 0 }}>
                             <label style={{ fontWeight: '700' }}>이메일 계정 (Username)</label>
-                            <input 
-                                type="text" 
-                                value={settings.SMTP_USERNAME || ''} 
-                                onChange={e => setSettings({...settings, SMTP_USERNAME: e.target.value})} 
+                            <input
+                                type="text"
+                                value={settings.SMTP_USERNAME || ''}
+                                onChange={e => setSettings({ ...settings, SMTP_USERNAME: e.target.value })}
                                 placeholder="예: admin@example.com"
                             />
                         </div>
                         <div className="form-group" style={{ marginBottom: 0 }}>
                             <label style={{ fontWeight: '700' }}>이메일 비밀번호 (App Password)</label>
-                            <input 
-                                type="password" 
-                                value={settings.SMTP_PASSWORD || ''} 
-                                onChange={e => setSettings({...settings, SMTP_PASSWORD: e.target.value})} 
+                            <input
+                                type="password"
+                                value={settings.SMTP_PASSWORD || ''}
+                                onChange={e => setSettings({ ...settings, SMTP_PASSWORD: e.target.value })}
                                 placeholder="기존 값이 유지됩니다. 변경하려면 입력하세요."
                             />
                             <small style={{ color: '#a0aec0', display: 'block', marginTop: '5px' }}>

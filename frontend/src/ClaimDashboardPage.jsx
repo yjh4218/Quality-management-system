@@ -202,31 +202,33 @@ function ClaimDashboardPage({ user, onNavigate }) {
                         <p style={{ color: '#666', margin: '5px 0 0 0' }}>품질 이슈 실시간 모니터링 및 분석</p>
                     </div>
                 </div>
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', background: 'white', padding: '15px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-end', background: 'white', padding: '15px', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', flexWrap: 'wrap' }}>
                     <div>
-                        <label style={{display:'block', fontSize:'12px', color:'#666', marginBottom:'5px'}}>조회 시작일</label>
-                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{padding:'8px', border:'1px solid #ced4da', borderRadius:'4px'}} />
+                        <label style={{display:'flex', alignItems: 'center', gap: '4px', fontSize:'12px', fontWeight: 'bold', color:'#4b5563', marginBottom:'5px'}}>🗓️ 조회 시작일</label>
+                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{padding:'8px', border:'1px solid #ced4da', borderRadius:'4px', width: '160px'}} />
                     </div>
                     <div>
-                        <label style={{display:'block', fontSize:'12px', color:'#666', marginBottom:'5px'}}>조회 종료일</label>
-                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{padding:'8px', border:'1px solid #ced4da', borderRadius:'4px'}} />
+                        <label style={{display:'flex', alignItems: 'center', gap: '4px', fontSize:'12px', fontWeight: 'bold', color:'#4b5563', marginBottom:'5px'}}>🗓️ 조회 종료일</label>
+                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{padding:'8px', border:'1px solid #ced4da', borderRadius:'4px', width: '160px'}} />
                     </div>
                     <div>
-                        <label style={{display:'block', fontSize:'12px', color:'#666', marginBottom:'5px'}}>품목코드</label>
+                        <label style={{display:'flex', alignItems: 'center', gap: '4px', fontSize:'12px', fontWeight: 'bold', color:'#4b5563', marginBottom:'5px'}}>🏷️ 품목코드</label>
                         <input type="text" placeholder="품목코드" value={itemCode} onChange={e => setItemCode(e.target.value)} style={{padding:'8px', border:'1px solid #ced4da', borderRadius:'4px', width: '120px'}} />
                     </div>
                     <div>
-                        <label style={{display:'block', fontSize:'12px', color:'#666', marginBottom:'5px'}}>품목명</label>
-                        <input type="text" placeholder="품목명" value={productName} onChange={e => setProductName(e.target.value)} style={{padding:'8px', border:'1px solid #ced4da', borderRadius:'4px', width: '150px'}} />
+                        <label style={{display:'flex', alignItems: 'center', gap: '4px', fontSize:'12px', fontWeight: 'bold', color:'#4b5563', marginBottom:'5px'}}>📦 품목명</label>
+                        <input type="text" placeholder="품목명" value={productName} onChange={e => setProductName(e.target.value)} style={{padding:'8px', border:'1px solid #ced4da', borderRadius:'4px', width: '180px'}} />
                     </div>
                     {!isManufacturer && (
                         <div>
-                            <label style={{display:'block', fontSize:'12px', color:'#666', marginBottom:'5px'}}>제조사</label>
-                            <input type="text" placeholder="제조사명" value={manufacturer} onChange={e => setManufacturer(e.target.value)} style={{padding:'8px', border:'1px solid #ced4da', borderRadius:'4px', width: '130px'}} />
+                            <label style={{display:'flex', alignItems: 'center', gap: '4px', fontSize:'12px', fontWeight: 'bold', color:'#4b5563', marginBottom:'5px'}}>🏭 제조사</label>
+                            <input type="text" placeholder="제조사명" value={manufacturer} onChange={e => setManufacturer(e.target.value)} style={{padding:'8px', border:'1px solid #ced4da', borderRadius:'4px', width: '150px'}} />
                         </div>
                     )}
-                    <button className="primary" onClick={handleSearch} disabled={loading}>{loading ? '조회 중...' : '조회'}</button>
-                    <button className="secondary" onClick={handleReset} disabled={loading}>초기화</button>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button className="primary" onClick={handleSearch} disabled={loading} style={{ height: '37px', padding: '0 20px', fontWeight: 'bold' }}>{loading ? '조회 중...' : '🔍 조회'}</button>
+                        <button className="secondary" onClick={handleReset} disabled={loading} style={{ height: '37px', padding: '0 20px' }}>초기화</button>
+                    </div>
                 </div>
             </div>
 

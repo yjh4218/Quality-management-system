@@ -300,7 +300,7 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
             <div className="card" style={{ marginBottom: '15px', padding: '20px', flexShrink: 0 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', alignItems: 'end' }}>
                     <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>품목코드</label>
+                        <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>🏷️ 품목코드</label>
                         <div style={{ display: 'flex', gap: '5px' }}>
                             <input
                                 type="text"
@@ -314,7 +314,7 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
                         </div>
                     </div>
                     <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>제품명</label>
+                        <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>📦 제품명</label>
                         <input
                             type="text"
                             placeholder="제품명 검색"
@@ -325,7 +325,7 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
                         />
                     </div>
                     <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>브랜드</label>
+                        <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>✨ 브랜드</label>
                         <input
                             type="text"
                             placeholder="브랜드 검색"
@@ -336,7 +336,7 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
                         />
                     </div>
                     <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>제조사명</label>
+                        <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>🏭 제조사명</label>
                         <input
                             type="text"
                             placeholder="제조사 검색"
@@ -347,7 +347,7 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
                         />
                     </div>
                     <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>전성분</label>
+                        <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>🧪 전성분</label>
                         <input
                             type="text"
                             placeholder="전성분 검색"

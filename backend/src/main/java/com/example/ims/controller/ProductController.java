@@ -19,6 +19,11 @@ import org.springframework.http.MediaType;
 import java.io.IOException;
 import java.util.List;
 
+/**
+ * 제품 마스터 관리 컨트롤러.
+ * [보안 강화] 모든 생성/수정/삭제 요청은 RBAC(Role-Based Access Control)을 통해 권한이 검증됩니다.
+ * [데이터 무결성] @Valid 어노테이션을 통해 서버 측에서 2차 데이터 유효성 검사를 수행합니다.
+ */
 @RestController
 @RequestMapping("/api/products")
 @RequiredArgsConstructor
@@ -33,6 +38,7 @@ public class ProductController {
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
+        // 제품 목록 페이징 조회 수행
         return ResponseEntity.ok(productService.getProductsPaginated(userDetails.getUsername(), page, size));
     }
 
@@ -56,7 +62,8 @@ public class ProductController {
     }
 
     @PostMapping
-    public ResponseEntity<Product> createProduct(@RequestBody Product product,
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
+    public ResponseEntity<Product> createProduct(@jakarta.validation.Valid @RequestBody Product product,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(productService.createProduct(product, userDetails.getUsername()));
     }
@@ -69,14 +76,16 @@ public class ProductController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
-    public ResponseEntity<Product> updateProduct(@PathVariable Long id, @RequestBody Product product,
+    public ResponseEntity<Product> updateProduct(@PathVariable Long id, @jakarta.validation.Valid @RequestBody Product product,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(productService.updateProduct(id, product, userDetails.getUsername()));
     }
 
     @PostMapping("/upload")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES', 'QUALITY_TEAM')")
     public ResponseEntity<String> uploadFile(@RequestParam("file") MultipartFile file,
                                              @RequestParam(value = "productName", required = false) String productName) {
+        // 파일 업로드 및 저장 처리
         String fileName = fileStorageService.storeFile(file, productName);
 
         String fileDownloadUri = ServletUriComponentsBuilder.fromCurrentContextPath()
@@ -88,6 +97,7 @@ public class ProductController {
     }
 
     @PostMapping("/upload-ingredients")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES', 'QUALITY_TEAM')")
     public ResponseEntity<List<com.example.ims.dto.ProductIngredientDto>> uploadIngredientsFile(@RequestParam("file") MultipartFile file) {
         try {
             System.out.println("Processing Excel file for ingredients upload: " + file.getOriginalFilename());
@@ -131,6 +141,7 @@ public class ProductController {
     }
 
     @GetMapping("/master/{itemCode}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES', 'QUALITY_TEAM')")
     public ResponseEntity<Product> loadMaster(@PathVariable String itemCode) {
         return ResponseEntity.ok(productService.loadMasterProduct(itemCode));
     }
