@@ -57,11 +57,6 @@ public class RegulatoryCrawlerService {
         }
     }
 
-    /**
-     * 특정 주기로 실행되는 배치 스케쥴러 (매주 일요일 새벽 3시)
-     * cron: "0 0 3 * * SUN"
-     * 여기서는 데모를 위해 매일 실행하거나 수동 실행 가능하도록 설정
-     */
     @Scheduled(cron = "0 0 3 * * SUN")
     @Transactional
     public void runWeeklyUpdate() {
@@ -78,11 +73,10 @@ public class RegulatoryCrawlerService {
         try {
             log.info(">>>> [BATCH] Starting Regulatory Data Update for: {}", countries);
             
-            List<CompletableFuture<Void>> futures = new ArrayList<>();
-            
-            // 1. Sync specific countries
+            // 1. Sync specific countries sequentially to prevent parallel SELECT-INSERT race conditions and duplicate key exceptions
             for (String country : countries) {
-                futures.add(CompletableFuture.runAsync(() -> {
+                try {
+                    log.info(">>>> [BATCH] Processing country: {}", country);
                     switch (country.toUpperCase()) {
                         case "KR": updateKoreaRegulations(); break;
                         case "EU": updateEURegulations(); break;
@@ -90,11 +84,11 @@ public class RegulatoryCrawlerService {
                         case "CN": updateChinaRegulations(); break;
                         case "JP": updateJapanRegulations(); break;
                     }
-                }));
+                } catch (Exception e) {
+                    log.error("Failed to sync regulations for country: " + country, e);
+                }
             }
             
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-
             // 2. Enforce Global Prohibitions (Safety Override)
             enforceGlobalProhibitions();
             

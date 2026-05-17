@@ -20,6 +20,7 @@ public class RegulatoryIngredient {
     @Column(unique = true, nullable = false, length = 1000)
     private String inciName; // International Nomenclature Cosmetic Ingredient
 
+    @Column(length = 2000)
     private String koreanName;
 
     private String casNumber;
