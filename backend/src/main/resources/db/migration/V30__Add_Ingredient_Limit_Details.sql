@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS regulatory_ingredients (
     jp_limit DOUBLE PRECISION,
     remarks TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_reg_inci_name ON regulatory_ingredients(inci_name);
