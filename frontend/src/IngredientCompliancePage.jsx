@@ -136,7 +136,7 @@ const IngredientCompliancePage = ({ user }) => {
 
     const filteredIngredients = useMemo(() => {
         return dbIngredients.filter(item => {
-            if (!item || !item.inciName) return false;
+            if (!item) return false;
 
             const inci = item.inciName ? item.inciName.toLowerCase() : "";
             const kor = item.koreanName ? item.koreanName.toLowerCase() : "";
@@ -1088,7 +1088,7 @@ const IngredientCompliancePage = ({ user }) => {
                         </div>
                         
                         <div style={{ background: '#f7fafc', padding: '12px', borderRadius: '8px', marginBottom: '20px' }}>
-                            <div style={{ fontSize: '15px', fontWeight: '700', color: '#2d3748' }}>{editModal.data.inciName}</div>
+                            <div style={{ fontSize: '15px', fontWeight: '700', color: '#2d3748' }}>{editModal.data.inciName || '영문명(INCI) 미등록'}</div>
                             <div style={{ fontSize: '13px', color: '#718096' }}>{editModal.data.koreanName || '한글명 미등록'}</div>
                         </div>
 

@@ -45,6 +45,7 @@ public class SystemInitializationService {
         seedAndRepairDashboardLayouts();
         seedAndRepairPageGuides();
         repairOtherTablesSchema(); // [추가] 소프트 델리트 및 기타 스키마 보정
+        repairRegulatoryIngredientsTableSchema(); // Drop unique constraints/indexes on regulatory_ingredients for full sync
 
         // Page guides are now handled entirely by Bulk Migration and use
         // SystemPageGuide entity
@@ -405,6 +406,30 @@ public class SystemInitializationService {
             }
         } catch (Exception e) {
             log.warn(">>>> [SYSTEM INIT] Failed to repair sequences: {}", e.getMessage());
+        }
+    }
+
+    private void repairRegulatoryIngredientsTableSchema() {
+        log.info(">>>> [SYSTEM INIT] Aligning 'regulatory_ingredients' unique constraints...");
+        String[] dropStatements = {
+            // PostgreSQL default constraint
+            "ALTER TABLE regulatory_ingredients DROP CONSTRAINT IF EXISTS regulatory_ingredients_inci_name_key",
+            // Hibernate auto-generated constraints
+            "ALTER TABLE regulatory_ingredients DROP CONSTRAINT IF EXISTS uk_380bierkp83sbnh6w1e3j74nt",
+            "ALTER TABLE regulatory_ingredients DROP CONSTRAINT IF EXISTS uk380bierkp83sbnh6w1e3j74nt",
+            "ALTER TABLE regulatory_ingredients DROP CONSTRAINT IF EXISTS \"UK_380BIERKP83SBNH6W1E3J74NT\"",
+            // Drop indexes
+            "DROP INDEX IF EXISTS uk_380bierkp83sbnh6w1e3j74nt",
+            "DROP INDEX IF EXISTS uk380bierkp83sbnh6w1e3j74nt",
+            "DROP INDEX IF EXISTS \"UK_380BIERKP83SBNH6W1E3J74NT\"",
+            "DROP INDEX IF EXISTS \"UK_380BIERKP83SBNH6W1E3J74NT_INDEX_C\""
+        };
+        for (String sql : dropStatements) {
+            try {
+                jdbcTemplate.execute(sql);
+            } catch (Exception e) {
+                log.debug(">>>> [SYSTEM INIT] Dropping unique constraint/index skipped: {} ({})", sql, e.getMessage());
+            }
         }
     }
 }

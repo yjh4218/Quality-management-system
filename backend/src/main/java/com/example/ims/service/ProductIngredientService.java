@@ -157,6 +157,9 @@ public class ProductIngredientService {
 
     private IngredientAnalysisResult analyzeSingleIngredient(String inciName, Double percentage) {
         List<RegulatoryIngredient> regulations = regulatoryRepository.findByInciName(inciName);
+        if (regulations.isEmpty() && inciName != null && !inciName.isEmpty()) {
+            regulations = regulatoryRepository.findByKoreanName(inciName);
+        }
         
         if (regulations.isEmpty()) {
             return IngredientAnalysisResult.builder()

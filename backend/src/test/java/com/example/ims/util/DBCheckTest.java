@@ -53,6 +53,57 @@ public class DBCheckTest {
     }
 
     @Test
+    public void checkRegulatoryIngredients() {
+        System.out.println("==================================================");
+        System.out.println(">>>> [REGULATORY INGREDIENTS CHECK]");
+        try {
+            List<Map<String, Object>> counts = jdbcTemplate.queryForList(
+                "SELECT source_api, COUNT(*) as cnt FROM regulatory_ingredients GROUP BY source_api"
+            );
+            System.out.println(">>>> Counts by source_api:");
+            for (Map<String, Object> c : counts) {
+                System.out.println(String.format("   API: %s | COUNT: %s", c.get("source_api"), c.get("cnt")));
+            }
+            
+            Integer total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM regulatory_ingredients", Integer.class);
+            System.out.println(">>>> Total ingredients: " + total);
+
+            List<Map<String, Object>> duplicates = jdbcTemplate.queryForList(
+                "SELECT inci_name, COUNT(*) as cnt FROM regulatory_ingredients WHERE inci_name IS NOT NULL GROUP BY inci_name HAVING COUNT(*) > 1 ORDER BY cnt DESC LIMIT 10"
+            );
+            System.out.println(">>>> Top 10 duplicate INCI names:");
+            for (Map<String, Object> d : duplicates) {
+                System.out.println(String.format("   INCI: %s | DUP COUNT: %s", d.get("inci_name"), d.get("cnt")));
+            }
+        } catch (Exception e) {
+            System.err.println(">>>> Failed to query regulatory_ingredients!");
+            e.printStackTrace();
+        }
+        System.out.println("==================================================");
+    }
+
+    @Autowired
+    private com.example.ims.service.SystemInitializationService initializationService;
+
+    @Autowired
+    private com.example.ims.service.RegulatoryCrawlerService crawlerService;
+
+    @Test
+    public void runCrawlerTest() {
+        System.out.println("==================================================");
+        System.out.println(">>>> [RUNNING CRAWLER TEST IN JUNIT]");
+        try {
+            // Drop unique constraints/indexes and run database repair first
+            initializationService.seedAndRepairData(null);
+            // Only sync KR to see REGL + INGD
+            crawlerService.syncByCountries(List.of("KR"));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        System.out.println("==================================================");
+    }
+
+    @Test
     public void checkTables() {
         StringBuilder sb = new StringBuilder();
         sb.append("==================================================\n");
