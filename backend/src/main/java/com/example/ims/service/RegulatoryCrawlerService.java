@@ -428,7 +428,7 @@ public class RegulatoryCrawlerService {
     }
 
     private void saveIfNew(String inciName, String koreanName, String cas, String country) {
-        Optional<RegulatoryIngredient> existing = repository.findByInciName(inciName);
+        List<RegulatoryIngredient> existing = repository.findByInciName(inciName);
         if (existing.isEmpty()) {
             saveOrUpdate(inciName, koreanName, cas, "ALLOWED", null, country);
         }
