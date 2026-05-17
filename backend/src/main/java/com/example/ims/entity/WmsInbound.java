@@ -15,7 +15,8 @@ import java.time.LocalDateTime;
     @Index(name = "idx_wms_item_code", columnList = "itemCode"),
     @Index(name = "idx_wms_inbound_date", columnList = "inboundDate"),
     @Index(name = "idx_wms_manufacturer", columnList = "manufacturer"),
-    @Index(name = "idx_wms_lot_number", columnList = "lotNumber")
+    @Index(name = "idx_wms_lot_number", columnList = "lotNumber"),
+    @Index(name = "idx_wms_deleted", columnList = "is_deleted")
 })
 @Data
 @NoArgsConstructor

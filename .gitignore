@@ -43,3 +43,8 @@ desktop.ini
 .hf.space/
 out/
 .next/
+
+# [SECURITY] Sensitive Properties Files
+backend/src/main/resources/application-local.properties
+backend/src/main/resources/application-secret.properties
+

@@ -60,6 +60,28 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 리소스를 찾을 수 없을 때 예외 처리 (404 Not Found).
+     */
+    @ExceptionHandler(jakarta.persistence.EntityNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleEntityNotFoundException(jakarta.persistence.EntityNotFoundException ex) {
+        Map<String, String> response = new HashMap<>();
+        response.put("error", "EntityNotFound");
+        response.put("message", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+    }
+
+    /**
+     * 비즈니스 로직 충돌 및 정밀 상태 전이 실패 시 예외 처리 (409 Conflict).
+     */
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, String>> handleIllegalStateException(IllegalStateException ex) {
+        Map<String, String> response = new HashMap<>();
+        response.put("error", "InvalidState");
+        response.put("message", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    /**
      * 권한 부족(403) 예외 처리. (이 처리가 없으면 RuntimeException으로 매핑되어 400 에러를 반환함)
      */
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)

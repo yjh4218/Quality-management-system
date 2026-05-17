@@ -78,7 +78,7 @@ public class Product {
      * Reference to the Brand entity.
      * 브랜드 정보와 연관 관계 매핑
      */
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "brand_id")
     private Brand brand;
 
@@ -86,7 +86,7 @@ public class Product {
      * Reference to the Manufacturer entity.
      * 상세 제조사 정보 연관 관계 매핑
      */
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "manufacturer_id")
     private Manufacturer manufacturerInfo;
 

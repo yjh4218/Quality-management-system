@@ -27,7 +27,7 @@ public class ChannelPackagingRule {
     @CreationTimestamp
     private LocalDateTime createdAt;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "channel_id")
     private SalesChannel channel;
 

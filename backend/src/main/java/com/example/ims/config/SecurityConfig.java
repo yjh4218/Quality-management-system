@@ -52,8 +52,8 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/bug-reports").authenticated()
                         .requestMatchers("/api/bug-reports/**").authenticated()
                         
-                        .requestMatchers("/api/admin/system/**").authenticated()
-                        .requestMatchers("/api/admin/trash/**").authenticated()
+                        .requestMatchers("/api/admin/system/**").hasRole("ADMIN")
+                        .requestMatchers("/api/admin/trash/**").hasRole("ADMIN")
                         
                         .requestMatchers("/api/audit-templates/**").authenticated()
                         
@@ -99,18 +99,17 @@ public class SecurityConfig {
                     .map(String::trim)
                     .collect(Collectors.toList()));
         } else {
-            // 로컬 개발 환경 폴백 (안전한 기본값)
+            // 로컬 개발 환경 및 기본 배포 환경 폴백 (안전한 기본값)
             configuration.setAllowedOrigins(List.of(
                 "http://localhost:3000",
                 "http://localhost:5173",
                 "http://127.0.0.1:5173"
             ));
+            // 개발/스테이징 보조 패턴 허용
+            configuration.addAllowedOriginPattern("https://*.hf.space");
+            configuration.addAllowedOriginPattern("https://*.onrender.com");
+            configuration.addAllowedOriginPattern("https://qualitymange.pages.dev");
         }
-        
-        // 배포 환경 패턴 허용
-        configuration.addAllowedOriginPattern("https://*.hf.space");
-        configuration.addAllowedOriginPattern("https://*.onrender.com");
-        configuration.addAllowedOriginPattern("https://qualitymange.pages.dev");
 
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin"));

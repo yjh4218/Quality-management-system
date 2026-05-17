@@ -54,3 +54,7 @@ frontend/node_modules/
 *.jpeg
 *.gif
 *.webp
+
+# --- [SECURITY PATCH] Sensitive Properties Files ---
+src/main/resources/application-local.properties
+src/main/resources/application-secret.properties

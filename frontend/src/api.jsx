@@ -123,8 +123,14 @@ api.interceptors.response.use(
         if (error.response && error.response.status === 401 && !isLoginRequest) {
             window.dispatchEvent(new Event('auth-unauthorized'));
         } else if (!isLoginRequest && !(error.config && error.config.skipToast)) {
-            // [에어백] 모든 실패한 요청에 대해 사용자에게 즉시 토스트 알림 (버그 신고 버튼 포함)
-            const errorMsg = error.response?.data?.message || "서버와 통신 중 문제가 발생했습니다.";
+            let errorMsg = "서버와 통신 중 문제가 발생했습니다.";
+            if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+                errorMsg = "요청 처리 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.";
+            } else if (error.response?.data?.message) {
+                errorMsg = error.response.data.message;
+            } else if (error.message) {
+                errorMsg = error.message;
+            }
             
             toast.error(
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
