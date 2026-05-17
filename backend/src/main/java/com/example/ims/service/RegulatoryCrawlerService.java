@@ -34,10 +34,38 @@ public class RegulatoryCrawlerService {
     private final ObjectMapper objectMapper = new ObjectMapper();
     
     private static RestTemplate createRestTemplate() {
-        RestTemplate rt = new RestTemplate();
+        // [FIX] 타임아웃 설정 추가 - 배포 환경에서 무한 대기 방지
+        org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(30000); // 30초 연결 타임아웃
+        factory.setReadTimeout(60000);    // 60초 읽기 타임아웃
+        RestTemplate rt = new RestTemplate(factory);
         rt.getMessageConverters().removeIf(converter -> converter instanceof StringHttpMessageConverter);
         rt.getMessageConverters().add(0, new StringHttpMessageConverter(StandardCharsets.UTF_8));
         return rt;
+    }
+
+    /**
+     * API 호출 재시도 로직 (최대 3회, 실패 시 HTTP 폴백 포함)
+     */
+    private String callApiWithRetry(String urlString, int maxRetries) {
+        Exception lastException = null;
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                return restTemplate.getForObject(urlString, String.class);
+            } catch (Exception e) {
+                lastException = e;
+                log.warn(">>>> [CRAWLER] API call attempt {}/{} failed: {} - {}", attempt, maxRetries, e.getClass().getSimpleName(), e.getMessage());
+                if (attempt == 1 && urlString.startsWith("https://")) {
+                    // 첫 번째 시도 실패 시 HTTP 폴백 시도
+                    urlString = urlString.replace("https://", "http://");
+                    log.info(">>>> [CRAWLER] Falling back to HTTP...");
+                }
+                if (attempt < maxRetries) {
+                    try { Thread.sleep(2000L * attempt); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                }
+            }
+        }
+        throw new RuntimeException("API call failed after " + maxRetries + " attempts", lastException);
     }
     
     // Sync status flag
@@ -137,74 +165,108 @@ public class RegulatoryCrawlerService {
             int pageNo = 1;
             int totalCount = 1; // Initial dummy value
             int numOfRows = 100; // Batch size
+            int savedCount = 0;
+            int skippedCount = 0;
+            int errorCount = 0;
+            int consecutiveErrors = 0; // 연속 에러 카운터
 
             while ((pageNo - 1) * numOfRows < totalCount) {
-                // Manual URL construction to avoid library-specific encoding issues
-                String urlString = String.format("%s?serviceKey=%s&type=json&pageNo=%d&numOfRows=%d", 
-                        REGL_API_URL, SERVICE_KEY, pageNo, numOfRows);
-                
-                String response;
                 try {
-                    response = restTemplate.getForObject(urlString, String.class);
-                } catch (Exception e) {
-                    // Fallback to HTTP if HTTPS fails
-                    log.warn(">>>> [CRAWLER] HTTPS failed, trying HTTP fallback...");
-                    urlString = urlString.replace("https://", "http://");
-                    response = restTemplate.getForObject(urlString, String.class);
-                }
+                    String urlString = String.format("%s?serviceKey=%s&type=json&pageNo=%d&numOfRows=%d", 
+                            REGL_API_URL, SERVICE_KEY, pageNo, numOfRows);
+                    
+                    String response = callApiWithRetry(urlString, 3);
 
-                JsonNode root = objectMapper.readTree(response);
-                JsonNode body = root.path("body");
-                
-                totalCount = body.path("totalCount").asInt();
-                JsonNode items = body.path("items");
-
-                if (items.isArray() && items.size() > 0) {
-                    for (JsonNode item : items) {
-                        String engName = item.path("INGR_ENG_NAME").asText();
-                        String korName = item.path("INGR_STD_NAME").asText();
-                        String prohNational = item.path("PROH_NATIONAL").asText();
-                        String limitNational = item.path("LIMIT_NATIONAL").asText();
-                        String limitContent = item.path("LIMIT_CONTENT").asText();
-                        String useRange = item.path("USE_RANGE").asText();
-                        String cas = item.path("CAS_NO").asText();
-
-                        String detailedRemarks = "";
-                        if (limitContent != null && !limitContent.equals("null") && !limitContent.isEmpty()) {
-                            detailedRemarks += "[한도상세] " + limitContent + " ";
+                    JsonNode root = objectMapper.readTree(response);
+                    JsonNode body = root.path("body");
+                    
+                    // API 응답 유효성 검증
+                    if (body.isMissingNode() || body.isNull()) {
+                        log.error(">>>> [CRAWLER] REGL API returned invalid response at page {}. Raw: {}", pageNo, 
+                                response != null ? response.substring(0, Math.min(200, response.length())) : "null");
+                        consecutiveErrors++;
+                        if (consecutiveErrors >= 5) {
+                            log.error(">>>> [CRAWLER] 5 consecutive errors. Aborting REGL sync.");
+                            break;
                         }
-                        if (useRange != null && !useRange.equals("null") && !useRange.isEmpty()) {
-                            detailedRemarks += "[사용범위] " + useRange;
-                        }
-
-                        if (engName == null || engName.isEmpty() || "null".equalsIgnoreCase(engName)) {
-                            engName = korName;
-                        }
-
-                        if (engName != null && !engName.isEmpty() && !"null".equalsIgnoreCase(engName)) {
-                            // [FIX] Atomic save: 한 번의 save()로 remarks + status + limitDetails를 모두 저장
-                            saveKoreaRegulationAtomic(engName, korName, cas, detailedRemarks, prohNational, limitNational);
-                        }
+                        pageNo++;
+                        continue;
                     }
-                } else {
-                    // If items are missing or totalCount is reported but no items returned
-                    log.warn(">>>> [CRAWLER] No items returned for page {}. Stopping.", pageNo);
-                    break;
+                    
+                    totalCount = body.path("totalCount").asInt();
+                    JsonNode items = body.path("items");
+                    
+                    if (pageNo == 1) {
+                        log.info(">>>> [CRAWLER] REGL API totalCount = {} (총 {}페이지 예상)", totalCount, (int) Math.ceil((double) totalCount / numOfRows));
+                    }
+
+                    if (items.isArray() && items.size() > 0) {
+                        consecutiveErrors = 0; // 성공 시 연속 에러 리셋
+                        for (JsonNode item : items) {
+                            try {
+                                String engName = item.path("INGR_ENG_NAME").asText();
+                                String korName = item.path("INGR_STD_NAME").asText();
+                                String prohNational = item.path("PROH_NATIONAL").asText();
+                                String limitNational = item.path("LIMIT_NATIONAL").asText();
+                                String limitContent = item.path("LIMIT_CONTENT").asText();
+                                String useRange = item.path("USE_RANGE").asText();
+                                String cas = item.path("CAS_NO").asText();
+
+                                String detailedRemarks = "";
+                                if (limitContent != null && !limitContent.equals("null") && !limitContent.isEmpty()) {
+                                    detailedRemarks += "[한도상세] " + limitContent + " ";
+                                }
+                                if (useRange != null && !useRange.equals("null") && !useRange.isEmpty()) {
+                                    detailedRemarks += "[사용범위] " + useRange;
+                                }
+
+                                if (engName == null || engName.isEmpty() || "null".equalsIgnoreCase(engName)) {
+                                    engName = korName;
+                                }
+
+                                if (engName != null && !engName.isEmpty() && !"null".equalsIgnoreCase(engName)) {
+                                    saveKoreaRegulationAtomic(engName, korName, cas, detailedRemarks, prohNational, limitNational);
+                                    savedCount++;
+                                } else {
+                                    skippedCount++;
+                                }
+                            } catch (Exception e) {
+                                errorCount++;
+                                log.warn(">>>> [CRAWLER] REGL item save error at page {}: {}", pageNo, e.getMessage());
+                            }
+                        }
+                    } else {
+                        log.warn(">>>> [CRAWLER] No items returned for REGL page {}. Stopping.", pageNo);
+                        break;
+                    }
+                } catch (Exception e) {
+                    log.error(">>>> [CRAWLER] REGL page {} fetch failed: {} - {}", pageNo, e.getClass().getSimpleName(), e.getMessage());
+                    consecutiveErrors++;
+                    errorCount++;
+                    if (consecutiveErrors >= 5) {
+                        log.error(">>>> [CRAWLER] 5 consecutive page errors. Aborting REGL sync at page {}.", pageNo);
+                        break;
+                    }
                 }
                 
-                if (pageNo % 10 == 0) log.info(">>>> [CRAWLER] KR API Progress: {} / {} ({}%)", (pageNo * numOfRows), totalCount, Math.min(100, (pageNo * numOfRows * 100) / Math.max(1, totalCount)));
+                if (pageNo % 10 == 0) {
+                    log.info(">>>> [CRAWLER] REGL Progress: page {}, processed {}/{}, saved={}, skipped={}, errors={}", 
+                            pageNo, Math.min(pageNo * numOfRows, totalCount), totalCount, savedCount, skippedCount, errorCount);
+                }
                 pageNo++;
                 
                 if (pageNo > 300) break; // Limit to 30,000 items
             }
             
-            log.info(">>>> [CRAWLER] KR API Sync Completed. Total records processed: {}", totalCount);
+            log.info(">>>> [CRAWLER] ===== REGL API Sync COMPLETED =====");
+            log.info(">>>> [CRAWLER] REGL totalCount={}, pages={}, saved={}, skipped={}, errors={}", 
+                    totalCount, pageNo - 1, savedCount, skippedCount, errorCount);
             
-            // 2. Fetch full ingredient master (2.5k+)
+            // 2. Fetch full ingredient master
             updateKoreaIngredientMaster();
             
         } catch (Exception e) {
-            log.error("Failed to sync Korea regulations via API", e);
+            log.error(">>>> [CRAWLER] CRITICAL: updateKoreaRegulations failed entirely", e);
         }
     }
 
@@ -255,54 +317,95 @@ public class RegulatoryCrawlerService {
             int pageNo = 1;
             int totalCount = 1;
             int numOfRows = 100;
+            int savedCount = 0;
+            int skippedCount = 0;
+            int errorCount = 0;
+            int consecutiveErrors = 0;
 
             while ((pageNo - 1) * numOfRows < totalCount) {
-                String urlString = String.format("%s?serviceKey=%s&type=json&pageNo=%d&numOfRows=%d", 
-                        INGD_API_URL, SERVICE_KEY, pageNo, numOfRows);
-                
-                String response;
                 try {
-                    response = restTemplate.getForObject(urlString, String.class);
-                } catch (Exception e) {
-                    log.warn(">>>> [CRAWLER] HTTPS failed for Master, trying HTTP fallback...");
-                    urlString = urlString.replace("https://", "http://");
-                    response = restTemplate.getForObject(urlString, String.class);
-                }
+                    String urlString = String.format("%s?serviceKey=%s&type=json&pageNo=%d&numOfRows=%d", 
+                            INGD_API_URL, SERVICE_KEY, pageNo, numOfRows);
+                    
+                    String response = callApiWithRetry(urlString, 3);
 
-                JsonNode root = objectMapper.readTree(response);
-                JsonNode body = root.path("body");
-                
-                totalCount = body.path("totalCount").asInt();
-                JsonNode items = body.path("items");
-
-                if (items.isArray() && items.size() > 0) {
-                    for (JsonNode item : items) {
-                        String engName = item.path("INGR_ENG_NAME").asText();
-                        String korName = item.path("INGR_KOR_NAME").asText();
-                        String cas = item.path("CAS_NO").asText();
-                        
-                        // Some records only have a Korean name and no English INCI name.
-                        // We use the Korean name as the unique identifier if INCI is missing.
-                        if (engName == null || engName.isEmpty() || "null".equalsIgnoreCase(engName)) {
-                            engName = korName;
+                    JsonNode root = objectMapper.readTree(response);
+                    JsonNode body = root.path("body");
+                    
+                    if (body.isMissingNode() || body.isNull()) {
+                        log.error(">>>> [CRAWLER] INGD API returned invalid response at page {}.", pageNo);
+                        consecutiveErrors++;
+                        if (consecutiveErrors >= 5) {
+                            log.error(">>>> [CRAWLER] 5 consecutive errors. Aborting INGD sync.");
+                            break;
                         }
-                        
-                        if (engName != null && !engName.isEmpty() && !"null".equalsIgnoreCase(engName)) {
-                            saveIfNew(engName, korName, cas, "KR");
-                        }
+                        pageNo++;
+                        continue;
                     }
-                } else {
-                    log.warn(">>>> [CRAWLER] No items returned for Master page {}. Stopping.", pageNo);
-                    break;
+                    
+                    totalCount = body.path("totalCount").asInt();
+                    JsonNode items = body.path("items");
+                    
+                    if (pageNo == 1) {
+                        log.info(">>>> [CRAWLER] INGD API totalCount = {} (총 {}페이지 예상)", totalCount, (int) Math.ceil((double) totalCount / numOfRows));
+                    }
+
+                    if (items.isArray() && items.size() > 0) {
+                        consecutiveErrors = 0;
+                        for (JsonNode item : items) {
+                            try {
+                                String engName = item.path("INGR_ENG_NAME").asText();
+                                String korName = item.path("INGR_KOR_NAME").asText();
+                                String cas = item.path("CAS_NO").asText();
+                                
+                                if (engName == null || engName.isEmpty() || "null".equalsIgnoreCase(engName)) {
+                                    engName = korName;
+                                }
+                                
+                                if (engName != null && !engName.isEmpty() && !"null".equalsIgnoreCase(engName)) {
+                                    Optional<RegulatoryIngredient> existing = repository.findByInciName(engName);
+                                    if (existing.isEmpty()) {
+                                        saveOrUpdate(engName, korName, cas, "ALLOWED", null, "KR");
+                                        savedCount++;
+                                    } else {
+                                        skippedCount++;
+                                    }
+                                }
+                            } catch (Exception e) {
+                                errorCount++;
+                                log.warn(">>>> [CRAWLER] INGD item save error at page {}: {}", pageNo, e.getMessage());
+                            }
+                        }
+                    } else {
+                        log.warn(">>>> [CRAWLER] No items returned for INGD page {}. Stopping.", pageNo);
+                        break;
+                    }
+                } catch (Exception e) {
+                    log.error(">>>> [CRAWLER] INGD page {} fetch failed: {} - {}", pageNo, e.getClass().getSimpleName(), e.getMessage());
+                    consecutiveErrors++;
+                    errorCount++;
+                    if (consecutiveErrors >= 5) {
+                        log.error(">>>> [CRAWLER] 5 consecutive page errors. Aborting INGD sync at page {}.", pageNo);
+                        break;
+                    }
                 }
-                if (pageNo % 10 == 0) log.info(">>>> [CRAWLER] KR Master Progress: {} / {}", (pageNo * numOfRows), totalCount);
+                
+                if (pageNo % 10 == 0) {
+                    log.info(">>>> [CRAWLER] INGD Progress: page {}, processed {}/{}, newSaved={}, existing={}, errors={}", 
+                            pageNo, Math.min(pageNo * numOfRows, totalCount), totalCount, savedCount, skippedCount, errorCount);
+                }
                 pageNo++;
                 
-                if (pageNo > 300) break; 
+                if (pageNo > 300) break;
             }
-            log.info(">>>> [CRAWLER] KR Ingredient Master Sync Completed.");
+            
+            long dbTotal = repository.count();
+            log.info(">>>> [CRAWLER] ===== INGD Master Sync COMPLETED =====");
+            log.info(">>>> [CRAWLER] INGD totalCount={}, pages={}, newSaved={}, existing={}, errors={}", 
+                    totalCount, pageNo - 1, savedCount, skippedCount, errorCount);
+            log.info(">>>> [CRAWLER] DB Total records after sync: {}", dbTotal);
         } catch (Exception e) {
-            log.error("Failed to sync Korea ingredient master", e);
+            log.error(">>>> [CRAWLER] CRITICAL: updateKoreaIngredientMaster failed entirely", e);
         }
     }
 
