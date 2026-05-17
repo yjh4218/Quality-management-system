@@ -33,6 +33,14 @@ public class SystemPageGuide {
     @Column(columnDefinition = "TEXT")
     private String sectionsJson;
 
+    @Column(columnDefinition = "TEXT")
+    private String content;
+
+    private String updatedBy;
+
+    @org.hibernate.annotations.UpdateTimestamp
+    private LocalDateTime updatedAt;
+
     @CreationTimestamp
     private LocalDateTime createdAt;
 }

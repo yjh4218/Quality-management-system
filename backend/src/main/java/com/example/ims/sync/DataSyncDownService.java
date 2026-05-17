@@ -20,7 +20,7 @@ public class DataSyncDownService {
 
     public DataSyncDownService(
             com.example.ims.service.SystemInitializationService systemInitializationService,
-            JdbcTemplate h2JdbcTemplate,
+            @Qualifier("jdbcTemplate") JdbcTemplate h2JdbcTemplate,
             @Qualifier("supabaseJdbcTemplate") JdbcTemplate supabaseJdbcTemplate) {
         this.systemInitializationService = systemInitializationService;
         this.h2JdbcTemplate = h2JdbcTemplate;

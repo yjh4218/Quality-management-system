@@ -202,103 +202,208 @@ const ProductionAuditPage = ({ user }) => {
     ], [viewMode, isManufacturer]);
 
     return (
-        <div className="card" style={{ padding: '15px', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)' }}>
-            <div className="page-header">
-                <div>
-                    <h2>📸 신제품 생산감리 (사진감리)</h2>
-                    <p style={{ fontSize: '13px', color: '#666', margin: 0 }}>제조사 생산 시 촬영한 용기, 단상자, 적재 사진 품질 감리 내역을 관리합니다.</p>
+        <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#f1f5f9' }}>
+            
+            {/* 3단계 표준 헤더 레이아웃 */}
+            <div className="page-header-standard" style={{ 
+                marginBottom: '20px', 
+                flexDirection: 'column', 
+                alignItems: 'flex-start', 
+                gap: '12px',
+                padding: '24px',
+                backgroundColor: '#fff',
+                borderRadius: '16px',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                border: '1px solid #f1f5f9'
+            }}>
+                {/* 1단계: 생성 및 연동 (최상단) */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                    <div className="header-title">
+                        <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0, fontSize: '22px', fontWeight: '800', color: '#1e293b' }}>
+                            📸 신제품 생산감리 (사진감리)
+                        </h2>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        {isManufacturer && (
+                            <button 
+                                className="primary" 
+                                onClick={handleCreateNew} 
+                                style={{ 
+                                    padding: '10px 24px', 
+                                    borderRadius: '10px', 
+                                    fontWeight: '800', 
+                                    backgroundColor: '#2563eb',
+                                    color: '#fff',
+                                    border: 'none',
+                                    cursor: canRegister ? 'pointer' : 'not-allowed',
+                                    opacity: canRegister ? 1 : 0.5
+                                }} 
+                                disabled={!canRegister}
+                            >
+                                ➕ 신규 감리 등록
+                            </button>
+                        )}
+                    </div>
                 </div>
-                <div className="button-group">
-                    {canView('productionAudit') && (
-                        <button onClick={handleExportExcel} className="outline" style={{ border: '1px solid #107c41', color: '#107c41', marginRight: '10px' }}>📊 엑셀 다운로드</button>
-                    )}
-                    <div style={{ display: 'inline-flex', background: '#f1f5f9', padding: '4px', borderRadius: '8px', marginRight: '10px' }}>
+
+                {/* 2단계: 핵심 제어 (중단) */}
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    width: '100%', 
+                    alignItems: 'center', 
+                    padding: '12px 0', 
+                    borderTop: '1px solid #f1f5f9',
+                    borderBottom: '1px solid #f1f5f9'
+                }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <div style={{ display: 'inline-flex', background: '#f8fafc', padding: '4px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                            <button 
+                                onClick={() => setViewMode('all')}
+                                style={{ 
+                                    padding: '8px 16px', 
+                                    fontSize: '13px', 
+                                    border: 'none', 
+                                    borderRadius: '8px',
+                                    fontWeight: '800',
+                                    backgroundColor: viewMode === 'all' ? '#2563eb' : 'transparent',
+                                    color: viewMode === 'all' ? '#fff' : '#64748b',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                전체 내역
+                            </button>
+                            <button 
+                                onClick={() => setViewMode('pending')}
+                                style={{ 
+                                    padding: '8px 16px', 
+                                    fontSize: '13px', 
+                                    border: 'none', 
+                                    borderRadius: '8px',
+                                    fontWeight: '800',
+                                    backgroundColor: viewMode === 'pending' ? '#2563eb' : 'transparent',
+                                    color: viewMode === 'pending' ? '#fff' : '#64748b',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                미진행 품목
+                            </button>
+                            <button 
+                                onClick={() => setViewMode('review')}
+                                style={{ 
+                                    padding: '8px 16px', 
+                                    fontSize: '13px', 
+                                    border: 'none', 
+                                    borderRadius: '8px',
+                                    fontWeight: '800',
+                                    backgroundColor: viewMode === 'review' ? '#2563eb' : 'transparent',
+                                    color: viewMode === 'review' ? '#fff' : '#64748b',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                {isManufacturer ? '반려됨' : '검토 필요'}
+                            </button>
+                            <button 
+                                onClick={() => setViewMode('completed')}
+                                style={{ 
+                                    padding: '8px 16px', 
+                                    fontSize: '13px', 
+                                    border: 'none', 
+                                    borderRadius: '8px',
+                                    fontWeight: '800',
+                                    backgroundColor: viewMode === 'completed' ? '#2563eb' : 'transparent',
+                                    color: viewMode === 'completed' ? '#fff' : '#64748b',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                완료 내역
+                            </button>
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
                         <button 
-                            onClick={() => setViewMode('all')}
-                            className={viewMode === 'all' ? 'primary' : 'secondary'}
-                            style={{ padding: '6px 15px', fontSize: '12px', border: 'none', borderRadius: '6px' }}
+                            className="outline" 
+                            onClick={handleExportExcel}
+                            style={{ fontSize: '14px', padding: '10px 20px', backgroundColor: '#fff', color: '#107c41', borderColor: '#107c41' }}
                         >
-                            전체 내역
+                            📊 결과 다운로드
                         </button>
                         <button 
-                            onClick={() => setViewMode('pending')}
-                            className={viewMode === 'pending' ? 'primary' : 'secondary'}
-                            style={{ padding: '6px 15px', fontSize: '12px', border: 'none', borderRadius: '6px' }}
+                            className="primary" 
+                            onClick={handleSearchClick} 
+                            style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px' }}
                         >
-                            미진행 품목
+                            🔍 조회
                         </button>
                         <button 
-                            onClick={() => setViewMode('review')}
-                            className={viewMode === 'review' ? 'primary' : 'secondary'}
-                            style={{ padding: '6px 15px', fontSize: '12px', border: 'none', borderRadius: '6px' }}
+                            className="outline" 
+                            onClick={() => setSearchFields({ itemCode: '', productName: '', manufacturerName: '', disclosureFilter: 'ALL' })} 
+                            style={{ padding: '10px 16px', fontSize: '14px' }}
                         >
-                            {isManufacturer ? '반려됨' : '검토 필요'}
-                        </button>
-                        <button 
-                            onClick={() => setViewMode('completed')}
-                            className={viewMode === 'completed' ? 'primary' : 'secondary'}
-                            style={{ padding: '6px 15px', fontSize: '12px', border: 'none', borderRadius: '6px' }}
-                        >
-                            완료 내역
+                            ♻️ 초기화
                         </button>
                     </div>
-                    {isManufacturer && (
-                        <button onClick={handleCreateNew} className="primary" style={{ fontWeight: '800', opacity: canRegister ? 1 : 0.5 }} disabled={!canRegister}>➕ 신규 감리 등록</button>
-                    )}
                 </div>
             </div>
 
-            {/* 검색 피드 카드 리팩토링 */}
-            <div className="card" style={{ marginBottom: '15px', padding: '20px', flexShrink: 0 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', alignItems: 'end' }}>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ fontSize: '12px', fontWeight: 'bold' }}>🏷️ 품목코드</label>
-                        <div style={{ display: 'flex', gap: '5px' }}>
+            {/* 검색 필터 그리드 */}
+            <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏷️ 품목코드</label>
+                        <div style={{ display: 'flex', gap: '8px' }}>
                             <input
                                 type="text"
-                                style={{ flex: 1 }}
-                                placeholder="코드 입력"
                                 value={searchFields.itemCode}
                                 onChange={(e) => setSearchFields({ ...searchFields, itemCode: e.target.value })}
                                 onKeyDown={(e) => e.key === 'Enter' && handleSearchClick()}
+                                placeholder="코드 입력"
+                                style={{ flex: 1, padding: '10px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px' }}
                             />
                             <button 
                                 type="button" 
                                 onClick={() => setIsProductSearchOpen(true)}
-                                style={{ padding: '0 10px', background: '#f8fafc', border: '1px solid #cbd5e0', borderRadius: '6px', cursor: 'pointer' }}
+                                style={{ padding: '0 12px', background: '#f8fafc', border: '1px solid #cbd5e0', borderRadius: '8px', cursor: 'pointer' }}
                             >
                                 🔍
                             </button>
                         </div>
                     </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ fontSize: '12px', fontWeight: 'bold' }}>📦 제품명</label>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>📦 제품명</label>
                         <input
                             type="text"
-                            placeholder="제품명 입력"
                             value={searchFields.productName}
                             onChange={(e) => setSearchFields({ ...searchFields, productName: e.target.value })}
                             onKeyDown={(e) => e.key === 'Enter' && handleSearchClick()}
+                            placeholder="제품명 입력"
+                            style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px' }}
                         />
                     </div>
                     {!isManufacturer && (
                         <>
-                            <div className="form-group" style={{ marginBottom: 0 }}>
-                                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>🏭 제조사</label>
+                            <div>
+                                <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏭 제조사</label>
                                 <input
                                     type="text"
-                                    placeholder="제조사명 입력"
                                     value={searchFields.manufacturerName}
                                     onChange={(e) => setSearchFields({ ...searchFields, manufacturerName: e.target.value })}
                                     onKeyDown={(e) => e.key === 'Enter' && handleSearchClick()}
+                                    placeholder="제조사명 입력"
+                                    style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px' }}
                                 />
                             </div>
-                            <div className="form-group" style={{ marginBottom: 0 }}>
-                                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>🚩 제조사 공개 여부</label>
+                            <div>
+                                <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🚩 제조사 공개 여부</label>
                                 <select 
                                     value={searchFields.disclosureFilter}
                                     onChange={(e) => setSearchFields({ ...searchFields, disclosureFilter: e.target.value })}
-                                    style={{ height: '42px' }}
+                                    style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', height: '42px' }}
                                 >
                                     <option value="ALL">전체</option>
                                     <option value="DISCLOSED">공개됨</option>
@@ -307,28 +412,31 @@ const ProductionAuditPage = ({ user }) => {
                             </div>
                         </>
                     )}
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                        <button className="primary" onClick={handleSearchClick} style={{ flex: 1, padding: '10px' }}>🔍 검색</button>
-                    </div>
                 </div>
             </div>
 
-            <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
-                <AgGridReact
-                    theme="legacy"
-                    rowHeight={50}
-                    ref={gridRef}
-                    rowData={rowData}
-                    columnDefs={colDefs}
-                    onRowDoubleClicked={handleRowClick}
-                    animateRows={true}
-                    overlayNoRowsTemplate={
-                        viewMode === 'pending' ? '생산감리 미진행 품목이 없습니다.' : 
-                        viewMode === 'review' ? 
-                            (isManufacturer ? '반려된 내역이 없습니다.' : '검토가 필요한 감리 내역이 없습니다.') : 
-                        '조회된 감리 내역이 없습니다.'
-                    }
-                />
+            {/* 데이터 카드 */}
+            <div className="card" style={{ padding: '24px', borderRadius: '16px', flex: 1, display: 'flex', flexDirection: 'column', background: 'white', border: '1px solid #e2e8f0' }}>
+                <div style={{ marginBottom: '15px', fontWeight: '800', fontSize: '14px', color: '#64748b' }}>
+                    조회 결과: <span style={{ color: '#2563eb' }}>{rowData.length}</span> 건
+                </div>
+                <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
+                    <AgGridReact
+                        theme="legacy"
+                        rowHeight={50}
+                        ref={gridRef}
+                        rowData={rowData}
+                        columnDefs={colDefs}
+                        onRowDoubleClicked={handleRowClick}
+                        animateRows={true}
+                        overlayNoRowsTemplate={
+                            viewMode === 'pending' ? '생산감리 미진행 품목이 없습니다.' : 
+                            viewMode === 'review' ? 
+                                (isManufacturer ? '반려된 내역이 없습니다.' : '검토가 필요한 감리 내역이 없습니다.') : 
+                            '조회된 감리 내역이 없습니다.'
+                        }
+                    />
+                </div>
             </div>
 
             <div style={{ padding: '10px', fontSize: '12px', color: '#718096', borderTop: '1px solid #edf2f7', marginTop: '10px' }}>

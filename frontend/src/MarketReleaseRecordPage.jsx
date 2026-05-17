@@ -39,18 +39,98 @@ const MarketReleaseRecordPage = ({ user }) => {
     }
 
     return (
-        <div className="card" style={{ backgroundColor: '#f4f6f8' }}>
-            {/* Control Bar (hidden on print) */}
-            <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', backgroundColor: '#fff', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-                    <h2 style={{ fontSize: '20px', margin: 0, fontWeight: 'bold' }}>📄 시장출하 적부판정 기록</h2>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#555' }}>적부판정일 기준</label>
-                        <input type="date" value={releaseDate} onChange={e => setReleaseDate(e.target.value)} style={{ padding: '8px 12px', border: '1px solid #ddd', borderRadius: '4px', outline: 'none' }} />
-                        <button onClick={fetchRecords} className="primary" style={{ padding: '8px 24px', whiteSpace: 'nowrap' }}>조회</button>
+        <div style={{ padding: '20px', backgroundColor: '#f1f5f9', minHeight: '100vh' }}>
+            {/* 3단계 표준 헤더 레이아웃 (no-print) */}
+            <div className="no-print page-header-standard" style={{ 
+                marginBottom: '20px', 
+                flexDirection: 'column', 
+                alignItems: 'flex-start', 
+                gap: '12px',
+                padding: '24px',
+                backgroundColor: '#fff',
+                borderRadius: '16px',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                border: '1px solid #f1f5f9'
+            }}>
+                {/* 1단계: 생성 및 연동 (최상단) */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                    <div className="header-title">
+                        <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0, fontSize: '22px', fontWeight: '800', color: '#1e293b' }}>
+                            📄 시장출하 적부판정 기록
+                        </h2>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                            className="primary" 
+                            onClick={handlePrint} 
+                            style={{ 
+                                padding: '10px 24px', 
+                                borderRadius: '10px', 
+                                fontWeight: '800', 
+                                backgroundColor: '#059669',
+                                color: '#fff',
+                                border: 'none',
+                                cursor: 'pointer'
+                            }} 
+                        >
+                            🖨️ 양식 인쇄
+                        </button>
                     </div>
                 </div>
-                <button onClick={handlePrint} className="primary" style={{ padding: '8px 24px', backgroundColor: '#28a745', border: 'none', whiteSpace: 'nowrap' }}>🖨️ 양식 인쇄</button>
+
+                {/* 2단계: 핵심 제어 (중단) */}
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    width: '100%', 
+                    alignItems: 'center', 
+                    padding: '12px 0', 
+                    borderTop: '1px solid #f1f5f9',
+                    borderBottom: '1px solid #f1f5f9'
+                }}>
+                    <div style={{ color: '#64748b', fontSize: '13px' }}>
+                        적부판정일 기준 당일 출하 승인된 제품 목록을 서식에 맞게 출력합니다.
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                            className="outline" 
+                            onClick={() => alert("적부판정 기록 엑셀 다운로드 기능 준비 중입니다.")}
+                            style={{ fontSize: '14px', padding: '10px 20px', backgroundColor: '#fff', color: '#107c41', borderColor: '#107c41' }}
+                        >
+                            📊 결과 다운로드
+                        </button>
+                        <button 
+                            className="primary" 
+                            onClick={fetchRecords} 
+                            style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px' }}
+                        >
+                            🔍 조회
+                        </button>
+                        <button 
+                            className="outline" 
+                            onClick={() => setReleaseDate(new Date().toISOString().split('T')[0])} 
+                            style={{ padding: '10px 16px', fontSize: '14px' }}
+                        >
+                            ♻️ 초기화
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* 검색 필터 그리드 (no-print) */}
+            <div className="no-print card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>📅 적부판정일 기준</label>
+                        <input
+                            type="date"
+                            value={releaseDate}
+                            onChange={e => setReleaseDate(e.target.value)}
+                            style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', fontWeight: '600' }}
+                        />
+                    </div>
+                </div>
             </div>
 
             {/* Printable Form */}

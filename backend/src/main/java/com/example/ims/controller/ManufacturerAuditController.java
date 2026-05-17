@@ -25,8 +25,10 @@ public class ManufacturerAuditController {
     public ResponseEntity<List<ManufacturerAudit>> searchAudits(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
-            @RequestParam(required = false) String manufacturerName) {
-        return ResponseEntity.ok(auditService.searchAudits(startDate, endDate, manufacturerName));
+            @RequestParam(required = false) String manufacturerName,
+            @RequestParam(required = false) String manufacturerCode,
+            @RequestParam(required = false) String grade) {
+        return ResponseEntity.ok(auditService.searchAudits(startDate, endDate, manufacturerName, manufacturerCode, grade));
     }
 
     @PostMapping
@@ -125,11 +127,13 @@ public class ManufacturerAuditController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(required = false) String manufacturerName,
+            @RequestParam(required = false) String manufacturerCode,
+            @RequestParam(required = false) String grade,
             Authentication authentication) {
         try {
             String username = authentication != null ? authentication.getName() : "anonymous";
             log.info("[EXPORT] Generating Bulk Audit Excel for user: {}", username);
-            byte[] excel = auditService.exportAuditsExcel(startDate, endDate, manufacturerName, username);
+            byte[] excel = auditService.exportAuditsExcel(startDate, endDate, manufacturerName, manufacturerCode, grade, username);
             return ResponseEntity.ok()
                     .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=Manufacturer_Audits_" + LocalDate.now() + ".xlsx")
                     .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))

@@ -32,7 +32,7 @@ const LogManagementPage = ({ user }) => {
     const [filters, setFilters] = useState(() => {
         const today = new Date();
         const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(today.getDate() - 7);
+        sevenDaysAgo.setFullYear(today.getFullYear() - 1); // 최근 1년으로 확장
         
         const formatDate = (date) => date.toISOString().split('T')[0];
         
@@ -307,56 +307,122 @@ const LogManagementPage = ({ user }) => {
     };
 
     return (
-        <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
-                <div>
-                    <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#1a1a1a', marginBottom: '8px' }}>📜 시스템 변경 및 감사 이력 (Global Audit Log)</h2>
-                    <p style={{ fontSize: '14px', color: '#666', margin: 0 }}>시스템 내 제품, 제조사, 브랜드의 모든 변경 사항(생성, 수정, 삭제)을 추적합니다. (해당 행을 더블 클릭하면 전/후 상세 데이터를 확인할 수 있습니다.)</p>
+        <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: '#f1f5f9' }}>
+            
+            {/* 3단계 표준 헤더 레이아웃 */}
+            <div className="page-header-standard" style={{ 
+                marginBottom: '20px', 
+                flexDirection: 'column', 
+                alignItems: 'flex-start', 
+                gap: '12px',
+                padding: '24px',
+                backgroundColor: '#fff',
+                borderRadius: '16px',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                border: '1px solid #f1f5f9'
+            }}>
+                {/* 1단계: 생성 및 연동 (최상단) */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                    <div className="header-title">
+                        <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0, fontSize: '22px', fontWeight: '800', color: '#1e293b' }}>
+                            📜 시스템 변경 및 감사 이력 (Global Audit Log)
+                        </h2>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                            onClick={fetchLogs} 
+                            className="secondary" 
+                            style={{ padding: '8px 16px', fontSize: '13px', fontWeight: 'bold' }}
+                        >
+                            🔄 로그 새로고침
+                        </button>
+                    </div>
                 </div>
-                <button onClick={fetchLogs} className="secondary" style={{ padding: '10px 24px', fontWeight: '600' }}>🔄 로그 새로고침</button>
+
+                {/* 2단계: 핵심 제어 (중단) */}
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    width: '100%', 
+                    alignItems: 'center', 
+                    padding: '12px 0', 
+                    borderTop: '1px solid #f1f5f9',
+                    borderBottom: '1px solid #f1f5f9'
+                }}>
+                    <div style={{ color: '#64748b', fontSize: '13px' }}>
+                        시스템 내 모든 변경 사항을 추적합니다. (더블 클릭 시 상세 데이터 확인)
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                            className="outline" 
+                            onClick={() => alert("로그 내역 엑셀 다운로드 기능 준비 중입니다.")}
+                            style={{ fontSize: '14px', padding: '10px 20px', backgroundColor: '#fff', color: '#107c41', borderColor: '#107c41' }}
+                        >
+                            📊 결과 다운로드
+                        </button>
+                        <button 
+                            className="primary" 
+                            onClick={fetchLogs} 
+                            style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px' }}
+                        >
+                            🔍 조회
+                        </button>
+                        <button 
+                            className="outline" 
+                            onClick={() => {
+                                const today = new Date();
+                                const oneYearAgo = new Date();
+                                oneYearAgo.setFullYear(today.getFullYear() - 1);
+                                const formatDate = (date) => date.toISOString().split('T')[0];
+                                setFilters({ startDate: formatDate(oneYearAgo), endDate: formatDate(today), entityType: '', entityId: '' });
+                            }} 
+                            style={{ padding: '10px 16px', fontSize: '14px' }}
+                        >
+                            ♻️ 초기화
+                        </button>
+                    </div>
+                </div>
             </div>
 
-            {/* [추가] 고급 필터 바 */}
-            <div className="responsive-filter-grid" style={{ backgroundColor: '#f8f9fa', padding: '15px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #e9ecef' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 'bold' }}>📅 기간:</span>
-                    <input type="date" value={filters.startDate} onChange={e => setFilters({...filters, startDate: e.target.value})} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ddd' }} />
-                    <span>~</span>
-                    <input type="date" value={filters.endDate} onChange={e => setFilters({...filters, endDate: e.target.value})} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ddd' }} />
-                </div>
+            {/* 검색 필터 그리드 */}
+            <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
+                    
+                    {/* 1. 기간 (날짜) - 넓게 배치 */}
+                    <div style={{ gridColumn: 'span 2', minWidth: '400px' }}>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '6px' }}>🗓️ 변경 기간</label>
+                        <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+                            <input type="date" value={filters.startDate} onChange={e => setFilters({...filters, startDate: e.target.value})} style={{ flex: 1, padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
+                            <span style={{ color: '#94a3b8' }}>~</span>
+                            <input type="date" value={filters.endDate} onChange={e => setFilters({...filters, endDate: e.target.value})} style={{ flex: 1, padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
+                        </div>
+                    </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 'bold' }}>📂 섹터(유형):</span>
-                    <select value={filters.entityType} onChange={e => setFilters({...filters, entityType: e.target.value})} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ddd' }}>
-                        <option value="">전체</option>
-                        <option value="PRODUCT">제품 관리</option>
-                        <option value="CLAIM">클레임 관리</option>
-                        <option value="INBOUND">입고 품질</option>
-                        <option value="MANUFACTURER">제조사 관리</option>
-                        <option value="BRAND">브랜드 관리</option>
-                        <option value="ACCESS">시스템 접속</option>
-                        <option value="VIEW">페이지 열람</option>
-                    </select>
-                </div>
+                    {/* 2. 섹터/유형 */}
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>📂 변경 유형</label>
+                        <select value={filters.entityType} onChange={e => setFilters({...filters, entityType: e.target.value})} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', backgroundColor: '#fff', height: '38px' }}>
+                            <option value="">전체 유형</option>
+                            <option value="PRODUCT">제품 관리</option>
+                            <option value="CLAIM">클레임 관리</option>
+                            <option value="INBOUND">입고 품질</option>
+                            <option value="MANUFACTURER">제조사 관리</option>
+                            <option value="BRAND">브랜드 관리</option>
+                            <option value="ACCESS">시스템 접속</option>
+                            <option value="VIEW">페이지 열람</option>
+                        </select>
+                    </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 'bold' }}>🔍 대상 ID/검색:</span>
-                    <input placeholder="ID 또는 품목코드" value={filters.entityId} onChange={e => setFilters({...filters, entityId: e.target.value})} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ddd', width: '130px' }} />
-                </div>
-
-                <div style={{ display: 'flex', gap: '10px' }}>
-                    <button onClick={fetchLogs} style={{ backgroundColor: '#2c3e50', color: 'white', padding: '7px 20px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>🔎 검색</button>
-                    <button onClick={() => {
-                        const today = new Date();
-                        const sevenDaysAgo = new Date();
-                        sevenDaysAgo.setDate(today.getDate() - 7);
-                        const formatDate = (date) => date.toISOString().split('T')[0];
-                        setFilters({startDate: formatDate(sevenDaysAgo), endDate: formatDate(today), entityType:'', entityId:''});
-                    }} style={{ backgroundColor: '#fff', color: '#666', padding: '7px 15px', border: '1px solid #ddd', borderRadius: '4px', cursor: 'pointer' }}>초기화</button>
+                    {/* 3. 검색어/ID */}
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🔍 대상 ID/검색</label>
+                        <input placeholder="ID 또는 품목코드" value={filters.entityId} onChange={e => setFilters({...filters, entityId: e.target.value})} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
+                    </div>
                 </div>
             </div>
 
-            <div className="ag-theme-alpine" style={{ height: 'calc(100vh - 280px)', width: '100%' }}>
+            <div className="ag-theme-alpine" style={{ flex: 1, width: '100%', minHeight: 0 }}>
                 <AgGridReact theme="legacy"
                     rowData={rowData}
                     columnDefs={colDefs}

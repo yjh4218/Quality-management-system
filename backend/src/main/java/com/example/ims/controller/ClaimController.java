@@ -96,6 +96,13 @@ public class ClaimController {
         return ResponseEntity.ok(claimService.getDashboardStats(standardizedRole, user.getCompanyName(), startDate, endDate, itemCode, productName, manufacturer));
     }
 
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
+    public ResponseEntity<Void> deleteClaim(@PathVariable Long id, @AuthenticationPrincipal UserDetails userDetails) {
+        claimService.deleteClaim(id, getUser(userDetails));
+        return ResponseEntity.ok().build();
+    }
+
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES', 'MANUFACTURER')")
     public ResponseEntity<Claim> updateClaim(

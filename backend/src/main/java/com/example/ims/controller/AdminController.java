@@ -21,7 +21,7 @@ public class AdminController {
     private final com.example.ims.service.RoleService roleService;
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('MENU_USERS_VIEW')")
+    @PreAuthorize("@perm.can('users', 'VIEW')")
     public ResponseEntity<List<com.example.ims.dto.UserResponseDto>> getAllUsers(
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String companyName,
@@ -45,7 +45,7 @@ public class AdminController {
     }
 
     @PostMapping("/{id}/approve")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('MENU_USERS_EDIT')")
+    @PreAuthorize("@perm.can('users', 'EDIT')")
     @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
     public ResponseEntity<?> approveUser(@PathVariable Long id) {
         log.info("[ADMIN] Approving user ID: {}", id);
@@ -66,7 +66,7 @@ public class AdminController {
     }
 
     @PutMapping("/{id}/role")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('MENU_USERS_EDIT')")
+    @PreAuthorize("@perm.can('users', 'EDIT')")
     public ResponseEntity<?> updateUserRole(@PathVariable Long id, @RequestBody Map<String, String> payload) {
         String newRole = payload.get("role");
         
@@ -87,7 +87,7 @@ public class AdminController {
     }
 
     @PostMapping("/{id}/toggle-status")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('MENU_USERS_EDIT')")
+    @PreAuthorize("@perm.can('users', 'EDIT')")
     @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
     public ResponseEntity<?> toggleUserStatus(@PathVariable Long id) {
         return userRepository.findById(id)

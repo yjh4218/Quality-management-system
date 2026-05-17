@@ -60,6 +60,12 @@ const SignUpModal = ({ isOpen, onClose }) => {
             alert("비밀번호가 일치하지 않습니다.");
             return;
         }
+        
+        const passwordRegex = /^(?=.*[a-zA-Z])(?=.*[0-9])(?=.*[!@#$%^&*()_+={}\[\]:;"'<>,.?/\\|~`]).{8,16}$/;
+        if (!passwordRegex.test(formData.password)) {
+            alert("비밀번호는 영문, 숫자, 특수기호를 포함하여 8~16자리로 입력해주세요.");
+            return;
+        }
         if (!formData.companyName) {
             alert("소속 회사를 선택해주세요.");
             return;
@@ -153,6 +159,9 @@ const SignUpModal = ({ isOpen, onClose }) => {
                                     required
                                     autoComplete="new-password"
                                 />
+                                <p style={{ margin: '5px 0 0 0', fontSize: '11px', color: '#718096', lineHeight: '1.4' }}>
+                                    ✓ 영문, 숫자, 특수기호 포함 8~16자
+                                </p>
                             </div>
                             <div className="form-group">
                                 <label style={{ fontWeight: '700', color: '#4a5568' }}>비밀번호 확인</label>

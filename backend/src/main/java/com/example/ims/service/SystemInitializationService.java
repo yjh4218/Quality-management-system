@@ -44,6 +44,7 @@ public class SystemInitializationService {
         migrateProductImages();
         seedAndRepairDashboardLayouts();
         seedAndRepairPageGuides();
+        repairOtherTablesSchema(); // [추가] 소프트 델리트 및 기타 스키마 보정
 
         // Page guides are now handled entirely by Bulk Migration and use
         // SystemPageGuide entity
@@ -134,10 +135,10 @@ public class SystemInitializationService {
                 + ",\"salesChannels\":" + allActions + ",\"products\":" + allActions + ",\"bomMaster\":" + allActions
                 + ",\"bomCategories\":" + allActions + ",\"packagingTemplates\":" + allActions + ",\"packagingRules\":"
                 + allActions + ",\"quality\":" + allActions + ",\"releaseRecord\":" + allActions + ",\"claims\":"
-                + allActions + ",\"claimDashboard\":" + viewOnly + "}";
+                + allActions + ",\"claimDashboard\":" + viewOnly + ",\"ingredientCompliance\":" + allActions + "}";
         String qualityJson = "{\"dashboard\":" + viewOnly + ",\"products\":" + viewOnly + ",\"quality\":" + allActions
                 + ",\"releaseRecord\":" + allActions + ",\"claims\":" + allActions + ",\"claimDashboard\":" + viewOnly
-                + "}";
+                + ",\"ingredientCompliance\":" + allActions + "}";
         String salesJson = "{\"dashboard\":" + viewOnly + ",\"products\":" + viewOnly + ",\"quality\":" + viewOnly
                 + ",\"claims\":" + viewOnly + ",\"claimDashboard\":" + viewOnly + "}";
         String mfrJson = "{\"dashboard\":" + viewOnly + ",\"quality\":[\"VIEW\",\"EDIT\"],\"claims\":" + viewOnly + "}";
@@ -146,9 +147,9 @@ public class SystemInitializationService {
                 + allActions + ",\"quality\":" + allActions + ",\"releaseRecord\":" + allActions + ",\"claims\":"
                 + allActions + ",\"claimDashboard\":" + viewOnly + "}";
 
-        String adminPerms = "[\"AUDIT_DISCLOSE_MANAGE\",\"PRODUCT_DISCLOSE_MANAGE\",\"PRODUCT_MASTER_MANAGE\",\"DASHBOARD_QUALITY_VIEW\",\"DASHBOARD_SALES_VIEW\",\"SENSITIVE_DATA_VIEW\",\"PRODUCT_PACKAGING_VIEW\"]";
-        String qualityPerms = "[\"AUDIT_DISCLOSE_MANAGE\",\"PRODUCT_DISCLOSE_MANAGE\",\"PRODUCT_MASTER_MANAGE\",\"DASHBOARD_QUALITY_VIEW\",\"SENSITIVE_DATA_VIEW\",\"PRODUCT_PACKAGING_VIEW\"]";
-        String respSalesPerms = "[\"PRODUCT_MASTER_MANAGE\",\"DASHBOARD_SALES_VIEW\",\"PRODUCT_PACKAGING_VIEW\"]";
+        String adminPerms = "[\"AUDIT_DISCLOSE_MANAGE\",\"PRODUCT_DISCLOSE_MANAGE\",\"PRODUCT_MASTER_MANAGE\",\"DASHBOARD_QUALITY_VIEW\",\"DASHBOARD_SALES_VIEW\",\"SENSITIVE_DATA_VIEW\",\"PRODUCT_PACKAGING_VIEW\",\"INGREDIENT_SAFETY_VIEW\"]";
+        String qualityPerms = "[\"AUDIT_DISCLOSE_MANAGE\",\"PRODUCT_DISCLOSE_MANAGE\",\"PRODUCT_MASTER_MANAGE\",\"DASHBOARD_QUALITY_VIEW\",\"SENSITIVE_DATA_VIEW\",\"PRODUCT_PACKAGING_VIEW\",\"INGREDIENT_SAFETY_VIEW\"]";
+        String respSalesPerms = "[\"PRODUCT_MASTER_MANAGE\",\"DASHBOARD_SALES_VIEW\",\"PRODUCT_PACKAGING_VIEW\",\"INGREDIENT_SAFETY_VIEW\"]";
 
         updateOrInsertRole("ROLE_ADMIN", "시스템 관리자", "전체 시스템 관리 권한", adminJson, adminPerms);
         updateOrInsertRole("ROLE_RESPONSIBLE_SALES", "화장품책임판매관리자", "영업 및 사용자 관리 권한", respSalesJson, respSalesPerms);
@@ -312,6 +313,47 @@ public class SystemInitializationService {
             } catch (Exception e) {
                 log.warn(">>>> [SYSTEM INIT] Could not add column '{}' to roles: {}", name, e.getMessage());
             }
+        }
+    }
+
+    private void repairOtherTablesSchema() {
+        log.info(">>>> [SYSTEM INIT] Aligning other tables (Soft Delete & Guides)...");
+        
+        // 1. 공통 소프트 델리트 컬럼 추가 (is_deleted, deleted_at)
+        String[] softDeleteTables = {
+            "products", "wms_inbound", "claims", "production_audit", 
+            "manufacturer_audits", "audit_templates", "audit_template_items"
+        };
+        
+        for (String table : softDeleteTables) {
+            try {
+                jdbcTemplate.execute("ALTER TABLE " + table + " ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE");
+                jdbcTemplate.execute("ALTER TABLE " + table + " ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP");
+                // 기존 데이터 중 NULL인 경우 FALSE로 보정 (SQLRestriction 필터링 누락 방지)
+                jdbcTemplate.update("UPDATE " + table + " SET is_deleted = FALSE WHERE is_deleted IS NULL");
+                
+                // [추가] active/is_active 컬럼 보정 (조회 누락 방지)
+                try {
+                    jdbcTemplate.execute("ALTER TABLE " + table + " ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE");
+                } catch (Exception e) {}
+                try {
+                    jdbcTemplate.execute("ALTER TABLE " + table + " ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE");
+                } catch (Exception e) {}
+                
+                jdbcTemplate.update("UPDATE " + table + " SET active = TRUE WHERE active IS NULL");
+                jdbcTemplate.update("UPDATE " + table + " SET is_active = TRUE WHERE is_active IS NULL");
+            } catch (Exception e) {
+                log.warn(">>>> [SYSTEM INIT] Could not repair soft delete/active for table '{}': {}", table, e.getMessage());
+            }
+        }
+        
+        // 2. system_page_guides 컬럼 추가
+        try {
+            jdbcTemplate.execute("ALTER TABLE system_page_guides ADD COLUMN IF NOT EXISTS content TEXT");
+            jdbcTemplate.execute("ALTER TABLE system_page_guides ADD COLUMN IF NOT EXISTS updated_by VARCHAR(255)");
+            jdbcTemplate.execute("ALTER TABLE system_page_guides ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP");
+        } catch (Exception e) {
+            log.warn(">>>> [SYSTEM INIT] Could not repair system_page_guides table: {}", e.getMessage());
         }
     }
 

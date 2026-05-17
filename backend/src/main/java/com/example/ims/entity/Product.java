@@ -19,9 +19,10 @@ import java.time.LocalDateTime;
         @Index(name = "idx_products_dimensions_status", columnList = "status"),
         @Index(name = "idx_product_name", columnList = "productName")
 })
+@org.hibernate.annotations.SQLRestriction("(is_deleted = false OR is_deleted IS NULL)")
 @Getter
 @Setter
-@ToString(exclude = {"brand", "manufacturerInfo", "productIngredients", "channels", "components"})
+@ToString(exclude = { "brand", "manufacturerInfo", "productIngredients", "channels", "components" })
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -107,7 +108,7 @@ public class Product {
     private String manufacturer; // Linked to User.companyName
 
     // ----- Specifications (제품 사양) -----
-    
+
     /**
      * Capacity string, usually in mL or fl.oz.
      * 용량 (텍스트, 예: 30mL 등)
@@ -136,11 +137,11 @@ public class Product {
     @Embedded
     @Builder.Default
     private InboxInfo inboxInfo = new InboxInfo();
-    
+
     @Embedded
     @Builder.Default
     private OutboxInfo outboxInfo = new OutboxInfo();
-    
+
     @Embedded
     @Builder.Default
     private PalletInfo palletInfo = new PalletInfo();
@@ -176,7 +177,7 @@ public class Product {
     private java.util.List<ProductIngredient> productIngredients = new java.util.ArrayList<>();
 
     // ----- Component & History Info (구성품 및 식별 정보) -----
-    
+
     /**
      * If the item is part of a set, this references the parent SKU.
      * 기획세트 등 모품목에 종속된 경우 모품목 코드를 기록
@@ -209,11 +210,7 @@ public class Product {
      * 유통 채널 목록 (올리브영, 자사몰 등)
      */
     @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-        name = "product_sales_channels",
-        joinColumns = @JoinColumn(name = "product_id"),
-        inverseJoinColumns = @JoinColumn(name = "channel_id")
-    )
+    @JoinTable(name = "product_sales_channels", joinColumns = @JoinColumn(name = "product_id"), inverseJoinColumns = @JoinColumn(name = "channel_id"))
     @Builder.Default
     private java.util.List<SalesChannel> channels = new java.util.ArrayList<>();
 
@@ -223,6 +220,20 @@ public class Product {
      */
     @Builder.Default
     private boolean active = true;
+
+    @Builder.Default
+    @Column(name = "is_deleted", columnDefinition = "boolean default false")
+    private Boolean deleted = false;
+
+    public boolean isDeleted() {
+        return deleted != null && deleted;
+    }
+
+    public void setIsDeleted(boolean val) {
+        this.deleted = val;
+    }
+
+    private LocalDateTime deletedAt;
 
     @Builder.Default
     private boolean photoAuditDisclosed = false;

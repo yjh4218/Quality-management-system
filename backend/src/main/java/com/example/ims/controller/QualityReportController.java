@@ -123,6 +123,15 @@ public class QualityReportController {
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
+    @DeleteMapping("/inbound/{id}")
+    public ResponseEntity<Void> deleteInbound(@PathVariable Long id, @AuthenticationPrincipal UserDetails userDetails) {
+        User user = userRepository.findByUsername(userDetails.getUsername())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        qualityReportService.deleteInbound(id, user);
+        return ResponseEntity.ok().build();
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
     @PostMapping("/inbound/{id}/complete")
     public ResponseEntity<Void> completeInspection(@PathVariable Long id, @AuthenticationPrincipal UserDetails userDetails) {
         checkQualityAuthority(userDetails);
@@ -162,6 +171,28 @@ public class QualityReportController {
     public ResponseEntity<String> triggerWmsFetch() {
         wmsService.fetchAndSaveInboundData();
         return ResponseEntity.ok("WMS sync triggered (Simulated)");
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
+    @PostMapping("/import")
+    public ResponseEntity<String> importExcel(@RequestParam("file") MultipartFile file) {
+        log.info(">>>> [IMPORT] Quality Excel Upload Request - File: {}", file.getOriginalFilename());
+        try {
+            int count = qualityReportService.importInboundExcel(file);
+            return ResponseEntity.ok(count + "건의 데이터가 성공적으로 업로드되었습니다.");
+        } catch (Exception e) {
+            log.error(">>>> [IMPORT] [ERROR] Excel import failed: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().body("엑셀 업로드 중 오류가 발생했습니다: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/import-template")
+    public ResponseEntity<byte[]> downloadImportTemplate() throws java.io.IOException {
+        byte[] template = qualityReportService.getImportTemplate();
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=InboundImport_Template.xlsx")
+                .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(template);
     }
 
     private void checkQualityAuthority(UserDetails userDetails) {

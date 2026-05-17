@@ -212,6 +212,7 @@ public class ProductionAuditService {
         
         String oldJson = captureJson(audit);
         audit.setDeleted(true);
+        audit.setDeletedAt(java.time.LocalDateTime.now());
         repository.save(audit);
 
         String modifierName = user.getName() + " (" + (user.getCompanyName() != null ? user.getCompanyName() : "시스템") + ")";

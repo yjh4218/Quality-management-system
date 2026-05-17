@@ -57,86 +57,144 @@ const BrandManagementPage = ({ user }) => {
     };
 
     return (
-        <div className="page-container">
-            {/* 표준화된 헤더 */}
-            <div className="page-header-standard">
-                <div className="header-title">
-                    <h2>🏷️ 브랜드 마스터 관리</h2>
-                    <p>시스템 내 제품 분류의 최상위 카테고리인 브랜드 정보를 관리합니다.</p>
-                </div>
-            </div>
-
-            {/* 브랜드 등록 폼 (표준 검색바 스타일 응용) */}
-            <div className="search-bar-standard" style={{ marginBottom: '40px' }}>
-                <form onSubmit={handleAdd} style={{ display: 'flex', gap: '20px', alignItems: 'flex-end', width: '100%' }}>
-                    <div style={{ flex: 1 }}>
-                        <label style={{ display: 'block', fontSize: '14px', fontWeight: '800', color: '#2d3748', marginBottom: '10px' }}>✨ 신규 브랜드 등록</label>
-                        <input
-                            type="text"
-                            value={newName}
-                            onChange={e => setNewName(e.target.value)}
-                            placeholder={canEdit ? "등록할 브랜드 명칭을 입력하세요 (예: 리쥬란)" : "브랜드 등록 권한이 없습니다."}
-                            style={{ padding: '14px 20px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '15px', fontWeight: '600' }}
-                            disabled={!canEdit}
-                        />
+        <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#f1f5f9' }}>
+            
+            {/* 3단계 표준 헤더 레이아웃 */}
+            <div className="page-header-standard" style={{ 
+                marginBottom: '20px', 
+                flexDirection: 'column', 
+                alignItems: 'flex-start', 
+                gap: '12px',
+                padding: '24px',
+                backgroundColor: '#fff',
+                borderRadius: '16px',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                border: '1px solid #f1f5f9'
+            }}>
+                {/* 1단계: 생성 및 연동 (최상단) */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                    <div className="header-title">
+                        <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0, fontSize: '22px', fontWeight: '800', color: '#1e293b' }}>
+                            🏷️ 브랜드 마스터 관리
+                        </h2>
                     </div>
-                    <button
-                        type="submit"
-                        className="primary"
-                        style={{ padding: '0 35px', borderRadius: '12px', fontWeight: '800', height: '52px', fontSize: '15px', boxShadow: '0 4px 12px rgba(0, 51, 102, 0.2)', opacity: canEdit ? 1 : 0.5 }}
-                        disabled={!canEdit}
-                    >
-                        브랜드 추가
-                    </button>
-                </form>
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <form onSubmit={handleAdd} style={{ display: 'flex', gap: '8px' }}>
+                            <input
+                                type="text"
+                                value={newName}
+                                onChange={e => setNewName(e.target.value)}
+                                placeholder="신규 브랜드명..."
+                                style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '13px', width: '200px' }}
+                                disabled={!canEdit}
+                            />
+                            <button 
+                                type="submit"
+                                className="primary" 
+                                style={{ 
+                                    padding: '8px 16px', 
+                                    borderRadius: '8px', 
+                                    fontWeight: '800', 
+                                    backgroundColor: '#2563eb',
+                                    color: '#fff',
+                                    border: 'none',
+                                    cursor: canEdit ? 'pointer' : 'not-allowed',
+                                    opacity: canEdit ? 1 : 0.5
+                                }} 
+                                disabled={!canEdit}
+                            >
+                                ➕ 브랜드 등록
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                {/* 2단계: 핵심 제어 (중단) */}
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    width: '100%', 
+                    alignItems: 'center', 
+                    padding: '12px 0', 
+                    borderTop: '1px solid #f1f5f9',
+                    borderBottom: '1px solid #f1f5f9'
+                }}>
+                    <div style={{ color: '#64748b', fontSize: '13px' }}>
+                        시스템 내 제품 분류의 최상위 카테고리인 브랜드 정보를 관리합니다.
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                            className="outline" 
+                            onClick={() => alert("브랜드 목록 엑셀 다운로드 기능 준비 중입니다.")}
+                            style={{ fontSize: '14px', padding: '10px 20px', backgroundColor: '#fff', color: '#107c41', borderColor: '#107c41' }}
+                        >
+                            📊 결과 다운로드
+                        </button>
+                        <button 
+                            className="primary" 
+                            onClick={fetchBrands} 
+                            style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px' }}
+                        >
+                            🔍 조회
+                        </button>
+                        <button 
+                            className="outline" 
+                            onClick={() => setNewName('')} 
+                            style={{ padding: '10px 16px', fontSize: '14px' }}
+                        >
+                            ♻️ 초기화
+                        </button>
+                    </div>
+                </div>
             </div>
 
             {/* 브랜드 목록 카드 */}
-            <div className="card" style={{ padding: '0', borderRadius: '24px', overflow: 'hidden', border: '1px solid #edf2f7', background: '#ffffff', boxShadow: '0 10px 30px rgba(0,0,0,0.04)' }}>
-                <div style={{ padding: '25px 30px', background: '#f8fafc', borderBottom: '1px solid #edf2f7', fontWeight: '900', fontSize: '15px', color: '#475569', display: 'flex', justifyContent: 'space-between' }}>
+            <div className="card" style={{ padding: '24px', borderRadius: '16px', flex: 1, display: 'flex', flexDirection: 'column', background: 'white', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                <div style={{ marginBottom: '15px', fontWeight: '800', fontSize: '14px', color: '#64748b', display: 'flex', justifyContent: 'space-between' }}>
                     <span>현황 리스트</span>
-                    <span style={{ color: 'var(--primary-color)' }}>총 {brands.length}개</span>
+                    <span style={{ color: '#2563eb' }}>총 {brands.length}개 건</span>
                 </div>
-                <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
+                <div style={{ flex: 1, overflowY: 'auto' }}>
                     {brands.map((b, index) => (
                         <div key={b.id} style={{
-                            padding: '20px 30px',
+                            padding: '16px',
                             display: 'flex',
                             justifyContent: 'space-between',
                             alignItems: 'center',
-                            borderBottom: index === brands.length - 1 ? 'none' : '1px solid #f1f5f9',
+                            borderBottom: '1px solid #f1f5f9',
                             transition: 'background 0.2s'
                         }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                                <span style={{ color: '#cbd5e0', fontSize: '13px', fontWeight: '800', width: '30px' }}>{String(index + 1).padStart(2, '0')}</span>
-                                <div style={{ width: '40px', height: '40px', background: '#ebf4ff', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>🔖</div>
-                                <span style={{ fontWeight: '800', color: '#1a202c', fontSize: '17px' }}>{b.name}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                <span style={{ color: '#94a3b8', fontSize: '12px', fontWeight: '800', width: '24px' }}>{String(index + 1).padStart(2, '0')}</span>
+                                <div style={{ width: '36px', height: '36px', background: '#eff6ff', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>🔖</div>
+                                <span style={{ fontWeight: '800', color: '#1e293b', fontSize: '15px' }}>{b.name}</span>
                             </div>
                             <button
                                 onClick={() => handleDelete(b.id)}
                                 className="secondary"
                                 style={{
-                                    padding: '8px 20px',
-                                    fontSize: '13px',
-                                    borderRadius: '10px',
-                                    color: '#e53e3e',
-                                    background: '#fff5f5',
-                                    border: 'none',
+                                    padding: '6px 16px',
+                                    fontSize: '12px',
+                                    borderRadius: '8px',
+                                    color: '#ef4444',
+                                    background: '#fef2f2',
+                                    border: '1px solid #fee2e2',
                                     fontWeight: '800',
                                     opacity: canDelete ? 1 : 0.5,
                                     cursor: canDelete ? 'pointer' : 'not-allowed'
                                 }}
                                 disabled={!canDelete}
                             >
-                                삭제하기
+                                삭제
                             </button>
                         </div>
                     ))}
                     {brands.length === 0 && (
-                        <div style={{ padding: '100px 20px', textAlign: 'center', color: '#cbd5e0' }}>
-                            <div style={{ fontSize: '64px', marginBottom: '20px' }}>🏷️</div>
-                            <h3 style={{ justifyContent: 'center' }}>등록된 브랜드가 없습니다.</h3>
-                            <p style={{ marginTop: '10px' }}>상단의 폼을 통해 새로운 브랜드를 시스템에 등록해 주세요.</p>
+                        <div style={{ padding: '100px 20px', textAlign: 'center', color: '#94a3b8' }}>
+                            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏷️</div>
+                            <h3 style={{ fontWeight: '800' }}>등록된 브랜드가 없습니다.</h3>
+                            <p style={{ fontSize: '13px', marginTop: '8px' }}>상단의 폼을 통해 새로운 브랜드를 시스템에 등록해 주세요.</p>
                         </div>
                     )}
                 </div>

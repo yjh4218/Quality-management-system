@@ -133,46 +133,112 @@ const SalesChannelManagement = ({ user }) => {
     ], [canEdit, canDelete]);
 
     return (
-        <div className="page-container">
-            <div className="page-header-standard">
-                <div className="header-title">
-                    <h2>🌐 유통 채널 관리</h2>
-                    <p>제품 마스터 및 포장 규칙에서 사용할 글로벌 유통 채널을 통합 관리합니다. (항목 더블클릭 시 상세 정보 확인)</p>
+        <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#f1f5f9' }}>
+            
+            {/* 3단계 표준 헤더 레이아웃 */}
+            <div className="page-header-standard" style={{ 
+                marginBottom: '20px', 
+                flexDirection: 'column', 
+                alignItems: 'flex-start', 
+                gap: '12px',
+                padding: '24px',
+                backgroundColor: '#fff',
+                borderRadius: '16px',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                border: '1px solid #f1f5f9'
+            }}>
+                {/* 1단계: 생성 및 연동 (최상단) */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                    <div className="header-title">
+                        <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0, fontSize: '22px', fontWeight: '800', color: '#1e293b' }}>
+                            🌐 유통 채널 관리
+                        </h2>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                            className="primary" 
+                            onClick={() => handleOpenDrawer()} 
+                            style={{ 
+                                padding: '10px 24px', 
+                                borderRadius: '10px', 
+                                fontWeight: '800', 
+                                backgroundColor: '#2563eb',
+                                color: '#fff',
+                                border: 'none',
+                                cursor: canEdit ? 'pointer' : 'not-allowed',
+                                opacity: canEdit ? 1 : 0.5
+                            }} 
+                            disabled={!canEdit}
+                        >
+                            ➕ 신규 채널 등록
+                        </button>
+                    </div>
                 </div>
-                <button 
-                    className="primary" 
-                    onClick={() => handleOpenDrawer()} 
-                    style={{ 
-                        padding: '12px 28px', 
-                        borderRadius: '12px', 
-                        boxShadow: '0 4px 12px rgba(0, 51, 102, 0.2)',
-                        opacity: canEdit ? 1 : 0.5 
-                    }} 
-                    disabled={!canEdit}
-                >
-                    ➕ 신규 채널 등록
-                </button>
+
+                {/* 2단계: 핵심 제어 (중단) */}
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    width: '100%', 
+                    alignItems: 'center', 
+                    padding: '12px 0', 
+                    borderTop: '1px solid #f1f5f9',
+                    borderBottom: '1px solid #f1f5f9'
+                }}>
+                    <div style={{ color: '#64748b', fontSize: '13px' }}>
+                        제품 마스터 및 포장 규칙에서 사용할 글로벌 유통 채널을 통합 관리합니다.
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                            className="outline" 
+                            onClick={() => alert("채널 목록 엑셀 다운로드 기능 준비 중입니다.")}
+                            style={{ fontSize: '14px', padding: '10px 20px', backgroundColor: '#fff', color: '#107c41', borderColor: '#107c41' }}
+                        >
+                            📊 결과 다운로드
+                        </button>
+                        <button 
+                            className="primary" 
+                            onClick={fetchChannels} 
+                            style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px' }}
+                        >
+                            🔍 조회
+                        </button>
+                        <button 
+                            className="outline" 
+                            onClick={() => setQuickFilterText('')} 
+                            style={{ padding: '10px 16px', fontSize: '14px' }}
+                        >
+                            ♻️ 초기화
+                        </button>
+                    </div>
+                </div>
             </div>
 
-            <div className="card" style={{ padding: '25px', borderRadius: '24px', flex: 1, display: 'flex', flexDirection: 'column', minHeight: '600px' }}>
-                <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontWeight: '800', fontSize: '15px', color: '#475569' }}>
-                        채널 목록 <span style={{ color: 'var(--primary-color)', marginLeft: '8px' }}>{channels.length}</span>
-                    </div>
-                    <div className="search-bar-standard" style={{ padding: '0', border: 'none', boxShadow: 'none', margin: 0, width: '350px' }}>
-                        <div style={{ display: 'flex', width: '100%', position: 'relative' }}>
+            {/* 검색 필터 그리드 */}
+            <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🔍 채널 검색</label>
+                        <div style={{ position: 'relative' }}>
                             <input
                                 type="text"
                                 placeholder="채널명으로 빠른 검색..."
                                 value={quickFilterText}
                                 onChange={(e) => setQuickFilterText(e.target.value)}
-                                style={{ padding: '12px 45px 12px 20px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px', width: '100%', fontWeight: '600' }}
+                                style={{ width: '100%', padding: '10px 40px 10px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', fontWeight: '600' }}
                             />
-                            <span style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', fontSize: '18px' }}>🔍</span>
+                            <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>🔍</span>
                         </div>
                     </div>
                 </div>
+            </div>
 
+            {/* 데이터 카드 */}
+            <div className="card" style={{ padding: '24px', borderRadius: '16px', flex: 1, display: 'flex', flexDirection: 'column', background: 'white', border: '1px solid #e2e8f0' }}>
+                <div style={{ marginBottom: '15px', fontWeight: '800', fontSize: '14px', color: '#64748b' }}>
+                    등록된 채널 수: <span style={{ color: '#2563eb' }}>{channels.length}</span> 건
+                </div>
                 <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
                     <AgGridReact
                         theme="legacy"

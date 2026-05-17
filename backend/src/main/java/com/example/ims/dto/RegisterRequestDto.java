@@ -18,16 +18,25 @@ public record RegisterRequestDto(
     String username,
 
     @NotBlank(message = "비밀번호는 필수입니다.")
-    @Size(min = 8, max = 50, message = "비밀번호는 8자 이상이어야 합니다.")
+    @jakarta.validation.constraints.Pattern(
+        regexp = "^(?=.*[a-zA-Z])(?=.*[0-9])(?=.*[!@#$%^&*()_+={}\\[\\]:;\"'<>,.?/\\\\|~`]).{8,16}$",
+        message = "비밀번호는 영문, 숫자, 특수기호를 포함하여 8~16자리로 입력해주세요."
+    )
     String password,
 
     @NotBlank(message = "이름은 필수입니다.")
     String name,
 
+    @NotBlank(message = "소속 회사는 필수입니다.")
     String companyName,
+
+    @NotBlank(message = "부서는 필수입니다.")
     String department,
+
+    @NotBlank(message = "연락처는 필수입니다.")
     String phone,
 
+    @NotBlank(message = "이메일은 필수입니다.")
     @Email(message = "유효한 이메일 형식이 아닙니다.")
     String email
 ) {}

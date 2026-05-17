@@ -21,6 +21,7 @@ public class SystemStartupRunner implements CommandLineRunner {
 
     private final JdbcTemplate jdbcTemplate;
     private final com.example.ims.service.SystemInitializationService initializationService;
+    private final com.example.ims.service.RegulatoryCrawlerService regulatoryCrawlerService;
 
     @org.springframework.beans.factory.annotation.Value("${ADMIN_INITIAL_PASSWORD:}")
     private String adminInitialPassword;
@@ -48,6 +49,10 @@ public class SystemStartupRunner implements CommandLineRunner {
                 }
 
                 initializationService.seedAndRepairData(adminInitialPassword);
+                
+                log.info(">>>> [SYSTEM STARTUP] Starting Regulatory Data Seeding...");
+                regulatoryCrawlerService.init();
+                
                 log.info(">>>> [SYSTEM STARTUP] [SUCCESS] Background initialization complete.");
             } catch (Exception e) {
                 log.error(">>>> [SYSTEM STARTUP] [CRITICAL] Background Flow error: {}", e.getMessage(), e);

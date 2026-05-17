@@ -777,6 +777,20 @@ const ProductDrawer = ({ product, onClose, user }) => {
         }
     };
 
+    const handleProductDelete = async () => {
+        if (!product || !product.id) return;
+        
+        if (window.confirm("정말 이 제품을 삭제하시겠습니까? 삭제된 데이터는 휴지통에서 확인 가능합니다.")) {
+            try {
+                await api.deleteProduct(product.id);
+                alert("제품이 삭제되었습니다.");
+                onClose(true);
+            } catch (error) {
+                alert("삭제 중 오류가 발생했습니다.");
+            }
+        }
+    };
+
     const getFileUrl = (path) => path?.startsWith('http') ? path : `http://localhost:8080${path}`;
 
     const getCleanFileName = (path) => {
@@ -1855,6 +1869,16 @@ const ProductDrawer = ({ product, onClose, user }) => {
                         <span>🔄 마지막 수정: {formData.updatedAt ? formData.updatedAt.substring(0, 16).replace('T', ' ') : '-'}</span>
                     </div>
                     <div style={{ display: 'flex', gap: '10px' }}>
+                        {product && canDeleteProduct('products') && (
+                            <button 
+                                type="button" 
+                                className="outline" 
+                                onClick={handleProductDelete} 
+                                style={{ color: '#c53030', borderColor: '#feb2b2', marginRight: 'auto' }}
+                            >
+                                🗑️ 삭제
+                            </button>
+                        )}
                         <button type="button" className="secondary" onClick={onClose} style={{ minWidth: '80px' }}>닫기</button>
                         <button
                             type="submit"

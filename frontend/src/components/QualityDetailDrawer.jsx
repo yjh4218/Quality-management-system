@@ -635,8 +635,40 @@ const QualityDetailDrawer = ({
                         borderTop: '1px solid #eef2f6',
                         zIndex: 10,
                         position: 'sticky',
-                        bottom: 0
+                        bottom: 0,
+                        display: 'flex',
+                        gap: 2
                     }}>
+                        {(isAdmin || isInternalQuality) && (
+                            <Button 
+                                variant="outlined" 
+                                color="error"
+                                onClick={async () => {
+                                    if (window.confirm("정말 이 입고 내역을 삭제하시겠습니까? 삭제된 데이터는 휴지통에서 확인 가능합니다.")) {
+                                        try {
+                                            const { deleteInbound } = await import('../api');
+                                            await deleteInbound(selectedInbound.id);
+                                            import('react-toastify').then(({ toast }) => toast.success("삭제되었습니다."));
+                                            onClose();
+                                            // Trigger refresh in parent
+                                            if (window.__QMS_REFRESH_QUALITY__) window.__QMS_REFRESH_QUALITY__();
+                                        } catch (e) {
+                                            import('react-toastify').then(({ toast }) => toast.error("삭제 실패"));
+                                        }
+                                    }
+                                }}
+                                sx={{ 
+                                    py: 1.8, 
+                                    borderRadius: '14px', 
+                                    fontWeight: 800,
+                                    fontSize: '16px',
+                                    textTransform: 'none',
+                                    minWidth: '150px'
+                                }}
+                            >
+                                🗑️ 삭제
+                            </Button>
+                        )}
                         <Button 
                             variant="contained" 
                             fullWidth 

@@ -22,7 +22,7 @@ public class AccessLogController {
     private final UserRepository userRepository;
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('accessLogs', 'VIEW')")
     public ResponseEntity<List<AccessLog>> getAllLogs() {
         return ResponseEntity.ok(accessLogService.getAllLogs());
     }

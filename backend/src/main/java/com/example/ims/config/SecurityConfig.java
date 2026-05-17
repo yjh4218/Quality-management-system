@@ -41,18 +41,19 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // [SECURITY PATCH] 관리자 전용 시스템 경로 권한 강화
                         .requestMatchers("/api/admin/system/health").permitAll() 
-                        .requestMatchers("/api/admin/system/**").hasRole("ADMIN")
-                        
                         .requestMatchers("/", "/api/auth/login", "/api/auth/logout").permitAll()
                         .requestMatchers("/api/auth/register", "/api/auth/check-username", "/api/auth/find-password", "/api/auth/verify-email").permitAll()
                         .requestMatchers("/api/auth/unlock/**", "/api/auth/reset-password/**").hasRole("ADMIN")
                         
-                        // 로그 및 보안 관련 경로 관리자 보호
+                        // 로그 및 보안 관련 경로 관리자 보호 (Controller에서 @PreAuthorize로 정밀 제어)
                         .requestMatchers("/api/logs/access/page-move").authenticated()
-                        .requestMatchers("/api/logs/access/**").hasRole("ADMIN")
+                        .requestMatchers("/api/logs/access/**").authenticated()
                         .requestMatchers("/api/logs/**").authenticated()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/bug-reports").authenticated()
-                        .requestMatchers("/api/bug-reports/**").hasAnyRole("ADMIN", "QUALITY_TEAM")
+                        .requestMatchers("/api/bug-reports/**").authenticated()
+                        
+                        .requestMatchers("/api/admin/system/**").authenticated()
+                        .requestMatchers("/api/admin/trash/**").authenticated()
                         
                         .requestMatchers("/api/audit-templates/**").authenticated()
                         

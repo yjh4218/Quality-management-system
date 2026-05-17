@@ -21,7 +21,7 @@ const LoginPage = ({ onLoginSuccess }) => {
         e.preventDefault();
         try {
             await login(username, password);
-            
+
             // Check if password reset is required
             const userRes = await getCurrentUser();
             if (userRes.data.passwordResetRequired) {
@@ -31,7 +31,7 @@ const LoginPage = ({ onLoginSuccess }) => {
             }
         } catch (err) {
             setFailedCount(prev => prev + 1);
-            
+
             const serverMessage = err.response?.data;
             let displayMessage = "아이디 또는 비밀번호가 일치하지 않습니다.";
 
@@ -51,7 +51,7 @@ const LoginPage = ({ onLoginSuccess }) => {
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        height: '100vh',
+        height: '125vh',
         backgroundColor: '#f0f2f5'
     };
 
@@ -122,16 +122,16 @@ const LoginPage = ({ onLoginSuccess }) => {
                     </button>
 
                     <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginTop: '20px' }}>
-                        <button 
-                            type="button" 
+                        <button
+                            type="button"
                             onClick={() => setIsSignUpOpen(true)}
                             style={{ background: 'none', border: 'none', color: '#0056b3', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}
                         >
                             회원가입하기
                         </button>
                         <span style={{ color: '#ddd' }}>|</span>
-                        <button 
-                            type="button" 
+                        <button
+                            type="button"
                             onClick={() => setIsFindPwOpen(true)}
                             style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: '14px' }}
                         >
@@ -153,13 +153,13 @@ const LoginPage = ({ onLoginSuccess }) => {
 
             <SignUpModal isOpen={isSignUpOpen} onClose={() => setIsSignUpOpen(false)} />
             <FindPasswordModal isOpen={isFindPwOpen} onClose={() => setIsFindPwOpen(false)} />
-            <ChangePasswordModal 
-                isOpen={isForcedResetOpen} 
-                isForced={true} 
+            <ChangePasswordModal
+                isOpen={isForcedResetOpen}
+                isForced={true}
                 onClose={() => {
                     setIsForcedResetOpen(false);
                     onLoginSuccess();
-                }} 
+                }}
             />
 
             {/* 커스텀 Alert 모달 */}
@@ -169,8 +169,8 @@ const LoginPage = ({ onLoginSuccess }) => {
                         <p style={{ fontSize: '16px', marginBottom: '24px', color: '#333', fontWeight: '500', whiteSpace: 'pre-wrap' }}>
                             {alertModal.message}
                         </p>
-                        <button 
-                            onClick={() => setAlertModal({ isOpen: false, message: '' })} 
+                        <button
+                            onClick={() => setAlertModal({ isOpen: false, message: '' })}
                             style={{ padding: '8px 32px', backgroundColor: '#0056b3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}
                         >
                             확인

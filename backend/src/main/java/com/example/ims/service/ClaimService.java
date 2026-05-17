@@ -175,6 +175,7 @@ public class ClaimService {
         Claim claim = getClaim(id, user);
         String oldJson = captureJson(claim);
         claim.setDeleted(true); // Soft delete
+        claim.setDeletedAt(java.time.LocalDateTime.now());
         Claim saved = claimRepository.save(claim);
 
         String company = user.getCompanyName() != null ? user.getCompanyName() : "시스템";

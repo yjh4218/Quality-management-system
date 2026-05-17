@@ -24,7 +24,7 @@ public class ManufacturerService {
         boolean isManufacturer = user.getRole().contains("ROLE_MANUFACTURER") || "제조사".equals(user.getDepartment());
         
         return manufacturerRepository.findAll().stream()
-                .filter(Manufacturer::isActive)
+                .filter(m -> m.isActive() && !m.isDeleted())
                 .filter(m -> {
                     if (isManufacturer) {
                         return m.getName().equals(user.getCompanyName());
@@ -58,6 +58,8 @@ public class ManufacturerService {
         Manufacturer manufacturer = getById(id);
         String oldJson = auditLogService.toCompactJson(manufacturer);
         manufacturer.setActive(false);
+        manufacturer.setDeleted(true);
+        manufacturer.setDeletedAt(java.time.LocalDateTime.now());
         Manufacturer saved = manufacturerRepository.save(manufacturer);
         auditLogService.logEntityChange("MANUFACTURER", id, "DELETE", username, 
                 null, username, null, null,
@@ -67,7 +69,8 @@ public class ManufacturerService {
     @Transactional
     public void restore(Long id, String username) {
         Manufacturer manufacturer = getById(id);
-        manufacturer.setActive(true);
+        manufacturer.setDeleted(false);
+        manufacturer.setDeletedAt(null);
         Manufacturer saved = manufacturerRepository.save(manufacturer);
         auditLogService.logEntityChange("MANUFACTURER", id, "RESTORE", username, 
                 null, username, null, null,

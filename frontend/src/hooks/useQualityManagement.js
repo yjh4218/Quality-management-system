@@ -7,7 +7,9 @@ import api, {
     getInboundHistory, 
     uploadCoaFile,
     triggerWmsFetch,
-    getManufacturers 
+    getManufacturers,
+    importInboundExcel,
+    downloadInboundTemplate
 } from '../api';
 
 export const useQualityManagement = (user, navigationData, onNavigated) => {
@@ -29,7 +31,7 @@ export const useQualityManagement = (user, navigationData, onNavigated) => {
     const getInitialDates = () => {
         const today = new Date();
         const lastWeek = new Date();
-        lastWeek.setDate(today.getDate() - 7);
+        lastWeek.setFullYear(today.getFullYear() - 1); // 1년으로 확장
         const format = d => {
             const y = d.getFullYear();
             const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -227,6 +229,39 @@ export const useQualityManagement = (user, navigationData, onNavigated) => {
         }
     };
 
+    const handleExcelImport = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        setIsLoading(true);
+        const toastId = toast.loading("엑셀 데이터를 업로드 중입니다...");
+        try {
+            const res = await importInboundExcel(file);
+            toast.update(toastId, { render: res.data, type: "success", isLoading: false, autoClose: 3000 });
+            fetchInboundData();
+        } catch (error) {
+            toast.update(toastId, { render: "엑셀 업로드 실패: " + (error.response?.data?.message || error.response?.data || error.message), type: "error", isLoading: false, autoClose: 5000 });
+        } finally {
+            setIsLoading(false);
+            e.target.value = '';
+        }
+    };
+
+    const handleDownloadTemplate = async () => {
+        try {
+            const response = await downloadInboundTemplate();
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'InboundImport_Template.xlsx');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (error) {
+            toast.error("양식 다운로드에 실패했습니다.");
+        }
+    };
+
     return {
         gridRef,
         rowData,
@@ -258,6 +293,8 @@ export const useQualityManagement = (user, navigationData, onNavigated) => {
         onCellValueChanged,
         handleBatchSave,
         handleRowAction,
-        handleFileUpload
+        handleFileUpload,
+        handleExcelImport,
+        handleDownloadTemplate
     };
 };

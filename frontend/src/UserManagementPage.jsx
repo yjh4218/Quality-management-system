@@ -260,70 +260,148 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
     ], [rowData]);
 
     return (
-        <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
-                <div>
-                    <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#1a1a1a', marginBottom: '8px' }}>👥 사용자 관리 및 승인</h2>
-                    <p style={{ fontSize: '14px', color: '#666' }}>신규 가입자의 승인 처리 및 계정 잠금 해제, 시스템 권한 설정을 관리합니다.</p>
-                </div>
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                    {/* 관리자에게만 탭 메뉴 노출 (roles 배열 내 ROLE_ADMIN 여부 확인) */}
-                    {currentUser?.roles?.some(r => (r.authority || r).includes('ROLE_ADMIN')) && (
-                        <div style={{ display: 'flex', gap: '5px', marginRight: '15px', paddingRight: '15px', borderRight: '1px solid #eee' }}>
-                            <button
-                                onClick={() => setActiveTab('users')}
-                                className={activeTab === 'users' ? 'primary' : 'outline'}
-                                style={{ padding: '8px 16px', fontWeight: '600', height: '40px' }}
-                            >
-                                👥 사용자 목록
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('settings')}
-                                className={activeTab === 'settings' ? 'primary' : 'outline'}
-                                style={{ padding: '8px 16px', fontWeight: '600', height: '40px' }}
-                            >
-                                ⚙️ 메일 발송 설정
-                            </button>
-                        </div>
-                    )}
+        <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: '#f1f5f9' }}>
 
-                    {activeTab === 'users' && (
-                        <>
-                            <button onClick={() => setShowRoleGuide(!showRoleGuide)} className="secondary outline" style={{ padding: '8px 16px', fontWeight: '600', height: '40px' }}>
+            {/* 3단계 표준 헤더 레이아웃 */}
+            <div className="page-header-standard" style={{
+                marginBottom: '20px',
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                gap: '12px',
+                padding: '24px',
+                backgroundColor: '#fff',
+                borderRadius: '16px',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                border: '1px solid #f1f5f9'
+            }}>
+                {/* 1단계: 생성 및 연동 (최상단) */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                    <div className="header-title">
+                        <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0, fontSize: '22px', fontWeight: '800', color: '#1e293b' }}>
+                            👥 사용자 관리 및 승인
+                        </h2>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        {activeTab === 'users' && (
+                            <button
+                                onClick={() => setShowRoleGuide(!showRoleGuide)}
+                                className="outline"
+                                style={{ padding: '8px 16px', fontWeight: '600', height: '40px', borderColor: '#cbd5e1' }}
+                            >
                                 {showRoleGuide ? '💡 권한 가이드라인 숨기기' : '💡 시스템 권한표 보기'}
                             </button>
-                            <button onClick={fetchUsers} className="primary" style={{ padding: '8px 24px', fontWeight: '600', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '4px', height: '40px' }}>🔍 조회</button>
-                        </>
-                    )}
+                        )}
+                    </div>
+                </div>
+
+                {/* 2단계: 핵심 제어 (중단) */}
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    width: '100%',
+                    alignItems: 'center',
+                    padding: '12px 0',
+                    borderTop: '1px solid #f1f5f9',
+                    borderBottom: '1px solid #f1f5f9'
+                }}>
+                    <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+                        <div style={{ color: '#64748b', fontSize: '13px' }}>
+                            사용자 승인 및 권한을 관리합니다.
+                        </div>
+                        {currentUser?.roles?.some(r => (r.authority || r).includes('ROLE_ADMIN')) && (
+                            <div style={{ display: 'flex', gap: '4px', backgroundColor: '#f1f5f9', padding: '4px', borderRadius: '8px' }}>
+                                <button
+                                    onClick={() => setActiveTab('users')}
+                                    style={{
+                                        padding: '6px 12px', fontSize: '12px', fontWeight: 'bold', borderRadius: '6px', border: 'none',
+                                        backgroundColor: activeTab === 'users' ? '#fff' : 'transparent',
+                                        color: activeTab === 'users' ? '#1e293b' : '#64748b',
+                                        boxShadow: activeTab === 'users' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    👥 사용자 목록
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('settings')}
+                                    style={{
+                                        padding: '6px 12px', fontSize: '12px', fontWeight: 'bold', borderRadius: '6px', border: 'none',
+                                        backgroundColor: activeTab === 'settings' ? '#fff' : 'transparent',
+                                        color: activeTab === 'settings' ? '#1e293b' : '#64748b',
+                                        boxShadow: activeTab === 'settings' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    ⚙️ 메일 설정
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        {activeTab === 'users' && (
+                            <>
+                                <button
+                                    className="outline"
+                                    onClick={() => alert("사용자 목록 엑셀 다운로드 기능 준비 중입니다.")}
+                                    style={{ fontSize: '14px', padding: '10px 20px', backgroundColor: '#fff', color: '#107c41', borderColor: '#107c41' }}
+                                >
+                                    📊 결과 다운로드
+                                </button>
+                                <button
+                                    className="primary"
+                                    onClick={fetchUsers}
+                                    style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px' }}
+                                >
+                                    🔍 조회
+                                </button>
+                                <button
+                                    className="outline"
+                                    onClick={() => setSearchFields({ name: '', companyName: '', department: '', role: '' })}
+                                    style={{ padding: '10px 16px', fontSize: '14px' }}
+                                >
+                                    ♻️ 초기화
+                                </button>
+                            </>
+                        )}
+                        {activeTab === 'settings' && (
+                            <button
+                                className="primary"
+                                onClick={handleSaveSettings}
+                                style={{ backgroundColor: '#1e293b', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px' }}
+                            >
+                                💾 설정 저장
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 
             {activeTab === 'users' && (
-                <>
-
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                     {showRoleGuide && (
-                        <div style={{ marginBottom: '25px', padding: '20px', backgroundColor: '#FCFFFF', borderRadius: '10px', border: '1px solid #cce5df', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                            <h3 style={{ fontSize: '16px', color: '#0a6c75', marginBottom: '15px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>🔐 시스템 계정별 권한 세부 가이드라인</h3>
+                        <div style={{ marginBottom: '25px', padding: '20px', backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+                            <h3 style={{ fontSize: '16px', fontWeight: '800', color: '#1e293b', marginBottom: '15px', borderBottom: '1px solid #f1f5f9', paddingBottom: '10px' }}>🔐 시스템 계정별 권한 세부 가이드라인</h3>
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                                 <thead>
-                                    <tr style={{ backgroundColor: '#f4f7f6', borderBottom: '2px solid #ddd' }}>
-                                        <th style={{ padding: '10px', textAlign: 'left', width: '20%' }}>접근 권한명 (Role)</th>
-                                        <th style={{ padding: '10px', textAlign: 'left', width: '25%' }}>조회 가능 메뉴</th>
-                                        <th style={{ padding: '10px', textAlign: 'left', width: '25%' }}>조회 차단 메뉴</th>
-                                        <th style={{ padding: '10px', textAlign: 'left' }}>데이터 생성/수정/삭제 등 편집 권한</th>
+                                    <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                                        <th style={{ padding: '10px', textAlign: 'left', width: '20%', color: '#64748b' }}>접근 권한명 (Role)</th>
+                                        <th style={{ padding: '10px', textAlign: 'left', width: '25%', color: '#64748b' }}>조회 가능 메뉴</th>
+                                        <th style={{ padding: '10px', textAlign: 'left', width: '25%', color: '#64748b' }}>조회 차단 메뉴</th>
+                                        <th style={{ padding: '10px', textAlign: 'left', color: '#64748b' }}>데이터 생성/수정/삭제 권한</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {roles.map(r => (
-                                        <tr key={r.roleKey} style={{ borderBottom: '1px solid #eee' }}>
-                                            <td style={{ padding: '10px' }}><strong>{r.displayName}</strong><br /><small style={{ color: '#666' }}>({r.roleKey})</small></td>
-                                            <td style={{ padding: '10px', color: r.roleKey === 'ROLE_ADMIN' ? '#2ecc71' : '#2ecc71', fontWeight: r.roleKey === 'ROLE_ADMIN' ? 'bold' : 'normal' }}>
+                                        <tr key={r.roleKey} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '10px' }}><strong>{r.displayName}</strong><br /><small style={{ color: '#94a3b8' }}>({r.roleKey})</small></td>
+                                            <td style={{ padding: '10px', color: '#16a34a', fontWeight: 'bold' }}>
                                                 {r.roleKey === 'ROLE_ADMIN' ? '전 메뉴 및 시스템 운영 메뉴' : '기본 업무 메뉴'}
                                             </td>
-                                            <td style={{ padding: '10px', color: '#e74c3c' }}>
+                                            <td style={{ padding: '10px', color: '#ef4444' }}>
                                                 {r.roleKey === 'ROLE_ADMIN' ? '-' : '사용자 관리 등 일부 메뉴'}
                                             </td>
-                                            <td style={{ padding: '10px' }}>{r.description || '권한 상세 설명이 없습니다.'}</td>
+                                            <td style={{ padding: '10px', color: '#475569' }}>{r.description || '권한 상세 설명이 없습니다.'}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -331,45 +409,45 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
                         </div>
                     )}
 
-                    {/* 검색 필터 영역 */}
-                    <div className="card" style={{ marginBottom: '15px', padding: '15px' }}>
-                        <div className="responsive-filter-grid">
-                            <div className="form-group" style={{ marginBottom: 0 }}>
-                                <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>성명</label>
+                    {/* 검색 필터 그리드 */}
+                    <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
+                            <div>
+                                <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>👤 성명</label>
                                 <input
                                     type="text"
                                     placeholder="성명 검색"
                                     value={searchFields.name}
                                     onChange={(e) => setSearchFields({ ...searchFields, name: e.target.value })}
-                                    style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
+                                    style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                                 />
                             </div>
-                            <div className="form-group" style={{ marginBottom: 0 }}>
-                                <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>업체명</label>
+                            <div>
+                                <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏢 업체명</label>
                                 <input
                                     type="text"
                                     placeholder="업체명 검색"
                                     value={searchFields.companyName}
                                     onChange={(e) => setSearchFields({ ...searchFields, companyName: e.target.value })}
-                                    style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
+                                    style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                                 />
                             </div>
-                            <div className="form-group" style={{ marginBottom: 0 }}>
-                                <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>부서</label>
+                            <div>
+                                <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>📁 부서</label>
                                 <input
                                     type="text"
                                     placeholder="부서 검색"
                                     value={searchFields.department}
                                     onChange={(e) => setSearchFields({ ...searchFields, department: e.target.value })}
-                                    style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
+                                    style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                                 />
                             </div>
-                            <div className="form-group" style={{ marginBottom: 0 }}>
-                                <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>권한 (Role)</label>
+                            <div>
+                                <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🔐 권한 (Role)</label>
                                 <select
                                     value={searchFields.role}
                                     onChange={(e) => setSearchFields({ ...searchFields, role: e.target.value })}
-                                    style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px', backgroundColor: '#fff' }}
+                                    style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', backgroundColor: '#fff', height: '38px' }}
                                 >
                                     <option value="">전체 권한 보기</option>
                                     {roles.map(r => (
@@ -380,7 +458,7 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
                         </div>
                     </div>
 
-                    <div className="ag-theme-alpine" style={{ height: 600, width: '100%', marginTop: '10px' }}>
+                    <div className="ag-theme-alpine" style={{ flex: 1, width: '100%', marginTop: '10px' }}>
                         <AgGridReact theme="legacy"
                             rowHeight={50}
                             rowData={rowData}
@@ -390,7 +468,7 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
                             quickFilterText={quickFilterText}
                         />
                     </div>
-                </>)}
+                </div>)}
 
             {activeTab === 'settings' && (
                 <div className="card" style={{ padding: '30px', maxWidth: '800px', margin: '0 auto', border: '1px solid #eef2f6', borderRadius: '12px' }}>

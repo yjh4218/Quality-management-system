@@ -101,10 +101,10 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
 
     const colDefs = useMemo(() => [
         { field: "brandName", headerName: "브랜드", filter: true, width: 140, pinned: 'left' },
-        { 
-            field: "productType", 
-            headerName: "제품구분", 
-            filter: true, 
+        {
+            field: "productType",
+            headerName: "제품구분",
+            filter: true,
             width: 120,
             pinned: 'left',
             valueGetter: (params) => {
@@ -112,26 +112,26 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
                 return params.data?.isPlanningSet ? '기획세트' : '단품';
             }
         },
-        { 
-            field: "itemCode", 
-            headerName: "품목코드", 
-            filter: true, 
-            width: 140, 
+        {
+            field: "itemCode",
+            headerName: "품목코드",
+            filter: true,
+            width: 140,
             pinned: 'left',
             cellRenderer: p => (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span>{p.value}</span>
                     {p.data?.isMaster && (
-                        <span style={{ 
-                            background: '#004085', 
-                            color: '#fff', 
-                            borderRadius: '50%', 
-                            width: '16px', 
-                            height: '16px', 
-                            display: 'inline-flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'center', 
-                            fontSize: '10px', 
+                        <span style={{
+                            background: '#004085',
+                            color: '#fff',
+                            borderRadius: '50%',
+                            width: '16px',
+                            height: '16px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '10px',
                             fontWeight: 'bold',
                             boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
                         }} title="마스터 제품">M</span>
@@ -149,10 +149,10 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
         { field: "englishProductName", headerName: "제품명(영문)", filter: true, flex: 1, minWidth: 250 },
         { field: "manufacturerName", headerName: "제조사", filter: true, width: 130 },
         { field: "shelfLifeMonths", headerName: "사용기한(개월)", width: 120, filter: true, valueFormatter: p => p.value ? p.value + '개월' : '' },
-        { 
-            field: "ingredients", 
-            headerName: "전성분", 
-            filter: true, 
+        {
+            field: "ingredients",
+            headerName: "전성분",
+            filter: true,
             width: 250
         },
 
@@ -229,7 +229,7 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
     const getRowStyle = (params) => {
         const p = params.data;
         if (!p) return null;
-        
+
         let style = {};
         const missingFields = [];
         if (!p.brandName) missingFields.push("브랜드");
@@ -239,13 +239,13 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
         if (missingFields.length > 0) {
             style.backgroundColor = '#fff4f4';
         }
-        
+
         if (p.isMaster) {
             style.backgroundColor = style.backgroundColor ? style.backgroundColor : '#f4fbff';
             style.fontWeight = '600';
             style.color = '#004085';
         }
-        
+
         return Object.keys(style).length > 0 ? style : null;
     };
 
@@ -253,8 +253,8 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
     const isMobile = window.innerWidth <= 768;
     const containerStyle = {
         padding: '15px',
-        display: 'flex', 
-        flexDirection: 'column', 
+        display: 'flex',
+        flexDirection: 'column',
         height: '100%',
         minHeight: isMobile ? '700px' : 'auto', /* Ensure enough space for filter + grid */
         overflow: 'hidden'
@@ -264,43 +264,100 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
      * Modified Header with .page-header class 
      */
     return (
-        <div className="card product-list-container" style={containerStyle}>
-            <div className="page-header">
-                <div>
-                    <h2>📦 제품코드 마스터</h2>
-                    <p style={{ fontSize: '13px', color: '#666', margin: 0 }}>전체 제품의 마스터 정보를 관리하고 상세 스펙 및 인증 서류를 확인합니다.</p>
+        <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: '#f1f5f9' }}>
+
+            {/* 3단계 표준 헤더 레이아웃 */}
+            <div className="page-header-standard" style={{
+                marginBottom: '20px',
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                gap: '12px',
+                padding: '24px',
+                backgroundColor: '#fff',
+                borderRadius: '16px',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                border: '1px solid #f1f5f9'
+            }}>
+                {/* 1단계: 생성 및 연동 (최상단) */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                    <div className="header-title">
+                        <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0, fontSize: '22px', fontWeight: '800', color: '#1e293b' }}>
+                            📦 제품코드 마스터
+                        </h2>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                            onClick={handleCreateNew}
+                            className="primary"
+                            style={{ padding: '10px 24px', fontWeight: 'bold', backgroundColor: '#4f46e5', opacity: canEdit ? 1 : 0.5, cursor: canEdit ? 'pointer' : 'not-allowed' }}
+                            disabled={!canEdit}
+                        >
+                            + 신규 제품 등록
+                        </button>
+                    </div>
                 </div>
-                <div className="button-group">
-                    {canView('products') && (
-                        <button onClick={handleExportExcel} className="outline" style={{ border: '1px solid #107c41', color: '#107c41' }}>📊 엑셀 다운로드</button>
-                    )}
-                    <button 
-                        onClick={() => setShowOnlyMaster(!showOnlyMaster)} 
-                        className="outline" 
-                        style={{ 
-                            border: `1px solid ${showOnlyMaster ? '#ff4d4f' : '#faad14'}`, 
-                            backgroundColor: showOnlyMaster ? '#fff1f0' : '#fffbe6',
-                            color: showOnlyMaster ? '#cf1322' : '#d48806'
-                        }}
-                    >
-                        {showOnlyMaster ? '👀 전체 조회' : '⭐ 마스터 조회'}
-                    </button>
-                    <button 
-                        onClick={handleCreateNew} 
-                        className="outline" 
-                        style={{ border: '1px solid #0056b3', color: '#0056b3', opacity: canEdit ? 1 : 0.5, cursor: canEdit ? 'pointer' : 'not-allowed' }}
-                        disabled={!canEdit}
-                    >
-                        ➕ 신규 제품 등록
-                    </button>
+
+                {/* 2단계: 핵심 제어 (중단) */}
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    width: '100%',
+                    alignItems: 'center',
+                    padding: '12px 0',
+                    borderTop: '1px solid #f1f5f9',
+                    borderBottom: '1px solid #f1f5f9'
+                }}>
+                    <div style={{ color: '#64748b', fontSize: '13px' }}>
+                        전체 제품의 마스터 정보를 관리하고 상세 스펙 및 인증 서류를 확인합니다.
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                            onClick={() => setShowOnlyMaster(!showOnlyMaster)}
+                            className="outline"
+                            style={{
+                                border: `1px solid ${showOnlyMaster ? '#ef4444' : '#f59e0b'}`,
+                                backgroundColor: showOnlyMaster ? '#fef2f2' : '#fffbeb',
+                                color: showOnlyMaster ? '#dc2626' : '#b45309',
+                                fontWeight: 'bold'
+                            }}
+                        >
+                            {showOnlyMaster ? '👀 전체 조회' : '⭐ 마스터 조회'}
+                        </button>
+                        {canView('products') && (
+                            <button
+                                onClick={handleExportExcel}
+                                className="outline"
+                                style={{ fontSize: '14px', padding: '10px 20px', backgroundColor: '#fff', color: '#107c41', borderColor: '#107c41' }}
+                            >
+                                📊 결과 다운로드
+                            </button>
+                        )}
+                        <button
+                            className="primary"
+                            onClick={handleSearchClick}
+                            style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px' }}
+                        >
+                            🔍 조회
+                        </button>
+                        <button
+                            className="outline"
+                            onClick={() => setSearchFields({ itemCode: '', productName: '', brand: '', manufacturer: '', ingredients: '' })}
+                            style={{ padding: '10px 16px', fontSize: '14px' }}
+                        >
+                            ♻️ 초기화
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            {/* 검색 필터 영역 */}
-            <div className="card" style={{ marginBottom: '15px', padding: '20px', flexShrink: 0 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', alignItems: 'end' }}>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>🏷️ 품목코드</label>
+            {/* 검색 필터 그리드 */}
+            <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
+
+                    {/* 1. 품목코드 (ID/고유번호 개념) */}
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏷️ 품목코드</label>
                         <div style={{ display: 'flex', gap: '5px' }}>
                             <input
                                 type="text"
@@ -308,62 +365,67 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
                                 value={searchFields.itemCode}
                                 onChange={(e) => setSearchFields({ ...searchFields, itemCode: e.target.value })}
                                 onKeyDown={(e) => e.key === 'Enter' && handleSearchClick()}
-                                style={{ flex: 1, padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
+                                style={{ flex: 1, padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                             />
-                            <button type="button" onClick={() => setShowSearchPopup(true)} style={{ padding: '0 8px', backgroundColor: '#f8f9fa', border: '1px solid #ced4da', borderRadius: '4px', cursor: 'pointer' }} title="품목 상세 검색">🔍</button>
+                            <button type="button" onClick={() => setShowSearchPopup(true)} style={{ padding: '0 10px', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer' }} title="품목 상세 검색">🔍</button>
                         </div>
                     </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>📦 제품명</label>
+
+                    {/* 2. 제품명 */}
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>📦 제품명</label>
                         <input
                             type="text"
                             placeholder="제품명 검색"
                             value={searchFields.productName}
                             onChange={(e) => setSearchFields({ ...searchFields, productName: e.target.value })}
                             onKeyDown={(e) => e.key === 'Enter' && handleSearchClick()}
-                            style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
+                            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                         />
                     </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>✨ 브랜드</label>
+
+                    {/* 3. 브랜드 */}
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>✨ 브랜드</label>
                         <input
                             type="text"
                             placeholder="브랜드 검색"
                             value={searchFields.brand}
                             onChange={(e) => setSearchFields({ ...searchFields, brand: e.target.value })}
                             onKeyDown={(e) => e.key === 'Enter' && handleSearchClick()}
-                            style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
+                            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                         />
                     </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>🏭 제조사명</label>
+
+                    {/* 4. 제조사 */}
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏭 제조사명</label>
                         <input
                             type="text"
                             placeholder="제조사 검색"
                             value={searchFields.manufacturer}
                             onChange={(e) => setSearchFields({ ...searchFields, manufacturer: e.target.value })}
                             onKeyDown={(e) => e.key === 'Enter' && handleSearchClick()}
-                            style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
+                            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                         />
                     </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>🧪 전성분</label>
+
+                    {/* 5. 전성분 (기타) */}
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🧪 전성분</label>
                         <input
                             type="text"
                             placeholder="전성분 검색"
                             value={searchFields.ingredients}
                             onChange={(e) => setSearchFields({ ...searchFields, ingredients: e.target.value })}
                             onKeyDown={(e) => e.key === 'Enter' && handleSearchClick()}
-                            style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
+                            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                         />
-                    </div>
-                    <div style={{ display: 'flex' }}>
-                        <button className="primary" onClick={handleSearchClick} style={{ width: '100%', padding: '8px 24px', fontWeight: 'bold', height: '37px', backgroundColor: '#0d6efd', borderColor: '#0d6efd', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>🔍 검색</button>
                     </div>
                 </div>
             </div>
 
-            <div className="ag-theme-alpine" style={{ flex: 1, width: '100%', height: isMobile ? '500px' : 'auto', minHeight: '400px' }}>
+            <div className="ag-theme-alpine" style={{ flex: 1, width: '100%', minHeight: 0 }}>
                 <AgGridReact theme="legacy"
                     rowHeight={50}
                     ref={gridRef}
@@ -379,8 +441,8 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
 
             {/* Custom Pagination Controls */}
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '15px', marginTop: '10px', padding: '10px', background: '#f8f9fa', borderRadius: '6px' }}>
-                <button 
-                    onClick={() => fetchProducts(page - 1)} 
+                <button
+                    onClick={() => fetchProducts(page - 1)}
                     disabled={page === 0}
                     style={{ padding: '6px 12px', border: '1px solid #ced4da', background: page === 0 ? '#e9ecef' : '#fff', cursor: page === 0 ? 'not-allowed' : 'pointer', borderRadius: '4px' }}
                 >
@@ -389,8 +451,8 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
                 <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#495057' }}>
                     {page + 1} / {totalPages === 0 ? 1 : totalPages}
                 </span>
-                <button 
-                    onClick={() => fetchProducts(page + 1)} 
+                <button
+                    onClick={() => fetchProducts(page + 1)}
                     disabled={page >= totalPages - 1}
                     style={{ padding: '6px 12px', border: '1px solid #ced4da', background: page >= totalPages - 1 ? '#e9ecef' : '#fff', cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer', borderRadius: '4px' }}
                 >
@@ -412,7 +474,7 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
             )}
 
             {showSearchPopup && (
-                <ProductSearchPopup 
+                <ProductSearchPopup
                     onClose={() => setShowSearchPopup(false)}
                     onSelect={(p) => {
                         setSearchFields({ ...searchFields, itemCode: p.itemCode, productName: p.productName });

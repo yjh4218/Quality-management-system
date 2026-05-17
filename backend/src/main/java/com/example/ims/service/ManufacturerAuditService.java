@@ -29,7 +29,9 @@ public class ManufacturerAuditService {
 
     @Transactional(readOnly = true)
     public List<AuditTemplate> getAllTemplates() {
-        List<AuditTemplate> templates = templateRepository.findAllByActiveTrueOrderByClassificationNameAsc();
+        // [안정화] 네이티브 쿼리로 NULL-safe 필터링 수행
+        List<AuditTemplate> templates = templateRepository.findAllActiveTemplates();
+        // Lazy 컬렉션 명시적 초기화 (LazyInitializationException 방지)
         templates.forEach(t -> {
             if (t.getGroups() != null) {
                 t.getGroups().forEach(g -> {
@@ -69,8 +71,8 @@ public class ManufacturerAuditService {
     }
 
     @Transactional(readOnly = true)
-    public List<ManufacturerAudit> searchAudits(LocalDate startDate, LocalDate endDate, String manufacturerName) {
-        List<ManufacturerAudit> audits = auditRepository.searchAudits(startDate, endDate, manufacturerName);
+    public List<ManufacturerAudit> searchAudits(LocalDate startDate, LocalDate endDate, String manufacturerName, String manufacturerCode, String grade) {
+        List<ManufacturerAudit> audits = auditRepository.searchAudits(startDate, endDate, manufacturerName, manufacturerCode, grade);
         audits.forEach(audit -> {
             if (audit.getManufacturer() != null) audit.getManufacturer().getName();
             if (audit.getTemplate() != null) {
@@ -307,12 +309,16 @@ public class ManufacturerAuditService {
     }
 
     public void deleteAudit(Long id) {
-        auditRepository.deleteById(id);
+        ManufacturerAudit audit = auditRepository.findById(id).orElseThrow();
+        audit.setDeleted(true);
+        audit.setDeletedAt(java.time.LocalDateTime.now());
+        auditRepository.save(audit);
     }
     
     public void deleteTemplate(Long id) {
         templateRepository.findById(id).ifPresent(t -> {
-            t.setActive(false);
+            t.setDeleted(true);
+            t.setDeletedAt(java.time.LocalDateTime.now());
             templateRepository.save(t);
         });
     }
@@ -572,8 +578,8 @@ public class ManufacturerAuditService {
     /**
      * [고도화 12] 검색된 Audit 목록을 Excel로 내보냅니다.
      */
-    public byte[] exportAuditsExcel(LocalDate startDate, LocalDate endDate, String manufacturerName, String username) throws java.io.IOException {
-        List<ManufacturerAudit> data = searchAudits(startDate, endDate, manufacturerName);
+    public byte[] exportAuditsExcel(LocalDate startDate, LocalDate endDate, String manufacturerName, String manufacturerCode, String grade, String username) throws java.io.IOException {
+        List<ManufacturerAudit> data = searchAudits(startDate, endDate, manufacturerName, manufacturerCode, grade);
         
         // [감사 로그] 엑셀 다운로드 이력 기록
         User userObj = userRepository.findByUsername(username).orElse(null);

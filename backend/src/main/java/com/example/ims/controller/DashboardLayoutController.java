@@ -23,13 +23,13 @@ public class DashboardLayoutController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('dashboardMgmt', 'EDIT')")
     public ResponseEntity<DashboardLayout> createLayout(@RequestBody DashboardLayout layout) {
         return ResponseEntity.ok(dashboardLayoutRepository.save(layout));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('dashboardMgmt', 'EDIT')")
     public ResponseEntity<DashboardLayout> updateLayout(@PathVariable Long id, @RequestBody DashboardLayout details) {
         DashboardLayout layout = dashboardLayoutRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Layout not found"));
@@ -40,7 +40,7 @@ public class DashboardLayoutController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('dashboardMgmt', 'DELETE')")
     public ResponseEntity<Void> deleteLayout(@PathVariable Long id) {
         dashboardLayoutRepository.deleteById(id);
         return ResponseEntity.ok().build();

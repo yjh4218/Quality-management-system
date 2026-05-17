@@ -34,13 +34,13 @@ public class BugReportController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM')")
+    @PreAuthorize("@perm.can('bugReports', 'VIEW')")
     public ResponseEntity<List<BugReport>> getAllReports() {
         return ResponseEntity.ok(bugReportService.getAllReports());
     }
 
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM')")
+    @PreAuthorize("@perm.can('bugReports', 'EDIT')")
     public ResponseEntity<BugReport> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> payload) {
         String status = payload.get("status");
         return ResponseEntity.ok(bugReportService.updateStatus(id, status));

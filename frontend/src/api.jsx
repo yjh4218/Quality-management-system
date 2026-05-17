@@ -122,7 +122,7 @@ api.interceptors.response.use(
         
         if (error.response && error.response.status === 401 && !isLoginRequest) {
             window.dispatchEvent(new Event('auth-unauthorized'));
-        } else if (!isLoginRequest) {
+        } else if (!isLoginRequest && !(error.config && error.config.skipToast)) {
             // [에어백] 모든 실패한 요청에 대해 사용자에게 즉시 토스트 알림 (버그 신고 버튼 포함)
             const errorMsg = error.response?.data?.message || "서버와 통신 중 문제가 발생했습니다.";
             
@@ -259,6 +259,7 @@ export const getInboundData = (params = {}) => {
 export const updateInboundData = (id, data) => api.put(`/api/quality/inbound/${id}`, data);
 export const completeInboundInspection = (id) => api.post(`/api/quality/inbound/${id}/complete`);
 export const getInboundHistory = (id) => api.get(`/api/quality/inbound/${id}/history`);
+export const deleteInbound = (id) => api.delete(`/api/quality/inbound/${id}`);
 export const uploadCoaFile = (file, productName = '') => {
     const formData = new FormData();
     formData.append('file', file);
@@ -279,6 +280,14 @@ export const exportInboundExcel = (params) => {
     if (params.grnNumber) queryParams.append('grnNumber', params.grnNumber);
     return api.get(`/api/quality/export?${queryParams.toString()}`, { responseType: 'blob' });
 };
+export const importInboundExcel = (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/api/quality/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    });
+};
+export const downloadInboundTemplate = () => api.get('/api/quality/import-template', { responseType: 'blob' });
 
 // Manufacturer APIs
 export const getManufacturers = () => api.get('/api/manufacturers');
@@ -430,7 +439,7 @@ export const rollbackAuditLog = (logId) => api.post(`/api/admin/logs/${logId}/re
 export const updateProfile = (profileData) => api.put('/api/auth/profile', profileData);
 
 // Page View Logging
-export const logPageView = (data) => api.post('/api/logs/access/page-move', data, { skipLoading: true });
+export const logPageView = (data) => api.post('/api/logs/access/page-move', data, { skipLoading: true, skipToast: true });
 
 // User Access Logs
 export const getAccessLogs = () => api.get('/api/logs/access').then(res => res.data);
@@ -473,6 +482,7 @@ export const getClaimDashboard = (params = {}, config = {}) => {
 };
 export const createClaim = (claim) => api.post('/api/claims', claim);
 export const updateClaim = (id, data) => api.put(`/api/claims/${id}`, data);
+export const deleteClaim = (id) => api.delete(`/api/claims/${id}`);
 export const uploadClaimResponse = (id, file, productName) => {
     const formData = new FormData();
     formData.append('file', file);

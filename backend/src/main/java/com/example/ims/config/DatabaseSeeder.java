@@ -208,7 +208,7 @@ public class DatabaseSeeder {
                     .receiptDate(java.time.LocalDate.now().minusDays(random.nextInt(60)))
                     .qualityStatus("4. 클레임 종결")
                     .claimContent("마이그레이션된 샘플 클레임 데이터입니다.")
-                    .isDeleted(false)
+                    .deleted(false)
                     .build());
         }
     }

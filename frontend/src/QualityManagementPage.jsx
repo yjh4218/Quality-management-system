@@ -3,13 +3,13 @@ import { AgGridReact } from 'ag-grid-react';
 import { Backdrop, CircularProgress } from '@mui/material';
 import QualitySearchFilter from './components/QualitySearchFilter';
 import QualityDetailDrawer from './components/QualityDetailDrawer';
-import api, { 
-    getInboundData, 
-    updateInboundData, 
-    getInboundHistory, 
+import api, {
+    getInboundData,
+    updateInboundData,
+    getInboundHistory,
     uploadCoaFile,
     triggerWmsFetch,
-    getManufacturers 
+    getManufacturers
 } from './api';
 
 import { useQualityManagement } from './hooks/useQualityManagement';
@@ -42,14 +42,22 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
         handleBatchSave,
         handleRowAction,
         handleFileUpload,
+        handleExcelImport,
+        handleDownloadTemplate,
         isLoading
     } = useQualityManagement(user, navigationData, onNavigated);
+
+    // Register global refresh function for child components (like Drawer) to use
+    useEffect(() => {
+        window.__QMS_REFRESH_QUALITY__ = fetchInboundData;
+        return () => { delete window.__QMS_REFRESH_QUALITY__; };
+    }, [fetchInboundData]);
 
 
     const getRowClass = (params) => {
         const inboundDateStr = params.data.inboundDate ? params.data.inboundDate.split('T')[0] : null;
         if (!inboundDateStr) return '';
-        
+
         const inboundDate = new Date(inboundDateStr);
         const coaDate = params.data.coaDecisionDate ? new Date(params.data.coaDecisionDate) : null;
         const qualityDate = params.data.qualityDecisionDate ? new Date(params.data.qualityDecisionDate) : null;
@@ -60,10 +68,10 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
     };
 
     const colDefs = useMemo(() => [
-        { 
-            field: "overallStatus", 
-            headerName: "입고 검사 상태", 
-            width: 200, 
+        {
+            field: "overallStatus",
+            headerName: "입고 검사 상태",
+            width: 200,
             pinned: 'left',
             checkboxSelection: true,
             headerCheckboxSelection: true,
@@ -82,13 +90,13 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
         { field: "quantity", headerName: "입고수량", width: 120, valueFormatter: p => p.value != null ? Number(p.value).toLocaleString() : '' },
         { field: "lotNumber", headerName: "LOT 번호", width: 140 },
         { field: "expirationDate", headerName: "사용기한", width: 120 },
-        { 
+        {
             headerName: '품질 담당자 영역',
             headerClass: 'quality-group-header',
             children: [
-                { 
-                    field: "inboundInspectionStatus", 
-                    headerName: "입고검사 단계", 
+                {
+                    field: "inboundInspectionStatus",
+                    headerName: "입고검사 단계",
                     width: 150,
                     headerClass: 'quality-header-left',
                     cellClass: 'quality-cell-left',
@@ -102,9 +110,9 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
                         return null;
                     }
                 },
-                { 
-                    field: "inboundInspectionResult", 
-                    headerName: "입고 검사 결과", 
+                {
+                    field: "inboundInspectionResult",
+                    headerName: "입고 검사 결과",
                     width: 150,
                     headerClass: 'quality-header',
                     valueFormatter: p => p.value || '판정 중',
@@ -113,9 +121,9 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
                     cellEditorParams: { values: ['판정 중', '적합', '부적합'] },
                     cellStyle: params => params.data.overallStatus === 'STEP5_FINAL_COMPLETE' ? { backgroundColor: '#f0f0f0', color: '#666' } : null
                 },
-                { 
-                    field: "controlSampleStatus", 
-                    headerName: "관리품 확인", 
+                {
+                    field: "controlSampleStatus",
+                    headerName: "관리품 확인",
                     width: 120,
                     headerClass: 'quality-header',
                     valueFormatter: p => p.value || '검사 대기',
@@ -124,9 +132,9 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
                     cellEditorParams: { values: ['검사 대기', '검사 중', '검사 완료'] },
                     cellStyle: params => params.data.overallStatus === 'STEP5_FINAL_COMPLETE' ? { backgroundColor: '#f0f0f0', color: '#666' } : null
                 },
-                { 
-                    field: "finalInspectionResult", 
-                    headerName: "완제품 검사 결과", 
+                {
+                    field: "finalInspectionResult",
+                    headerName: "완제품 검사 결과",
                     width: 130,
                     headerClass: 'quality-header',
                     valueFormatter: p => p.value || '판정 중',
@@ -148,24 +156,24 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
                 }
             ]
         },
-        { 
+        {
             headerName: '제조사 영역',
             headerClass: 'manufacturer-group-header',
             children: [
-                { 
-                    field: "specificGravity", 
-                    headerName: "비중값", 
-                    width: 90, 
+                {
+                    field: "specificGravity",
+                    headerName: "비중값",
+                    width: 90,
                     headerClass: 'manufacturer-header-left',
                     cellClass: 'manufacturer-cell-left',
                     editable: params => (isManufacturer || isInternalQuality || isAdmin) && params.data.overallStatus !== 'STEP5_FINAL_COMPLETE',
                     cellStyle: params => params.data.overallStatus === 'STEP5_FINAL_COMPLETE' ? { backgroundColor: '#f0f0f0', color: '#666' } : null,
                     valueFormatter: p => p.value != null ? Number(p.value).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 }) : ''
                 },
-                { 
-                    field: "testReportNumbers", 
-                    headerName: "시험성적서 번호", 
-                    width: 150, 
+                {
+                    field: "testReportNumbers",
+                    headerName: "시험성적서 번호",
+                    width: 150,
                     headerClass: 'manufacturer-header',
                     editable: params => (isManufacturer || isInternalQuality || isAdmin) && params.data.overallStatus !== 'STEP5_FINAL_COMPLETE',
                     tooltipField: "testReportNumbers",
@@ -180,39 +188,39 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
                     cellRenderer: p => {
                         const urls = p.data.coaFileUrl && typeof p.data.coaFileUrl === 'string' ? p.data.coaFileUrl.split(',').filter(u => u.trim() !== '') : [];
                         return (
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', height: '100%', overflowX: 'auto' }} onClick={e => e.stopPropagation()}>
-                            {urls.length > 0 ? (
-                                urls.map((url, idx) => {
-                                    const displayName = getCleanFileName(url);
-                                    
-                                    return (
-                                    <div key={idx} style={{ display: 'flex', gap: '4px', alignItems: 'center', border: '1px solid #ddd', padding: '2px', borderRadius: '4px', backgroundColor: '#f9f9f9', maxWidth: '150px' }}>
-                                        <span title={displayName} style={{ fontSize: '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80px' }}>{displayName}</span>
-                                        <button onClick={(e) => { e.stopPropagation(); window.open(getFullUrl(url), '_blank'); }}
-                                           className="small-btn primary" 
-                                           style={{ padding: '2px 6px', fontSize: '10px' }}>열기</button>
-                                        {(isManufacturer || isInternalQuality || isAdmin) && p.data.overallStatus !== 'STEP5_FINAL_COMPLETE' && (
-                                            <button onClick={async (e) => { 
-                                                e.stopPropagation(); 
-                                                if(window.confirm("이 국문 COA 파일을 삭제하시겠습니까?")) {
-                                                    const remainingUrls = urls.filter((_, i) => i !== idx).join(',');
-                                                    const updated = { ...p.data, coaFileUrl: remainingUrls || null };
-                                                    await updateInboundData(p.data.id, updated);
-                                                    setRowData(prev => prev.map(row => row.id === p.data.id ? updated : row));
-                                                }
-                                            }} className="small-btn outline" style={{ color: '#e74c3c', borderColor: '#e74c3c', fontWeight: 'bold', padding: '2px 6px', fontSize: '10px' }}>X</button>
-                                        )}
-                                    </div>
-                                    );
-                                })
-                            ) : <span style={{ color: '#999', fontSize: '11px', marginRight: '5px' }}>미등록</span>}
-                            {(isManufacturer || isInternalQuality || isAdmin) && p.data.overallStatus !== 'STEP5_FINAL_COMPLETE' && (
-                                <label style={{ cursor: 'pointer', fontSize: '12px', backgroundColor: '#f0f0f0', padding: '2px 6px', borderRadius: '4px', border: '1px solid #ccc', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
-                                    추가 (10MB)
-                                    <input type="file" hidden accept=".pdf" onChange={e => { e.stopPropagation(); handleFileUpload(e, p.data, 'coaFileUrl'); }} />
-                                </label>
-                            )}
-                        </div>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', height: '100%', overflowX: 'auto' }} onClick={e => e.stopPropagation()}>
+                                {urls.length > 0 ? (
+                                    urls.map((url, idx) => {
+                                        const displayName = getCleanFileName(url);
+
+                                        return (
+                                            <div key={idx} style={{ display: 'flex', gap: '4px', alignItems: 'center', border: '1px solid #ddd', padding: '2px', borderRadius: '4px', backgroundColor: '#f9f9f9', maxWidth: '150px' }}>
+                                                <span title={displayName} style={{ fontSize: '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80px' }}>{displayName}</span>
+                                                <button onClick={(e) => { e.stopPropagation(); window.open(getFullUrl(url), '_blank'); }}
+                                                    className="small-btn primary"
+                                                    style={{ padding: '2px 6px', fontSize: '10px' }}>열기</button>
+                                                {(isManufacturer || isInternalQuality || isAdmin) && p.data.overallStatus !== 'STEP5_FINAL_COMPLETE' && (
+                                                    <button onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        if (window.confirm("이 국문 COA 파일을 삭제하시겠습니까?")) {
+                                                            const remainingUrls = urls.filter((_, i) => i !== idx).join(',');
+                                                            const updated = { ...p.data, coaFileUrl: remainingUrls || null };
+                                                            await updateInboundData(p.data.id, updated);
+                                                            setRowData(prev => prev.map(row => row.id === p.data.id ? updated : row));
+                                                        }
+                                                    }} className="small-btn outline" style={{ color: '#e74c3c', borderColor: '#e74c3c', fontWeight: 'bold', padding: '2px 6px', fontSize: '10px' }}>X</button>
+                                                )}
+                                            </div>
+                                        );
+                                    })
+                                ) : <span style={{ color: '#999', fontSize: '11px', marginRight: '5px' }}>미등록</span>}
+                                {(isManufacturer || isInternalQuality || isAdmin) && p.data.overallStatus !== 'STEP5_FINAL_COMPLETE' && (
+                                    <label style={{ cursor: 'pointer', fontSize: '12px', backgroundColor: '#f0f0f0', padding: '2px 6px', borderRadius: '4px', border: '1px solid #ccc', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
+                                        추가 (10MB)
+                                        <input type="file" hidden accept=".pdf" onChange={e => { e.stopPropagation(); handleFileUpload(e, p.data, 'coaFileUrl'); }} />
+                                    </label>
+                                )}
+                            </div>
                         );
                     }
                 },
@@ -224,45 +232,45 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
                     cellRenderer: p => {
                         const urls = p.data.coaFileUrlEng && typeof p.data.coaFileUrlEng === 'string' ? p.data.coaFileUrlEng.split(',').filter(u => u.trim() !== '') : [];
                         return (
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', height: '100%', overflowX: 'auto' }} onClick={e => e.stopPropagation()}>
-                            {urls.length > 0 ? (
-                                urls.map((url, idx) => {
-                                    const displayName = getCleanFileName(url);
-                                    
-                                    return (
-                                    <div key={idx} style={{ display: 'flex', gap: '4px', alignItems: 'center', border: '1px solid #ddd', padding: '2px', borderRadius: '4px', backgroundColor: '#f9f9f9', maxWidth: '150px' }}>
-                                        <span title={displayName} style={{ fontSize: '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80px' }}>{displayName}</span>
-                                        <button onClick={(e) => { e.stopPropagation(); window.open(getFullUrl(url), '_blank'); }}
-                                           className="small-btn primary" 
-                                           style={{ padding: '2px 6px', fontSize: '10px' }}>열기</button>
-                                        {(isManufacturer || isInternalQuality || isAdmin) && p.data.overallStatus !== 'STEP5_FINAL_COMPLETE' && (
-                                            <button onClick={async (e) => { 
-                                                e.stopPropagation(); 
-                                                if(window.confirm("이 영문 COA 파일을 삭제하시겠습니까?")) {
-                                                    const remainingUrls = urls.filter((_, i) => i !== idx).join(',');
-                                                    const updated = { ...p.data, coaFileUrlEng: remainingUrls || null };
-                                                    await updateInboundData(p.data.id, updated);
-                                                    setRowData(prev => prev.map(row => row.id === p.data.id ? updated : row));
-                                                }
-                                            }} className="small-btn outline" style={{ color: '#e74c3c', borderColor: '#e74c3c', fontWeight: 'bold', padding: '2px 6px', fontSize: '10px' }}>X</button>
-                                        )}
-                                    </div>
-                                    );
-                                })
-                            ) : <span style={{ color: '#999', fontSize: '11px', marginRight: '5px' }}>미등록</span>}
-                            {(isManufacturer || isInternalQuality || isAdmin) && p.data.overallStatus !== 'STEP5_FINAL_COMPLETE' && (
-                                <label style={{ cursor: 'pointer', fontSize: '12px', backgroundColor: '#f0f0f0', padding: '2px 6px', borderRadius: '4px', border: '1px solid #ccc', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
-                                    추가 (10MB)
-                                    <input type="file" hidden accept=".pdf" onChange={e => { e.stopPropagation(); handleFileUpload(e, p.data, 'coaFileUrlEng'); }} />
-                                </label>
-                            )}
-                        </div>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', height: '100%', overflowX: 'auto' }} onClick={e => e.stopPropagation()}>
+                                {urls.length > 0 ? (
+                                    urls.map((url, idx) => {
+                                        const displayName = getCleanFileName(url);
+
+                                        return (
+                                            <div key={idx} style={{ display: 'flex', gap: '4px', alignItems: 'center', border: '1px solid #ddd', padding: '2px', borderRadius: '4px', backgroundColor: '#f9f9f9', maxWidth: '150px' }}>
+                                                <span title={displayName} style={{ fontSize: '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80px' }}>{displayName}</span>
+                                                <button onClick={(e) => { e.stopPropagation(); window.open(getFullUrl(url), '_blank'); }}
+                                                    className="small-btn primary"
+                                                    style={{ padding: '2px 6px', fontSize: '10px' }}>열기</button>
+                                                {(isManufacturer || isInternalQuality || isAdmin) && p.data.overallStatus !== 'STEP5_FINAL_COMPLETE' && (
+                                                    <button onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        if (window.confirm("이 영문 COA 파일을 삭제하시겠습니까?")) {
+                                                            const remainingUrls = urls.filter((_, i) => i !== idx).join(',');
+                                                            const updated = { ...p.data, coaFileUrlEng: remainingUrls || null };
+                                                            await updateInboundData(p.data.id, updated);
+                                                            setRowData(prev => prev.map(row => row.id === p.data.id ? updated : row));
+                                                        }
+                                                    }} className="small-btn outline" style={{ color: '#e74c3c', borderColor: '#e74c3c', fontWeight: 'bold', padding: '2px 6px', fontSize: '10px' }}>X</button>
+                                                )}
+                                            </div>
+                                        );
+                                    })
+                                ) : <span style={{ color: '#999', fontSize: '11px', marginRight: '5px' }}>미등록</span>}
+                                {(isManufacturer || isInternalQuality || isAdmin) && p.data.overallStatus !== 'STEP5_FINAL_COMPLETE' && (
+                                    <label style={{ cursor: 'pointer', fontSize: '12px', backgroundColor: '#f0f0f0', padding: '2px 6px', borderRadius: '4px', border: '1px solid #ccc', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
+                                        추가 (10MB)
+                                        <input type="file" hidden accept=".pdf" onChange={e => { e.stopPropagation(); handleFileUpload(e, p.data, 'coaFileUrlEng'); }} />
+                                    </label>
+                                )}
+                            </div>
                         );
                     }
                 },
-                { 
-                    field: "coaDecisionDate", 
-                    headerName: "성적서 판정일", 
+                {
+                    field: "coaDecisionDate",
+                    headerName: "성적서 판정일",
                     width: 120,
                     headerClass: 'manufacturer-header-right',
                     cellClass: 'manufacturer-cell-right',
@@ -277,7 +285,7 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
 
     const updateDetailField = async (field, value) => {
         if (!selectedInbound) return;
-        
+
         // Prevent auto-save attempting to hit the backend if user has no edit rights at all
         if (!isInternalQuality && !isAdmin && !isManufacturer) return;
 
@@ -299,7 +307,7 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
     };
 
     return (
-        <div className="card" style={{ height: 'calc(100vh - 40px)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: '#f1f5f9' }}>
             <style>{`
                 /* Quality Area */
                 .quality-group-header {
@@ -382,7 +390,7 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
                     font-weight: bold;
                 }
             `}</style>
-            <QualitySearchFilter 
+            <QualitySearchFilter
                 searchParams={searchParams}
                 setSearchParams={setSearchParams}
                 onSearch={fetchInboundData}
@@ -392,19 +400,21 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
                 }}
                 onSync={handleSync}
                 onBatchSave={handleBatchSave}
+                onExcelImport={handleExcelImport}
+                onDownloadTemplate={handleDownloadTemplate}
                 isInternalQuality={isInternalQuality}
                 manufacturers={manufacturers}
                 canViewInbound={true}
                 inboundCount={rowData.length}
             />
 
-            <div className="ag-theme-alpine" style={{ flex: 1, width: '100%', fontSize: '12px' }}>
-                <AgGridReact theme="legacy" 
+            <div className="ag-theme-alpine" style={{ flex: 1, width: '100%', minHeight: 0, fontSize: '12px' }}>
+                <AgGridReact theme="legacy"
                     rowHeight={50}
                     ref={gridRef}
-                    rowData={rowData} 
+                    rowData={rowData}
                     getRowId={p => String(p.data.id)}
-                    columnDefs={colDefs} 
+                    columnDefs={colDefs}
                     getRowClass={getRowClass}
                     rowSelection="multiple"
                     suppressRowClickSelection={true}
@@ -441,7 +451,7 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
                         import('react-toastify').then(({ toast }) => toast.success("상세 품질 정보가 성공적으로 저장되었습니다."));
                         setIsDrawerOpen(false);
                         fetchInboundData();
-                    } catch(e) {
+                    } catch (e) {
                         import('react-toastify').then(({ toast }) => toast.error("저장 실패: " + (e.response?.data?.message || e.message)));
                     }
                 }}

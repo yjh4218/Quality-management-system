@@ -9,6 +9,7 @@ import com.example.ims.repository.ManufacturerRepository;
 import com.example.ims.repository.ProductHistoryRepository;
 import com.example.ims.repository.ProductRepository;
 import com.example.ims.repository.UserRepository;
+import com.example.ims.dto.ProductIngredientDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.example.ims.entity.ProductComponent;
 import com.example.ims.entity.ProductIngredient;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import org.apache.poi.ss.usermodel.*;
@@ -409,6 +411,8 @@ public class ProductService {
                 .orElseThrow(() -> new RuntimeException("Product not found"));
         String oldJson = captureJson(product);
         product.setActive(false);
+        product.setDeleted(true);
+        product.setDeletedAt(LocalDateTime.now());
         Product saved = productRepository.save(product);
         String newJson = captureJson(saved);
         
@@ -440,6 +444,8 @@ public class ProductService {
                 .orElseThrow(() -> new RuntimeException("Product not found"));
         String oldJson = captureJson(product);
         product.setActive(true);
+        product.setDeleted(false);
+        product.setDeletedAt(null);
         Product saved = productRepository.save(product);
         String newJson = captureJson(saved);
         
@@ -622,7 +628,7 @@ public class ProductService {
                 .build();
     }
     
-    public List<com.example.ims.dto.ProductIngredientDto> parseIngredientsExcel(org.springframework.web.multipart.MultipartFile file) throws Exception {
+    public List<ProductIngredientDto> parseIngredientsExcel(org.springframework.web.multipart.MultipartFile file) throws Exception {
         return excelParsingService.parseIngredientExcel(file);
     }
 

@@ -59,37 +59,111 @@ const AccessLogPage = () => {
     ], []);
 
     return (
-        <div className="card" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <div>
-                    <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#1a1a1a', marginBottom: '8px' }}>🕒 사용자 접근 로그</h2>
-                    <p style={{ fontSize: '14px', color: '#666' }}>사용자의 로그인, 로그아웃 및 페이지 이동 이력을 모니터링합니다.</p>
+        <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#f1f5f9' }}>
+            
+            {/* 3단계 표준 헤더 레이아웃 */}
+            <div className="page-header-standard" style={{ 
+                marginBottom: '20px', 
+                flexDirection: 'column', 
+                alignItems: 'flex-start', 
+                gap: '12px',
+                padding: '24px',
+                backgroundColor: '#fff',
+                borderRadius: '16px',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                border: '1px solid #f1f5f9'
+            }}>
+                {/* 1단계: 생성 및 연동 (최상단) */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                    <div className="header-title">
+                        <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0, fontSize: '22px', fontWeight: '800', color: '#1e293b' }}>
+                            🕒 사용자 접근 로그
+                        </h2>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                            onClick={fetchLogs} 
+                            className="secondary" 
+                            style={{ padding: '8px 16px', fontSize: '13px', fontWeight: 'bold' }}
+                        >
+                            🔄 로그 새로고침
+                        </button>
+                    </div>
                 </div>
-                <div style={{ display: 'flex', gap: '12px' }}>
-                    <input
-                        type="text"
-                        placeholder="ID, 성명, 액션 검색..."
-                        value={quickFilterText}
-                        onChange={(e) => setQuickFilterText(e.target.value)}
-                        style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '4px', width: '250px' }}
-                    />
-                    <button onClick={fetchLogs} className="outline" style={{ padding: '10px 20px' }}>
-                        🔄 새로고침
-                    </button>
+
+                {/* 2단계: 핵심 제어 (중단) */}
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    width: '100%', 
+                    alignItems: 'center', 
+                    padding: '12px 0', 
+                    borderTop: '1px solid #f1f5f9',
+                    borderBottom: '1px solid #f1f5f9'
+                }}>
+                    <div style={{ color: '#64748b', fontSize: '13px' }}>
+                        사용자의 로그인, 로그아웃 및 페이지 이동 이력을 모니터링합니다.
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                            className="outline" 
+                            onClick={() => alert("접근 로그 엑셀 다운로드 기능 준비 중입니다.")}
+                            style={{ fontSize: '14px', padding: '10px 20px', backgroundColor: '#fff', color: '#107c41', borderColor: '#107c41' }}
+                        >
+                            📊 결과 다운로드
+                        </button>
+                        <button 
+                            className="primary" 
+                            onClick={fetchLogs} 
+                            style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px' }}
+                        >
+                            🔍 조회
+                        </button>
+                        <button 
+                            className="outline" 
+                            onClick={() => setQuickFilterText('')} 
+                            style={{ padding: '10px 16px', fontSize: '14px' }}
+                        >
+                            ♻️ 초기화
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
-                <AgGridReact
-                    theme="legacy"
-                    rowHeight={45}
-                    rowData={rowData}
-                    columnDefs={columnDefs}
-                    pagination={true}
-                    paginationPageSize={100}
-                    quickFilterText={quickFilterText}
-                    enableBrowserTooltips={true}
-                />
+            {/* 검색 필터 그리드 */}
+            <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🔍 로그 검색</label>
+                        <div style={{ position: 'relative' }}>
+                            <input
+                                type="text"
+                                placeholder="ID, 성명, 액션 등 검색..."
+                                value={quickFilterText}
+                                onChange={(e) => setQuickFilterText(e.target.value)}
+                                style={{ width: '100%', padding: '10px 40px 10px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px' }}
+                            />
+                            <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>🔍</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* 데이터 카드 */}
+            <div className="card" style={{ padding: '24px', borderRadius: '16px', flex: 1, display: 'flex', flexDirection: 'column', background: 'white', border: '1px solid #e2e8f0' }}>
+                <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
+                    <AgGridReact
+                        theme="legacy"
+                        rowHeight={45}
+                        rowData={rowData}
+                        columnDefs={columnDefs}
+                        pagination={true}
+                        paginationPageSize={100}
+                        quickFilterText={quickFilterText}
+                        enableBrowserTooltips={true}
+                    />
+                </div>
             </div>
         </div>
     );

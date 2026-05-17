@@ -102,23 +102,93 @@ const PackagingTemplatePage = ({ user }) => {
     ], []);
 
     return (
-        <div className="page-container" style={{ padding: '24px', display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-            <header className="page-header" style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-                <div>
-                    <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1a202c' }}>📋 포장공정 템플릿 관리</h1>
-                    <p style={{ color: '#718096', fontSize: '14px' }}>제품 제형별 표준 포장 공정 및 단계별 작업 가이드를 관리합니다.</p>
-                </div>
-                <button 
-                    className="primary" 
-                    onClick={handleCreateNew}
-                    style={{ opacity: canManageBatch ? 1 : 0.5, cursor: canManageBatch ? 'pointer' : 'not-allowed' }}
-                    disabled={!canManageBatch}
-                >
-                    <span style={{ marginRight: '8px' }}>+</span> 신규 템플릿 등록
-                </button>
-            </header>
+        <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#f1f5f9' }}>
+            
+            {/* 3단계 표준 헤더 레이아웃 */}
+            <div className="page-header-standard" style={{ 
+                marginBottom: '20px', 
+                flexDirection: 'column', 
+                alignItems: 'flex-start', 
+                gap: '12px',
+                padding: '24px',
+                backgroundColor: '#fff',
+                borderRadius: '16px',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                border: '1px solid #f1f5f9'
+            }}>
+                {/* 1단계: 생성 및 연동 (최상단) */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                    <div className="header-title">
+                        <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0, fontSize: '22px', fontWeight: '800', color: '#1e293b' }}>
+                            📋 포장공정 템플릿 관리
+                        </h2>
+                    </div>
 
-            <div className="card" style={{ padding: '0', overflow: 'hidden', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                            className="primary" 
+                            onClick={handleCreateNew} 
+                            style={{ 
+                                padding: '10px 24px', 
+                                borderRadius: '10px', 
+                                fontWeight: '800', 
+                                backgroundColor: '#2563eb',
+                                color: '#fff',
+                                border: 'none',
+                                cursor: canManageBatch ? 'pointer' : 'not-allowed',
+                                opacity: canManageBatch ? 1 : 0.5
+                            }} 
+                            disabled={!canManageBatch}
+                        >
+                            ➕ 신규 템플릿 등록
+                        </button>
+                    </div>
+                </div>
+
+                {/* 2단계: 핵심 제어 (중단) */}
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    width: '100%', 
+                    alignItems: 'center', 
+                    padding: '12px 0', 
+                    borderTop: '1px solid #f1f5f9',
+                    borderBottom: '1px solid #f1f5f9'
+                }}>
+                    <div style={{ color: '#64748b', fontSize: '13px' }}>
+                        제품 제형별 표준 포장 공정 및 단계별 작업 가이드를 관리합니다.
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                            className="outline" 
+                            onClick={() => alert("포장 템플릿 엑셀 다운로드 기능 준비 중입니다.")}
+                            style={{ fontSize: '14px', padding: '10px 20px', backgroundColor: '#fff', color: '#107c41', borderColor: '#107c41' }}
+                        >
+                            📊 결과 다운로드
+                        </button>
+                        <button 
+                            className="primary" 
+                            onClick={fetchTemplates} 
+                            style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px' }}
+                        >
+                            🔍 조회
+                        </button>
+                        <button 
+                            className="outline" 
+                            onClick={() => {}} 
+                            style={{ padding: '10px 16px', fontSize: '14px' }}
+                        >
+                            ♻️ 초기화
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* 데이터 카드 */}
+            <div className="card" style={{ padding: '24px', borderRadius: '16px', flex: 1, display: 'flex', flexDirection: 'column', background: 'white', border: '1px solid #e2e8f0' }}>
+                <div style={{ marginBottom: '15px', fontWeight: '800', fontSize: '14px', color: '#64748b' }}>
+                    등록된 템플릿 수: <span style={{ color: '#2563eb' }}>{templates.length}</span> 건
+                </div>
                 <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
                     <AgGridReact theme="legacy"
                         rowData={templates} 

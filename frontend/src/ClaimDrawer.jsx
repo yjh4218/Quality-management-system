@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { createClaim, updateClaim, uploadClaimResponse, uploadClaimPhoto, getClaimHistory } from './api';
+import { createClaim, updateClaim, uploadClaimResponse, uploadClaimPhoto, getClaimHistory, deleteClaim } from './api';
+import * as api from './api';
 import ProductSearchPopup from './ProductSearchPopup';
 import SaveConfirmModal from './components/SaveConfirmModal';
 import { usePermissions } from './usePermissions';
@@ -48,7 +49,7 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
     const isQuality = stands.some(r => r.authority === 'ROLE_QUALITY' || 
         (user?.companyName === '더파운더즈' && (user?.department === 'Quality' || user?.department === '품질팀' || user?.department === '품질')));
 
-    const { canEdit: canEditClaim } = usePermissions(user);
+    const { canEdit: canEditClaim, canDelete: canDeleteClaim } = usePermissions(user);
     const hasGlobalEdit = canEditClaim('claims');
 
     const canEditCs = (!readOnly) && hasGlobalEdit && (!isManufacturer);
@@ -216,6 +217,21 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
         setFormData(prev => ({ ...prev, claimPhotos: prev.claimPhotos.filter((_, idx) => idx !== indexToRemove) }));
     };
 
+    const handleClaimDelete = async () => {
+        if (!claim || !claim.id) return;
+        
+        if (window.confirm("정말 이 클레임을 삭제하시겠습니까? 삭제된 데이터는 휴지통에서 확인 가능합니다.")) {
+            try {
+                await deleteClaim(claim.id);
+                alert("클레임이 삭제되었습니다.");
+                onSaved();
+                onClose();
+            } catch (error) {
+                alert("삭제 중 오류가 발생했습니다.");
+            }
+        }
+    };
+
     const handleSubmit = (e) => {
         if (e) e.preventDefault();
         setIsConfirmOpen(true);
@@ -298,7 +314,7 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
 
                 {/* 3. Body Section (Scrollable) */}
                 <div className="drawer-body">
-                    <form onSubmit={handleSubmit} className="drawer-body-form">
+                    <form id="claim-form" onSubmit={handleSubmit} className="drawer-body-form">
                         {activeTab === 'details' && (
                             <div className="tab-pane">
                                 {/* 접수 정보 섹션 */}
@@ -481,14 +497,6 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                         </div>
                                     </div>
                                 )}
-                                
-                                {canEditQuality && (
-                                    <div style={{ marginTop: '30px', padding: '20px', background: '#fff', borderRadius: '12px', border: '1px solid #edf2f7', textAlign: 'center' }}>
-                                        <button type="submit" className="primary" style={{ minWidth: '240px', padding: '12px 40px', fontSize: '15px' }} disabled={loading}>
-                                            {loading ? '⏳ 저장 중...' : (claim ? '💾 변경사항 저장하기' : '🚀 신규 클레임 등록하기')}
-                                        </button>
-                                    </div>
-                                )}
                             </div>
                         )}
 
@@ -502,7 +510,6 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                     Object.entries(
                                         history.reduce((acc, rec) => {
                                             const timeKey = rec.modifiedAt ? rec.modifiedAt.substring(0, 19).replace('T', ' ') : '알 수 없는 시간';
-                                            // [고도화] 상세 사용자 정보 우선 노출, 없으면 기존 modifier 필드 사용
                                             const mName = rec.modifierName || rec.modifier || '시스템';
                                             const mId = rec.modifierUsername ? `(${rec.modifierUsername})` : '';
                                             const mComp = rec.modifierCompany ? ` [${rec.modifierCompany}]` : '';
@@ -542,9 +549,33 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
 
                 {/* 4. Footer Section */}
                 <div className="drawer-footer">
-                    <div style={{ display: 'flex', gap: '20px' }}>
+                    <div style={{ display: 'flex', gap: '20px', fontSize: '12px', color: '#94a3b8' }}>
                         <span>📅 등록일: <strong>{formData.createdAt ? formData.createdAt.substring(0, 16).replace('T', ' ') : '-'}</strong></span>
                         <span>🔄 마지막 수정: <strong>{formData.updatedAt ? formData.updatedAt.substring(0, 16).replace('T', ' ') : '-'}</strong></span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        {claim && canDeleteClaim('claims') && (
+                            <button 
+                                type="button" 
+                                className="outline" 
+                                onClick={handleClaimDelete} 
+                                style={{ minWidth: '80px', color: '#dc3545', borderColor: '#dc3545' }}
+                            >
+                                🗑️ 삭제
+                            </button>
+                        )}
+                        <button type="button" className="secondary" onClick={onClose} style={{ minWidth: '80px' }}>닫기</button>
+                        {canEditQuality && (
+                            <button 
+                                type="submit" 
+                                form="claim-form"
+                                className="primary" 
+                                style={{ minWidth: '120px', background: '#003366', color: '#fff' }} 
+                                disabled={loading}
+                            >
+                                {loading ? '⏳ 저장 중...' : (claim ? '💾 저장하기' : '🚀 등록하기')}
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>

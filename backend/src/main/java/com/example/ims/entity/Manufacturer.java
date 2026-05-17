@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "manufacturers")
+@org.hibernate.annotations.SQLRestriction("(is_deleted = false OR is_deleted IS NULL)")
 @Getter
 @Setter
 @ToString(exclude = "files")
@@ -42,7 +43,21 @@ public class Manufacturer {
     private String description;
 
     @Builder.Default
-    private boolean active = true; // Soft delete flag
+    private boolean active = true; // Legacy active flag
+
+    @Builder.Default
+    @Column(name = "is_deleted", columnDefinition = "boolean default false")
+    private Boolean deleted = false;
+
+    public boolean isDeleted() {
+        return deleted != null && deleted;
+    }
+
+    public void setIsDeleted(boolean val) {
+        this.deleted = val;
+    }
+
+    private LocalDateTime deletedAt;
 
     private String phoneNumber; // 전화번호
     private String email; // 메일주소

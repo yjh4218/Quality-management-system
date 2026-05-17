@@ -18,7 +18,13 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     Optional<Product> findByItemCode(String itemCode);
     boolean existsByItemCode(String itemCode);
     List<Product> findByActiveTrue();
-    List<Product> findByActiveFalseOrderByUpdatedAtDesc();
+    
+    @Query(value = "SELECT * FROM products WHERE is_deleted = true OR active = false ORDER BY updated_at DESC", nativeQuery = true)
+    List<Product> findDeletedProducts();
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "UPDATE products SET is_deleted = false, active = true WHERE id = :id", nativeQuery = true)
+    void restoreProduct(Long id);
     List<Product> findByManufacturer(String manufacturer);
     List<Product> findTop50ByCreatedAtAfterOrderByCreatedAtDesc(LocalDateTime createdAt);
 

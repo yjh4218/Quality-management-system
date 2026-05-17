@@ -124,6 +124,13 @@
 			<artifactId>spring-session-jdbc</artifactId>
 		</dependency>
 
+		<!-- Jsoup for Web Scraping (Regulatory Data Automation) -->
+		<dependency>
+			<groupId>org.jsoup</groupId>
+			<artifactId>jsoup</artifactId>
+			<version>1.16.1</version>
+		</dependency>
+
 	</dependencies>
 
 	<build>

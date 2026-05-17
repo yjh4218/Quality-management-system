@@ -194,41 +194,111 @@ function ClaimDashboardPage({ user, onNavigate }) {
 
     return (
         <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#f0f2f5', overflowY: 'auto' }}>
-            <div style={{ marginBottom: '20px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                    <div>
-                        <button className="secondary" onClick={() => onNavigate('claims')} style={{ marginBottom: '10px' }}>&larr; 클레임 관리로 돌아가기</button>
-                        <h2 style={{ fontSize: '26px', fontWeight: 'bold', margin: 0 }}>📊 클레임 종합 대시보드</h2>
-                        <p style={{ color: '#666', margin: '5px 0 0 0' }}>품질 이슈 실시간 모니터링 및 분석</p>
+            <div className="page-header-standard" style={{ 
+                marginBottom: '20px', 
+                flexDirection: 'column', 
+                alignItems: 'flex-start', 
+                gap: '12px',
+                padding: '24px',
+                backgroundColor: '#fff',
+                borderRadius: '16px',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                border: '1px solid #f1f5f9'
+            }}>
+                {/* 1단계: 상단 (생성 및 연동 대신 뒤로가기) */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                    <div className="header-title">
+                        <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0, fontSize: '26px', fontWeight: '800', color: '#1e293b' }}>
+                            📊 클레임 종합 대시보드
+                        </h2>
+                        <p style={{ color: '#64748b', margin: '5px 0 0 0', fontSize: '14px' }}>품질 이슈 실시간 모니터링 및 분석</p>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                            className="secondary" 
+                            onClick={() => onNavigate('claims')} 
+                            style={{ 
+                                padding: '10px 20px', 
+                                borderRadius: '10px', 
+                                fontWeight: '800', 
+                                backgroundColor: '#f1f5f9',
+                                color: '#475569',
+                                border: '1px solid #e2e8f0',
+                                cursor: 'pointer'
+                            }} 
+                        >
+                            &larr; 클레임 관리로 돌아가기
+                        </button>
                     </div>
                 </div>
-                <div style={{ display: 'flex', gap: '15px', alignItems: 'flex-end', background: 'white', padding: '15px', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', flexWrap: 'wrap' }}>
+
+                {/* 2단계: 핵심 제어 (중단) */}
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    width: '100%', 
+                    alignItems: 'center', 
+                    padding: '12px 0', 
+                    borderTop: '1px solid #f1f5f9',
+                    borderBottom: '1px solid #f1f5f9'
+                }}>
+                    <div style={{ color: '#64748b', fontSize: '13px' }}>
+                        기간 및 필터 조건에 따른 클레임 통계 데이터를 분석합니다.
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                            className="outline" 
+                            onClick={() => alert("대시보드 통계 엑셀 다운로드 기능 준비 중입니다.")}
+                            style={{ fontSize: '14px', padding: '10px 20px', backgroundColor: '#fff', color: '#107c41', borderColor: '#107c41' }}
+                        >
+                            📊 분석 리포트 다운로드
+                        </button>
+                        <button 
+                            className="primary" 
+                            onClick={handleSearch} 
+                            disabled={loading}
+                            style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px' }}
+                        >
+                            {loading ? '조회 중...' : '🔍 조회'}
+                        </button>
+                        <button 
+                            className="outline" 
+                            onClick={handleReset} 
+                            disabled={loading}
+                            style={{ padding: '10px 16px', fontSize: '14px' }}
+                        >
+                            ♻️ 초기화
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* 검색 필터 그리드 */}
+            <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
                     <div>
-                        <label style={{display:'flex', alignItems: 'center', gap: '4px', fontSize:'12px', fontWeight: 'bold', color:'#4b5563', marginBottom:'5px'}}>🗓️ 조회 시작일</label>
-                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{padding:'8px', border:'1px solid #ced4da', borderRadius:'4px', width: '160px'}} />
+                        <label style={{display:'flex', alignItems: 'center', gap: '4px', fontSize:'12px', fontWeight: '800', color:'#475569', marginBottom:'6px'}}>🗓️ 조회 기간 (시작)</label>
+                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{width: '100%', padding:'10px', border:'1px solid #d1d5db', borderRadius:'8px', fontSize: '14px'}} />
                     </div>
                     <div>
-                        <label style={{display:'flex', alignItems: 'center', gap: '4px', fontSize:'12px', fontWeight: 'bold', color:'#4b5563', marginBottom:'5px'}}>🗓️ 조회 종료일</label>
-                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{padding:'8px', border:'1px solid #ced4da', borderRadius:'4px', width: '160px'}} />
+                        <label style={{display:'flex', alignItems: 'center', gap: '4px', fontSize:'12px', fontWeight: '800', color:'#475569', marginBottom:'6px'}}>🗓️ 조회 기간 (종료)</label>
+                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{width: '100%', padding:'10px', border:'1px solid #d1d5db', borderRadius:'8px', fontSize: '14px'}} />
                     </div>
                     <div>
-                        <label style={{display:'flex', alignItems: 'center', gap: '4px', fontSize:'12px', fontWeight: 'bold', color:'#4b5563', marginBottom:'5px'}}>🏷️ 품목코드</label>
-                        <input type="text" placeholder="품목코드" value={itemCode} onChange={e => setItemCode(e.target.value)} style={{padding:'8px', border:'1px solid #ced4da', borderRadius:'4px', width: '120px'}} />
+                        <label style={{display:'flex', alignItems: 'center', gap: '4px', fontSize:'12px', fontWeight: '800', color:'#475569', marginBottom:'6px'}}>🏷️ 품목코드</label>
+                        <input type="text" placeholder="코드 검색" value={itemCode} onChange={e => setItemCode(e.target.value)} style={{width: '100%', padding:'10px', border:'1px solid #d1d5db', borderRadius:'8px', fontSize: '14px'}} />
                     </div>
                     <div>
-                        <label style={{display:'flex', alignItems: 'center', gap: '4px', fontSize:'12px', fontWeight: 'bold', color:'#4b5563', marginBottom:'5px'}}>📦 품목명</label>
-                        <input type="text" placeholder="품목명" value={productName} onChange={e => setProductName(e.target.value)} style={{padding:'8px', border:'1px solid #ced4da', borderRadius:'4px', width: '180px'}} />
+                        <label style={{display:'flex', alignItems: 'center', gap: '4px', fontSize:'12px', fontWeight: '800', color:'#475569', marginBottom:'6px'}}>📦 품목명</label>
+                        <input type="text" placeholder="품목명 검색" value={productName} onChange={e => setProductName(e.target.value)} style={{width: '100%', padding:'10px', border:'1px solid #d1d5db', borderRadius:'8px', fontSize: '14px'}} />
                     </div>
                     {!isManufacturer && (
                         <div>
-                            <label style={{display:'flex', alignItems: 'center', gap: '4px', fontSize:'12px', fontWeight: 'bold', color:'#4b5563', marginBottom:'5px'}}>🏭 제조사</label>
-                            <input type="text" placeholder="제조사명" value={manufacturer} onChange={e => setManufacturer(e.target.value)} style={{padding:'8px', border:'1px solid #ced4da', borderRadius:'4px', width: '150px'}} />
+                            <label style={{display:'flex', alignItems: 'center', gap: '4px', fontSize:'12px', fontWeight: '800', color:'#475569', marginBottom:'6px'}}>🏭 제조사</label>
+                            <input type="text" placeholder="제조사명 검색" value={manufacturer} onChange={e => setManufacturer(e.target.value)} style={{width: '100%', padding:'10px', border:'1px solid #d1d5db', borderRadius:'8px', fontSize: '14px'}} />
                         </div>
                     )}
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                        <button className="primary" onClick={handleSearch} disabled={loading} style={{ height: '37px', padding: '0 20px', fontWeight: 'bold' }}>{loading ? '조회 중...' : '🔍 조회'}</button>
-                        <button className="secondary" onClick={handleReset} disabled={loading} style={{ height: '37px', padding: '0 20px' }}>초기화</button>
-                    </div>
                 </div>
             </div>
 

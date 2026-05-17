@@ -2,6 +2,8 @@ package com.example.ims.controller;
 
 import com.example.ims.entity.Product;
 import com.example.ims.entity.ProductHistory;
+import com.example.ims.dto.ProductIngredientDto;
+import com.example.ims.dto.ProductSummaryRecord;
 import com.example.ims.service.FileStorageService;
 import com.example.ims.service.ProductService;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +36,7 @@ public class ProductController {
     private final FileStorageService fileStorageService;
 
     @GetMapping
-    public ResponseEntity<org.springframework.data.domain.Page<com.example.ims.dto.ProductSummaryRecord>> getProducts(
+    public ResponseEntity<org.springframework.data.domain.Page<ProductSummaryRecord>> getProducts(
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
@@ -98,7 +100,7 @@ public class ProductController {
 
     @PostMapping("/upload-ingredients")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES', 'QUALITY_TEAM')")
-    public ResponseEntity<List<com.example.ims.dto.ProductIngredientDto>> uploadIngredientsFile(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<List<ProductIngredientDto>> uploadIngredientsFile(@RequestParam("file") MultipartFile file) {
         try {
             System.out.println("Processing Excel file for ingredients upload: " + file.getOriginalFilename());
             List<com.example.ims.dto.ProductIngredientDto> parsedIngredients = productService.parseIngredientsExcel(file);
@@ -147,7 +149,7 @@ public class ProductController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<org.springframework.data.domain.Page<com.example.ims.dto.ProductSummaryRecord>> search(
+    public ResponseEntity<org.springframework.data.domain.Page<ProductSummaryRecord>> search(
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestParam(required = false) String itemCode,
             @RequestParam(required = false) String productName,

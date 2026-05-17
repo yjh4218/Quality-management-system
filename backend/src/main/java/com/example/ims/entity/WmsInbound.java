@@ -21,7 +21,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@org.hibernate.annotations.SQLRestriction("is_deleted = false")
+@org.hibernate.annotations.SQLRestriction("(is_deleted = false OR is_deleted IS NULL)")
 public class WmsInbound {
 
     @Id
@@ -33,7 +33,17 @@ public class WmsInbound {
     
     @Builder.Default
     @Column(name = "is_deleted", columnDefinition = "boolean default false")
-    private boolean isDeleted = false;
+    private Boolean deleted = false;
+
+    public boolean isDeleted() {
+        return deleted != null && deleted;
+    }
+
+    public void setIsDeleted(boolean val) {
+        this.deleted = val;
+    }
+
+    private LocalDateTime deletedAt;
 
     @Column(nullable = false)
     private String itemCode;

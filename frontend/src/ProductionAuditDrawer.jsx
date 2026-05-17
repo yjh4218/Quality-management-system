@@ -4,8 +4,10 @@ import {
     updateProductionAudit,
     toggleProductDisclosure,
     uploadFile,
-    getProductionAuditHistory
+    getProductionAuditHistory,
+    deleteProductionAudit
 } from './api';
+import * as api from './api';
 import { toast } from 'react-toastify';
 import ProductSearchPopup from './ProductSearchPopup';
 import SaveConfirmModal from './components/SaveConfirmModal';
@@ -36,7 +38,7 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
         canViewHistory: false
     });
 
-    const { canEdit, isAdmin, hasPerm } = usePermissions(user);
+    const { canEdit, isAdmin, hasPerm, canDelete } = usePermissions(user);
     const canRegister = canEdit('qualityPhotoAudit');
 
     useEffect(() => {
@@ -119,6 +121,21 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
             paths.splice(index, 1);
             return { ...prev, [field]: paths.join(',') };
         });
+    };
+
+    const handleAuditDelete = async () => {
+        if (!audit || !audit.id) return;
+        
+        if (window.confirm("정말 이 생산감리 내역을 삭제하시겠습니까? 삭제된 데이터는 휴지통에서 확인 가능합니다.")) {
+            try {
+                await deleteProductionAudit(audit.id);
+                toast.success("생산감리 내역이 삭제되었습니다.");
+                onSaveSuccess();
+                onClose();
+            } catch (error) {
+                toast.error("삭제 중 오류가 발생했습니다.");
+            }
+        }
     };
 
     const handleSave = async () => {
@@ -393,7 +410,6 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
                                 Object.entries(
                                     history.reduce((acc, rec) => {
                                         const timeKey = rec.modifiedAt ? rec.modifiedAt.substring(0, 19).replace('T', ' ') : '알 수 없는 시간';
-                                        // [고도화] 상세 사용자 정보 우선 노출, 없으면 기존 modifier 필드 사용
                                         const mName = rec.modifierName || rec.modifier || '시스템';
                                         const mId = rec.modifierUsername ? `(${rec.modifierUsername})` : '';
                                         const mComp = rec.modifierCompany ? ` [${rec.modifierCompany}]` : '';
@@ -440,6 +456,15 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
 
                 <div className="modal-footer" style={{ padding: '20px 25px' }}>
                     <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', width: '100%' }}>
+                        {audit && canDelete('qualityPhotoAudit') && (
+                            <button 
+                                onClick={handleAuditDelete} 
+                                className="outline" 
+                                style={{ padding: '10px 25px', color: '#e53e3e', borderColor: '#e53e3e' }}
+                            >
+                                🗑️ 삭제
+                            </button>
+                        )}
                         <button onClick={onClose} className="secondary" style={{ padding: '10px 25px' }}>닫기</button>
                         
                         {/* Manufacturer Save Button */}

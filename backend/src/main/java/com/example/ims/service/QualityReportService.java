@@ -25,6 +25,7 @@ public class QualityReportService {
     private final WmsService wmsService;
     private final ExcelExportService excelExportService;
     private final UserRepository userRepository;
+    private final com.example.ims.repository.ProductRepository productRepository;
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @Transactional
@@ -273,6 +274,34 @@ public class QualityReportService {
         historyRepository.save(history);
     }
 
+    @Transactional
+    public void deleteInbound(Long id, User modifierUser) {
+        WmsInbound inbound = inboundRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("해당 입고 정보를 찾을 수 없습니다."));
+        
+        String modifier = modifierUser.getName() + " (" + (modifierUser.getCompanyName() != null ? modifierUser.getCompanyName() : "시스템") + ")";
+        String oldJson = auditLogService.toCompactJson(inbound);
+        
+        inbound.setDeleted(true);
+        inbound.setDeletedAt(java.time.LocalDateTime.now());
+        inboundRepository.save(inbound);
+        
+        // 글로벌 감사 로그 기록
+        eventPublisher.publishEvent(com.example.ims.event.EntityChangeEvent.builder()
+                .entityType("INBOUND")
+                .entityId(id)
+                .action("DELETE")
+                .modifier(modifier)
+                .modifierId(modifierUser.getId())
+                .modifierUsername(modifierUser.getUsername())
+                .modifierName(modifierUser.getName())
+                .modifierCompany(modifierUser.getCompanyName())
+                .description("입고 품질 정보 삭제 (소프트 삭제): " + inbound.getGrnNumber())
+                .oldEntity(oldJson)
+                .newEntity(inbound)
+                .build());
+    }
+
     public List<WmsInboundHistory> getInboundHistory(Long inboundId, User user) {
         WmsInbound inbound = inboundRepository.findById(inboundId)
                 .orElseThrow(() -> new RuntimeException("Inbound not found"));
@@ -347,5 +376,164 @@ public class QualityReportService {
             i.getInboundInspectionStatus(), i.getInboundInspectionResult(), i.getControlSampleStatus(), i.getFinalInspectionResult(),
             i.getQualityDecisionDate() != null ? i.getQualityDecisionDate().toString() : "-"
         });
+    }
+    /**
+     * [QMS Master] Import inbound data from Excel file.
+     * Uses Apache POI for XSSF parsing.
+     * 
+     * @param file The multipart Excel file
+     * @return Number of imported rows
+     * @throws java.io.IOException if file reading fails
+     */
+    @Transactional
+    public int importInboundExcel(org.springframework.web.multipart.MultipartFile file) throws java.io.IOException {
+        int count = 0;
+        try (java.io.InputStream is = file.getInputStream();
+             org.apache.poi.ss.usermodel.Workbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook(is)) {
+            
+            org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
+            java.util.Iterator<org.apache.poi.ss.usermodel.Row> rows = sheet.iterator();
+            
+            // Skip header
+            if (rows.hasNext()) rows.next();
+            
+            while (rows.hasNext()) {
+                org.apache.poi.ss.usermodel.Row row = rows.next();
+                if (isRowEmpty(row)) continue;
+                
+                WmsInbound inbound = new WmsInbound();
+                
+                // Column 0: Date (Expected YYYY-MM-DD or Date type)
+                org.apache.poi.ss.usermodel.Cell dateCell = row.getCell(0);
+                if (dateCell != null) {
+                    if (dateCell.getCellType() == org.apache.poi.ss.usermodel.CellType.NUMERIC && org.apache.poi.ss.usermodel.DateUtil.isCellDateFormatted(dateCell)) {
+                        inbound.setInboundDate(dateCell.getLocalDateTimeCellValue());
+                    } else {
+                        try {
+                            String dateStr = getCellValueAsString(dateCell);
+                            if (dateStr != null && !dateStr.isEmpty()) {
+                                inbound.setInboundDate(java.time.LocalDate.parse(dateStr).atStartOfDay());
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                }
+                
+                // Column 1: Item Code (Mandatory)
+                String itemCode = getCellValueAsString(row.getCell(1));
+                if (itemCode == null || itemCode.trim().isEmpty()) continue;
+                inbound.setItemCode(itemCode.trim());
+                
+                // Column 2: Product Name (Optional, auto-fills from Product Master if empty)
+                String productName = getCellValueAsString(row.getCell(2));
+                inbound.setProductName(productName != null ? productName.trim() : null);
+                
+                // Column 3: Quantity
+                org.apache.poi.ss.usermodel.Cell qtyCell = row.getCell(3);
+                if (qtyCell != null) {
+                    if (qtyCell.getCellType() == org.apache.poi.ss.usermodel.CellType.NUMERIC) {
+                        inbound.setQuantity((int) qtyCell.getNumericCellValue());
+                    } else {
+                        try {
+                            String qtyStr = getCellValueAsString(qtyCell).replaceAll("[^0-9]", "");
+                            if (!qtyStr.isEmpty()) {
+                                inbound.setQuantity(Integer.parseInt(qtyStr));
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                }
+                
+                // Column 4: Manufacturer
+                String manufacturer = getCellValueAsString(row.getCell(4));
+                inbound.setManufacturer(manufacturer != null ? manufacturer.trim() : null);
+                
+                // Column 5: Lot Number
+                String lotNumber = getCellValueAsString(row.getCell(5));
+                inbound.setLotNumber(lotNumber != null ? lotNumber.trim() : null);
+                
+                // Column 6: Remark
+                String remark = getCellValueAsString(row.getCell(6));
+                inbound.setRemark(remark != null ? remark.trim() : null);
+                
+                // [QMS Logic] Auto-fill Product Name from Product Master if missing in Excel
+                if (inbound.getProductName() == null || inbound.getProductName().isEmpty()) {
+                    productRepository.findByItemCode(inbound.getItemCode())
+                            .ifPresent(p -> inbound.setProductName(p.getProductName()));
+                }
+                
+                // Default status for imported items
+                inbound.setOverallStatus(WmsInbound.OverallStatus.STEP1_WAITING);
+                
+                // Save via WmsService to trigger GRN auto-generation and Audit Log events
+                wmsService.saveWmsInbound(inbound);
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private String getCellValueAsString(org.apache.poi.ss.usermodel.Cell cell) {
+        if (cell == null) return "";
+        switch (cell.getCellType()) {
+            case STRING: return cell.getStringCellValue();
+            case NUMERIC: 
+                if (org.apache.poi.ss.usermodel.DateUtil.isCellDateFormatted(cell)) {
+                    return cell.getLocalDateTimeCellValue().toLocalDate().toString();
+                }
+                double val = cell.getNumericCellValue();
+                if (val == (long) val) return String.valueOf((long) val);
+                return String.valueOf(val);
+            case BOOLEAN: return String.valueOf(cell.getBooleanCellValue());
+            case FORMULA: 
+                try {
+                    return cell.getStringCellValue();
+                } catch (Exception e) {
+                    return String.valueOf(cell.getNumericCellValue());
+                }
+            case BLANK: return "";
+            default: return "";
+        }
+    }
+
+    private boolean isRowEmpty(org.apache.poi.ss.usermodel.Row row) {
+        if (row == null) return true;
+        if (row.getLastCellNum() <= 0) return true;
+        for (int c = row.getFirstCellNum(); c < row.getLastCellNum(); c++) {
+            org.apache.poi.ss.usermodel.Cell cell = row.getCell(c);
+            if (cell != null && cell.getCellType() != org.apache.poi.ss.usermodel.CellType.BLANK) {
+                String val = getCellValueAsString(cell);
+                if (val != null && !val.trim().isEmpty()) return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * [QMS Master] Generate a standard Excel template for inbound data import.
+     */
+    public byte[] getImportTemplate() throws java.io.IOException {
+        try (org.apache.poi.ss.usermodel.Workbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+            
+            org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("ImportTemplate");
+            org.apache.poi.ss.usermodel.Row header = sheet.createRow(0);
+            
+            String[] headers = {"입고일자 (YYYY-MM-DD)", "품목코드", "제품명 (선택)", "수량", "제조사", "LOT번호", "비고"};
+            for (int i = 0; i < headers.length; i++) {
+                header.createCell(i).setCellValue(headers[i]);
+            }
+            
+            // Add a sample row
+            org.apache.poi.ss.usermodel.Row sample = sheet.createRow(1);
+            sample.createCell(0).setCellValue(java.time.LocalDate.now().toString());
+            sample.createCell(1).setCellValue("ITEM-CODE-001");
+            sample.createCell(2).setCellValue("샘플 제품명");
+            sample.createCell(3).setCellValue(100);
+            sample.createCell(4).setCellValue("한국콜마");
+            sample.createCell(5).setCellValue("LOT-SAMPLE-01");
+            sample.createCell(6).setCellValue("샘플 비고입니다.");
+
+            workbook.write(out);
+            return out.toByteArray();
+        }
     }
 }

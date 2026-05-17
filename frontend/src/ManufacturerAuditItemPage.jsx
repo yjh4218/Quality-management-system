@@ -147,15 +147,67 @@ const ManufacturerAuditItemPage = () => {
     if (isLoading && templates.length === 0) return <div className="p-4">로딩 중...</div>;
 
     return (
-        <div className="page-container-inner" style={{ padding: '20px' }}>
-            <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <div>
-                    <h2 style={{ margin: 0 }}>⚙️ 제조사 점검항목 관리</h2>
-                    <p style={{ color: '#666', fontSize: '14px', marginTop: '5px' }}>제조사 Audit에 사용되는 점검 양식과 항목을 설정합니다.</p>
+        <div className="page-container-inner" style={{ padding: '20px', height: '100%', overflowY: 'auto' }}>
+            <div className="page-header-standard" style={{ 
+                marginBottom: '20px', 
+                flexDirection: 'column', 
+                alignItems: 'flex-start', 
+                gap: '12px',
+                padding: '24px',
+                backgroundColor: '#fff',
+                borderRadius: '16px',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                border: '1px solid #f1f5f9'
+            }}>
+                {/* 1단계: 생성 및 연동 (최상단) */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                    <div className="header-title">
+                        <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0, fontSize: '22px', fontWeight: '800', color: '#1e293b' }}>
+                            ⚙️ 제조사 점검항목 관리
+                        </h2>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                            className="primary" 
+                            onClick={addNewTemplate} 
+                            style={{ 
+                                padding: '10px 24px', 
+                                borderRadius: '10px', 
+                                fontWeight: '800', 
+                                backgroundColor: '#2563eb',
+                                color: '#fff',
+                                border: 'none',
+                                cursor: 'pointer'
+                            }} 
+                        >
+                            ➕ 새 양식 만들기
+                        </button>
+                    </div>
                 </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                    <button className="secondary" onClick={addNewTemplate}>+ 새 양식 만들기</button>
-                    <button className="primary" onClick={handleSave} style={{ padding: '8px 25px', fontWeight: 'bold' }}>전체 저장</button>
+
+                {/* 2단계: 핵심 제어 (중단) */}
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    width: '100%', 
+                    alignItems: 'center', 
+                    padding: '12px 0', 
+                    borderTop: '1px solid #f1f5f9',
+                    borderBottom: '1px solid #f1f5f9'
+                }}>
+                    <div style={{ color: '#64748b', fontSize: '13px' }}>
+                        제조사 Audit에 사용되는 점검 양식과 항목을 설정합니다.
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                            className="primary" 
+                            onClick={handleSave} 
+                            style={{ backgroundColor: '#1e293b', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px' }}
+                        >
+                            💾 전체 저장
+                        </button>
+                    </div>
                 </div>
             </div>
 

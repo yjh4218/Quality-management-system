@@ -20,13 +20,13 @@ public class DataManagementController {
     private final DataManagementService dataManagementService;
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('trashBin', 'VIEW')")
     public ResponseEntity<List<TrashItemDto>> getTrashItems() {
         return ResponseEntity.ok(dataManagementService.getTrashItems());
     }
 
     @PostMapping("/{type}/{id}/restore")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('trashBin', 'EDIT')")
     @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
     public ResponseEntity<?> restoreItem(@PathVariable String type, @PathVariable Long id) {
         try {
@@ -39,7 +39,7 @@ public class DataManagementController {
     }
 
     @DeleteMapping("/{type}/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('trashBin', 'DELETE')")
     @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
     public ResponseEntity<?> hardDelete(@PathVariable String type, @PathVariable Long id, java.security.Principal principal) {
         try {

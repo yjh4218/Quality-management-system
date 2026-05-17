@@ -25,6 +25,7 @@ import java.time.LocalDateTime;
     @Index(name = "idx_claim_manufacturer", columnList = "manufacturer"),
     @Index(name = "idx_claim_shared_with_manufacturer", columnList = "sharedWithManufacturer")
 })
+@org.hibernate.annotations.SQLRestriction("(is_deleted = false OR is_deleted IS NULL)")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -39,8 +40,18 @@ public class Claim {
     private String claimNumber;
     
     @Builder.Default
-    @Column(columnDefinition = "boolean default false")
-    private boolean isDeleted = false;
+    @Column(name = "is_deleted", columnDefinition = "boolean default false")
+    private Boolean deleted = false;
+
+    public boolean isDeleted() {
+        return deleted != null && deleted;
+    }
+
+    public void setIsDeleted(boolean val) {
+        this.deleted = val;
+    }
+
+    private LocalDateTime deletedAt;
 
     // 접수부서 (CS/영업) 필드
     @jakarta.validation.constraints.NotNull(message = "접수일자는 필수입니다.")

@@ -104,25 +104,70 @@ const DashboardManagementPage = ({ user }) => {
     };
 
     return (
-        <div style={{ padding: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h1 style={{ margin: 0 }}>🎨 대시보드 제작 및 관리</h1>
-                <button 
-                    onClick={() => handleOpenModal()}
-                    style={{ 
-                        padding: '10px 20px', 
-                        backgroundColor: '#4f46e5', 
-                        color: 'white', 
-                        borderRadius: '6px', 
-                        cursor: canEdit ? 'pointer' : 'default',
-                        border: 'none',
-                        fontWeight: '600',
-                        opacity: canEdit ? 1 : 0.5
-                    }}
-                    disabled={!canEdit}
-                >
-                    + 새 대시보드 제작
-                </button>
+        <div style={{ padding: '20px', height: '100%', overflowY: 'auto' }}>
+            <div className="page-header-standard" style={{ 
+                marginBottom: '20px', 
+                flexDirection: 'column', 
+                alignItems: 'flex-start', 
+                gap: '12px',
+                padding: '24px',
+                backgroundColor: '#fff',
+                borderRadius: '16px',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                border: '1px solid #f1f5f9'
+            }}>
+                {/* 1단계: 생성 및 연동 (최상단) */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                    <div className="header-title">
+                        <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0, fontSize: '22px', fontWeight: '800', color: '#1e293b' }}>
+                            🎨 대시보드 제작 및 관리
+                        </h2>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                            className="primary" 
+                            onClick={() => handleOpenModal()} 
+                            style={{ 
+                                padding: '10px 24px', 
+                                borderRadius: '10px', 
+                                fontWeight: '800', 
+                                backgroundColor: '#2563eb',
+                                color: '#fff',
+                                border: 'none',
+                                cursor: canEdit ? 'pointer' : 'default',
+                                opacity: canEdit ? 1 : 0.5
+                            }} 
+                            disabled={!canEdit}
+                        >
+                            ➕ 새 대시보드 제작
+                        </button>
+                    </div>
+                </div>
+
+                {/* 2단계: 핵심 제어 (중단) */}
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    width: '100%', 
+                    alignItems: 'center', 
+                    padding: '12px 0', 
+                    borderTop: '1px solid #f1f5f9',
+                    borderBottom: '1px solid #f1f5f9'
+                }}>
+                    <div style={{ color: '#64748b', fontSize: '13px' }}>
+                        권한별 홈 화면의 위젯 구성 및 레이아웃을 중앙에서 통제합니다.
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                            className="primary" 
+                            onClick={fetchLayouts} 
+                            style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px' }}
+                        >
+                            🔍 조회
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>

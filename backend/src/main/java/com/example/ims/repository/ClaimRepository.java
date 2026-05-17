@@ -23,9 +23,13 @@ public interface ClaimRepository extends JpaRepository<Claim, Long>, JpaSpecific
     // [신규] 제조사 품질 답변 완료 알림용
     List<Claim> findTop50ByMfrTerminationDateAfterOrderByMfrTerminationDateDesc(LocalDate date);
 
-    // [휴지통] 삭제된 항목 조회 (명시적 JPQL)
-    @org.springframework.data.jpa.repository.Query("SELECT c FROM Claim c WHERE c.isDeleted = true ORDER BY c.updatedAt DESC")
+    // [휴지통] 삭제된 항목 조회 (Native Query로 SQLRestriction 우회)
+    @org.springframework.data.jpa.repository.Query(value = "SELECT * FROM claims WHERE is_deleted = true ORDER BY updated_at DESC", nativeQuery = true)
     List<Claim> findDeletedClaims();
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query(value = "UPDATE claims SET is_deleted = false WHERE id = :id", nativeQuery = true)
+    void restoreClaim(Long id);
 
     /**
      * PostgreSQL 시퀀스 기반 클레임 채번 (동시성 보장)

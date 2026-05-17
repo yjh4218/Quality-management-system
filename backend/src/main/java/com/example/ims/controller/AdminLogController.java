@@ -16,7 +16,7 @@ public class AdminLogController {
     private final AuditLogService auditLogService;
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('MENU_LOGS_VIEW')")
+    @PreAuthorize("@perm.can('logs', 'VIEW')")
     public ResponseEntity<org.springframework.data.domain.Page<AuditLog>> getAllLogs(
             @org.springframework.web.bind.annotation.RequestParam(required = false) String entityType,
             @org.springframework.web.bind.annotation.RequestParam(required = false) String search,
@@ -28,7 +28,7 @@ public class AdminLogController {
     }
 
     @org.springframework.web.bind.annotation.PostMapping("/{logId}/restore")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('MENU_LOGS_EDIT')")
+    @PreAuthorize("@perm.can('logs', 'EDIT')")
     public ResponseEntity<Void> restoreFromLog(@org.springframework.web.bind.annotation.PathVariable Long logId, @org.springframework.security.core.annotation.AuthenticationPrincipal org.springframework.security.core.userdetails.UserDetails userDetails) {
         auditLogService.restoreFromLog(logId, userDetails.getUsername());
         return ResponseEntity.ok().build();

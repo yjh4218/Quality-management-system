@@ -19,9 +19,13 @@ const MENU_OPTIONS = [
     { key: 'bugReports', category: '시스템', label: '버그 리포트 관리', actions: ['VIEW', 'EDIT'] },
     { key: 'logs', category: '시스템', label: '시스템 변경 이력', actions: ['VIEW', 'EDIT', 'DELETE'] },
     { key: 'roles', category: '시스템', label: '권한 관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
+    { key: 'guideManagement', category: '시스템', label: '가이드 관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
+    { key: 'dashboardMgmt', category: '시스템', label: '대시보드 제작/관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
+    { key: 'trashBin', category: '시스템', label: '데이터 복구 (휴지통)', actions: ['VIEW', 'EDIT', 'DELETE'] },
     { key: 'products', category: '마스터', label: '제품코드 마스터', actions: ['VIEW', 'EDIT', 'DELETE'] },
     { key: 'bomMaster', category: '마스터', label: '구성품 BOM 마스터 관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
     { key: 'bomCategories', category: '마스터', label: 'BOM 유형 설정/관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
+    { key: 'ingredientCompliance', category: '마스터', label: '성분 안전성 검토 (Global Compliance)', actions: ['VIEW'] },
     { key: 'manufacturerAuditItems', category: '마스터', label: '제조사 점검항목 관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
     { key: 'packagingTemplates', category: '마스터', label: '포장공정 템플릿 관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
     { key: 'packagingRules', category: '마스터', label: '채널별 포장 규칙 관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
@@ -36,6 +40,7 @@ const MENU_OPTIONS = [
     { key: 'claims', category: '클레임', label: '클레임 조회 및 입력 (제조사 접근 필요)', actions: ['VIEW', 'EDIT', 'DELETE'] },
     { key: 'claimDashboard', category: '클레임', label: '클레임 대시보드', actions: ['VIEW'] },
 ];
+
 
 const FUNCTIONAL_PERMISSIONS = [
     { key: 'AUDIT_DISCLOSE_MANAGE', label: '📸 사진감리 제조사 공개 제어', description: '생산감리 리스트에서 제조사 공개/비공개 여부를 설정할 수 있습니다.' },
@@ -260,7 +265,7 @@ const RoleManagementPage = ({ user }) => {
         let updated = currentFuncPerms.includes(permissionKey)
             ? currentFuncPerms.filter(p => p !== permissionKey)
             : [...currentFuncPerms, permissionKey];
-        
+
         setSelectedRole({ ...selectedRole, allowedPermissions: JSON.stringify(updated) });
     };
 
@@ -331,44 +336,113 @@ const RoleManagementPage = ({ user }) => {
     ], [canEdit, canDelete, isAdmin]);
 
     return (
-        <div className="page-container">
-            {/* 표준화된 헤더 */}
-            <div className="page-header-standard">
-                <div className="header-title">
-                    <h2>🔐 시스템 권한 마스터 관리</h2>
-                    <p>사용자 역할별 메뉴 접근 제어 및 기능적 권한을 중앙에서 정의하고 배포합니다.</p>
+        <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#f1f5f9' }}>
+
+            {/* 3단계 표준 헤더 레이아웃 */}
+            <div className="page-header-standard" style={{
+                marginBottom: '20px',
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                gap: '12px',
+                padding: '24px',
+                backgroundColor: '#fff',
+                borderRadius: '16px',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                border: '1px solid #f1f5f9'
+            }}>
+                {/* 1단계: 생성 및 연동 (최상단) */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                    <div className="header-title">
+                        <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0, fontSize: '22px', fontWeight: '800', color: '#1e293b' }}>
+                            🔐 시스템 권한 마스터 관리
+                        </h2>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                            className="primary"
+                            onClick={() => handleOpenModal()}
+                            style={{
+                                padding: '10px 24px',
+                                borderRadius: '10px',
+                                fontWeight: '800',
+                                backgroundColor: '#2563eb',
+                                color: '#fff',
+                                border: 'none',
+                                cursor: canEdit ? 'pointer' : 'not-allowed',
+                                opacity: canEdit ? 1 : 0.5
+                            }}
+                            disabled={!canEdit}
+                        >
+                            ➕ 신규 권한 등록
+                        </button>
+                    </div>
                 </div>
-                <button 
-                    className="primary" 
-                    onClick={() => handleOpenModal()} 
-                    style={{ padding: '12px 30px', borderRadius: '12px', fontWeight: '800', opacity: canEdit ? 1 : 0.5 }} 
-                    disabled={!canEdit}
-                >
-                    ➕ 신규 권한 등록
-                </button>
+
+                {/* 2단계: 핵심 제어 (중단) */}
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    width: '100%',
+                    alignItems: 'center',
+                    padding: '12px 0',
+                    borderTop: '1px solid #f1f5f9',
+                    borderBottom: '1px solid #f1f5f9'
+                }}>
+                    <div style={{ color: '#64748b', fontSize: '13px' }}>
+                        사용자 역할별 메뉴 접근 제어 및 기능적 권한을 중앙에서 정의합니다.
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                            className="outline"
+                            onClick={() => alert("권한 목록 엑셀 다운로드 기능 준비 중입니다.")}
+                            style={{ fontSize: '14px', padding: '10px 20px', backgroundColor: '#fff', color: '#107c41', borderColor: '#107c41' }}
+                        >
+                            📊 결과 다운로드
+                        </button>
+                        <button
+                            className="primary"
+                            onClick={fetchRoles}
+                            style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px' }}
+                        >
+                            🔍 조회
+                        </button>
+                        <button
+                            className="outline"
+                            onClick={() => setQuickFilterText('')}
+                            style={{ padding: '10px 16px', fontSize: '14px' }}
+                        >
+                            ♻️ 초기화
+                        </button>
+                    </div>
+                </div>
             </div>
 
-            {/* 필터 및 데이터 카드 (제품코드 마스터 스타일 벤치마킹) */}
-            <div className="card" style={{ padding: '30px', borderRadius: '24px', flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <div style={{ marginBottom: '25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontWeight: '800', fontSize: '16px', color: '#475569' }}>
-                        권한 리스트 <span style={{ color: 'var(--primary-color)', marginLeft: '8px' }}>{rowData.length}</span>
-                    </div>
-                    <div className="search-bar-standard" style={{ padding: '0', border: 'none', boxShadow: 'none', margin: 0, width: '350px' }}>
-                        <div style={{ display: 'flex', width: '100%', position: 'relative' }}>
+            {/* 검색 필터 그리드 */}
+            <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🔍 권한 검색</label>
+                        <div style={{ position: 'relative' }}>
                             <input
                                 type="text"
-                                placeholder="권한 코드 또는 표시명으로 빠른 검색..."
+                                placeholder="권한 코드 또는 표시명 검색..."
                                 value={quickFilterText}
                                 onChange={(e) => setQuickFilterText(e.target.value)}
-                                style={{ padding: '12px 45px 12px 20px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '14px', width: '100%' }}
+                                style={{ width: '100%', padding: '10px 40px 10px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px' }}
                             />
-                            <span style={{ position: 'absolute', right: '15px', top: '50%', transform: 'translateY(-50%)', fontSize: '18px' }}>🔍</span>
+                            <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>🔍</span>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <div className="ag-theme-alpine" style={{ flex: 1, width: '100%', minHeight: '500px' }}>
+            {/* 데이터 카드 */}
+            <div className="card" style={{ padding: '24px', borderRadius: '16px', flex: 1, display: 'flex', flexDirection: 'column', background: 'white', border: '1px solid #e2e8f0' }}>
+                <div style={{ marginBottom: '15px', fontWeight: '800', fontSize: '14px', color: '#64748b' }}>
+                    등록된 권한 수: <span style={{ color: '#2563eb' }}>{rowData.length}</span> 건
+                </div>
+                <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
                     <AgGridReact
                         theme="legacy"
                         rowHeight={60}
@@ -521,7 +595,7 @@ const RoleManagementPage = ({ user }) => {
                                                 const currentFuncPerms = getParsedPermissions(selectedRole.allowedPermissions, true);
                                                 const isChecked = currentFuncPerms.includes(fp.key);
                                                 return (
-                                                    <div 
+                                                    <div
                                                         key={fp.key}
                                                         onClick={() => canEdit && (!isInitialSystemRole || isAdmin) && toggleFunctionalPermission(fp.key)}
                                                         style={{

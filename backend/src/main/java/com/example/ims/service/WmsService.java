@@ -99,6 +99,7 @@ public class WmsService {
         WmsInbound inbound = inboundRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Inbound record not found"));
         inbound.setDeleted(true);
+        inbound.setDeletedAt(java.time.LocalDateTime.now());
         WmsInbound saved = inboundRepository.save(inbound);
 
         eventPublisher.publishEvent(com.example.ims.event.EntityChangeEvent.builder()

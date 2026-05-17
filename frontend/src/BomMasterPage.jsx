@@ -110,62 +110,161 @@ const BomMasterPage = ({ user }) => {
     ], []);
 
     return (
-        <div className="page-container" style={{ padding: '24px', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-            <header className="page-header" style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-                <div>
-                    <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1a202c' }}>📏 구성품 BOM 마스터 관리</h1>
-                    <p style={{ color: '#718096', fontSize: '14px' }}>제품 구성품(용기, 캡, 라벨 등)의 상세 스펙과 재질 정보를 통합 관리합니다.</p>
-                </div>
-                <button className="primary" onClick={handleCreateNew} disabled={!canEdit} style={{ opacity: canEdit ? 1 : 0.5 }}>
-                    <span style={{ marginRight: '8px' }}>+</span> 신규 구성품 등록
-                </button>
-            </header>
+        <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#f1f5f9' }}>
+            
+            {/* 3단계 표준 헤더 레이아웃 */}
+            <div className="page-header-standard" style={{ 
+                marginBottom: '20px', 
+                flexDirection: 'column', 
+                alignItems: 'flex-start', 
+                gap: '12px',
+                padding: '24px',
+                backgroundColor: '#fff',
+                borderRadius: '16px',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                border: '1px solid #f1f5f9'
+            }}>
+                {/* 1단계: 생성 및 연동 (최상단) */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                    <div className="header-title">
+                        <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0, fontSize: '22px', fontWeight: '800', color: '#1e293b' }}>
+                            📏 구성품 BOM 마스터 관리
+                        </h2>
+                    </div>
 
-            {/* 검색 필터 영역 */}
-            <div className="card" style={{ padding: '20px', marginBottom: '24px', flexShrink: 0 }}>
-                <form onSubmit={handleSearch} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '15px', alignItems: 'end' }}>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label>BOM 코드</label>
-                        <input value={filters.bomCode} onChange={e => setFilters({...filters, bomCode: e.target.value})} placeholder="코드 검색" />
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                            className="primary" 
+                            onClick={handleCreateNew} 
+                            style={{ 
+                                padding: '10px 24px', 
+                                borderRadius: '10px', 
+                                fontWeight: '800', 
+                                backgroundColor: '#2563eb',
+                                color: '#fff',
+                                border: 'none',
+                                cursor: canEdit ? 'pointer' : 'not-allowed',
+                                opacity: canEdit ? 1 : 0.5
+                            }} 
+                            disabled={!canEdit}
+                        >
+                            ➕ 신규 구성품 등록
+                        </button>
                     </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label>구성품명</label>
-                        <input value={filters.componentName} onChange={e => setFilters({...filters, componentName: e.target.value})} placeholder="구성품명 검색" />
+                </div>
+
+                {/* 2단계: 핵심 제어 (중단) */}
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    width: '100%', 
+                    alignItems: 'center', 
+                    padding: '12px 0', 
+                    borderTop: '1px solid #f1f5f9',
+                    borderBottom: '1px solid #f1f5f9'
+                }}>
+                    <div style={{ color: '#64748b', fontSize: '13px' }}>
+                        제품 구성품(용기, 캡, 라벨 등)의 상세 스펙과 재질 정보를 통합 관리합니다.
                     </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label>유형</label>
-                        <select value={filters.type} onChange={e => setFilters({...filters, type: e.target.value, detailedType: ''})}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                            className="outline" 
+                            onClick={() => alert("BOM 마스터 엑셀 다운로드 기능 준비 중입니다.")}
+                            style={{ fontSize: '14px', padding: '10px 20px', backgroundColor: '#fff', color: '#107c41', borderColor: '#107c41' }}
+                        >
+                            📊 결과 다운로드
+                        </button>
+                        <button 
+                            className="primary" 
+                            onClick={fetchMaterials} 
+                            style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px' }}
+                        >
+                            🔍 조회
+                        </button>
+                        <button 
+                            className="outline" 
+                            onClick={handleReset} 
+                            style={{ padding: '10px 16px', fontSize: '14px' }}
+                        >
+                            ♻️ 초기화
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* 검색 필터 그리드 */}
+            <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🔢 BOM 코드</label>
+                        <input
+                            type="text"
+                            value={filters.bomCode}
+                            onChange={e => setFilters({...filters, bomCode: e.target.value})}
+                            placeholder="코드 검색"
+                            style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px' }}
+                        />
+                    </div>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>📦 구성품명</label>
+                        <input
+                            type="text"
+                            value={filters.componentName}
+                            onChange={e => setFilters({...filters, componentName: e.target.value})}
+                            placeholder="구성품명 검색"
+                            style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px' }}
+                        />
+                    </div>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>📂 유형</label>
+                        <select
+                            value={filters.type}
+                            onChange={e => setFilters({...filters, type: e.target.value, detailedType: ''})}
+                            style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px' }}
+                        >
                             <option value="">전체 유형</option>
                             {Object.keys(BOM_TYPE_MAP).map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
                     </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label>세부 유형</label>
-                        <select value={filters.detailedType} onChange={e => setFilters({...filters, detailedType: e.target.value})}>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>📝 세부 유형</label>
+                        <select
+                            value={filters.detailedType}
+                            onChange={e => setFilters({...filters, detailedType: e.target.value})}
+                            style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px' }}
+                        >
                             <option value="">전체 세부유형</option>
                             {filters.type && BOM_TYPE_MAP[filters.type].map(dt => <option key={dt} value={dt}>{dt}</option>)}
                         </select>
                     </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label>제조사</label>
-                        <input value={filters.manufacturer} onChange={e => setFilters({...filters, manufacturer: e.target.value})} placeholder="제조사 검색" />
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏭 제조사</label>
+                        <input
+                            type="text"
+                            value={filters.manufacturer}
+                            onChange={e => setFilters({...filters, manufacturer: e.target.value})}
+                            placeholder="제조사 검색"
+                            style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px' }}
+                        />
                     </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                        <button type="submit" className="primary" style={{ flex: 1 }}>🔍 검색</button>
-                        <button type="button" onClick={handleReset} className="secondary">초기화</button>
-                    </div>
-                </form>
+                </div>
             </div>
 
-            {/* 리스트 영역 (AG Grid) */}
-            <div className="ag-theme-alpine" style={{ flex: 1, width: '100%', minHeight: '400px' }}>
-                <AgGridReact theme="legacy"
-                    rowData={materials} 
-                    columnDefs={colDefs} 
-                    rowHeight={50}
-                    animateRows={true}
-                    domLayout="normal"
-                />
+            {/* 데이터 카드 */}
+            <div className="card" style={{ padding: '24px', borderRadius: '16px', flex: 1, display: 'flex', flexDirection: 'column', background: 'white', border: '1px solid #e2e8f0' }}>
+                <div style={{ marginBottom: '15px', fontWeight: '800', fontSize: '14px', color: '#64748b' }}>
+                    검색 결과: <span style={{ color: '#2563eb' }}>{materials.length}</span> 건
+                </div>
+                <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
+                    <AgGridReact
+                        theme="legacy"
+                        rowData={materials}
+                        columnDefs={colDefs}
+                        rowHeight={50}
+                        animateRows={true}
+                        domLayout="normal"
+                    />
+                </div>
             </div>
 
             {isDrawerOpen && (
