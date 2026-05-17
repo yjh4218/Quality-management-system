@@ -16,16 +16,16 @@ public interface ProductionAuditRepository extends JpaRepository<ProductionAudit
     @org.springframework.data.jpa.repository.Query("SELECT a FROM ProductionAudit a WHERE (a.deleted = false OR a.deleted IS NULL) AND a.manufacturerName = :manufacturerName AND a.isDisclosed = true AND EXISTS (SELECT p FROM Product p WHERE p.itemCode = a.itemCode AND p.isMaster = true AND p.active = true)")
     List<ProductionAudit> findByManufacturerNameAndIsDisclosedTrueAndIsDeletedFalse(String manufacturerName);
 
-    @org.springframework.data.jpa.repository.Query("SELECT DISTINCT p FROM Product p LEFT JOIN FETCH p.manufacturerInfo WHERE p.active = true AND p.isMaster = true AND NOT EXISTS " +
+    @org.springframework.data.jpa.repository.Query("SELECT DISTINCT p FROM Product p LEFT JOIN p.manufacturerInfo WHERE p.active = true AND p.isMaster = true AND NOT EXISTS " +
             "(SELECT a FROM ProductionAudit a WHERE a.itemCode = p.itemCode AND (a.deleted = false OR a.deleted IS NULL))")
     List<com.example.ims.entity.Product> findPendingProducts();
 
-    @org.springframework.data.jpa.repository.Query("SELECT DISTINCT p FROM Product p LEFT JOIN FETCH p.manufacturerInfo WHERE p.active = true AND p.isMaster = true " +
+    @org.springframework.data.jpa.repository.Query("SELECT DISTINCT p FROM Product p LEFT JOIN p.manufacturerInfo WHERE p.active = true AND p.isMaster = true " +
             "AND (p.manufacturerInfo.name = :manufacturerName OR p.manufacturer = :manufacturerName) " +
             "AND NOT EXISTS (SELECT a FROM ProductionAudit a WHERE a.itemCode = p.itemCode AND (a.deleted = false OR a.deleted IS NULL))")
     List<com.example.ims.entity.Product> findPendingProductsByManufacturerInternal(String manufacturerName);
 
-    @org.springframework.data.jpa.repository.Query("SELECT DISTINCT p FROM Product p LEFT JOIN FETCH p.manufacturerInfo WHERE p.active = true AND p.isMaster = true " +
+    @org.springframework.data.jpa.repository.Query("SELECT DISTINCT p FROM Product p LEFT JOIN p.manufacturerInfo WHERE p.active = true AND p.isMaster = true " +
             "AND (p.manufacturerInfo.name = :manufacturerName OR p.manufacturer = :manufacturerName) AND p.photoAuditDisclosed = true " +
             "AND NOT EXISTS (SELECT a FROM ProductionAudit a WHERE a.itemCode = p.itemCode AND (a.deleted = false OR a.deleted IS NULL))")
     List<com.example.ims.entity.Product> findPendingProductsByManufacturerAndIsDisclosedTrue(String manufacturerName);
