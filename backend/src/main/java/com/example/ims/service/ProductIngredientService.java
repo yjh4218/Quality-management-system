@@ -156,9 +156,9 @@ public class ProductIngredientService {
     }
 
     private IngredientAnalysisResult analyzeSingleIngredient(String inciName, Double percentage) {
-        Optional<RegulatoryIngredient> regOpt = regulatoryRepository.findByInciName(inciName);
+        List<RegulatoryIngredient> regulations = regulatoryRepository.findByInciName(inciName);
         
-        if (regOpt.isEmpty()) {
+        if (regulations.isEmpty()) {
             return IngredientAnalysisResult.builder()
                     .inciName(inciName)
                     .percentage(percentage)
@@ -168,68 +168,70 @@ public class ProductIngredientService {
                     .build();
         }
 
-        RegulatoryIngredient reg = regOpt.get();
         List<String> violations = new ArrayList<>();
         String status = "OK";
         StringBuilder message = new StringBuilder();
 
-        // Check KR
-        if ("PROHIBITED".equalsIgnoreCase(reg.getKrStatus())) {
-            status = "DANGER";
-            violations.add("KOREA (금지)");
-        } else if ("RESTRICTED".equalsIgnoreCase(reg.getKrStatus())) {
-            Double limit = reg.getKrLimit();
-            if (limit != null && percentage > limit) {
+        // 모든 규제 레코드를 순회하며 가장 엄격한 규제를 적용
+        for (RegulatoryIngredient reg : regulations) {
+            // Check KR
+            if ("PROHIBITED".equalsIgnoreCase(reg.getKrStatus()) && !violations.contains("KOREA (금지)")) {
                 status = "DANGER";
-                violations.add("KOREA (한도초과: " + limit + "%)");
+                violations.add("KOREA (금지)");
+            } else if ("RESTRICTED".equalsIgnoreCase(reg.getKrStatus())) {
+                Double limit = reg.getKrLimit();
+                if (limit != null && percentage > limit) {
+                    String v = "KOREA (한도초과: " + limit + "%)";
+                    if (!violations.contains(v)) { status = "DANGER"; violations.add(v); }
+                }
             }
-        }
 
-        // Check EU
-        if ("PROHIBITED".equalsIgnoreCase(reg.getEuStatus())) {
-            status = "DANGER";
-            violations.add("EU (금지)");
-        } else if ("RESTRICTED".equalsIgnoreCase(reg.getEuStatus())) {
-            Double limit = reg.getEuLimit();
-            if (limit != null && percentage > limit) {
+            // Check EU
+            if ("PROHIBITED".equalsIgnoreCase(reg.getEuStatus()) && !violations.contains("EU (금지)")) {
                 status = "DANGER";
-                violations.add("EU (한도초과: " + limit + "%)");
+                violations.add("EU (금지)");
+            } else if ("RESTRICTED".equalsIgnoreCase(reg.getEuStatus())) {
+                Double limit = reg.getEuLimit();
+                if (limit != null && percentage > limit) {
+                    String v = "EU (한도초과: " + limit + "%)";
+                    if (!violations.contains(v)) { status = "DANGER"; violations.add(v); }
+                }
             }
-        }
 
-        // Check CN
-        if ("PROHIBITED".equalsIgnoreCase(reg.getCnStatus())) {
-            status = "DANGER";
-            violations.add("CHINA (금지)");
-        } else if ("RESTRICTED".equalsIgnoreCase(reg.getCnStatus())) {
-            Double limit = reg.getCnLimit();
-            if (limit != null && percentage > limit) {
+            // Check CN
+            if ("PROHIBITED".equalsIgnoreCase(reg.getCnStatus()) && !violations.contains("CHINA (금지)")) {
                 status = "DANGER";
-                violations.add("CHINA (한도초과: " + limit + "%)");
+                violations.add("CHINA (금지)");
+            } else if ("RESTRICTED".equalsIgnoreCase(reg.getCnStatus())) {
+                Double limit = reg.getCnLimit();
+                if (limit != null && percentage > limit) {
+                    String v = "CHINA (한도초과: " + limit + "%)";
+                    if (!violations.contains(v)) { status = "DANGER"; violations.add(v); }
+                }
             }
-        }
 
-        // Check US
-        if ("PROHIBITED".equalsIgnoreCase(reg.getUsStatus())) {
-            status = "DANGER";
-            violations.add("USA (금지)");
-        } else if ("RESTRICTED".equalsIgnoreCase(reg.getUsStatus())) {
-            Double limit = reg.getUsLimit();
-            if (limit != null && percentage > limit) {
+            // Check US
+            if ("PROHIBITED".equalsIgnoreCase(reg.getUsStatus()) && !violations.contains("USA (금지)")) {
                 status = "DANGER";
-                violations.add("USA (한도초과: " + limit + "%)");
+                violations.add("USA (금지)");
+            } else if ("RESTRICTED".equalsIgnoreCase(reg.getUsStatus())) {
+                Double limit = reg.getUsLimit();
+                if (limit != null && percentage > limit) {
+                    String v = "USA (한도초과: " + limit + "%)";
+                    if (!violations.contains(v)) { status = "DANGER"; violations.add(v); }
+                }
             }
-        }
 
-        // Check JP
-        if ("PROHIBITED".equalsIgnoreCase(reg.getJpStatus())) {
-            status = "DANGER";
-            violations.add("JAPAN (금지)");
-        } else if ("RESTRICTED".equalsIgnoreCase(reg.getJpStatus())) {
-            Double limit = reg.getJpLimit();
-            if (limit != null && percentage > limit) {
+            // Check JP
+            if ("PROHIBITED".equalsIgnoreCase(reg.getJpStatus()) && !violations.contains("JAPAN (금지)")) {
                 status = "DANGER";
-                violations.add("JAPAN (한도초과: " + limit + "%)");
+                violations.add("JAPAN (금지)");
+            } else if ("RESTRICTED".equalsIgnoreCase(reg.getJpStatus())) {
+                Double limit = reg.getJpLimit();
+                if (limit != null && percentage > limit) {
+                    String v = "JAPAN (한도초과: " + limit + "%)";
+                    if (!violations.contains(v)) { status = "DANGER"; violations.add(v); }
+                }
             }
         }
 

@@ -17,13 +17,22 @@ public class RegulatoryIngredient {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true, nullable = false, length = 1000)
+    @Column(length = 1000)
     private String inciName; // International Nomenclature Cosmetic Ingredient
 
     @Column(length = 2000)
     private String koreanName;
 
     private String casNumber;
+
+    @Column(length = 50)
+    private String sourceApi; // REGL, INGD, MANUAL, LEGACY
+
+    @Column(columnDefinition = "TEXT")
+    private String origin;
+
+    @Column(length = 500)
+    private String synonym;
 
     @Column(length = 50)
     private String krStatus; // ALLOWED, RESTRICTED, PROHIBITED

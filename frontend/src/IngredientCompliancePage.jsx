@@ -160,9 +160,12 @@ const IngredientCompliancePage = ({ user }) => {
     }, [dbIngredients]);
 
     const colDefs = useMemo(() => [
+        { field: "sourceApi", headerName: "출처", filter: true, width: 100 },
         { field: "inciName", headerName: "INCI Name (Eng)", filter: true, width: 440, pinned: 'left' },
         { field: "koreanName", headerName: "성분명 (Kor)", filter: true, width: 360, pinned: 'left', cellStyle: { fontWeight: 'bold', color: '#2b6cb0' } },
         { field: "casNumber", headerName: "CAS No.", filter: true, width: 120 },
+        { field: "origin", headerName: "원료설명", filter: true, width: 200, tooltipField: "origin" },
+        { field: "synonym", headerName: "동의어", filter: true, width: 200, tooltipField: "synonym" },
         {
             field: "krStatus",
             headerName: "한국 (KR)",

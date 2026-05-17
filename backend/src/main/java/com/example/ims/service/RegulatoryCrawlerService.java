@@ -101,6 +101,13 @@ public class RegulatoryCrawlerService {
         try {
             log.info(">>>> [BATCH] Starting Regulatory Data Update for: {}", countries);
             
+            // [FIX] Full Reload 전략: 전체 동기화 전 기존 API 데이터 삭제
+            if (countries.contains("KR") || countries.contains("kr") || countries.contains("Kr")) {
+                log.info(">>>> [BATCH] Cleaning up old REGL and INGD data...");
+                repository.deleteBySourceApi("REGL");
+                repository.deleteBySourceApi("INGD");
+            }
+
             // 1. Sync specific countries sequentially to prevent parallel SELECT-INSERT race conditions and duplicate key exceptions
             for (String country : countries) {
                 try {
@@ -141,11 +148,17 @@ public class RegulatoryCrawlerService {
     }
 
     private void saveAsGlobalProhibited(String inciName, String koreanName) {
-        Optional<RegulatoryIngredient> existing = repository.findByInciName(inciName);
-        RegulatoryIngredient ingredient = existing.orElseGet(() -> RegulatoryIngredient.builder()
+        List<RegulatoryIngredient> existingList = repository.findByInciName(inciName);
+        RegulatoryIngredient ingredient;
+        if (existingList.isEmpty()) {
+            ingredient = RegulatoryIngredient.builder()
                 .inciName(inciName)
                 .koreanName(koreanName)
-                .build());
+                .sourceApi("MANUAL")
+                .build();
+        } else {
+            ingredient = existingList.get(0); // 첫 번째 항목 업데이트
+        }
         
         if (koreanName != null) ingredient.setKoreanName(koreanName);
         
@@ -276,21 +289,21 @@ public class RegulatoryCrawlerService {
      * limitDetails가 소멸되는 문제가 있었음.
      */
     private void saveKoreaRegulationAtomic(String inciName, String koreanName, String cas, String remarks, String prohNational, String limitNational) {
-        RegulatoryIngredient ingredient = repository.findByInciName(inciName)
-                .orElse(RegulatoryIngredient.builder().inciName(inciName).build());
+        // [FIX] 중복 병합 제거: 매 건마다 새로운 엔티티 생성 (Full Reload)
+        RegulatoryIngredient ingredient = RegulatoryIngredient.builder()
+                .inciName(inciName)
+                .koreanName(koreanName)
+                .casNumber(cas)
+                .sourceApi("REGL")
+                .build();
 
-        if (koreanName != null) ingredient.setKoreanName(koreanName);
-        if (cas != null && !cas.equals("null")) ingredient.setCasNumber(cas);
-
-        // 1. Remarks + LimitDetails 설정 (기존 remarks가 이미 등록되어 있다면 보존하여 덮어쓰기 방지)
-        if (ingredient.getRemarks() == null || ingredient.getRemarks().trim().isEmpty()) {
-            if (remarks != null && !remarks.isEmpty()) {
-                ingredient.setRemarks(remarks);
-                parseAndSaveDetails(ingredient, remarks);
-            }
+        // 1. Remarks + LimitDetails 설정
+        if (remarks != null && !remarks.isEmpty()) {
+            ingredient.setRemarks(remarks);
+            parseAndSaveDetails(ingredient, remarks);
         }
 
-        // 2. 국가별 규제 상태 설정 (같은 엔티티 객체에서)
+        // 2. 국가별 규제 상태 설정
         if (prohNational != null && !prohNational.isEmpty() && !"null".equalsIgnoreCase(prohNational)) {
             if (prohNational.contains("한국")) { ingredient.setKrStatus("PROHIBITED"); ingredient.setKrLimit(0.0); }
             if (prohNational.contains("EU"))   { ingredient.setEuStatus("PROHIBITED"); ingredient.setEuLimit(0.0); }
@@ -357,20 +370,25 @@ public class RegulatoryCrawlerService {
                                 String engName = item.path("INGR_ENG_NAME").asText();
                                 String korName = item.path("INGR_KOR_NAME").asText();
                                 String cas = item.path("CAS_NO").asText();
+                                String originText = item.path("ORIGIN_MAJOR_KOR_NAME").asText();
+                                String synonymText = item.path("INGR_SYNONYM").asText();
                                 
                                 if (engName == null || engName.isEmpty() || "null".equalsIgnoreCase(engName)) {
                                     engName = korName;
                                 }
                                 
-                                if (engName != null && !engName.isEmpty() && !"null".equalsIgnoreCase(engName)) {
-                                    Optional<RegulatoryIngredient> existing = repository.findByInciName(engName);
-                                    if (existing.isEmpty()) {
-                                        saveOrUpdate(engName, korName, cas, "ALLOWED", null, "KR");
-                                        savedCount++;
-                                    } else {
-                                        skippedCount++;
-                                    }
-                                }
+                                // INCI명이 없어도 저장 허용
+                                RegulatoryIngredient ingredient = RegulatoryIngredient.builder()
+                                        .inciName("null".equalsIgnoreCase(engName) ? null : engName)
+                                        .koreanName(korName)
+                                        .casNumber(cas)
+                                        .sourceApi("INGD")
+                                        .origin("null".equalsIgnoreCase(originText) ? null : originText)
+                                        .synonym("null".equalsIgnoreCase(synonymText) ? null : synonymText)
+                                        .krStatus("ALLOWED")
+                                        .build();
+                                repository.save(ingredient);
+                                savedCount++;
                             } catch (Exception e) {
                                 errorCount++;
                                 log.warn(">>>> [CRAWLER] INGD item save error at page {}: {}", pageNo, e.getMessage());
@@ -476,8 +494,17 @@ public class RegulatoryCrawlerService {
     }
 
     private void saveOrUpdateRemarks(String inciName, String koreanName, String cas, String remarks) {
-        RegulatoryIngredient ingredient = repository.findByInciName(inciName)
-                .orElse(RegulatoryIngredient.builder().inciName(inciName).build());
+        List<RegulatoryIngredient> existingList = repository.findByInciName(inciName);
+        RegulatoryIngredient ingredient;
+        if (existingList.isEmpty()) {
+            ingredient = RegulatoryIngredient.builder()
+                .inciName(inciName)
+                .koreanName(koreanName)
+                .sourceApi("MANUAL")
+                .build();
+        } else {
+            ingredient = existingList.get(0);
+        }
 
         if (koreanName != null) ingredient.setKoreanName(koreanName);
         if (cas != null && !cas.equals("null")) ingredient.setCasNumber(cas);
@@ -555,8 +582,17 @@ public class RegulatoryCrawlerService {
     }
 
     private void saveOrUpdate(String inciName, String koreanName, String cas, String status, Double limit, String country) {
-        RegulatoryIngredient ingredient = repository.findByInciName(inciName)
-                .orElse(RegulatoryIngredient.builder().inciName(inciName).build());
+        List<RegulatoryIngredient> existingList = repository.findByInciName(inciName);
+        RegulatoryIngredient ingredient;
+        if (existingList.isEmpty()) {
+            ingredient = RegulatoryIngredient.builder()
+                .inciName(inciName)
+                .koreanName(koreanName)
+                .sourceApi("MANUAL")
+                .build();
+        } else {
+            ingredient = existingList.get(0);
+        }
 
         if (koreanName != null && !koreanName.isEmpty() && !"null".equalsIgnoreCase(koreanName)) {
             ingredient.setKoreanName(koreanName);
