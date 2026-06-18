@@ -46,6 +46,7 @@
 - **Sorting Rule**: 모든 데이터 목록의 기본 정렬은 **날짜(최신순) > 코드 > 명칭** 순서를 원칙으로 함. (Ag-Grid 및 SQL 쿼리에 일괄 적용)
 - **AI Plan Rule**: 모든 개발 계획은 **Gemini 3 Flash**가 즉시 실행할 수 있도록 단계별로 구체적이고 명확하게 수립함.
 - **Security & RBAC**: 엄격한 역할 기반 액세스 제어 (Admin, Quality, Manufacturer). 민감한 정보는 `.env` 관리.
+- **Database Schema Sync**: 엔티티 클래스(`@Entity`)를 추가하거나 필드/컬럼을 생성/수정/삭제하는 경우, 로컬 마이그레이션 테스트 스크립트(`MigrationTask.java` 등)뿐만 아니라 배포 시 수행되는 **Flyway SQL 마이그레이션 파일(`V__...sql`)을 반드시 동시에 작성**하여 리포지토리에 반영해야 함. 배포 시 스키마 불일치로 인한 오류를 사전에 방지함.
 
 ## 3. Documentation & Maintenance (New)
 - **Documentation Standard**: 모든 주요 메서드와 컴포넌트에 Javadoc/JSDoc 필수 적용.

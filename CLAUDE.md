@@ -89,6 +89,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - **Serial Numbering**: `[PREFIX]-[YYYYMMDD]-[000]` (e.g., CLM-20260509-001).
 - **6-Step Workflow**: Automate status transitions (0-5) based on data entry and approval.
 - **Logistics Constraint**: Default validation for 1,100 x 1,100 mm pallets.
+- **Flyway Migration**: Every entity schema/field modification MUST include a corresponding V__<name>.sql script inside db/migration to avoid production database schema mismatch.
 
 ## 📊 Development Status
 - **Current Ruleset**: Established `QMS-AI-RULES.md` as the absolute standard.
