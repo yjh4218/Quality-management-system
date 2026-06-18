@@ -15,7 +15,6 @@ public class MailTemplateService {
     @Autowired
     private MailTemplateRepository mailTemplateRepository;
 
-    @PostConstruct
     public void initDefaultTemplates() {
         java.util.Optional<MailTemplate> existingClaimDefault = mailTemplateRepository.findByTemplateCodeAndDeletedFalse("CLAIM_DEFAULT");
         if (existingClaimDefault.isEmpty()) {

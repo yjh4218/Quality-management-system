@@ -22,6 +22,8 @@ public class SystemInitializationService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final org.springframework.core.env.Environment env;
+    private final MailCategoryService mailCategoryService;
+    private final MailTemplateService mailTemplateService;
 
     @Transactional
     public void seedAndRepairData(String adminInitialPassword) {
@@ -44,6 +46,16 @@ public class SystemInitializationService {
         migrateProductImages();
         seedAndRepairDashboardLayouts();
         seedAndRepairPageGuides();
+        
+        // [추가] 메일 카테고리 및 템플릿의 안전한 초기화 (마이그레이션 적용 후 시점)
+        try {
+            mailCategoryService.initDefaultCategories();
+            mailTemplateService.initDefaultTemplates();
+            log.info(">>>> [SYSTEM INIT] Mail categories and templates seeded successfully.");
+        } catch (Exception e) {
+            log.error(">>>> [SYSTEM INIT] [ERROR] Failed to seed mail categories/templates: {}", e.getMessage(), e);
+        }
+
         repairOtherTablesSchema(); // [추가] 소프트 델리트 및 기타 스키마 보정
         repairRegulatoryIngredientsTableSchema(); // Drop unique constraints/indexes on regulatory_ingredients for full sync
         seedDummyProducts(); // Seed dummy products for testing

@@ -15,7 +15,6 @@ public class MailCategoryService {
     @Autowired
     private MailCategoryRepository repository;
 
-    @PostConstruct
     public void initDefaultCategories() {
         if (repository.findByCategoryCodeAndDeletedFalse("CLAIM").isEmpty()) {
             MailCategory claimCategory = MailCategory.builder()
