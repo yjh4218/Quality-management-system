@@ -169,7 +169,7 @@ const BomRegistrationDrawer = ({ material, onClose, user }) => {
     const isAluminum = (name) => name && (name.includes('알루미늄') || name.toUpperCase().includes('AL'));
 
     return (
-        <div className="drawer-overlay" onClick={onClose}>
+        <div className="drawer-overlay">
             <div className="drawer" onClick={e => e.stopPropagation()}>
                 {/* 1. Fixed Header Area */}
                 <div className="drawer-header">

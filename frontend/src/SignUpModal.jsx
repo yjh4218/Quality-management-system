@@ -106,8 +106,8 @@ const SignUpModal = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ width: '500px' }}>
+        <div className="modal-overlay">
+            <div className="modal-content" style={{ width: '500px' }}>
                 {/* 1. Fixed Header Area */}
                 <div className="modal-header">
                     <h2 style={{ margin: 0, fontSize: '22px', display: 'flex', alignItems: 'center', gap: '10px', color: '#0056b3' }}>

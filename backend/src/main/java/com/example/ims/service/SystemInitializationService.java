@@ -46,6 +46,7 @@ public class SystemInitializationService {
         seedAndRepairPageGuides();
         repairOtherTablesSchema(); // [추가] 소프트 델리트 및 기타 스키마 보정
         repairRegulatoryIngredientsTableSchema(); // Drop unique constraints/indexes on regulatory_ingredients for full sync
+        seedDummyProducts(); // Seed dummy products for testing
 
         // Page guides are now handled entirely by Bulk Migration and use
         // SystemPageGuide entity
@@ -136,28 +137,37 @@ public class SystemInitializationService {
                 + ",\"salesChannels\":" + allActions + ",\"products\":" + allActions + ",\"bomMaster\":" + allActions
                 + ",\"bomCategories\":" + allActions + ",\"packagingTemplates\":" + allActions + ",\"packagingRules\":"
                 + allActions + ",\"quality\":" + allActions + ",\"releaseRecord\":" + allActions + ",\"claims\":"
-                + allActions + ",\"claimDashboard\":" + viewOnly + ",\"ingredientCompliance\":" + allActions + "}";
+                + allActions + ",\"claimDashboard\":" + viewOnly + ",\"ingredientCompliance\":" + allActions 
+                + ",\"qualityPhotoAudit\":" + allActions + ",\"announcements\":" + allActions + ",\"announcementCategories\":" + allActions 
+                + ",\"notifications\":" + allActions + "}";
         String qualityJson = "{\"dashboard\":" + viewOnly + ",\"products\":" + viewOnly + ",\"quality\":" + allActions
                 + ",\"releaseRecord\":" + allActions + ",\"claims\":" + allActions + ",\"claimDashboard\":" + viewOnly
-                + ",\"ingredientCompliance\":" + allActions + "}";
+                + ",\"ingredientCompliance\":" + allActions + ",\"qualityPhotoAudit\":" + allActions 
+                + ",\"announcements\":" + viewOnly + ",\"announcementCategories\":" + viewOnly 
+                + ",\"notifications\":" + allActions + "}";
         String salesJson = "{\"dashboard\":" + viewOnly + ",\"products\":" + viewOnly + ",\"quality\":" + viewOnly
-                + ",\"claims\":" + viewOnly + ",\"claimDashboard\":" + viewOnly + "}";
-        String mfrJson = "{\"dashboard\":" + viewOnly + ",\"quality\":[\"VIEW\",\"EDIT\"],\"claims\":" + viewOnly + "}";
+                + ",\"claims\":" + viewOnly + ",\"claimDashboard\":" + viewOnly + ",\"announcements\":" + viewOnly 
+                + ",\"notifications\":" + viewOnly + "}";
+        String mfrJson = "{\"dashboard\":" + viewOnly + ",\"quality\":[\"VIEW\",\"EDIT\"],\"claims\":" + viewOnly 
+                + ",\"qualityPhotoAudit\":[\"VIEW\",\"EDIT\"],\"announcements\":" + viewOnly 
+                + ",\"notifications\":" + allActions + "}";
         String respSalesJson = "{\"dashboard\":" + viewOnly + ",\"users\":" + allActions + ",\"brands\":" + allActions
                 + ",\"manufacturers\":" + allActions + ",\"salesChannels\":" + allActions + ",\"products\":"
                 + allActions + ",\"quality\":" + allActions + ",\"releaseRecord\":" + allActions + ",\"claims\":"
-                + allActions + ",\"claimDashboard\":" + viewOnly + "}";
+                + allActions + ",\"claimDashboard\":" + viewOnly + ",\"qualityPhotoAudit\":" + allActions 
+                + ",\"announcements\":" + allActions + ",\"announcementCategories\":" + allActions 
+                + ",\"notifications\":" + allActions + "}";
 
-        String adminPerms = "[\"AUDIT_DISCLOSE_MANAGE\",\"PRODUCT_DISCLOSE_MANAGE\",\"PRODUCT_MASTER_MANAGE\",\"DASHBOARD_QUALITY_VIEW\",\"DASHBOARD_SALES_VIEW\",\"SENSITIVE_DATA_VIEW\",\"PRODUCT_PACKAGING_VIEW\",\"INGREDIENT_SAFETY_VIEW\"]";
-        String qualityPerms = "[\"AUDIT_DISCLOSE_MANAGE\",\"PRODUCT_DISCLOSE_MANAGE\",\"PRODUCT_MASTER_MANAGE\",\"DASHBOARD_QUALITY_VIEW\",\"SENSITIVE_DATA_VIEW\",\"PRODUCT_PACKAGING_VIEW\",\"INGREDIENT_SAFETY_VIEW\"]";
-        String respSalesPerms = "[\"PRODUCT_MASTER_MANAGE\",\"DASHBOARD_SALES_VIEW\",\"PRODUCT_PACKAGING_VIEW\",\"INGREDIENT_SAFETY_VIEW\"]";
+        String adminPerms = "[\"AUDIT_DISCLOSE_MANAGE\",\"PRODUCT_DISCLOSE_MANAGE\",\"PRODUCT_MASTER_MANAGE\",\"DASHBOARD_QUALITY_VIEW\",\"DASHBOARD_SALES_VIEW\",\"SENSITIVE_DATA_VIEW\",\"PRODUCT_PACKAGING_VIEW\",\"INGREDIENT_SAFETY_VIEW\",\"ANNOUNCEMENT_ALL_VIEW\"]";
+        String qualityPerms = "[\"AUDIT_DISCLOSE_MANAGE\",\"PRODUCT_DISCLOSE_MANAGE\",\"PRODUCT_MASTER_MANAGE\",\"DASHBOARD_QUALITY_VIEW\",\"SENSITIVE_DATA_VIEW\",\"PRODUCT_PACKAGING_VIEW\",\"INGREDIENT_SAFETY_VIEW\",\"ANNOUNCEMENT_ALL_VIEW\"]";
+        String respSalesPerms = "[\"PRODUCT_MASTER_MANAGE\",\"DASHBOARD_SALES_VIEW\",\"PRODUCT_PACKAGING_VIEW\",\"INGREDIENT_SAFETY_VIEW\",\"ANNOUNCEMENT_ALL_VIEW\"]";
 
         updateOrInsertRole("ROLE_ADMIN", "시스템 관리자", "전체 시스템 관리 권한", adminJson, adminPerms);
         updateOrInsertRole("ROLE_RESPONSIBLE_SALES", "화장품책임판매관리자", "영업 및 사용자 관리 권한", respSalesJson, respSalesPerms);
         updateOrInsertRole("ROLE_QUALITY", "품질 담당자", "입고 검사 및 판정 권한", qualityJson, qualityPerms);
         updateOrInsertRole("ROLE_SALES", "영업담당자", "데이터 조회 전용", salesJson, "[\"DASHBOARD_SALES_VIEW\"]");
         updateOrInsertRole("ROLE_MANUFACTURER", "제조사 담당자", "제조사 데이터 입력 권한", mfrJson, "[]");
-        updateOrInsertRole("ROLE_USER", "일반 사용자", "기본 대시보드 시청", "{\"dashboard\":[\"VIEW\"]}", "[]");
+        updateOrInsertRole("ROLE_USER", "일반 사용자", "기본 대시보드 시청", "{\"dashboard\":[\"VIEW\"],\"announcements\":[\"VIEW\"],\"notifications\":[\"VIEW\"]}", "[]");
     }
 
     private void updateOrInsertRole(String key, String name, String desc, String menuJson, String permsJson) {
@@ -168,9 +178,9 @@ public class SystemInitializationService {
                     "INSERT INTO roles (role_key, display_name, description, is_system_role, allowed_menus, allowed_permissions) VALUES (?, ?, ?, ?, ?, ?)",
                     key, name, desc, true, menuJson, permsJson);
         } else {
-            // Repair: Update menus/permissions if blank or null
+            // Repair: Always update roles allowed_menus and allowed_permissions to sync default values
             jdbcTemplate.update(
-                    "UPDATE roles SET allowed_menus = ?, allowed_permissions = ? WHERE role_key = ? AND (allowed_menus IS NULL OR allowed_menus = '{}' OR allowed_menus = '' OR allowed_permissions IS NULL OR allowed_permissions = '[]' OR allowed_permissions = '')",
+                    "UPDATE roles SET allowed_menus = ?, allowed_permissions = ? WHERE role_key = ?",
                     menuJson, permsJson, key);
         }
     }
@@ -185,10 +195,10 @@ public class SystemInitializationService {
     }
 
     private void seedAndRepairDashboardLayouts() {
-        String adminWidgets = "[\"WIDGET_NEW_PRODUCTS\",\"WIDGET_PENDING_USERS\",\"WIDGET_AUDIT_LOGS\",\"WIDGET_QUALITY_INBOUNDS\",\"WIDGET_PENDING_DIMENSIONS\",\"WIDGET_CONFIRMED_DIMENSIONS\",\"WIDGET_RECENT_CLAIMS\",\"WIDGET_MFR_COMPLETED_CLAIMS\",\"WIDGET_AUDIT_REVIEW\",\"WIDGET_AUDIT_PROGRESS\"]";
-        String qualityWidgets = "[\"WIDGET_NEW_PRODUCTS\",\"WIDGET_QUALITY_INBOUNDS\",\"WIDGET_PENDING_DIMENSIONS\",\"WIDGET_CONFIRMED_DIMENSIONS\",\"WIDGET_RECENT_CLAIMS\",\"WIDGET_AUDIT_REVIEW\",\"WIDGET_AUDIT_PROGRESS\"]";
-        String salesWidgets = "[\"WIDGET_NEW_PRODUCTS\",\"WIDGET_CONFIRMED_DIMENSIONS\",\"WIDGET_RECENT_CLAIMS\",\"WIDGET_MFR_COMPLETED_CLAIMS\"]";
-        String mfrWidgets = "[\"WIDGET_QUALITY_INBOUNDS\",\"WIDGET_RECENT_CLAIMS\",\"WIDGET_AUDIT_PROGRESS\"]";
+        String adminWidgets = "[\"WIDGET_ANNOUNCEMENTS\",\"WIDGET_NEW_PRODUCTS\",\"WIDGET_PENDING_USERS\",\"WIDGET_AUDIT_LOGS\",\"WIDGET_QUALITY_INBOUNDS\",\"WIDGET_PENDING_DIMENSIONS\",\"WIDGET_CONFIRMED_DIMENSIONS\",\"WIDGET_RECENT_CLAIMS\",\"WIDGET_MFR_COMPLETED_CLAIMS\",\"WIDGET_AUDIT_REVIEW\",\"WIDGET_AUDIT_PROGRESS\"]";
+        String qualityWidgets = "[\"WIDGET_ANNOUNCEMENTS\",\"WIDGET_NEW_PRODUCTS\",\"WIDGET_QUALITY_INBOUNDS\",\"WIDGET_PENDING_DIMENSIONS\",\"WIDGET_CONFIRMED_DIMENSIONS\",\"WIDGET_RECENT_CLAIMS\",\"WIDGET_AUDIT_REVIEW\",\"WIDGET_AUDIT_PROGRESS\"]";
+        String salesWidgets = "[\"WIDGET_ANNOUNCEMENTS\",\"WIDGET_NEW_PRODUCTS\",\"WIDGET_CONFIRMED_DIMENSIONS\",\"WIDGET_RECENT_CLAIMS\",\"WIDGET_MFR_COMPLETED_CLAIMS\"]";
+        String mfrWidgets = "[\"WIDGET_ANNOUNCEMENTS\",\"WIDGET_QUALITY_INBOUNDS\",\"WIDGET_RECENT_CLAIMS\",\"WIDGET_AUDIT_PROGRESS\"]";
 
         updateOrInsertLayout("관리자 기본", adminWidgets, "ROLE_ADMIN");
         updateOrInsertLayout("품질팀 기본", qualityWidgets, "ROLE_QUALITY");
@@ -201,6 +211,8 @@ public class SystemInitializationService {
                 Integer.class, name);
         if (exists == null || exists == 0) {
             jdbcTemplate.update("INSERT INTO dashboard_layouts (name, widget_config) VALUES (?, ?)", name, widgets);
+        } else {
+            jdbcTemplate.update("UPDATE dashboard_layouts SET widget_config = ? WHERE name = ?", widgets, name);
         }
 
         // Ensure role is linked to layout if not already
@@ -212,7 +224,11 @@ public class SystemInitializationService {
     private void seedTestUsers() {
         createIfMissing("qc", "품질담당", "더파운더즈", "ROLE_QUALITY");
         createIfMissing("qa", "QA담당", "더파운더즈", "ROLE_QUALITY");
-        createIfMissing("ko", "공장장", "제조사A", "ROLE_MANUFACTURER");
+        createIfMissing("ko", "공장장", "한국콜마", "ROLE_MANUFACTURER");
+        
+        // Ensure 'ko' company is updated to '한국콜마' if it already exists to match seeded claim manufacturers
+        jdbcTemplate.update("UPDATE users SET company_name = '한국콜마' WHERE username = 'ko'");
+        
         log.info(">>>> [SYSTEM INIT] Test users verified/seeded.");
     }
 
@@ -320,6 +336,14 @@ public class SystemInitializationService {
     private void repairOtherTablesSchema() {
         log.info(">>>> [SYSTEM INIT] Aligning other tables (Soft Delete & Guides)...");
         
+        // claims 테이블에 낙관적 락을 위한 version 컬럼 보정
+        try {
+            jdbcTemplate.execute("ALTER TABLE claims ADD COLUMN IF NOT EXISTS version BIGINT DEFAULT 0");
+            jdbcTemplate.update("UPDATE claims SET version = 0 WHERE version IS NULL");
+        } catch (Exception e) {
+            log.warn(">>>> [SYSTEM INIT] Could not add version column to claims: {}", e.getMessage());
+        }
+        
         // 1. 공통 소프트 델리트 컬럼 추가 (is_deleted, deleted_at)
         String[] softDeleteTables = {
             "products", "wms_inbound", "claims", "production_audit", 
@@ -355,6 +379,22 @@ public class SystemInitializationService {
             jdbcTemplate.execute("ALTER TABLE system_page_guides ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP");
         } catch (Exception e) {
             log.warn(">>>> [SYSTEM INIT] Could not repair system_page_guides table: {}", e.getMessage());
+        }
+
+        // 3. 전체공지 일련번호 시퀀스 보정
+        try {
+            jdbcTemplate.execute("CREATE SEQUENCE IF NOT EXISTS announcement_number_seq START WITH 1 INCREMENT BY 1");
+            log.info(">>>> [SYSTEM INIT] announcement_number_seq sequence verified/created.");
+        } catch (Exception e) {
+            log.warn(">>>> [SYSTEM INIT] Could not create announcement_number_seq sequence: {}", e.getMessage());
+        }
+
+        // 4. 통합 알림 일련번호 시퀀스 보정
+        try {
+            jdbcTemplate.execute("CREATE SEQUENCE IF NOT EXISTS notification_number_seq START WITH 1 INCREMENT BY 1");
+            log.info(">>>> [SYSTEM INIT] notification_number_seq sequence verified/created.");
+        } catch (Exception e) {
+            log.warn(">>>> [SYSTEM INIT] Could not create notification_number_seq sequence: {}", e.getMessage());
         }
     }
 
@@ -430,6 +470,60 @@ public class SystemInitializationService {
             } catch (Exception e) {
                 log.debug(">>>> [SYSTEM INIT] Dropping unique constraint/index skipped: {} ({})", sql, e.getMessage());
             }
+        }
+    }
+    private void seedDummyProducts() {
+        log.info(">>>> [SYSTEM INIT] Seeding Dummy Products for testing...");
+        try {
+            Integer brandCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM brands", Integer.class);
+            if (brandCount == null || brandCount == 0) {
+                jdbcTemplate.update("INSERT INTO brands (name) VALUES (?)", "더파운더즈");
+            }
+
+            Integer productCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM products", Integer.class);
+            if (productCount == null || productCount == 0) {
+                Long brandId = jdbcTemplate.queryForObject("SELECT id FROM brands LIMIT 1", Long.class);
+                
+                Integer mfrCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM manufacturers", Integer.class);
+                if (mfrCount == null || mfrCount == 0) {
+                    jdbcTemplate.update("INSERT INTO manufacturers (identification_code, manufacturer_code, name, category, contact_person, phone_number, email, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                            "M-2026-001", "M-2026-001", "글로벌 코스메틱", "화장품", "이영희", "010-1234-5678", "global@example.com", true);
+                }
+                Long mfrId = jdbcTemplate.queryForObject("SELECT id FROM manufacturers LIMIT 1", Long.class);
+                
+                jdbcTemplate.update(
+                        "INSERT INTO products (item_code, product_name, english_product_name, brand_id, manufacturer_id, capacity, weight, status, active, is_deleted, created_at, updated_at, is_master, is_parent, is_planning_set, photo_audit_disclosed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?, ?, ?, ?)",
+                        "PRD-2026-001", "모이스처 수분 크림 50ml", "Moisture Cream 50ml", brandId, mfrId, "50ml", "100g", "양산", true, false, false, false, false, false
+                );
+                
+                jdbcTemplate.update(
+                        "INSERT INTO products (item_code, product_name, english_product_name, brand_id, manufacturer_id, capacity, weight, status, active, is_deleted, created_at, updated_at, is_master, is_parent, is_planning_set, photo_audit_disclosed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?, ?, ?, ?)",
+                        "PRD-2026-002", "안티에이징 세럼 30ml", "Anti-aging Serum 30ml", brandId, mfrId, "30ml", "80g", "가안", true, false, false, false, false, false
+                );
+            }
+            
+            // [보정] manufacturers 테이블에 "한국콜마"가 없으면 인서트
+            Integer kolmarMfrExists = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM manufacturers WHERE name = '한국콜마'", Integer.class);
+            if (kolmarMfrExists == null || kolmarMfrExists == 0) {
+                jdbcTemplate.update("INSERT INTO manufacturers (identification_code, manufacturer_code, name, category, contact_person, phone_number, email, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        "M001", "M001", "한국콜마", "화장품", "김콜마", "010-9999-8888", "kolmar@example.com", true);
+                log.info(">>>> [SYSTEM INIT] Seeded '한국콜마' manufacturer.");
+            }
+
+            // [보정] KOLMAR- 로 시작하는 제품들의 제조사 정보를 한국콜마로 자동 보정
+            try {
+                Long kolmarId = jdbcTemplate.queryForObject("SELECT id FROM manufacturers WHERE name = '한국콜마' LIMIT 1", Long.class);
+                if (kolmarId != null) {
+                    int updatedMfrId = jdbcTemplate.update("UPDATE products SET manufacturer_id = ? WHERE item_code LIKE 'KOLMAR-%' AND manufacturer_id IS NULL", kolmarId);
+                    int updatedMfr = jdbcTemplate.update("UPDATE products SET manufacturer = '한국콜마' WHERE item_code LIKE 'KOLMAR-%' AND manufacturer IS NULL");
+                    int updatedDisclosed = jdbcTemplate.update("UPDATE products SET photo_audit_disclosed = true WHERE item_code LIKE 'KOLMAR-%' AND photo_audit_disclosed IS NULL");
+                    log.info(">>>> [SYSTEM INIT] Repaired manufacturer for KOLMAR products. updatedMfrId: {}, updatedMfr: {}, updatedDisclosed: {}", updatedMfrId, updatedMfr, updatedDisclosed);
+                }
+            } catch (Exception e) {
+                log.warn(">>>> [SYSTEM INIT] Could not repair KOLMAR products manufacturer: {}", e.getMessage());
+            }
+        } catch (Exception e) {
+            log.warn(">>>> [SYSTEM INIT] Could not seed dummy products: {}", e.getMessage());
         }
     }
 }

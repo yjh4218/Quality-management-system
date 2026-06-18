@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getDashboard } from './api';
+import { getDashboard, getActiveAnnouncements } from './api';
 import './DashboardPage.css';
 import { usePermissions } from './usePermissions';
 
@@ -14,6 +14,7 @@ import { usePermissions } from './usePermissions';
 const DashboardPage = ({ user, onNavigate }) => {
     const { isAdmin, hasPerm } = usePermissions(user);
     const [data, setData] = useState(null);
+    const [announcements, setAnnouncements] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
@@ -25,8 +26,12 @@ const DashboardPage = ({ user, onNavigate }) => {
         const fetchDashboardData = async () => {
             try {
                 setLoading(true);
-                const result = await getDashboard();
+                const [result, annList] = await Promise.all([
+                    getDashboard(),
+                    getActiveAnnouncements()
+                ]);
                 setData(result);
+                setAnnouncements(annList.data || []);
             } catch (err) {
                 setError("데이터를 불러오는 중 오류가 발생했습니다.");
             } finally {
@@ -50,6 +55,67 @@ const DashboardPage = ({ user, onNavigate }) => {
      * 새로운 위젯 종류가 추가될 경우 이곳에 렌더러를 정의하면 대시보드 빌더에서 즉시 사용 가능합니다.
      */
     const renderers = {
+        WIDGET_ANNOUNCEMENTS: () => {
+            const hasAnnouncements = announcements && announcements.length > 0;
+            return (
+                <section className="dashboard-section card" style={{ gridColumn: '1 / -1', marginBottom: '12px' }} key="announcements">
+                    <div className="section-header">
+                        <span className="icon">📢</span>
+                        <h2>전사 전체공지 및 배너</h2>
+                        <span className="count">{announcements?.length || 0}</span>
+                    </div>
+                    {hasAnnouncements ? (
+                        <div className="dashboard-announcements-list" style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '10px 0' }}>
+                            {announcements.map(ann => (
+                                <div key={ann.id} className="announcement-banner" style={{
+                                    background: ann.category ? `linear-gradient(135deg, ${ann.category.color}0d 0%, #fff 100%)` : 'linear-gradient(135deg, #4755690d 0%, #fff 100%)',
+                                    border: `1px solid ${ann.category ? ann.category.color + '40' : '#cbd5e1'}`,
+                                    borderLeft: `6px solid ${ann.category ? ann.category.color : '#475569'}`,
+                                    borderRadius: '12px',
+                                    padding: '16px 20px',
+                                    boxShadow: `0 4px 6px -1px ${ann.category ? ann.category.color + '0d' : 'rgba(0,0,0,0.03)'}`,
+                                    position: 'relative'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                                        <span style={{ 
+                                            backgroundColor: ann.category ? ann.category.color : '#475569', 
+                                            color: '#fff', 
+                                            fontSize: '11px', 
+                                            fontWeight: ann.category && ann.category.bold ? '900' : '500', 
+                                            padding: '2px 8px', 
+                                            borderRadius: '12px' 
+                                        }}>
+                                            {ann.category ? ann.category.name : '일반'}
+                                        </span>
+                                        <span style={{ color: '#718096', fontSize: '11px', fontWeight: 'bold' }}>
+                                            {ann.announcementNumber}
+                                        </span>
+                                        <span style={{ color: '#a0aec0', fontSize: '11px', marginLeft: 'auto' }}>
+                                            작성일: {new Date(ann.createdAt).toLocaleDateString()} (작성자: {ann.createdByName || ann.createdByUsername})
+                                        </span>
+                                    </div>
+                                    <h3 style={{ margin: '0 0 6px 0', fontSize: '15px', fontWeight: '800', color: '#1e293b' }}>
+                                        {ann.title}
+                                    </h3>
+                                    <p style={{ 
+                                        margin: 0, 
+                                        fontSize: '13px', 
+                                        color: '#475569', 
+                                        lineHeight: '1.5', 
+                                        whiteSpace: 'pre-wrap',
+                                        wordBreak: 'break-all'
+                                    }}>
+                                        {ann.content}
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="empty-section-msg" style={{ padding: '24px 0' }}>등록된 활성 전체공지가 없습니다.</div>
+                    )}
+                </section>
+            );
+        },
         WIDGET_NEW_PRODUCTS: () => (
             <section className="dashboard-section card" key="new_products">
                 <div className="section-header">
@@ -313,14 +379,19 @@ const DashboardPage = ({ user, onNavigate }) => {
                 <h1>👋 안녕하세요, {user?.name || user?.username}님!</h1>
                 <p>오늘의 시스템 현황과 확인이 필요한 작업들입니다.</p>
             </header>
-
             <div className="dashboard-grid">
-                {data.widgetConfig && data.widgetConfig.length > 0 ? (
-                    data.widgetConfig.map(widgetKey => {
+                {data.widgetConfig && data.widgetConfig.length > 0 ? (() => {
+                    const sortedConfigs = [...data.widgetConfig];
+                    const annIndex = sortedConfigs.indexOf("WIDGET_ANNOUNCEMENTS");
+                    if (annIndex > 0) {
+                        sortedConfigs.splice(annIndex, 1);
+                        sortedConfigs.unshift("WIDGET_ANNOUNCEMENTS");
+                    }
+                    return sortedConfigs.map(widgetKey => {
                         const renderer = renderers[widgetKey];
                         return renderer ? renderer() : null;
-                    })
-                ) : (
+                    });
+                })() : (
                     <div className="empty-dashboard">
                         <h3>대시보드가 설정되지 않았습니다.</h3>
                         <p>관리자에게 대시보드 구성을 요청하시거나, 잠시만 기다려주세요.</p>

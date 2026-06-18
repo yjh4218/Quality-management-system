@@ -32,11 +32,7 @@ public class DashboardController {
             return ResponseEntity.ok(dashboardService.getDashboardData(user));
         } catch (Exception e) {
             e.printStackTrace();
-            String errorMessage = e.getMessage();
-            if (e.getCause() != null) {
-                errorMessage += " | CAUSE: " + e.getCause().getMessage();
-            }
-            return ResponseEntity.status(500).body("Dashboard Error: " + errorMessage);
+            return ResponseEntity.status(500).body("시스템 대시보드 데이터를 수집하는 중 오류가 발생했습니다. 지속 발생 시 관리자에게 문의해 주세요.");
         }
     }
 }

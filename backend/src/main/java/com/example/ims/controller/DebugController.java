@@ -46,4 +46,33 @@ public class DebugController {
         
         return report;
     }
+
+    @GetMapping("/users")
+    public Object getUsersList() {
+        try {
+            return jdbcTemplate.queryForList("SELECT id, username, name, company_name, role FROM users");
+        } catch (Exception e) {
+            return Map.of("error", e.getMessage());
+        }
+    }
+
+    @GetMapping("/audits")
+    public Object getAuditsList() {
+        try {
+            return jdbcTemplate.queryForList("SELECT id, item_code, product_name, manufacturer_name, is_disclosed, is_deleted FROM production_audit");
+        } catch (Exception e) {
+            return Map.of("error", e.getMessage());
+        }
+    }
+
+    @GetMapping("/claim-291")
+    public Object getClaim291() {
+        try {
+            return jdbcTemplate.queryForMap("SELECT id, claim_number, updated_at, version, shared_with_manufacturer FROM claims WHERE id = 291");
+        } catch (Exception e) {
+            return Map.of("error", e.getMessage());
+        }
+    }
 }
+
+

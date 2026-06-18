@@ -13,6 +13,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
         Optional<User> findByVerificationToken(String token);
 
         List<User> findByEnabledFalse();
+        List<User> findByCompanyName(String companyName);
 
         @org.springframework.data.jpa.repository.Query("SELECT u FROM User u WHERE " +
                         "(:name IS NULL OR LOWER(u.name) LIKE LOWER(CONCAT('%', :name, '%'))) AND " +

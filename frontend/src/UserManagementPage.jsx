@@ -237,7 +237,8 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
     const colDefs = useMemo(() => [
         { field: "id", headerName: "ID", width: 70 },
         { field: "username", headerName: "아이디", filter: true, width: 150 },
-        { field: "name", headerName: "성명", filter: true, width: 150 },
+        { field: "email", headerName: "이메일", filter: true, width: 180 },
+        { field: "name", headerName: "성명", filter: true, width: 120 },
         { field: "companyName", headerName: "업체명", filter: true, width: 160 },
         { field: "department", headerName: "부서", width: 130 },
         {

@@ -72,6 +72,7 @@ const IngredientCompliancePage = ({ user }) => {
             }
         } catch (error) {
             console.error('Fetch error:', error);
+            showToast('규제 성분 데이터를 불러오는 중 오류가 발생했습니다.', 'error');
         } finally {
             setLookupLoading(false);
         }
@@ -336,6 +337,7 @@ const IngredientCompliancePage = ({ user }) => {
             }
         } catch (error) {
             console.error('Analysis error:', error);
+            showToast('성분 안전성 분석 중 오류가 발생했습니다. 파일 형식을 확인해주세요.', 'error');
         } finally {
             setLoading(false);
         }

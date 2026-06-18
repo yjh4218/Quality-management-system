@@ -21,6 +21,8 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
     });
     const [showOnlyMaster, setShowOnlyMaster] = useState(false);
     const [showSearchPopup, setShowSearchPopup] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [exporting, setExporting] = useState(false);
 
     const canEdit = canEditProduct('products');
     const canViewPackaging = hasPerm('PRODUCT_PACKAGING_VIEW');
@@ -57,6 +59,7 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
     };
 
     const fetchProducts = async (pageNum = 0) => {
+        setLoading(true);
         try {
             const response = await api.searchProducts({ ...searchFields, page: pageNum, size: defaultPageSize });
             setRowData(response.data.content || []);
@@ -64,6 +67,8 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
             setPage(pageNum);
         } catch (error) {
             alert("제품 목록을 불러오지 못했습니다.");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -81,11 +86,14 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
             alert("조회 내역이 없습니다.");
             return;
         }
+        setExporting(true);
         try {
             const response = await api.exportProductsExcel(searchFields);
             api.downloadBlob(response, "ProductMaster_Export.xlsx");
         } catch (error) {
             alert("엑셀 다운로드 중 오류가 발생했습니다.");
+        } finally {
+            setExporting(false);
         }
     };
 
@@ -327,18 +335,20 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
                         {canView('products') && (
                             <button
                                 onClick={handleExportExcel}
+                                disabled={exporting}
                                 className="outline"
-                                style={{ fontSize: '14px', padding: '10px 20px', backgroundColor: '#fff', color: '#107c41', borderColor: '#107c41' }}
+                                style={{ fontSize: '14px', padding: '10px 20px', backgroundColor: '#fff', color: '#107c41', borderColor: '#107c41', opacity: exporting ? 0.7 : 1 }}
                             >
-                                📊 결과 다운로드
+                                {exporting ? '⏳ 다운로드 중...' : '📊 결과 다운로드'}
                             </button>
                         )}
                         <button
                             className="primary"
                             onClick={handleSearchClick}
-                            style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px' }}
+                            disabled={loading}
+                            style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px', opacity: loading ? 0.7 : 1 }}
                         >
-                            🔍 조회
+                            {loading ? '⏳ 조회 중...' : '🔍 조회'}
                         </button>
                         <button
                             className="outline"

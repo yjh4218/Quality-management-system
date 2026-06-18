@@ -67,17 +67,24 @@ public class FileStorageService {
                     "application/pdf",
                     "image/jpeg", "image/png", "image/gif", "image/webp",
                     "application/vnd.ms-excel",
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "application/msword",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "application/x-hwp", "application/haansofthwp",
+                    "application/x-tika-msoffice", "application/x-tika-ooxml",
+                    "application/zip" // Tika sometimes detects .docx/.xlsx as zip
             );
 
             // 2. MIME 타입 검증
-            if (!safeTypes.contains(detectedType)) {
-                // [Edge Case] Tika가 .xlsx를 octet-stream으로 오진하는 경우에만 확장자 추가 검증
-                if ("application/octet-stream".equals(detectedType)) {
+            if (!safeTypes.contains(detectedType) && !detectedType.startsWith("image/")) {
+                // Tika가 파일 타입을 잘못 식별하는 경우가 많으므로 (예: text/plain, application/octet-stream 등)
+                // 확장자 기반으로 한 번 더 검증을 시도합니다.
+                try {
                     validateByExtension(file.getOriginalFilename());
-                } else {
-                    log.warn("[SECURITY] Blocked malicious file type: {}", detectedType);
-                    throw new RuntimeException("허용되지 않은 파일 규격입니다. (PDF, 이미지, 엑셀만 가능)");
+                    log.info("[FILE] Allowed file with MIME type '{}' based on extension fallback.", detectedType);
+                } catch (Exception extEx) {
+                    log.warn("[SECURITY] Blocked malicious file type: {} (Extension check failed: {})", detectedType, extEx.getMessage());
+                    throw new RuntimeException("허용되지 않은 파일 규격입니다. (PDF, 이미지, 엑셀, Word, HWP만 가능)");
                 }
             }
         } catch (IOException e) {
@@ -92,8 +99,11 @@ public class FileStorageService {
     private void validateByExtension(String originalFilename) {
         if (originalFilename == null) throw new RuntimeException("파일명이 존재하지 않습니다.");
         String ext = originalFilename.toLowerCase();
-        if (!(ext.endsWith(".xlsx") || ext.endsWith(".xls"))) {
-            throw new RuntimeException("보안 위험: 바이너리 파일 업로드가 금지되어 있습니다.");
+        Set<String> allowedExtensions = Set.of(".xlsx", ".xls", ".doc", ".docx", ".hwp", ".pdf",
+                ".jpg", ".jpeg", ".png", ".gif", ".webp");
+        boolean allowed = allowedExtensions.stream().anyMatch(ext::endsWith);
+        if (!allowed) {
+            throw new RuntimeException("보안 위험: 허용되지 않은 파일 형식입니다.");
         }
     }
 

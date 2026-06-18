@@ -118,7 +118,7 @@ const ManufacturerDrawer = ({ manufacturer, onClose, canEdit }) => {
     const getFileUrl = (path) => path.startsWith('http') ? path : `http://localhost:8080${path}`;
 
     return (
-        <div className="drawer-overlay" onClick={onClose} style={{ backdropFilter: 'blur(4px)', background: 'rgba(0, 51, 102, 0.15)' }}>
+        <div className="drawer-overlay" style={{ backdropFilter: 'blur(4px)', background: 'rgba(0, 51, 102, 0.15)' }}>
             <div className="drawer" onClick={(e) => e.stopPropagation()} style={{ width: '850px', borderRadius: '24px', overflow: 'hidden' }}>
                 <div className="drawer-header" style={{ padding: '30px 40px', borderBottom: '1px solid #f1f5f9' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

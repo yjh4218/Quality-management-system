@@ -42,6 +42,10 @@ public class ProductionAuditService {
     private final ObjectMapper objectMapper;
     private final FileStorageService fileStorageService;
     private final ExcelExportService excelExportService;
+    private final EmailService emailService;
+    private final com.example.ims.repository.ManufacturerRepository manufacturerRepository;
+    private final MailTemplateService mailTemplateService;
+    private final NotificationService notificationService;
 
     @Transactional(readOnly = true)
     public List<ProductionAuditDTO> getAllAudits(String username, String manufacturerName) {
@@ -60,7 +64,16 @@ public class ProductionAuditService {
             }
         } else {
             // 제조사는 무조건 본인 업체 데이터 중 '공개'된 것만 조회
-            audits = repository.findByManufacturerNameAndIsDisclosedTrueAndIsDeletedFalse(user.getCompanyName());
+            log.info(">>>> [AUDIT DEBUG] Manufacturer Audits request. User: '{}', User Company: '{}'", username, user.getCompanyName());
+            audits = repository.findByManufacturerNameAndIsDisclosedTrueAndIsDeletedFalse(cleanCompanyName(user.getCompanyName()));
+            log.info(">>>> [AUDIT DEBUG] Found Manufacturer Audits count: {}", audits.size());
+            if (audits.isEmpty()) {
+                List<ProductionAudit> all = repository.findAll();
+                log.info(">>>> [AUDIT DEBUG] DB Audits total size: {}. All manufacturers in DB: {}", 
+                    all.size(), 
+                    all.stream().map(a -> "[" + a.getManufacturerName() + ", isDiscl=" + a.isDisclosed() + ", isDel=" + a.isDeleted() + ", item=" + a.getItemCode() + "]").collect(Collectors.toList())
+                );
+            }
         }
 
         return audits.stream().map(this::convertToDTO).collect(Collectors.toList());
@@ -84,7 +97,16 @@ public class ProductionAuditService {
             }
         } else {
             // 제조사는 본인 업체 미진행 중 '공개요청'된 것만 조회
-            products = repository.findPendingProductsByManufacturerAndIsDisclosedTrue(user.getCompanyName());
+            log.info(">>>> [AUDIT DEBUG] Pending Audits request. User: '{}', User Company: '{}'", username, user.getCompanyName());
+            products = repository.findPendingProductsByManufacturerAndIsDisclosedTrue(cleanCompanyName(user.getCompanyName()));
+            log.info(">>>> [AUDIT DEBUG] Found Pending count: {}", products.size());
+            if (products.isEmpty()) {
+                List<Product> allProds = productRepository.findAll();
+                log.info(">>>> [AUDIT DEBUG] DB Products total size: {}. All Products: {}",
+                    allProds.size(),
+                    allProds.stream().map(p -> "[" + p.getItemCode() + ", name=" + p.getProductName() + ", mfr=" + p.getManufacturer() + ", info=" + (p.getManufacturerInfo() != null ? p.getManufacturerInfo().getName() : "null") + ", discl=" + p.isPhotoAuditDisclosed() + ", active=" + p.isActive() + "]").collect(Collectors.toList())
+                );
+            }
         }
         
         return products.stream().map(p -> {
@@ -177,9 +199,53 @@ public class ProductionAuditService {
 
         // 제품 정보와 동기화
         productRepository.findByItemCode(audit.getItemCode()).ifPresent(p -> {
+            boolean wasDisclosed = p.isPhotoAuditDisclosed();
             p.setPhotoAuditDisclosed(audit.isDisclosed());
             productRepository.save(p);
+
+            if (!wasDisclosed && audit.isDisclosed() && p.getManufacturerInfo() != null && p.getManufacturerInfo().getName() != null) {
+                com.example.ims.entity.Manufacturer mfr = manufacturerRepository.findByName(p.getManufacturerInfo().getName()).orElse(null);
+                if (mfr != null && mfr.getEmail() != null && !mfr.getEmail().isEmpty()) {
+                    emailService.sendProductionAuditNotificationEmail(mfr.getEmail(), p);
+                } else {
+                    log.warn("Cannot send audit notification email: Manufacturer email not found for {}", p.getManufacturerInfo().getName());
+                }
+
+                // [알림 연동] 생산감리 공개요청(사진 등록 요청) 시 제조사에 알림 적재
+                try {
+                    notificationService.createNotification(
+                        "생산감리 사진 등록 요청",
+                        String.format("품목 %s(%s)의 생산감리 사진 등록 요청이 등록되었습니다. 사진을 업로드해 주세요.", 
+                            p.getProductName(), p.getItemCode()),
+                        "PRODUCTION_AUDIT",
+                        null,
+                        "ROLE_MANUFACTURER",
+                        p.getManufacturerInfo().getName(),
+                        String.format("/production-audits?itemCode=%s", p.getItemCode())
+                    );
+                } catch (Exception e) {
+                    log.error("Failed to create audit request notification: {}", e.getMessage());
+                }
+            }
         });
+
+        // [알림 연동] 제조사가 사진을 업로드하고 상태가 SUBMITTED(또는 업로드 완료 상태)가 되었을 때 품질팀에 알림 발송
+        if ("SUBMITTED".equals(savedAudit.getStatus()) && !"SUBMITTED".equals(oldAuditClone.getStatus())) {
+            try {
+                notificationService.createNotification(
+                    "생산감리 사진 제출 완료",
+                    String.format("제조사(%s)에서 품목 %s의 생산감리 사진 3종 제출을 완료했습니다. 검토 바랍니다.", 
+                        savedAudit.getManufacturerName(), savedAudit.getProductName()),
+                    "PRODUCTION_AUDIT",
+                    null,
+                    "ROLE_QUALITY",
+                    null,
+                    String.format("/production-audits?itemCode=%s", savedAudit.getItemCode())
+                );
+            } catch (Exception e) {
+                log.error("Failed to create audit submit notification: {}", e.getMessage());
+            }
+        }
 
         String modifierName = user.getName() + " (" + (user.getCompanyName() != null ? user.getCompanyName() : "시스템") + ")";
         
@@ -242,6 +308,191 @@ public class ProductionAuditService {
         return historyRepository.findByAuditIdOrderByModifiedAtDesc(auditId);
     }
 
+    @Transactional(readOnly = true)
+    public java.util.Map<String, String> getAuditEmailPreview(String idOrItemCode) {
+        ProductionAudit audit = null;
+        com.example.ims.entity.Product product = null;
+
+        // Try to parse as ID
+        try {
+            Long id = Long.parseLong(idOrItemCode);
+            audit = repository.findById(id).orElse(null);
+        } catch (NumberFormatException e) {
+            // Not a number, so it is an itemCode
+        }
+
+        if (audit == null) {
+            String itemCode = idOrItemCode;
+            audit = repository.findByItemCode(itemCode).orElse(null);
+            if (audit == null) {
+                product = productRepository.findByItemCode(itemCode).orElse(null);
+                if (product == null && !itemCode.equals("null") && !itemCode.equals("undefined")) {
+                    product = productRepository.findAll().stream()
+                            .filter(p -> p.getItemCode().equalsIgnoreCase(itemCode))
+                            .findFirst().orElse(null);
+                }
+                
+                if (product != null) {
+                    audit = new ProductionAudit();
+                    audit.setItemCode(product.getItemCode());
+                    audit.setProductName(product.getProductName());
+                    String mfrName = "";
+                    try {
+                        if (product.getManufacturerInfo() != null) {
+                            mfrName = product.getManufacturerInfo().getName();
+                        } else if (product.getManufacturer() != null) {
+                            mfrName = product.getManufacturer();
+                        }
+                    } catch (Exception e) {
+                        log.warn("Failed to load manufacturerInfo proxy for itemCode: {}, fallback to legacy manufacturer field.", product.getItemCode(), e);
+                        if (product.getManufacturer() != null) {
+                            mfrName = product.getManufacturer();
+                        }
+                    }
+                    audit.setManufacturerName(mfrName);
+                } else {
+                    throw new RuntimeException("해당 품목코드에 해당하는 제품 정보 또는 생산감리 정보를 찾을 수 없습니다.");
+                }
+            }
+        }
+
+        String toEmail = "";
+        if (audit.getManufacturerName() != null && !audit.getManufacturerName().isEmpty()) {
+            com.example.ims.entity.Manufacturer mfr = manufacturerRepository.findByName(audit.getManufacturerName()).orElse(null);
+            if (mfr != null && mfr.getEmail() != null) {
+                toEmail = mfr.getEmail();
+            }
+        }
+
+        // Try to load active template for PRODUCTION_AUDIT, fallback to default hardcoded if not found
+        com.example.ims.entity.MailTemplate template = mailTemplateService.getActiveTemplatesByCategory("PRODUCTION_AUDIT")
+                .stream()
+                .findFirst()
+                .orElse(null);
+
+        String subject;
+        String body;
+
+        if (template != null) {
+            subject = emailService.processAuditTemplate(template.getSubject(), audit);
+            body = emailService.processAuditTemplate(template.getBody(), audit);
+        } else {
+            subject = "[QMS 알림] 신제품 생산감리 사진 등록 요청 (" + audit.getProductName() + ")";
+            body = "<html>\n<body style=\"font-family: 'Malgun Gothic', sans-serif; line-height: 1.6; color: #333;\">\n" +
+                    "  <div style=\"max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);\">\n" +
+                    "    <h2 style=\"color: #0f172a; border-bottom: 2px solid #cbd5e1; padding-bottom: 10px;\">통합 품질 관리 시스템 (QMS)</h2>\n" +
+                    "    <p>안녕하세요, 귀사에 <b>신제품 생산감리 사진 등록</b>이 요청되었습니다.</p>\n" +
+                    "    <div style=\"background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0;\">\n" +
+                    "      <ul style=\"margin: 0; padding-left: 20px; color: #475569;\">\n" +
+                    "        <li style=\"margin-bottom: 8px;\"><b>품목코드:</b> " + (audit.getItemCode() != null ? audit.getItemCode() : "") + "</li>\n" +
+                    "        <li style=\"margin-bottom: 8px;\"><b>제품명:</b> " + (audit.getProductName() != null ? audit.getProductName() : "") + "</li>\n" +
+                    "      </ul>\n" +
+                    "    </div>\n" +
+                    "    <p>QMS 시스템에 접속하여 해당 제품에 대한 용기, 단상자, 적재 사진을 업로드해 주시기 바랍니다.</p>\n" +
+                    "    <div style=\"text-align: center; margin: 30px 0;\">\n" +
+                    "      <a href=\"http://localhost:5173/production-audit?itemCode=" + audit.getItemCode() + "\" style=\"display: inline-block; padding: 12px 24px; color: #ffffff; background-color: #003366; text-decoration: none; border-radius: 6px; font-weight: bold;\">📸 생산감리 사진 등록하러 가기</a>\n" +
+                    "    </div>\n" +
+                    "    <hr style=\"border: none; border-top: 1px solid #cbd5e1; margin: 20px 0;\" />\n" +
+                    "    <p style=\"font-size: 12px; color: #94a3b8; text-align: center;\">본 메일은 QMS 시스템에서 자동으로 발송된 메일입니다.</p>\n" +
+                    "  </div>\n" +
+                    "</body>\n" +
+                    "</html>";
+        }
+
+        java.util.Map<String, String> preview = new java.util.HashMap<>();
+        preview.put("toEmail", toEmail);
+        preview.put("subject", subject);
+        preview.put("body", body);
+        return preview;
+    }
+
+    @Transactional
+    public boolean sendAuditCustomEmail(String idOrItemCode, java.util.Map<String, String> emailRequest, org.springframework.security.core.userdetails.UserDetails userDetails) {
+        String toEmail = emailRequest.get("toEmail");
+        String subject = emailRequest.get("subject");
+        String body = emailRequest.get("body");
+
+        if (toEmail == null || toEmail.trim().isEmpty()) {
+            throw new RuntimeException("수신자 메일 주소가 입력되지 않았습니다.");
+        }
+        if (subject == null || subject.trim().isEmpty()) {
+            throw new RuntimeException("메일 제목이 입력되지 않았습니다.");
+        }
+        if (body == null || body.trim().isEmpty()) {
+            throw new RuntimeException("메일 내용이 입력되지 않았습니다.");
+        }
+
+        boolean isMock = false;
+        // Split by comma in case multiple emails are provided
+        String[] emails = toEmail.split(",");
+        for (String email : emails) {
+            String trimmedEmail = email.trim();
+            if (!trimmedEmail.isEmpty()) {
+                isMock = emailService.sendCustomEmail(trimmedEmail, subject, body);
+            }
+        }
+
+        Long auditId = 0L;
+        String itemCode = null;
+        try {
+            auditId = Long.parseLong(idOrItemCode);
+        } catch (NumberFormatException e) {
+            itemCode = idOrItemCode;
+        }
+
+        User modifier = null;
+        if (userDetails != null) {
+            modifier = userRepository.findByUsername(userDetails.getUsername()).orElse(null);
+        }
+
+        // [추가] 메일 발송 완료 후 공개 상태 자동 적용
+        ProductionAudit audit = null;
+        if (auditId > 0) {
+            audit = repository.findById(auditId).orElse(null);
+        } else if (itemCode != null) {
+            audit = repository.findByItemCode(itemCode).orElse(null);
+        }
+
+        if (audit != null) {
+            if (!audit.isDisclosed()) {
+                if (modifier != null) {
+                    compareAndAdd(new java.util.ArrayList<>(), audit.getId(), modifier, "isDisclosed", false, true);
+                }
+                audit.setDisclosed(true);
+                repository.save(audit);
+            }
+            productRepository.findByItemCode(audit.getItemCode()).ifPresent(p -> {
+                p.setPhotoAuditDisclosed(true);
+                productRepository.save(p);
+            });
+        } else if (itemCode != null) {
+            final String finalItemCode = itemCode;
+            productRepository.findByItemCode(finalItemCode).ifPresent(p -> {
+                p.setPhotoAuditDisclosed(true);
+                productRepository.save(p);
+            });
+        }
+
+        String modifierName = modifier != null ? modifier.getName() : "시스템";
+        Long modifierId = modifier != null ? modifier.getId() : null;
+        String modifierUsername = modifier != null ? modifier.getUsername() : null;
+        String modifierCompany = modifier != null ? modifier.getCompanyName() : null;
+
+        eventPublisher.publishEvent(EntityChangeEvent.builder()
+                .entityType("PRODUCTION_AUDIT")
+                .entityId(auditId > 0 ? auditId : (audit != null ? audit.getId() : 0L))
+                .action("EMAIL_SENT")
+                .modifier(modifierName)
+                .modifierId(modifierId)
+                .modifierUsername(modifierUsername)
+                .modifierName(modifierName)
+                .modifierCompany(modifierCompany)
+                .description("신제품 생산감리 커스텀 이메일 발송 완료 (대상: " + toEmail + ")")
+                .build());
+
+        return isMock;
+    }
+
     private void logChanges(ProductionAudit oldA, ProductionAudit newA, User user) {
         List<ProductionAuditHistory> batch = new ArrayList<>();
         compareAndAdd(batch, oldA.getId(), user, "productionDate", oldA.getProductionDate(), newA.getProductionDate());
@@ -297,8 +548,19 @@ public class ProductionAuditService {
         log.info("[SERVICE] Updating Disclosure for Item: {} to {}", itemCode, isDisclosed);
         Product product = productRepository.findByItemCode(itemCode)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
+        boolean wasDisclosed = product.isPhotoAuditDisclosed();
         product.setPhotoAuditDisclosed(isDisclosed);
         productRepository.save(product);
+
+        if (!wasDisclosed && isDisclosed && product.getManufacturerInfo() != null && product.getManufacturerInfo().getName() != null) {
+            com.example.ims.entity.Manufacturer mfr = manufacturerRepository.findByName(product.getManufacturerInfo().getName()).orElse(null);
+            if (mfr != null && mfr.getEmail() != null && !mfr.getEmail().isEmpty()) {
+                emailService.sendProductionAuditNotificationEmail(mfr.getEmail(), product);
+            } else {
+                log.warn("Cannot send audit notification email: Manufacturer email not found for {}", product.getManufacturerInfo().getName());
+            }
+        }
+
         log.info("[SERVICE] Successfully saved product disclosure status.");
     }
 
@@ -375,5 +637,14 @@ public class ProductionAuditService {
             a.getId(), a.getStatus(), a.getItemCode(), a.getProductName(), a.getManufacturerName(),
             a.getProductionDate(), a.getUploadDate(), a.isDisclosed(), a.getRejectionReason()
         });
+    }
+
+    private String cleanCompanyName(String name) {
+        if (name == null) return "";
+        int idx = name.indexOf("•");
+        if (idx != -1) {
+            name = name.substring(0, idx);
+        }
+        return name.replace("(주)", "").replace("주식회사", "").trim();
     }
 }

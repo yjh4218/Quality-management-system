@@ -27,6 +27,13 @@ public class ManufacturerController {
         return ResponseEntity.ok(manufacturerService.getAll(userDetails.getUsername()));
     }
 
+    @GetMapping("/departments")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<java.util.Map<String, List<String>>> getCompanyDepartmentsAndEmails(
+            @RequestParam String companyName) {
+        return ResponseEntity.ok(manufacturerService.getCompanyDepartmentsAndEmails(companyName));
+    }
+
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
     public ResponseEntity<Manufacturer> create(@RequestBody Manufacturer manufacturer,

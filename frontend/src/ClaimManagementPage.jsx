@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AgGridReact } from 'ag-grid-react';
+import { toast } from 'react-toastify';
 import { getClaims, getClaimDashboard } from './api';
 import ClaimDrawer from './ClaimDrawer';
 import ProductSearchPopup from './ProductSearchPopup';
@@ -12,6 +13,8 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [selectedClaim, setSelectedClaim] = useState(null);
     const initializedRef = useRef(false);
+    const [loading, setLoading] = useState(false);
+    const [exporting, setExporting] = useState(false);
 
     const lastSearchRef = useRef('');
 
@@ -35,7 +38,8 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
         country: '',
         qualityStatus: '',
         claimNumber: '',
-        sharedWithManufacturer: ''
+        sharedWithManufacturer: '',
+        manufacturer: ''
     });
     const [showSearchPopup, setShowSearchPopup] = useState(false);
 
@@ -48,11 +52,16 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
         if (!force && lastSearchRef.current === currentSearchKey) return;
         
         lastSearchRef.current = currentSearchKey; // Set early to prevent race conditions
+        setLoading(true);
         try {
             const claimsRes = await getClaims(searchParams);
             setActualClaims(claimsRes.data || []);
         } catch (error) {
+            console.error("Failed to load claims", error);
             setActualClaims([]);
+            toast.error("클레임 내역을 불러오는 중 오류가 발생했습니다.");
+        } finally {
+            setLoading(false);
         }
     }, [searchParams]);
 
@@ -149,12 +158,17 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
             alert("조회 내역이 없습니다.");
             return;
         }
+        setExporting(true);
         try {
             const { exportClaimsExcel, downloadBlob } = await import('./api');
             const response = await exportClaimsExcel(searchParams);
             downloadBlob(response, "Claim_Export.xlsx");
+            toast.success("클레임 엑셀 다운로드가 완료되었습니다.");
         } catch (error) {
-            alert("엑셀 다운로드 중 오류가 발생했습니다.");
+            console.error("Export error", error);
+            toast.error("엑셀 다운로드 중 오류가 발생했습니다.");
+        } finally {
+            setExporting(false);
         }
     };
 
@@ -220,23 +234,25 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
                             <button 
                                 className="outline" 
                                 onClick={handleExportExcel} 
-                                style={{ fontSize: '14px', padding: '10px 20px', backgroundColor: '#fff', color: '#107c41', borderColor: '#107c41' }}
+                                disabled={exporting}
+                                style={{ fontSize: '14px', padding: '10px 20px', backgroundColor: '#fff', color: '#107c41', borderColor: '#107c41', opacity: exporting ? 0.7 : 1 }}
                             >
-                                📊 결과 다운로드
+                                {exporting ? '⏳ 다운로드 중...' : '📊 결과 다운로드'}
                             </button>
                         )}
                         <button 
                             className="primary" 
                             onClick={() => loadData(true)} 
-                            style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px' }}
+                            disabled={loading}
+                            style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px', opacity: loading ? 0.7 : 1 }}
                         >
-                            🔍 조회
+                            {loading ? '⏳ 조회 중...' : '🔍 조회'}
                         </button>
                         <button 
                             className="outline" 
                             onClick={() => {
                                 const initD = getInitialDates();
-                                setSearchParams({ startDate: initD.start, endDate: initD.end, itemCode: '', productName: '', lotNumber: '', country: '', qualityStatus: '', claimNumber: '', sharedWithManufacturer: '' });
+                                setSearchParams({ startDate: initD.start, endDate: initD.end, itemCode: '', productName: '', lotNumber: '', country: '', qualityStatus: '', claimNumber: '', sharedWithManufacturer: '', manufacturer: '' });
                             }} 
                             style={{ padding: '10px 16px', fontSize: '14px' }}
                         >
@@ -284,11 +300,18 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
                         <input type="text" placeholder="LOT" value={searchParams.lotNumber || ''} onChange={e => setSearchParams({ ...searchParams, lotNumber: e.target.value })} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
                     </div>
 
-                    {/* 5. 기타 (국가/상태) */}
+                    {/* 5. 기타 (국가/상태/제조사) */}
                     <div>
                         <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🌍 국가</label>
                         <input type="text" placeholder="국가명" value={searchParams.country || ''} onChange={e => setSearchParams({ ...searchParams, country: e.target.value })} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
                     </div>
+
+                    {!isManufacturer && (
+                        <div>
+                            <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏭 제조사</label>
+                            <input type="text" placeholder="제조사명" value={searchParams.manufacturer || ''} onChange={e => setSearchParams({ ...searchParams, manufacturer: e.target.value })} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
+                        </div>
+                    )}
 
                     <div>
                         <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🔄 처리 상태</label>
@@ -352,7 +375,12 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
                 <ClaimDrawer
                     claim={selectedClaim}
                     onClose={() => setIsDrawerOpen(false)}
-                    onSaved={() => loadData(true)}
+                    onSaved={(updated) => {
+                        loadData(true);
+                        if (updated) {
+                            setSelectedClaim(updated);
+                        }
+                    }}
                     user={user}
                 />
             )}

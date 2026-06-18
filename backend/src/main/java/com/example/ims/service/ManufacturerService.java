@@ -96,4 +96,25 @@ public class ManufacturerService {
         return manufacturerRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Manufacturer not found"));
     }
+
+    public java.util.Map<String, List<String>> getCompanyDepartmentsAndEmails(String companyName) {
+        java.util.Map<String, List<String>> deptMap = new java.util.HashMap<>();
+        if (companyName == null || companyName.isBlank()) {
+            return deptMap;
+        }
+        List<com.example.ims.entity.User> users = userRepository.findByCompanyName(companyName);
+        for (com.example.ims.entity.User u : users) {
+            if (u.isEnabled()) {
+                String dept = u.getDepartment();
+                if (dept == null || dept.isBlank()) {
+                    dept = "기타";
+                }
+                String email = u.getEmail();
+                if (email != null && !email.isBlank()) {
+                    deptMap.computeIfAbsent(dept, k -> new java.util.ArrayList<>()).add(email);
+                }
+            }
+        }
+        return deptMap;
+    }
 }

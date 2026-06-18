@@ -42,7 +42,7 @@ const HelpCenterModal = ({ currentPage, onClose }) => {
     }, [currentPage]);
 
     return (
-        <div className="modal-overlay help-overlay" onClick={onClose}>
+        <div className="modal-overlay help-overlay">
             <div className="modal-content help-content" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-header">
                     <h3>💡 {loading ? "가이드 로딩 중..." : guide?.title}</h3>

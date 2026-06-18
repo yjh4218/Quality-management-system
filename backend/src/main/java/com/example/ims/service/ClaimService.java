@@ -30,11 +30,15 @@ public class ClaimService {
     private final FileStorageService fileStorageService;
     private final ExcelExportService excelExportService;
     private final com.example.ims.repository.UserRepository userRepository;
+    private final EmailService emailService;
+    private final com.example.ims.repository.ManufacturerRepository manufacturerRepository;
+    private final MailTemplateService mailTemplateService;
+    private final NotificationService notificationService;
 
     @Transactional(readOnly = true)
     public List<Claim> getClaims(String role, String companyName) {
         if (role != null && role.contains("MANUFACTURER")) {
-            return claimRepository.findByManufacturer(companyName).stream()
+            return claimRepository.findByManufacturer(cleanCompanyName(companyName)).stream()
                     .filter(Claim::isSharedWithManufacturer)
                     .collect(java.util.stream.Collectors.toList());
         }
@@ -44,7 +48,7 @@ public class ClaimService {
     @Transactional(readOnly = true)
     public List<Claim> searchClaims(String role, String companyName, String startDate, String endDate, String itemCode,
             String productName, String lotNumber, String country, String qualityStatus, String claimNumber,
-            String sharedFilterStr) {
+            String manufacturer, String sharedFilterStr) {
         Boolean sharedWithManufacturer = null;
         if (sharedFilterStr != null && !sharedFilterStr.trim().isEmpty()) {
             if (sharedFilterStr.equalsIgnoreCase("true") || sharedFilterStr.equals("1")) {
@@ -63,7 +67,7 @@ public class ClaimService {
                 // 1. [권한 필터] 제조사 권한은 오로지 본인 회사의 '공유된' 항목만 접근 가능
                 if (role != null && (role.equals("ROLE_MANUFACTURER") || role.equals("MANUFACTURER"))) {
                     if (companyName != null) {
-                        predicates.add(cb.equal(root.get("manufacturer"), companyName));
+                        predicates.add(cb.equal(root.get("manufacturer"), cleanCompanyName(companyName)));
                     }
                     predicates.add(cb.isTrue(root.get("sharedWithManufacturer")));
                 }
@@ -96,6 +100,10 @@ public class ClaimService {
 
                 if (claimNumber != null && !claimNumber.trim().isEmpty()) {
                     predicates.add(cb.like(root.get("claimNumber"), "%" + claimNumber.trim() + "%"));
+                }
+
+                if (manufacturer != null && !manufacturer.trim().isEmpty()) {
+                    predicates.add(cb.like(cb.lower(root.get("manufacturer")), "%" + manufacturer.trim().toLowerCase() + "%"));
                 }
 
                 // 4. [제조사 공유 여부 필터]
@@ -155,6 +163,24 @@ public class ClaimService {
         boolean isNew = claim.getId() == null;
         Claim saved = claimRepository.save(claim);
 
+        // [알림 연동] 신규 클레임이 등록되고 제조사 공유 상태일 때, 제조사 전체에 알림 발송
+        if (isNew && saved.isSharedWithManufacturer() && saved.getManufacturer() != null) {
+            try {
+                notificationService.createNotification(
+                    "신규 클레임 접수 알림",
+                    String.format("품목 %s(Lot: %s)에 대한 신규 클레임(%s)이 접수되었습니다. 확인 부탁드립니다.", 
+                        saved.getProductName(), saved.getLotNumber() != null ? saved.getLotNumber() : "-", saved.getClaimNumber()),
+                    "CLAIM",
+                    null, // targetUsername
+                    "ROLE_MANUFACTURER", // targetRole
+                    saved.getManufacturer(), // targetCompanyName
+                    String.format("/claims?claimId=%d", saved.getId()) // linkUrl (클레임 모달 딥링크)
+                );
+            } catch (Exception e) {
+                log.error("Failed to create claim notification: {}", e.getMessage());
+            }
+        }
+
         // [고도화] 직접 호출 대신 이벤트를 발행하여 AuditLogService와 결합도 해제
         eventPublisher.publishEvent(com.example.ims.event.EntityChangeEvent.builder()
                 .entityType("CLAIM")
@@ -172,7 +198,7 @@ public class ClaimService {
     @Transactional
     @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
     public void deleteClaim(Long id, User user) {
-        Claim claim = getClaim(id, user);
+        Claim claim = getClaim(id, user, false);
         String oldJson = captureJson(claim);
         claim.setDeleted(true); // Soft delete
         claim.setDeletedAt(java.time.LocalDateTime.now());
@@ -235,13 +261,21 @@ public class ClaimService {
         claim.setMfrStatus(mfrStatus);
     }
 
-    @Transactional(readOnly = true)
-    public Claim getClaim(Long id, User user) {
+    @Transactional
+    public Claim getClaim(Long id, User user, boolean fromEmail) {
         Claim claim = claimRepository.findById(id).orElseThrow(() -> new RuntimeException("Claim not found"));
 
         boolean isManufacturer = user.getRole().contains("ROLE_MANUFACTURER") || "제조사".equals(user.getDepartment());
         if (isManufacturer) {
-            if (!Objects.equals(user.getCompanyName(), claim.getManufacturer()) || !claim.isSharedWithManufacturer()) {
+            // 메일 링크로 들어왔고 제조사명이 일치한다면 자동으로 공개 처리
+            if (fromEmail && Objects.equals(cleanCompanyName(user.getCompanyName()), cleanCompanyName(claim.getManufacturer()))) {
+                if (!claim.isSharedWithManufacturer()) {
+                    claim.setSharedWithManufacturer(true);
+                    claimRepository.save(claim);
+                }
+            }
+
+            if (!Objects.equals(cleanCompanyName(user.getCompanyName()), cleanCompanyName(claim.getManufacturer())) || !claim.isSharedWithManufacturer()) {
                 throw new RuntimeException("해당 클레임에 대한 접근 권한이 없습니다.");
             }
         }
@@ -282,9 +316,30 @@ public class ClaimService {
         return "[" + String.join(", ", list) + "]";
     }
 
+    @Transactional
     @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
     public Claim updateClaim(Long id, Claim updatedData, User user) {
-        Claim existing = getClaim(id, user);
+        Claim existing = getClaim(id, user, false);
+        
+        // 제조사가 이전에 대책서(원인분석/재발방지대책)를 제출했었는지 여부 백업
+        boolean wasMfrSubmitted = (existing.getMfrRootCauseAnalysis() != null && !existing.getMfrRootCauseAnalysis().isEmpty())
+                               || (existing.getMfrPreventativeAction() != null && !existing.getMfrPreventativeAction().isEmpty());
+        
+        // 제조사 기입 내용 수정 변경 여부 체크
+        boolean mfrFieldsChanged = false;
+        if (updatedData.getMfrRootCauseAnalysis() != null && !updatedData.getMfrRootCauseAnalysis().equals(existing.getMfrRootCauseAnalysis())) {
+            mfrFieldsChanged = true;
+        }
+        if (updatedData.getMfrPreventativeAction() != null && !updatedData.getMfrPreventativeAction().equals(existing.getMfrPreventativeAction())) {
+            mfrFieldsChanged = true;
+        }
+        // 낙관적 락 수동 검증: 요청 버전과 DB의 최신 버전 비교 (null 안전 비교)
+        Long reqVersion = updatedData.getVersion() != null ? updatedData.getVersion() : 0L;
+        Long dbVersion = existing.getVersion() != null ? existing.getVersion() : 0L;
+        if (!reqVersion.equals(dbVersion)) {
+            throw new org.springframework.orm.ObjectOptimisticLockingFailureException(Claim.class, id);
+        }
+
         String oldJson = auditLogService.toCompactJson(existing);
 
         String company = user.getCompanyName() != null ? user.getCompanyName() : "시스템";
@@ -296,6 +351,31 @@ public class ClaimService {
                     String.valueOf(existing.isSharedWithManufacturer()),
                     String.valueOf(updatedData.isSharedWithManufacturer()));
             existing.setSharedWithManufacturer(updatedData.isSharedWithManufacturer());
+
+            // 공유 처리 시 제조사 이메일 발송 및 시스템 알림 등록
+            if (updatedData.isSharedWithManufacturer() && existing.getManufacturer() != null) {
+                com.example.ims.entity.Manufacturer mfr = manufacturerRepository.findByName(existing.getManufacturer()).orElse(null);
+                if (mfr != null && mfr.getEmail() != null && !mfr.getEmail().isEmpty()) {
+                    emailService.sendClaimNotificationEmail(mfr.getEmail(), existing);
+                } else {
+                    log.warn("Cannot send claim notification email: Manufacturer email not found for {}", existing.getManufacturer());
+                }
+                
+                try {
+                    notificationService.createNotification(
+                        "신규 클레임 접수 알림",
+                        String.format("품목 %s(Lot: %s)에 대한 신규 클레임(%s)이 공유되었습니다. 확인 부탁드립니다.", 
+                            existing.getProductName(), existing.getLotNumber() != null ? existing.getLotNumber() : "-", existing.getClaimNumber()),
+                        "CLAIM",
+                        null,
+                        "ROLE_MANUFACTURER",
+                        existing.getManufacturer(),
+                        String.format("/claims?claimId=%d", existing.getId())
+                    );
+                } catch (Exception e) {
+                    log.error("Failed to create claim share notification: {}", e.getMessage());
+                }
+            }
         }
 
         // 종결일 업데이트
@@ -476,11 +556,60 @@ public class ClaimService {
             existing.setMfrRemarks(updatedData.getMfrRemarks());
         }
 
-        // [고도화 2] 상태 자동 업데이트
-        determineStatus(existing);
-        determineMfrStatus(existing);
+        // [수정] 수동으로 지정된 상태값이 있으면 우선 적용하고, 없으면 자동 판정 수행
+        if (updatedData.getQualityStatus() != null && !updatedData.getQualityStatus().trim().isEmpty()) {
+            compareAndSave(id, user, "QualityStatus", existing.getQualityStatus(), updatedData.getQualityStatus());
+            existing.setQualityStatus(updatedData.getQualityStatus());
+        } else {
+            determineStatus(existing);
+        }
+
+        if (updatedData.getMfrStatus() != null && !updatedData.getMfrStatus().trim().isEmpty()) {
+            compareAndSave(id, user, "MfrStatus", existing.getMfrStatus(), updatedData.getMfrStatus());
+            existing.setMfrStatus(updatedData.getMfrStatus());
+        } else {
+            determineMfrStatus(existing);
+        }
+
+        boolean mfrSubmitted = (updatedData.getMfrRootCauseAnalysis() != null && !updatedData.getMfrRootCauseAnalysis().isEmpty()) 
+                            || (updatedData.getMfrPreventativeAction() != null && !updatedData.getMfrPreventativeAction().isEmpty());
 
         Claim saved = claimRepository.save(existing);
+
+        // 제조사가 대책서/원인분석을 새로 기입하거나 수정하여 저장했을 때 품질팀(ROLE_QUALITY) 및 관리자(ROLE_ADMIN)에게 알림 발송
+        if (mfrFieldsChanged && mfrSubmitted) {
+            // 1. 품질 담당자에게 알림 생성
+            try {
+                notificationService.createNotification(
+                    "제조사 대책서 제출 알림",
+                    String.format("제조사(%s)에서 클레임 %s에 대한 원인분석 및 대책서를 제출하였습니다.", 
+                        saved.getManufacturer(), saved.getClaimNumber()),
+                    "CLAIM",
+                    null,
+                    "ROLE_QUALITY",
+                    null,
+                    String.format("/claims?claimId=%d", saved.getId())
+                );
+            } catch (Exception e) {
+                log.error("Failed to create manufacturer action plan notification for quality: {}", e.getMessage());
+            }
+
+            // 2. 시스템 관리자에게 알림 생성
+            try {
+                notificationService.createNotification(
+                    "제조사 대책서 제출 알림",
+                    String.format("제조사(%s)에서 클레임 %s에 대한 원인분석 및 대책서를 제출하였습니다.", 
+                        saved.getManufacturer(), saved.getClaimNumber()),
+                    "CLAIM",
+                    null,
+                    "ROLE_ADMIN",
+                    null,
+                    String.format("/claims?claimId=%d", saved.getId())
+                );
+            } catch (Exception e) {
+                log.error("Failed to create manufacturer action plan notification for admin: {}", e.getMessage());
+            }
+        }
 
         // [고도화] 이벤트 발행
         eventPublisher.publishEvent(com.example.ims.event.EntityChangeEvent.builder()
@@ -516,7 +645,7 @@ public class ClaimService {
         }
 
         List<Claim> allFilteredClaims = searchClaims(role, companyName, effectiveStart.toString(), endDate, itemCode,
-                productName, null, null, null, null, null);
+                productName, null, null, null, null, manufacturer, null);
 
         LocalDate oneMonthAgo = now.minusMonths(1);
 
@@ -662,8 +791,8 @@ public class ClaimService {
     /**
      * [고도화] 클레임 목록을 엑셀 파일로 추출합니다.
      */
-    public byte[] exportClaims(String username, String role, String companyName, String startDate, String endDate, String itemCode, String productName, String lotNumber, String country, String qualityStatus, String claimNumber, String sharedFilterStr) throws java.io.IOException {
-        List<Claim> data = searchClaims(role, companyName, startDate, endDate, itemCode, productName, lotNumber, country, qualityStatus, claimNumber, sharedFilterStr);
+    public byte[] exportClaims(String username, String role, String companyName, String startDate, String endDate, String itemCode, String productName, String lotNumber, String country, String qualityStatus, String claimNumber, String manufacturer, String sharedFilterStr) throws java.io.IOException {
+        List<Claim> data = searchClaims(role, companyName, startDate, endDate, itemCode, productName, lotNumber, country, qualityStatus, claimNumber, manufacturer, sharedFilterStr);
         
         // [감사 로그] 엑셀 다운로드 이력 기록
         User userObj = userRepository.findByUsername(username).orElse(null);
@@ -702,5 +831,144 @@ public class ClaimService {
             c.getOccurrenceQty(), c.getPrimaryCategory(), c.getSecondaryCategory(),
             c.getQualityStatus(), c.getMfrStatus(), c.isSharedWithManufacturer()
         });
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Object> getClaimEmailPreview(Long claimId, String templateCode) {
+        Claim claim = claimRepository.findById(claimId).orElseThrow(() -> new RuntimeException("클레임을 찾을 수 없습니다."));
+        com.example.ims.entity.MailTemplate template = mailTemplateService.getTemplateByCode(templateCode);
+        if (template == null) {
+            throw new RuntimeException("해당 메일 양식을 찾을 수 없습니다: " + templateCode);
+        }
+
+        String manufacturerName = claim.getManufacturer();
+        if (manufacturerName == null || manufacturerName.isEmpty()) {
+            throw new RuntimeException("해당 클레임에 지정된 제조사가 없습니다.");
+        }
+
+        String targetEmailStr = "";
+        com.example.ims.entity.Manufacturer mfr = manufacturerRepository.findByName(manufacturerName).orElse(null);
+        if (mfr != null && mfr.getEmail() != null) {
+            targetEmailStr = mfr.getEmail();
+        }
+
+        String subject = emailService.processClaimTemplate(template.getSubject(), claim);
+        String body = emailService.processClaimTemplate(template.getBody(), claim);
+
+        java.util.Map<String, Object> preview = new java.util.HashMap<>();
+        preview.put("toEmail", targetEmailStr);
+        preview.put("subject", subject);
+        preview.put("body", body);
+        return preview;
+    }
+
+    @Transactional
+    public void sendEmailToManufacturer(Long claimId, String templateCode, User modifier) {
+        Claim claim = claimRepository.findById(claimId).orElseThrow(() -> new RuntimeException("클레임을 찾을 수 없습니다."));
+        com.example.ims.entity.MailTemplate template = mailTemplateService.getTemplateByCode(templateCode);
+        if (template == null) {
+            throw new RuntimeException("해당 메일 양식을 찾을 수 없습니다: " + templateCode);
+        }
+
+        String manufacturerName = claim.getManufacturer();
+        if (manufacturerName == null || manufacturerName.isEmpty()) {
+            throw new RuntimeException("해당 클레임에 지정된 제조사가 없습니다.");
+        }
+
+        List<User> manufacturerUsers = userRepository.findByCompanyName(manufacturerName);
+        if (manufacturerUsers.isEmpty()) {
+            throw new RuntimeException("해당 제조사(" + manufacturerName + ") 소속으로 등록된 사용자가 없습니다.");
+        }
+
+        List<String> targetEmails = manufacturerUsers.stream()
+                .filter(u -> u.getEmail() != null && !u.getEmail().isEmpty())
+                .map(User::getEmail)
+                .collect(Collectors.toList());
+
+        if (targetEmails.isEmpty()) {
+            throw new RuntimeException("해당 제조사(" + manufacturerName + ") 소속 사용자 중 이메일 주소가 등록된 사용자가 없습니다.");
+        }
+
+        for (String targetEmail : targetEmails) {
+            emailService.sendDynamicEmail(targetEmail, template, claim);
+        }
+
+        String targetEmailList = String.join(", ", targetEmails);
+
+        // Audit Log
+        eventPublisher.publishEvent(com.example.ims.event.EntityChangeEvent.builder()
+                .entityType("CLAIM")
+                .entityId(claim.getId())
+                .action("EMAIL_SENT")
+                .modifier(modifier.getName())
+                .modifierId(modifier.getId())
+                .modifierUsername(modifier.getUsername())
+                .modifierName(modifier.getName())
+                .modifierCompany(modifier.getCompanyName())
+                .description("제조사에 이메일 통보 완료 (템플릿: " + template.getTemplateName() + ", 대상: " + targetEmailList + ")")
+                .build());
+    }
+
+    @Transactional
+    public boolean sendCustomEmailToManufacturer(Long claimId, java.util.Map<String, String> emailRequest, User modifier) {
+        Claim claim = claimRepository.findById(claimId).orElseThrow(() -> new RuntimeException("클레임을 찾을 수 없습니다."));
+        
+        String toEmail = emailRequest.get("toEmail");
+        String subject = emailRequest.get("subject");
+        String body = emailRequest.get("body");
+
+        if (toEmail == null || toEmail.trim().isEmpty()) {
+            throw new RuntimeException("수신자 메일 주소가 입력되지 않았습니다.");
+        }
+        if (subject == null || subject.trim().isEmpty()) {
+            throw new RuntimeException("메일 제목이 입력되지 않았습니다.");
+        }
+        if (body == null || body.trim().isEmpty()) {
+            throw new RuntimeException("메일 내용이 입력되지 않았습니다.");
+        }
+
+        boolean isMock = false;
+        // Split by comma in case multiple emails are provided
+        String[] emails = toEmail.split(",");
+        for (String email : emails) {
+            String trimmedEmail = email.trim();
+            if (!trimmedEmail.isEmpty()) {
+                isMock = emailService.sendCustomEmail(trimmedEmail, subject, body);
+            }
+        }
+
+        // 메일 발송 일시 기록 및 제조사 자동 공유 설정
+        claim.setEmailSentAt(java.time.LocalDateTime.now());
+        if (!claim.isSharedWithManufacturer()) {
+            compareAndSave(claimId, modifier, "SharedWithManufacturer", "false", "true");
+            claim.setSharedWithManufacturer(true);
+        }
+        claimRepository.save(claim);
+
+
+
+        // Audit Log
+        eventPublisher.publishEvent(com.example.ims.event.EntityChangeEvent.builder()
+                .entityType("CLAIM")
+                .entityId(claim.getId())
+                .action("EMAIL_SENT")
+                .modifier(modifier.getName())
+                .modifierId(modifier.getId())
+                .modifierUsername(modifier.getUsername())
+                .modifierName(modifier.getName())
+                .modifierCompany(modifier.getCompanyName())
+                .description("제조사에 커스텀 이메일 발송 완료 (대상: " + toEmail + ")")
+                .build());
+
+        return isMock;
+    }
+
+    private String cleanCompanyName(String name) {
+        if (name == null) return "";
+        int idx = name.indexOf("•");
+        if (idx != -1) {
+            name = name.substring(0, idx);
+        }
+        return name.replace("(주)", "").replace("주식회사", "").trim();
     }
 }

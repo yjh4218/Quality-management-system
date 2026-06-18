@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AgGridReact } from 'ag-grid-react';
+import { toast } from 'react-toastify';
 import ProductionAuditDrawer from './ProductionAuditDrawer';
 import ProductSearchPopup from './ProductSearchPopup';
 import * as api from './api';
@@ -13,7 +14,7 @@ import { usePermissions } from './usePermissions';
  * @param {Object} props
  * @param {Object} props.user - 현재 로그인한 사용자의 정보
  */
-const ProductionAuditPage = ({ user }) => {
+const ProductionAuditPage = ({ user, navigationData, onNavigated }) => {
     const { canView, canEdit } = usePermissions(user);
     const isManufacturer = user?.roles?.some(r => r.authority?.includes('MANUFACTURER'));
     const canRegister = canEdit('qualityPhotoAudit');
@@ -29,6 +30,89 @@ const ProductionAuditPage = ({ user }) => {
         manufacturerName: '',
         disclosureFilter: 'ALL' // 'ALL', 'DISCLOSED', 'HIDDEN'
     });
+    const [loading, setLoading] = useState(false);
+    const [exporting, setExporting] = useState(false);
+
+    // [추가] 딥링크(navigationData) 연동 처리
+    const lastNavData = useRef(undefined);
+    useEffect(() => {
+        if (lastNavData.current === navigationData) return;
+        lastNavData.current = navigationData;
+
+        if (navigationData) {
+            const { auditId, itemCode } = navigationData;
+            
+            // 만약 itemCode가 있으면 즉시 상세조회 시도 (제품 정보 상세 매핑 및 pending 뷰 모드 자동 활성화)
+            if (itemCode) {
+                const mfrFilter = isManufacturer ? user.companyName : '';
+                Promise.all([
+                    api.getPendingProductionAudits(mfrFilter).catch(() => ({ data: [] })),
+                    api.getProducts().catch(() => ({ data: { content: [] } }))
+                ]).then(([pendingRes, productsRes]) => {
+                    const pendingList = pendingRes.data || [];
+                    const productsList = productsRes.data?.content || productsRes.data || [];
+                    
+                    const foundPending = pendingList.find(p => p.itemCode === itemCode);
+                    const foundProduct = productsList.find(p => p.itemCode === itemCode);
+                    const found = foundPending || foundProduct;
+                    
+                    setSelectedAudit({
+                        itemCode: itemCode,
+                        productName: found ? found.productName : '',
+                        manufacturerName: found ? (found.manufacturerName || found.manufacturerInfo?.name || found.manufacturer || '') : (user?.companyName || ''),
+                        isDisclosed: found ? (found.isDisclosed !== undefined ? found.isDisclosed : found.disclosed) : true,
+                        status: 'PENDING'
+                    });
+                    setViewMode('pending');
+                    setIsDrawerOpen(true);
+                }).catch(() => {
+                    setSelectedAudit({
+                        itemCode: itemCode,
+                        productName: '',
+                        manufacturerName: user?.companyName || '',
+                        isDisclosed: true,
+                        status: 'PENDING'
+                    });
+                    setViewMode('pending');
+                    setIsDrawerOpen(true);
+                });
+            } else if (auditId) {
+                // auditId 기반으로 목록에서 조회를 시도하여 해당 서랍 오픈
+                api.getProductionAudits(isManufacturer ? user.companyName : '')
+                    .then(res => {
+                        const list = res.data || [];
+                        const target = list.find(a => String(a.id) === String(auditId));
+                        if (target) {
+                            setSelectedAudit(target);
+                            setIsDrawerOpen(true);
+                        } else {
+                            return api.getPendingProductionAudits(isManufacturer ? user.companyName : '');
+                        }
+                    })
+                    .then(res => {
+                        if (!res) return;
+                        const pendingList = res.data || [];
+                        const target = pendingList.find(p => String(p.id) === String(auditId) || p.itemCode === auditId);
+                        if (target) {
+                            setSelectedAudit({
+                                itemCode: target.itemCode,
+                                productName: target.productName,
+                                manufacturerName: target.manufacturerName,
+                                isDisclosed: target.isDisclosed,
+                                status: 'PENDING'
+                            });
+                            setViewMode('pending');
+                            setIsDrawerOpen(true);
+                        }
+                    })
+                    .catch(err => {
+                        console.error("Failed to load production audit from deep link", err);
+                    });
+            }
+
+            if (onNavigated) onNavigated();
+        }
+    }, [navigationData]);
 
 
     const lastFetchedMode = useRef(null);
@@ -39,6 +123,7 @@ const ProductionAuditPage = ({ user }) => {
     }, [viewMode]);
 
     const fetchData = async () => {
+        setLoading(true);
         try {
             const mfrFilter = isManufacturer ? user.companyName : searchFields.manufacturerName;
             
@@ -50,14 +135,16 @@ const ProductionAuditPage = ({ user }) => {
                 const res = await api.getProductionAudits(mfrFilter);
                 audits = res.data || [];
             } catch (err) {
-                // Fetch audits fail
+                console.error("Failed to load production audits", err);
+                toast.error("생산감리 내역 조회 중 오류가 발생했습니다.");
             }
             
             try {
                 const res = await api.getPendingProductionAudits(mfrFilter);
                 pending = res.data || [];
             } catch (err) {
-                // Fetch pending fail
+                console.error("Failed to load pending audits", err);
+                toast.error("미진행 품목 조회 중 오류가 발생했습니다.");
             }
             
             let finalData = [];
@@ -95,7 +182,10 @@ const ProductionAuditPage = ({ user }) => {
 
             setRowData(filteredResults);
         } catch (error) {
-            // Process fail
+            console.error("Failed to process fetch data", error);
+            toast.error("데이터 처리 중 오류가 발생했습니다.");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -128,12 +218,17 @@ const ProductionAuditPage = ({ user }) => {
             alert("조회 내역이 없습니다.");
             return;
         }
+        setExporting(true);
         try {
             const mfrFilter = isManufacturer ? user.companyName : searchFields.manufacturerName;
             const response = await api.exportAuditsExcel({ ...searchFields, manufacturerName: mfrFilter });
             api.downloadBlob(response, "ProductionAudit_Export.xlsx");
+            toast.success("생산감리 엑셀 다운로드가 완료되었습니다.");
         } catch (error) {
-            alert("엑셀 다운로드 중 오류가 발생했습니다.");
+            console.error("Export error", error);
+            toast.error("엑셀 다운로드 중 오류가 발생했습니다.");
+        } finally {
+            setExporting(false);
         }
     };
 
@@ -329,16 +424,18 @@ const ProductionAuditPage = ({ user }) => {
                         <button 
                             className="outline" 
                             onClick={handleExportExcel}
-                            style={{ fontSize: '14px', padding: '10px 20px', backgroundColor: '#fff', color: '#107c41', borderColor: '#107c41' }}
+                            disabled={exporting}
+                            style={{ fontSize: '14px', padding: '10px 20px', backgroundColor: '#fff', color: '#107c41', borderColor: '#107c41', opacity: exporting ? 0.7 : 1 }}
                         >
-                            📊 결과 다운로드
+                            {exporting ? '⏳ 다운로드 중...' : '📊 결과 다운로드'}
                         </button>
                         <button 
                             className="primary" 
                             onClick={handleSearchClick} 
-                            style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px' }}
+                            disabled={loading}
+                            style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px', opacity: loading ? 0.7 : 1 }}
                         >
-                            🔍 조회
+                            {loading ? '⏳ 조회 중...' : '🔍 조회'}
                         </button>
                         <button 
                             className="outline" 
@@ -353,7 +450,8 @@ const ProductionAuditPage = ({ user }) => {
 
             {/* 검색 필터 그리드 */}
             <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
                     <div>
                         <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏷️ 품목코드</label>
                         <div style={{ display: 'flex', gap: '8px' }}>
@@ -368,7 +466,7 @@ const ProductionAuditPage = ({ user }) => {
                             <button 
                                 type="button" 
                                 onClick={() => setIsProductSearchOpen(true)}
-                                style={{ padding: '0 12px', background: '#f8fafc', border: '1px solid #cbd5e0', borderRadius: '8px', cursor: 'pointer' }}
+                                style={{ padding: '0 12px', minWidth: '44px', width: '44px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', border: '1px solid #cbd5e0', borderRadius: '8px', cursor: 'pointer' }}
                             >
                                 🔍
                             </button>

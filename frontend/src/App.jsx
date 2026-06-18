@@ -20,19 +20,23 @@ import GuideManagementPage from './GuideManagementPage.jsx';
 import ProductionAuditPage from './ProductionAuditPage.jsx';
 import DashboardManagementPage from './DashboardManagementPage.jsx';
 import TrashBinPage from './TrashBinPage.jsx';
+import MailTemplatePage from './MailTemplatePage.jsx';
 import IngredientCompliancePage from './IngredientCompliancePage.jsx';
 import HelpCenterModal from './components/HelpCenterModal';
 import ProfileModal from './ProfileModal';
-import { getCurrentUser, logout } from './api';
+import { getCurrentUser, logout, getMyNotifications, getUnreadNotificationCount, readNotification, readAllNotifications, deleteNotification } from './api';
 import ManufacturerAuditItemPage from './ManufacturerAuditItemPage';
 import ManufacturerAuditPage from './ManufacturerAuditPage';
 import ManufacturerAuditDashboard from './ManufacturerAuditDashboard';
 import ManufacturerCategoryPage from './ManufacturerCategoryPage';
 import AccessLogPage from './AccessLogPage.jsx';
 import BugReportPage from './BugReportPage.jsx';
+import AnnouncementManagementPage from './AnnouncementManagementPage.jsx';
+import NotificationListPage from './NotificationListPage.jsx';
 
 const PAGE_INFO = {
     dashboard: { title: '📊 시스템 대시보드' },
+    notifications: { title: '🔔 수신 알림 확인' },
     users: { title: '👥 사용자 승인 관리' },
     logs: { title: '📜 시스템 변경 이력' },
     roles: { title: '🔐 권한 관리' },
@@ -58,7 +62,9 @@ const PAGE_INFO = {
     manufacturerCategories: { title: '📂 제조사 구분 관리' },
     accessLogs: { title: '🕒 사용자 접근 로그' },
     bugReports: { title: '🐞 버그 리포트 관리' },
-    ingredientCompliance: { title: '🧪 성분 안전성 검토' }
+    ingredientCompliance: { title: '🧪 성분 안전성 검토' },
+    mailTemplates: { title: '📧 제조사 전달 메일 관리' },
+    announcements: { title: '📢 전체공지' }
 };
 
 // [추가] 글로벌 에러 핸들링을 위한 Error Boundary 컴포넌트
@@ -165,9 +171,17 @@ const App = () => {
     const [isLoading, setIsLoading] = useState(false); 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+    // Notification states
+    const [notifications, setNotifications] = useState([]);
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [isNotifOpen, setIsNotifOpen] = useState(false);
+    const [bellAnimated, setBellAnimated] = useState(false);
+    const popoverRef = React.useRef(null);
+
     // [고도화 1] 사이드바 그룹 열림/닫힘 상태 관리 (Accordion Behavior)
     const [openSections, setOpenSections] = useState({
-        system: true,
+        monitoring: true,
+        system: false,
         master: false,
         quality: false,
         claim: false
@@ -239,6 +253,133 @@ const App = () => {
         });
     };
 
+    // Notification effects and functions
+    const fetchNotifications = async () => {
+        if (!isLoggedIn) return;
+        try {
+            const res = await getMyNotifications();
+            if (res && res.data) {
+                setNotifications(res.data);
+            }
+        } catch (err) {
+            console.error("Failed to fetch notifications", err);
+        }
+    };
+
+    const fetchUnreadCount = async () => {
+        if (!isLoggedIn) return;
+        try {
+            const res = await getUnreadNotificationCount();
+            if (res && res.data) {
+                const newCount = res.data.unreadCount;
+                if (newCount > unreadCount) {
+                    // Trigger bell animation on new unread notifications
+                    setBellAnimated(true);
+                    setTimeout(() => setBellAnimated(false), 800);
+                }
+                setUnreadCount(newCount);
+            }
+        } catch (err) {
+            console.error("Failed to fetch unread notification count", err);
+        }
+    };
+
+    const handleReadNotification = async (notification) => {
+        try {
+            await readNotification(notification.id);
+            fetchNotifications();
+            fetchUnreadCount();
+
+            // Redirect based on linkUrl
+            if (notification.linkUrl) {
+                setIsNotifOpen(false);
+                const url = new URL(notification.linkUrl, window.location.origin);
+                const searchParams = url.searchParams;
+                const claimId = searchParams.get('claimId');
+                const auditId = searchParams.get('auditId');
+                const itemCode = searchParams.get('itemCode');
+
+                // Determine routing
+                if (claimId) {
+                    import('./api').then(({ getClaimById }) => {
+                        getClaimById(claimId, false)
+                            .then(res => {
+                                if (res && res.data) {
+                                    handleNavigate('claims', res.data);
+                                }
+                            });
+                    });
+                } else if (itemCode) {
+                    handleNavigate('qualityPhotoAudit', { auditId, itemCode });
+                } else if (url.pathname === '/user-management') {
+                    handleNavigate('users');
+                } else {
+                    // Fallback navigate based on pathname
+                    const pathMap = {
+                        '/user-management': 'users',
+                        '/claims': 'claims',
+                        '/production-audits': 'qualityPhotoAudit',
+                        '/announcements': 'announcements'
+                    };
+                    const pageKey = pathMap[url.pathname];
+                    if (pageKey) handleNavigate(pageKey);
+                }
+            }
+        } catch (err) {
+            console.error("Failed to read notification", err);
+        }
+    };
+
+    const handleReadAllNotifications = async () => {
+        try {
+            await readAllNotifications();
+            fetchNotifications();
+            fetchUnreadCount();
+        } catch (err) {
+            console.error("Failed to read all notifications", err);
+        }
+    };
+
+    const handleDeleteNotification = async (id, e) => {
+        e.stopPropagation(); // Prevent trigger click item
+        try {
+            await deleteNotification(id);
+            fetchNotifications();
+            fetchUnreadCount();
+        } catch (err) {
+            console.error("Failed to delete notification", err);
+        }
+    };
+
+    // Polling and Click Outside hook
+    useEffect(() => {
+        if (!isLoggedIn) return;
+        
+        fetchNotifications();
+        fetchUnreadCount();
+
+        // 30 seconds Short Polling
+        const interval = setInterval(() => {
+            fetchUnreadCount();
+            if (isNotifOpen) {
+                fetchNotifications();
+            }
+        }, 30000);
+
+        // Click outside handler
+        const handleOutsideClick = (e) => {
+            if (popoverRef.current && !popoverRef.current.contains(e.target) && !e.target.closest('.notification-bell-btn')) {
+                setIsNotifOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleOutsideClick);
+
+        return () => {
+            clearInterval(interval);
+            document.removeEventListener('mousedown', handleOutsideClick);
+        };
+    }, [isLoggedIn, isNotifOpen]);
+
     useEffect(() => {
         // [변경] sessionStorage token 체크 제거 -> 항상 세션 쿠키로 fetchUser() 시도
         fetchUser();
@@ -255,6 +396,81 @@ const App = () => {
         };
     }, []);
 
+    // [추가] 딥링크 파라미터 감지 및 로그인 후 복원 로직
+    useEffect(() => {
+        // 1. 최초 앱 로드 시 URL에 딥링크 파라미터가 있으면 sessionStorage에 저장
+        const searchParams = new URLSearchParams(window.location.search);
+        const claimId = searchParams.get('claimId');
+        const auditId = searchParams.get('auditId');
+        const itemCode = searchParams.get('itemCode');
+        const fromEmail = searchParams.get('fromEmail');
+
+        if (claimId || auditId || itemCode) {
+            sessionStorage.setItem('qms_deeplink', JSON.stringify({
+                claimId,
+                auditId,
+                itemCode,
+                fromEmail: fromEmail === 'true'
+            }));
+            console.log(">>>> [DEEPLINK] Saved to sessionStorage:", { claimId, auditId, itemCode, fromEmail });
+        }
+    }, []);
+
+    useEffect(() => {
+        // 2. 사용자가 로그인하면 sessionStorage에서 딥링크 정보를 가져와 복원
+        if (!isLoggedIn || !user) return;
+
+        const savedDeeplink = sessionStorage.getItem('qms_deeplink');
+        const searchParams = new URLSearchParams(window.location.search);
+        
+        let claimId = searchParams.get('claimId');
+        let auditId = searchParams.get('auditId');
+        let itemCode = searchParams.get('itemCode');
+        let fromEmail = searchParams.get('fromEmail') === 'true';
+
+        if (!claimId && !auditId && !itemCode && savedDeeplink) {
+            try {
+                const parsed = JSON.parse(savedDeeplink);
+                claimId = parsed.claimId;
+                auditId = parsed.auditId;
+                itemCode = parsed.itemCode;
+                fromEmail = parsed.fromEmail;
+                console.log(">>>> [DEEPLINK] Restored from sessionStorage:", parsed);
+            } catch (e) {
+                console.error("Failed to parse saved deeplink", e);
+            }
+        }
+
+        if (claimId || auditId || itemCode) {
+            // 주소창 및 sessionStorage의 딥링크 정보 초기화 (중복 진입 방지)
+            sessionStorage.removeItem('qms_deeplink');
+            try {
+                const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+                window.history.replaceState({ path: newUrl }, '', newUrl);
+            } catch (historyErr) {
+                console.error("Failed to clear query parameters", historyErr);
+            }
+
+            if (claimId) {
+                import('./api').then(({ getClaimById }) => {
+                    getClaimById(claimId, fromEmail)
+                        .then(res => {
+                            if (res && res.data) {
+                                handleNavigate('claims', res.data);
+                                console.log(">>>> [DEEPLINK] Navigated to claims with:", res.data);
+                            }
+                        })
+                        .catch(err => {
+                            console.error("Failed to load deep link claim", err);
+                        });
+                });
+            } else if (auditId || itemCode) {
+                handleNavigate('qualityPhotoAudit', { auditId, itemCode });
+                console.log(">>>> [DEEPLINK] Navigated to qualityPhotoAudit with:", { auditId, itemCode });
+            }
+        }
+    }, [isLoggedIn, user]);
+
     // [추가] 탭 변경 시 사이드바 동기화 및 페이지 열람 로깅
     useEffect(() => {
         if (!activeTabId || !isLoggedIn) return;
@@ -267,13 +483,15 @@ const App = () => {
 
         // 1. 사이드바 그룹 자동 열기
         let targetSection = null;
-        if (['dashboard', 'users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin', 'accessLogs', 'bugReports'].includes(pageKey)) targetSection = 'system';
+        if (['dashboard', 'announcements', 'notifications'].includes(pageKey)) targetSection = 'monitoring';
+        else if (['users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin', 'accessLogs', 'bugReports'].includes(pageKey)) targetSection = 'system';
         else if (['brands', 'manufacturers', 'salesChannels', 'manufacturerCategories', 'products', 'bomMaster', 'bomCategories', 'packagingTemplates', 'packagingRules', 'ingredientCompliance'].includes(pageKey)) targetSection = 'master';
         else if (['quality', 'releaseRecord', 'qualityPhotoAudit', 'manufacturerAudits', 'manufacturerAuditDashboard'].includes(pageKey)) targetSection = 'quality';
         else if (['claims', 'claimDashboard'].includes(pageKey)) targetSection = 'claim';
 
         if (targetSection) {
             setOpenSections({
+                monitoring: false,
                 system: false,
                 master: false,
                 quality: false,
@@ -431,7 +649,8 @@ const App = () => {
 
     const canAccess = (menuKey) => hasPermission(menuKey, 'VIEW');
 
-    const hasSystemAccess = canAccess('dashboard') || canAccess('users') || canAccess('logs') || canAccess('roles') || canAccess('guideManagement') || canAccess('dashboardMgmt') || canAccess('trashBin') || canAccess('accessLogs') || canAccess('bugReports');
+    const hasMonitoringAccess = canAccess('dashboard') || canAccess('announcements') || canAccess('notifications');
+    const hasSystemAccess = canAccess('users') || canAccess('logs') || canAccess('roles') || canAccess('guideManagement') || canAccess('dashboardMgmt') || canAccess('trashBin') || canAccess('accessLogs') || canAccess('bugReports');
     const hasMasterAccess = canAccess('brands') || canAccess('manufacturers') || canAccess('salesChannels') || canAccess('manufacturerCategories') || canAccess('products') || canAccess('bomMaster') || canAccess('bomCategories') || canAccess('packagingTemplates') || canAccess('packagingRules') || canAccess('ingredientCompliance');
     const hasQualityAccess = canAccess('quality') || canAccess('releaseRecord') || canAccess('qualityPhotoAudit') || canAccess('manufacturerAudits') || canAccess('manufacturerAuditDashboard') || canAccess('manufacturerAuditItems');
     const hasClaimAccess = canAccess('claims') || canAccess('claimDashboard');
@@ -440,7 +659,8 @@ const App = () => {
     const isSectionActive = (section) => {
         const activePage = tabs.find(t => t.id === activeTabId)?.page;
         switch(section) {
-            case 'system': return ['dashboard', 'users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin', 'accessLogs', 'bugReports'].includes(activePage);
+            case 'monitoring': return ['dashboard', 'announcements', 'notifications'].includes(activePage);
+            case 'system': return ['users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin', 'accessLogs', 'bugReports'].includes(activePage);
             case 'master': return ['brands', 'manufacturers', 'salesChannels', 'manufacturerCategories', 'products', 'bomMaster', 'bomCategories', 'packagingTemplates', 'packagingRules', 'ingredientCompliance'].includes(activePage);
             case 'quality': return ['quality', 'releaseRecord', 'qualityPhotoAudit', 'manufacturerAudits', 'manufacturerAuditDashboard', 'manufacturerAuditItems'].includes(activePage);
             case 'claim': return ['claims', 'claimDashboard'].includes(activePage);
@@ -482,6 +702,38 @@ const App = () => {
                 </div>
 
                 <nav className="sidebar-menu">
+                    {/* [현황 모니터링] */}
+                    {hasMonitoringAccess && (
+                    <div className="sidebar-group">
+                        <button 
+                            className={`sidebar-group-header ${isSectionActive('monitoring') ? 'active' : ''}`} 
+                            onClick={() => toggleSection('monitoring')}
+                        >
+                            <span>📊 현황 모니터링</span>
+                            <span className={`arrow ${openSections.monitoring ? 'open' : ''}`}>▼</span>
+                        </button>
+                        {openSections.monitoring && (
+                            <div className="sidebar-group-content">
+                                {canAccess('dashboard') && (
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'dashboard' ? 'active' : ''}`} onClick={() => handleNavigate('dashboard')}>
+                                        📊 시스템 대시보드
+                                    </button>
+                                )}
+                                {canAccess('announcements') && (
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'announcements' ? 'active' : ''}`} onClick={() => handleNavigate('announcements')}>
+                                        📢 전체공지
+                                    </button>
+                                )}
+                                {canAccess('notifications') && (
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'notifications' ? 'active' : ''}`} onClick={() => handleNavigate('notifications')}>
+                                        🔔 수신 알림 확인
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                    )}
+
                     {/* [시스템 관리] */}
                     {hasSystemAccess && (
                     <div className="sidebar-group">
@@ -515,14 +767,9 @@ const App = () => {
                                     </>
                                 )}
 
-                                {(canAccess('dashboard') || canAccess('logs') || canAccess('bugReports')) && (
+                                {(canAccess('logs') || canAccess('bugReports')) && (
                                     <>
                                         <div className="sidebar-sub-header">운영 모니터링</div>
-                                        {canAccess('dashboard') && (
-                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'dashboard' ? 'active' : ''}`} onClick={() => handleNavigate('dashboard')}>
-                                                📊 시스템 대시보드
-                                            </button>
-                                        )}
                                         {canAccess('logs') && (
                                             <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'logs' ? 'active' : ''}`} onClick={() => handleNavigate('logs')}>
                                                 📜 시스템 변경 이력
@@ -536,7 +783,7 @@ const App = () => {
                                     </>
                                 )}
 
-                                {(canAccess('guideManagement') || canAccess('dashboardMgmt') || canAccess('trashBin')) && (
+                                {(canAccess('guideManagement') || canAccess('dashboardMgmt') || canAccess('trashBin') || canAccess('mailTemplates')) && (
                                     <>
                                         <div className="sidebar-sub-header">설정 및 유지보수</div>
                                         {canAccess('guideManagement') && (
@@ -552,6 +799,11 @@ const App = () => {
                                         {canAccess('trashBin') && (
                                             <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'trashBin' ? 'active' : ''}`} onClick={() => handleNavigate('trashBin')}>
                                                 🗑️ 데이터 복구 (휴지통)
+                                            </button>
+                                        )}
+                                        {canAccess('mailTemplates') && (
+                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'mailTemplates' ? 'active' : ''}`} onClick={() => handleNavigate('mailTemplates')}>
+                                                📧 제조사 전달 메일 관리
                                             </button>
                                         )}
                                     </>
@@ -775,19 +1027,91 @@ const App = () => {
 
             {/* Main Content Area */}
             <main className="main-content">
-                <div className="tab-bar" ref={tabBarRef}>
-                    {tabs.map(tab => (
-                        <div 
-                            key={tab.id} 
-                            className={`tab-item ${tab.id === activeTabId ? 'active' : ''}`}
-                            onClick={() => setActiveTabId(tab.id)}
+                <div className="tab-header-container">
+                    <div className="tab-bar" ref={tabBarRef}>
+                        {tabs.map(tab => (
+                            <div 
+                                key={tab.id} 
+                                className={`tab-item ${tab.id === activeTabId ? 'active' : ''}`}
+                                onClick={() => setActiveTabId(tab.id)}
+                            >
+                                <span className="tab-title">{tab.title}</span>
+                                {tabs.length > 1 && (
+                                    <span className="tab-close" onClick={(e) => handleCloseTab(tab.id, e)}>&times;</span>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* 알림 시스템 위젯 상단 탭 바 우측 끝 배치 */}
+                    <div className="notifications-widget-container">
+                        <button 
+                            className={`notification-bell-btn ${unreadCount > 0 ? 'has-unread' : ''} ${bellAnimated ? 'bell-ringing' : ''}`}
+                            onClick={() => setIsNotifOpen(!isNotifOpen)}
+                            title="알림 확인"
                         >
-                            <span className="tab-title">{tab.title}</span>
-                            {tabs.length > 1 && (
-                                <span className="tab-close" onClick={(e) => handleCloseTab(tab.id, e)}>&times;</span>
+                            🔔
+                            {unreadCount > 0 && (
+                                <span className="notification-badge">{unreadCount}</span>
                             )}
-                        </div>
-                    ))}
+                        </button>
+
+                        {isNotifOpen && (
+                            <div className="notifications-popover" ref={popoverRef}>
+                                <div className="notifications-header">
+                                    <h3>알림 목록</h3>
+                                    {unreadCount > 0 && (
+                                        <button className="read-all-btn" onClick={handleReadAllNotifications}>
+                                            모두 읽음
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="notifications-list">
+                                    {notifications.length === 0 ? (
+                                        <div className="notifications-empty">
+                                            <span className="notifications-empty-icon">🔔</span>
+                                            <span>새로운 알림이 없습니다.</span>
+                                        </div>
+                                    ) : (
+                                        notifications.map(n => (
+                                            <div 
+                                                key={n.id} 
+                                                className={`notification-item ${!n.read ? 'unread' : ''}`}
+                                                onClick={() => handleReadNotification(n)}
+                                            >
+                                                <div className="notification-item-header">
+                                                    <span className="notification-item-title">{n.title}</span>
+                                                    <button 
+                                                        className="notification-delete-btn" 
+                                                        onClick={(e) => handleDeleteNotification(n.id, e)}
+                                                        title="알림 삭제"
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </div>
+                                                <div className="notification-item-message">{n.message}</div>
+                                                <div className="notification-item-meta">
+                                                    <span className={`notification-type-badge ${n.type ? n.type.toLowerCase() : 'announcement'}`}>
+                                                        {n.type === 'CLAIM' ? '클레임' : 
+                                                         n.type === 'PRODUCTION_AUDIT' ? '생산감리' : 
+                                                         n.type === 'USER_APPROVAL' ? '사용자승인' : '공지'}
+                                                    </span>
+                                                    <span>
+                                                        {n.createdAt ? new Date(n.createdAt).toLocaleDateString('ko-KR', {
+                                                            month: 'short',
+                                                            day: 'numeric',
+                                                            hour: '2-digit',
+                                                            minute: '2-digit'
+                                                        }) : ''}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 <div className="tab-content-container">
@@ -809,6 +1133,9 @@ const App = () => {
                                 {canAccess('roles') && tab.page === 'roles' && <RoleManagementPage user={user} />}
                                 {canAccess('guideManagement') && tab.page === 'guideManagement' && <GuideManagementPage user={user} />}
                                 {canAccess('dashboardMgmt') && tab.page === 'dashboardMgmt' && <DashboardManagementPage user={user} />}
+                                {canAccess('mailTemplates') && tab.page === 'mailTemplates' && <MailTemplatePage user={user} />}
+                                {canAccess('announcements') && tab.page === 'announcements' && <AnnouncementManagementPage user={user} onNavigate={handleNavigate} />}
+                                {canAccess('notifications') && tab.page === 'notifications' && <NotificationListPage user={user} onNavigate={handleNavigate} />}
 
                                 {tab.page === 'brands' && <BrandManagementPage user={user} />}
                                 {tab.page === 'manufacturers' && <ManufacturerManagementPage user={user} />}
@@ -831,7 +1158,13 @@ const App = () => {
                                 {canAccess('releaseRecord') && tab.page === 'releaseRecord' && (
                                     <MarketReleaseRecordPage user={user} />
                                 )}
-                                {canAccess('qualityPhotoAudit') && tab.page === 'qualityPhotoAudit' && <ProductionAuditPage user={user} />}
+                                {canAccess('qualityPhotoAudit') && tab.page === 'qualityPhotoAudit' && (
+                                    <ProductionAuditPage 
+                                        user={user} 
+                                        navigationData={tab.data}
+                                        onNavigated={() => {}}
+                                    />
+                                )}
                                 {canAccess('ingredientCompliance') && tab.page === 'ingredientCompliance' && <IngredientCompliancePage user={user} />}
                                 {tab.page === 'dashboard' && (
                                     <DashboardPage 

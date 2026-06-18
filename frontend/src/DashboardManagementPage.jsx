@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import { usePermissions } from './usePermissions';
 
 const WIDGET_OPTIONS = [
+    { key: 'WIDGET_ANNOUNCEMENTS', label: '📢 전체공지 배너', description: '최근 등록된 활성 공지사항 배너들을 표시합니다.' },
     { key: 'WIDGET_NEW_PRODUCTS', label: '📦 신규 등록 품목', description: '최근 등록된 신제품 리스트를 표시합니다.' },
     { key: 'WIDGET_PENDING_USERS', label: '👥 사용자 승인 대기', description: '승인이 필요한 신규 가입자 목록을 표시합니다.' },
     { key: 'WIDGET_AUDIT_LOGS', label: '📜 시스템 변경 이력', description: '최근의 데이터 변경/삭제 로그를 표시합니다.' },

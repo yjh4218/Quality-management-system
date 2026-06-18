@@ -7,26 +7,28 @@ import java.util.List;
 
 @Repository
 public interface ProductionAuditRepository extends JpaRepository<ProductionAudit, Long> {
-    @org.springframework.data.jpa.repository.Query("SELECT a FROM ProductionAudit a WHERE (a.deleted = false OR a.deleted IS NULL) AND EXISTS (SELECT p FROM Product p WHERE p.itemCode = a.itemCode AND p.isMaster = true AND p.active = true)")
+    java.util.Optional<ProductionAudit> findByItemCode(String itemCode);
+
+    @org.springframework.data.jpa.repository.Query("SELECT a FROM ProductionAudit a WHERE (a.deleted = false OR a.deleted IS NULL) AND EXISTS (SELECT p FROM Product p WHERE p.itemCode = a.itemCode AND p.active = true)")
     List<ProductionAudit> findByIsDeletedFalse();
 
-    @org.springframework.data.jpa.repository.Query("SELECT a FROM ProductionAudit a WHERE (a.deleted = false OR a.deleted IS NULL) AND a.manufacturerName = :manufacturerName AND EXISTS (SELECT p FROM Product p WHERE p.itemCode = a.itemCode AND p.isMaster = true AND p.active = true)")
+    @org.springframework.data.jpa.repository.Query("SELECT a FROM ProductionAudit a WHERE (a.deleted = false OR a.deleted IS NULL) AND TRIM(a.manufacturerName) = TRIM(:manufacturerName) AND EXISTS (SELECT p FROM Product p WHERE p.itemCode = a.itemCode AND p.active = true)")
     List<ProductionAudit> findByManufacturerNameAndIsDeletedFalseInternal(String manufacturerName);
 
-    @org.springframework.data.jpa.repository.Query("SELECT a FROM ProductionAudit a WHERE (a.deleted = false OR a.deleted IS NULL) AND a.manufacturerName = :manufacturerName AND a.isDisclosed = true AND EXISTS (SELECT p FROM Product p WHERE p.itemCode = a.itemCode AND p.isMaster = true AND p.active = true)")
+    @org.springframework.data.jpa.repository.Query("SELECT a FROM ProductionAudit a WHERE (a.deleted = false OR a.deleted IS NULL) AND TRIM(a.manufacturerName) = TRIM(:manufacturerName) AND a.isDisclosed = true AND EXISTS (SELECT p FROM Product p WHERE p.itemCode = a.itemCode AND p.active = true)")
     List<ProductionAudit> findByManufacturerNameAndIsDisclosedTrueAndIsDeletedFalse(String manufacturerName);
 
-    @org.springframework.data.jpa.repository.Query("SELECT DISTINCT p FROM Product p LEFT JOIN p.manufacturerInfo WHERE p.active = true AND p.isMaster = true AND NOT EXISTS " +
+    @org.springframework.data.jpa.repository.Query("SELECT DISTINCT p FROM Product p LEFT JOIN p.manufacturerInfo WHERE p.active = true AND NOT EXISTS " +
             "(SELECT a FROM ProductionAudit a WHERE a.itemCode = p.itemCode AND (a.deleted = false OR a.deleted IS NULL))")
     List<com.example.ims.entity.Product> findPendingProducts();
 
-    @org.springframework.data.jpa.repository.Query("SELECT DISTINCT p FROM Product p LEFT JOIN p.manufacturerInfo WHERE p.active = true AND p.isMaster = true " +
-            "AND (p.manufacturerInfo.name = :manufacturerName OR p.manufacturer = :manufacturerName) " +
+    @org.springframework.data.jpa.repository.Query("SELECT DISTINCT p FROM Product p LEFT JOIN p.manufacturerInfo WHERE p.active = true " +
+            "AND (TRIM(p.manufacturerInfo.name) = TRIM(:manufacturerName) OR TRIM(p.manufacturer) = TRIM(:manufacturerName)) " +
             "AND NOT EXISTS (SELECT a FROM ProductionAudit a WHERE a.itemCode = p.itemCode AND (a.deleted = false OR a.deleted IS NULL))")
     List<com.example.ims.entity.Product> findPendingProductsByManufacturerInternal(String manufacturerName);
 
-    @org.springframework.data.jpa.repository.Query("SELECT DISTINCT p FROM Product p LEFT JOIN p.manufacturerInfo WHERE p.active = true AND p.isMaster = true " +
-            "AND (p.manufacturerInfo.name = :manufacturerName OR p.manufacturer = :manufacturerName) AND p.photoAuditDisclosed = true " +
+    @org.springframework.data.jpa.repository.Query("SELECT DISTINCT p FROM Product p LEFT JOIN p.manufacturerInfo WHERE p.active = true " +
+            "AND (TRIM(p.manufacturerInfo.name) = TRIM(:manufacturerName) OR TRIM(p.manufacturer) = TRIM(:manufacturerName)) AND p.photoAuditDisclosed = true " +
             "AND NOT EXISTS (SELECT a FROM ProductionAudit a WHERE a.itemCode = p.itemCode AND (a.deleted = false OR a.deleted IS NULL))")
     List<com.example.ims.entity.Product> findPendingProductsByManufacturerAndIsDisclosedTrue(String manufacturerName);
 

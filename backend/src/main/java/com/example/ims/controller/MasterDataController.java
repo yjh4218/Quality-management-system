@@ -1,6 +1,7 @@
 package com.example.ims.controller;
 
 import com.example.ims.entity.*;
+import com.example.ims.dto.ApiResponse;
 import com.example.ims.service.MasterDataService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -99,9 +100,9 @@ public class MasterDataController {
     @GetMapping("/bom-categories/active")
     public ResponseEntity<?> getActiveBomCategories() {
         try {
-            return ResponseEntity.ok(bomCategoryService.getAllActiveCategories());
+            return ResponseEntity.ok(ApiResponse.success(bomCategoryService.getAllActiveCategories()));
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(ApiResponse.error("활성 BOM 카테고리 목록을 가져오는 중 오류가 발생했습니다."));
         }
     }
 
@@ -109,9 +110,9 @@ public class MasterDataController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> getAllBomCategories() {
         try {
-            return ResponseEntity.ok(bomCategoryService.getAllCategories());
+            return ResponseEntity.ok(ApiResponse.success(bomCategoryService.getAllCategories()));
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(ApiResponse.error("전체 BOM 카테고리 목록을 가져오는 중 오류가 발생했습니다."));
         }
     }
 
@@ -119,9 +120,9 @@ public class MasterDataController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> saveBomCategory(@RequestBody BomCategory category, @AuthenticationPrincipal UserDetails userDetails) {
         try {
-            return ResponseEntity.ok(bomCategoryService.saveCategory(category, userDetails.getUsername()));
+            return ResponseEntity.ok(ApiResponse.success(bomCategoryService.saveCategory(category, userDetails.getUsername())));
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().body("Save Error: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(ApiResponse.error("BOM 카테고리 저장 중 오류가 발생했습니다."));
         }
     }
 

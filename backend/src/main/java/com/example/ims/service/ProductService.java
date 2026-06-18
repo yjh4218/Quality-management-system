@@ -41,6 +41,7 @@ public class ProductService {
     private final FileStorageService fileStorageService;
     private final ExcelExportService excelExportService;
     private final ExcelParsingService excelParsingService;
+    private final com.example.ims.repository.ProductionAuditRepository productionAuditRepository;
 
     /**
      * Helper to initialize shelf life for existing products if missing.
@@ -112,6 +113,10 @@ public class ProductService {
         if (isManufacturer && !Objects.equals(user.getCompanyName(), product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : null)) {
             throw new RuntimeException("해당 제품에 대한 접근 권한이 없습니다.");
         }
+
+        // [FIX] LAZY 단일 엔티티 강제 초기화
+        if (product.getBrand() != null) org.hibernate.Hibernate.initialize(product.getBrand());
+        if (product.getManufacturerInfo() != null) org.hibernate.Hibernate.initialize(product.getManufacturerInfo());
 
         // [FIX] LAZY 컬렉션 강제 초기화 - JSON 직렬화 시 세션 종료로 인한 LazyInitializationException 방지
         if (product.getImagePaths() != null) product.getImagePaths().size();
@@ -190,6 +195,16 @@ public class ProductService {
         }
             
         Product saved = productRepository.save(product);
+
+        // [고도화] 신규제품 등록 시 자동으로 신제품 생산감리(사진감리) 연계 (자동으로 DB에 생성)
+        com.example.ims.entity.ProductionAudit audit = new com.example.ims.entity.ProductionAudit();
+        audit.setItemCode(saved.getItemCode());
+        audit.setProductName(saved.getProductName());
+        audit.setManufacturerName(saved.getManufacturerInfo() != null ? saved.getManufacturerInfo().getName() : "");
+        audit.setStatus("1. 감리대기");
+        audit.setDisclosed(false);
+        productionAuditRepository.save(audit);
+
         String company = user.getCompanyName() != null ? user.getCompanyName() : "시스템";
         String modifierName = user.getName() + " (" + company + ")";
         

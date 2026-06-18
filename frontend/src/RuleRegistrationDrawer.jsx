@@ -80,7 +80,7 @@ const RuleRegistrationDrawer = ({ rule, initialChannel, onClose, user }) => {
     };
 
     return (
-        <div className="drawer-overlay" onClick={() => onClose()}>
+        <div className="drawer-overlay">
             <div className="drawer" onClick={(e) => e.stopPropagation()} style={{ width: '600px' }}>
                 {/* 1. Fixed Header Area */}
                 <div className="drawer-header">

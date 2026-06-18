@@ -90,12 +90,24 @@ public class MasterDataService {
     // --- Channel Packaging Rule (Feature 3, 4) ---
     @Transactional(readOnly = true)
     public List<ChannelPackagingRule> getAllRules() {
-        return ruleRepository.findAll();
+        List<ChannelPackagingRule> rules = ruleRepository.findAll();
+        rules.forEach(r -> {
+            if (r.getChannel() != null) {
+                org.hibernate.Hibernate.initialize(r.getChannel());
+            }
+        });
+        return rules;
     }
 
     @Transactional(readOnly = true)
     public List<ChannelPackagingRule> getRulesByChannel(SalesChannel channel) {
-        return ruleRepository.findByChannel(channel);
+        List<ChannelPackagingRule> rules = ruleRepository.findByChannel(channel);
+        rules.forEach(r -> {
+            if (r.getChannel() != null) {
+                org.hibernate.Hibernate.initialize(r.getChannel());
+            }
+        });
+        return rules;
     }
 
     @Transactional

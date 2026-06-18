@@ -27,6 +27,7 @@ public class AuthService {
     private final ManufacturerRepository manufacturerRepository;
     private final MailService mailService;
     private final EmailService emailService;
+    private final NotificationService notificationService;
 
     /**
      * 신규 사용자 가입 신청을 처리합니다.
@@ -83,7 +84,24 @@ public class AuthService {
 
         user.setEmailVerified(true);
         user.setVerificationToken(null);
-        userRepository.save(user);
+        User savedUser = userRepository.save(user);
+
+        // 이메일 인증 완료 후 관리자 승인 대기 알림 발송
+        try {
+            notificationService.createNotification(
+                "신규 회원가입 승인 대기",
+                String.format("사용자 %s(%s, %s)님이 가입 신청을 완료했습니다. 승인이 필요합니다.", 
+                    savedUser.getName(), savedUser.getUsername(), 
+                    savedUser.getCompanyName() != null ? savedUser.getCompanyName() : "소속 없음"),
+                "USER_APPROVAL",
+                null, // targetUsername
+                "ROLE_ADMIN", // targetRole
+                null, // targetCompanyName
+                "/user-management" // linkUrl (사용자 관리 딥링크)
+            );
+        } catch (Exception e) {
+            log.error("Failed to create user approval notification for {}: {}", savedUser.getUsername(), e.getMessage());
+        }
     }
 
     /**

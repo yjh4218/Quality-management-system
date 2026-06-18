@@ -35,8 +35,8 @@ const ChangePasswordModal = ({ isOpen, onClose, isForced = false }) => {
     if (!isOpen) return null;
 
     return (
-        <div className="modal-overlay" onClick={isForced ? null : onClose}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ width: '400px' }}>
+        <div className="modal-overlay">
+            <div className="modal-content" style={{ width: '400px' }}>
                 {/* 1. Fixed Header Area */}
                 <div className="modal-header">
                     <h2 style={{ margin: 0, fontSize: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>

@@ -31,7 +31,7 @@ const ManufacturerSearchModal = ({ onClose, onSelect }) => {
     );
 
     return (
-        <div className="drawer-overlay" onClick={onClose} style={{ zIndex: 3001 }}>
+        <div className="drawer-overlay" style={{ zIndex: 3001 }}>
             <div className="modal-content" style={{ width: '700px' }} onClick={e => e.stopPropagation()}>
                 {/* 1. Modal Header */}
                 <div className="modal-header">

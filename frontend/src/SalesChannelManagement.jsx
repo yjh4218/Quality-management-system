@@ -255,7 +255,7 @@ const SalesChannelManagement = ({ user }) => {
             </div>
 
             {showDrawer && (
-                <div className="drawer-overlay" onClick={() => setShowDrawer(false)} style={{ zIndex: 1000 }}>
+                <div className="drawer-overlay" style={{ zIndex: 1000 }}>
                     <div className="drawer" onClick={e => e.stopPropagation()} style={{ width: '480px', padding: '40px', borderRadius: '24px 0 0 24px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '35px', borderBottom: '1px solid #f1f5f9', paddingBottom: '20px' }}>
                             <h3 style={{ fontSize: '22px', fontWeight: '800' }}>{editingChannel ? '📝 유통 채널 정보 수정' : '✨ 신규 유통 채널 등록'}</h3>

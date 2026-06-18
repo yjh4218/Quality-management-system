@@ -133,10 +133,11 @@ const TrashBinPage = ({ user }) => {
                     <div style={{ display: 'flex', gap: '8px' }}>
                         <button 
                             className="outline" 
-                            onClick={fetchTrashItems} 
-                            style={{ padding: '10px 20px', borderRadius: '10px', fontWeight: '800', backgroundColor: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0' }}
+                            onClick={loadTrashItems} 
+                            disabled={loading}
+                            style={{ padding: '10px 20px', borderRadius: '10px', fontWeight: '800', backgroundColor: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0', opacity: loading ? 0.6 : 1 }}
                         >
-                            🔄 새로고침
+                            {loading ? '⏳...' : '🔄 새로고침'}
                         </button>
                     </div>
                 </div>
@@ -164,10 +165,11 @@ const TrashBinPage = ({ user }) => {
                         </button>
                         <button 
                             className="primary" 
-                            onClick={fetchTrashItems} 
-                            style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px' }}
+                            onClick={loadTrashItems} 
+                            disabled={loading}
+                            style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px', opacity: loading ? 0.6 : 1 }}
                         >
-                            🔍 조회
+                            {loading ? '조회 중...' : '🔍 조회'}
                         </button>
                         <button 
                             className="outline" 
@@ -190,7 +192,7 @@ const TrashBinPage = ({ user }) => {
                                 type="text"
                                 placeholder="식별코드, 명칭, 삭제자 검색..."
                                 style={{ width: '100%', padding: '10px 40px 10px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px' }}
-                                onKeyDown={(e) => e.key === 'Enter' && fetchTrashItems()}
+                                onKeyDown={(e) => e.key === 'Enter' && loadTrashItems()}
                             />
                             <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>🔍</span>
                         </div>

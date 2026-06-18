@@ -78,11 +78,28 @@ public class ProductionAuditController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping("/{id}/email-preview")
+    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','RESPONSIBLE_SALES')")
+    public ResponseEntity<Map<String, String>> getAuditEmailPreview(@PathVariable String id) {
+        return ResponseEntity.ok(service.getAuditEmailPreview(id));
+    }
+
+    @PostMapping("/{id}/send-email")
+    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','RESPONSIBLE_SALES')")
+    public ResponseEntity<java.util.Map<String, Object>> sendAuditCustomEmail(@PathVariable String id, @RequestBody Map<String, String> emailRequest, @AuthenticationPrincipal UserDetails userDetails) {
+        boolean isMock = service.sendAuditCustomEmail(id, emailRequest, userDetails);
+        java.util.Map<String, Object> res = new java.util.HashMap<>();
+        res.put("success", true);
+        res.put("isMock", isMock);
+        res.put("message", isMock ? "SMTP_NOT_CONFIGURED" : "EMAIL_SENT");
+        return ResponseEntity.ok(res);
+    }
+
     /**
-     * 감리 변경 이력 조회 (모든 역할 허용)
+     * 감리 변경 이력 조회 (ADMIN, QUALITY 허용)
      */
     @GetMapping("/{id}/history")
-    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','SALES','MANUFACTURER','RESPONSIBLE_SALES')")
+    @PreAuthorize("hasAnyRole('ADMIN','QUALITY')")
     public ResponseEntity<List<com.example.ims.entity.ProductionAuditHistory>> getHistory(@PathVariable Long id) {
         return ResponseEntity.ok(service.getHistory(id));
     }

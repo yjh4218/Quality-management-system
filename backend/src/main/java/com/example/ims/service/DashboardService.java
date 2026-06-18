@@ -208,23 +208,25 @@ public class DashboardService {
     private List<String> getDefaultWidgetsForRole(String role) {
         if ("ROLE_ADMIN".equals(role)) {
             return List.of(
+                    "WIDGET_ANNOUNCEMENTS",
                     "WIDGET_NEW_PRODUCTS", "WIDGET_PENDING_USERS", "WIDGET_AUDIT_LOGS",
                     "WIDGET_QUALITY_INBOUNDS", "WIDGET_PENDING_DIMENSIONS", "WIDGET_CONFIRMED_DIMENSIONS",
                     "WIDGET_RECENT_CLAIMS", "WIDGET_MFR_COMPLETED_CLAIMS", "WIDGET_AUDIT_REVIEW",
                     "WIDGET_AUDIT_PROGRESS");
         } else if ("ROLE_QUALITY".equals(role)) {
             return List.of(
+                    "WIDGET_ANNOUNCEMENTS",
                     "WIDGET_NEW_PRODUCTS", "WIDGET_QUALITY_INBOUNDS", "WIDGET_PENDING_DIMENSIONS",
                     "WIDGET_CONFIRMED_DIMENSIONS", "WIDGET_RECENT_CLAIMS", "WIDGET_MFR_COMPLETED_CLAIMS",
                     "WIDGET_AUDIT_REVIEW", "WIDGET_AUDIT_PROGRESS");
         } else if ("ROLE_MANUFACTURER".equals(role)) {
-            return List.of("WIDGET_QUALITY_INBOUNDS", "WIDGET_RECENT_CLAIMS", "WIDGET_AUDIT_PROGRESS");
+            return List.of("WIDGET_ANNOUNCEMENTS", "WIDGET_QUALITY_INBOUNDS", "WIDGET_RECENT_CLAIMS", "WIDGET_AUDIT_PROGRESS");
         } else if ("ROLE_SALES".equals(role)) {
-            return List.of("WIDGET_NEW_PRODUCTS", "WIDGET_CONFIRMED_DIMENSIONS", "WIDGET_RECENT_CLAIMS",
+            return List.of("WIDGET_ANNOUNCEMENTS", "WIDGET_NEW_PRODUCTS", "WIDGET_CONFIRMED_DIMENSIONS", "WIDGET_RECENT_CLAIMS",
                     "WIDGET_MFR_COMPLETED_CLAIMS");
         } else {
             // Default for any other role
-            return List.of("WIDGET_NEW_PRODUCTS", "WIDGET_RECENT_CLAIMS");
+            return List.of("WIDGET_ANNOUNCEMENTS", "WIDGET_NEW_PRODUCTS", "WIDGET_RECENT_CLAIMS");
         }
     }
 

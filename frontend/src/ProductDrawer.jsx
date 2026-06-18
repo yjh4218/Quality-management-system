@@ -85,6 +85,8 @@ const ProductDrawer = ({ product, onClose, user }) => {
     const [isBomSearchOpen, setIsBomSearchOpen] = useState(false);
     const [selectedBomIndex, setSelectedBomIndex] = useState(null);
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+    const [testReports, setTestReports] = useState([]);
+    const [testReportPreview, setTestReportPreview] = useState({ open: false, url: '', type: '', name: '' });
     const [packagingSpecs, setPackagingSpecs] = useState([]);
     const [currentSpec, setCurrentSpec] = useState({
         packagingMethodText: '',
@@ -288,6 +290,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
             fetchFullProduct();
             fetchHistory(product.id);
             fetchPackagingSpecs(product.id);
+            fetchTestReports(product.id);
         } else {
             resetForm();
         }
@@ -366,6 +369,60 @@ const ProductDrawer = ({ product, onClose, user }) => {
             setPackagingSpecs(res.data);
         } catch (error) {
             // Specs fail
+        }
+    };
+
+    const fetchTestReports = async (id) => {
+        try {
+            const res = await api.getProductTestReports(id);
+            setTestReports(res.data || []);
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
+    const handleUploadTestReport = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (file.size > 10 * 1024 * 1024) {
+            toast.error("파일 크기는 10MB를 초과할 수 없습니다.");
+            return;
+        }
+        try {
+            const uploadRes = await api.uploadFile(file, formData.productName || 'test-report');
+            // uploadRes.data is expected to be a string containing the URL or file path.
+            if (uploadRes && uploadRes.data) {
+                const filePath = typeof uploadRes.data === 'string' ? uploadRes.data : uploadRes.data.filePath;
+                if (!filePath) {
+                    throw new Error("Invalid response format from upload API");
+                }
+                const reportName = prompt("성적서 이름을 입력하세요 (예: 유해물질 불검출 성적서)");
+                if (!reportName) return;
+
+                const payload = {
+                    reportName,
+                    fileName: file.name,
+                    filePath: filePath,
+                    fileType: file.type
+                };
+                const res = await api.addProductTestReport(product.id, payload);
+                setTestReports([...testReports, res.data.data || res.data]);
+                toast.success("성적서가 등록되었습니다.");
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error("업로드 중 오류가 발생했습니다.");
+        }
+    };
+
+    const handleDeleteTestReport = async (reportId) => {
+        if (!window.confirm("이 성적서를 삭제하시겠습니까?")) return;
+        try {
+            await api.deleteProductTestReport(reportId);
+            setTestReports(testReports.filter(r => r.id !== reportId));
+            toast.success("성적서가 삭제되었습니다.");
+        } catch (error) {
+            console.error(error);
         }
     };
 
@@ -840,6 +897,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                         {permissions.canViewPackaging && (
                             <button type="button" className={`drawer-tab-btn ${activeTab === 'packaging' ? 'active' : ''}`} onClick={() => setActiveTab('packaging')}>포장재 정보 및 사양서</button>
                         )}
+                        <button type="button" className={`drawer-tab-btn ${activeTab === 'testReports' ? 'active' : ''}`} onClick={() => setActiveTab('testReports')}>공인성적서 관리</button>
                         {product && <button type="button" className={`drawer-tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>변경 이력</button>}
                     </div>
                 </div>
@@ -1459,6 +1517,43 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                 </div>
                         )}
 
+                        {activeTab === 'testReports' && (
+                            <div className="tab-pane" style={{ padding: '20px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                                    <h3 style={{ margin: 0, fontSize: '18px', color: '#003366', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span>📋</span> 공인기관 성적서 관리
+                                    </h3>
+                                    {canEdit && (
+                                        <label className="btn secondary" style={{ cursor: 'pointer', padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold' }}>
+                                            📤 새 성적서 업로드
+                                            <input type="file" accept=".pdf,image/*" style={{ display: 'none' }} onChange={handleUploadTestReport} />
+                                        </label>
+                                    )}
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '15px' }}>
+                                    {testReports.length === 0 ? (
+                                        <div style={{ gridColumn: '1 / -1', padding: '40px', textAlign: 'center', color: '#718096', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
+                                            등록된 성적서가 없습니다. 새 성적서를 업로드해주세요.
+                                        </div>
+                                    ) : (
+                                        testReports.map(report => (
+                                            <div key={report.id} style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '15px', background: '#fff', display: 'flex', flexDirection: 'column', gap: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                                                <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#2d3748' }}>{report.reportName || report.fileName}</div>
+                                                <div style={{ fontSize: '12px', color: '#718096', wordBreak: 'break-all' }}>{report.fileName}</div>
+                                                <div style={{ fontSize: '11px', color: '#a0aec0' }}>등록일: {new Date(report.uploadedAt).toLocaleString()}</div>
+                                                <div style={{ display: 'flex', gap: '8px', marginTop: 'auto', paddingTop: '10px' }}>
+                                                    <button type="button" className="btn secondary" style={{ flex: 1, padding: '6px', fontSize: '12px' }} onClick={() => setTestReportPreview({ open: true, url: report.filePath.startsWith('http') ? report.filePath : api.getBaseURL() + report.filePath, type: report.fileType, name: report.reportName })}>미리보기</button>
+                                                    {canEdit && (
+                                                        <button type="button" className="btn danger" style={{ padding: '6px 12px', fontSize: '12px' }} onClick={() => handleDeleteTestReport(report.id)}>삭제</button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                         {activeTab === 'history' && (
                     <div>
                         {history.length === 0 ? <p style={{ padding: '20px', color: '#777' }}>변경 이력이 없습니다.</p> : Object.entries(
@@ -1931,6 +2026,24 @@ const ProductDrawer = ({ product, onClose, user }) => {
                     onClose={() => setIsConfirmOpen(false)}
                     onConfirm={handleConfirmSave}
                 />
+            )}
+
+            {testReportPreview.open && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 11000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                    <div style={{ background: '#fff', width: '90%', maxWidth: '1000px', height: '90%', borderRadius: '12px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                        <div style={{ padding: '15px 20px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
+                            <h3 style={{ margin: 0, fontSize: '16px', color: '#1a202c' }}>{testReportPreview.name || '성적서 미리보기'}</h3>
+                            <button type="button" onClick={() => setTestReportPreview({ open: false, url: '', type: '', name: '' })} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}>&times;</button>
+                        </div>
+                        <div style={{ flex: 1, overflow: 'auto', padding: '20px', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', background: '#f1f5f9' }}>
+                            {testReportPreview.type?.includes('image') ? (
+                                <img src={testReportPreview.url} alt="Preview" style={{ maxWidth: '100%', objectFit: 'contain' }} />
+                            ) : (
+                                <iframe src={testReportPreview.url} style={{ width: '100%', height: '100%', border: 'none' }} title="PDF Preview" />
+                            )}
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

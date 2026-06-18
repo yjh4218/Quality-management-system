@@ -39,7 +39,7 @@ const FindPasswordModal = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-overlay">
             <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ width: '450px' }}>
                 {/* 1. Fixed Header Area */}
                 <div className="modal-header">

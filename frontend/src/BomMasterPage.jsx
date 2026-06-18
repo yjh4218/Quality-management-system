@@ -27,6 +27,8 @@ const BomMasterPage = ({ user }) => {
         manufacturer: ''
     });
 
+    const [loading, setLoading] = useState(false);
+
     const hasFetchedOnMount = useRef(false);
     useEffect(() => {
         if (hasFetchedOnMount.current) return;
@@ -35,11 +37,14 @@ const BomMasterPage = ({ user }) => {
     }, []);
 
     const fetchMaterials = async () => {
+        setLoading(true);
         try {
             const res = await api.getMasterMaterialsSearch(filters);
             setMaterials(res.data);
         } catch (error) {
             toast.error("BOM 데이터를 불러오지 못했습니다.");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -177,9 +182,10 @@ const BomMasterPage = ({ user }) => {
                         <button 
                             className="primary" 
                             onClick={fetchMaterials} 
-                            style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px' }}
+                            disabled={loading}
+                            style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px', opacity: loading ? 0.7 : 1 }}
                         >
-                            🔍 조회
+                            {loading ? '⏳ 조회 중...' : '🔍 조회'}
                         </button>
                         <button 
                             className="outline" 

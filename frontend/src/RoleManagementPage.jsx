@@ -13,7 +13,9 @@ import { usePermissions } from './usePermissions';
  */
 
 const MENU_OPTIONS = [
-    { key: 'dashboard', category: '시스템', label: '시스템 대시보드 (제조사 접근 필요)', actions: ['VIEW'] },
+    { key: 'dashboard', category: '현황 모니터링', label: '시스템 대시보드 (제조사 접근 필요)', actions: ['VIEW'] },
+    { key: 'announcements', category: '현황 모니터링', label: '전체공지', actions: ['VIEW', 'EDIT', 'DELETE'] },
+    { key: 'notifications', category: '현황 모니터링', label: '알림 확인', actions: ['VIEW', 'DELETE'] },
     { key: 'users', category: '시스템', label: '사용자 승인 관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
     { key: 'accessLogs', category: '시스템', label: '사용자 접근 로그', actions: ['VIEW'] },
     { key: 'bugReports', category: '시스템', label: '버그 리포트 관리', actions: ['VIEW', 'EDIT'] },
@@ -22,6 +24,7 @@ const MENU_OPTIONS = [
     { key: 'guideManagement', category: '시스템', label: '가이드 관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
     { key: 'dashboardMgmt', category: '시스템', label: '대시보드 제작/관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
     { key: 'trashBin', category: '시스템', label: '데이터 복구 (휴지통)', actions: ['VIEW', 'EDIT', 'DELETE'] },
+    { key: 'mailTemplates', category: '시스템', label: '제조사 전달 메일 관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
     { key: 'products', category: '마스터', label: '제품코드 마스터', actions: ['VIEW', 'EDIT', 'DELETE'] },
     { key: 'bomMaster', category: '마스터', label: '구성품 BOM 마스터 관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
     { key: 'bomCategories', category: '마스터', label: 'BOM 유형 설정/관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
@@ -37,6 +40,7 @@ const MENU_OPTIONS = [
     { key: 'quality', category: '운영', label: '입고 품질 관리 (제조사 접근 필요)', actions: ['VIEW', 'EDIT', 'DELETE'] },
     { key: 'releaseRecord', category: '운영', label: '시장출하 적부판정 기록', actions: ['VIEW', 'EDIT', 'DELETE'] },
     { key: 'qualityPhotoAudit', category: '운영', label: '신제품 생산감리(사진감리)', actions: ['VIEW', 'EDIT', 'DELETE'] },
+    { key: 'announcementCategories', category: '운영', label: '공지 분류 관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
     { key: 'claims', category: '클레임', label: '클레임 조회 및 입력 (제조사 접근 필요)', actions: ['VIEW', 'EDIT', 'DELETE'] },
     { key: 'claimDashboard', category: '클레임', label: '클레임 대시보드', actions: ['VIEW'] },
 ];
@@ -50,7 +54,8 @@ const FUNCTIONAL_PERMISSIONS = [
     { key: 'DASHBOARD_SALES_VIEW', label: '📈 영업 대시보드 조회 권한', description: '신제품 현황, 체적 확정 내역 등 영업팀용 대시보드를 조회합니다.' },
     { key: 'SENSITIVE_DATA_VIEW', label: '🕵️ 민감 정보(BOM/원가) 조회', description: '제품의 원재료 및 단가 등 민감한 비즈니스 데이터를 조회할 수 있습니다.' },
     { key: 'PRODUCT_PACKAGING_VIEW', label: '📦 제품 포장재/사양서 조회 권한', description: '제품 마스터에서 포장재 정보 및 사양서 탭을 조회할 수 있는 권한입니다.' },
-    { key: 'AUDIT_EDIT_APPROVED', label: '🛡️ 승인된 생산감리 수정 권한', description: '이미 [승인됨] 상태인 생산감리 항목을 예외적으로 수정할 수 있는 권한입니다.' }
+    { key: 'AUDIT_EDIT_APPROVED', label: '🛡️ 승인된 생산감리 수정 권한', description: '이미 [승인됨] 상태인 생산감리 항목을 예외적으로 수정할 수 있는 권한입니다.' },
+    { key: 'ANNOUNCEMENT_ALL_VIEW', label: '📢 모든 전체공지 조회 권한', description: '특정 대상과 무관하게 시스템의 모든 전체공지를 조회할 수 있습니다.' }
 ];
 
 const FP_DEPENDENCIES = {
@@ -61,7 +66,8 @@ const FP_DEPENDENCIES = {
     'DASHBOARD_SALES_VIEW': 'dashboard',
     'SENSITIVE_DATA_VIEW': 'bomMaster',
     'PRODUCT_PACKAGING_VIEW': 'products',
-    'AUDIT_EDIT_APPROVED': 'qualityPhotoAudit'
+    'AUDIT_EDIT_APPROVED': 'qualityPhotoAudit',
+    'ANNOUNCEMENT_ALL_VIEW': 'announcements'
 };
 
 const RoleManagementPage = ({ user }) => {
@@ -456,9 +462,8 @@ const RoleManagementPage = ({ user }) => {
                 </div>
             </div>
 
-            {/* Role Config Modal (Drawer style) */}
             {isModalOpen && (
-                <div className="drawer-overlay" onClick={() => setIsModalOpen(false)}>
+                <div className="drawer-overlay">
                     <div className="drawer" onClick={e => e.stopPropagation()} style={{ width: '1400px', borderRadius: '28px' }}>
                         <div className="drawer-header" style={{ padding: '30px 45px' }}>
                             <h2 style={{ fontSize: '24px', fontWeight: '900' }}>
@@ -533,14 +538,14 @@ const RoleManagementPage = ({ user }) => {
                                                     <tr>
                                                         <th style={{ textAlign: 'left', padding: '15px 20px', background: '#f1f5f9', borderBottom: '2px solid #e2e8f0' }}>메뉴 경로</th>
                                                         <th style={{ width: '100px', background: '#f1f5f9', borderBottom: '2px solid #e2e8f0', textAlign: 'center' }}>조회(V)</th>
-                                                        <th style={{ width: '100px', background: '#f1f5f9', borderBottom: '2px solid #e2e8f0', textAlign: 'center' }}>편집(E)</th>
+                                                        <th style={{ width: '100px', background: '#f1f5f9', borderBottom: '2px solid #e2e8f0', textAlign: 'center' }}>작성/편집</th>
                                                         <th style={{ width: '100px', background: '#f1f5f9', borderBottom: '2px solid #e2e8f0', textAlign: 'center' }}>삭제(D)</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     {(() => {
                                                         const currentAllowedMenus = getParsedPermissions(selectedRole.allowedMenus);
-                                                        return ['시스템', '마스터', '운영', '클레임'].map(cat => (
+                                                        return ['현황 모니터링', '시스템', '마스터', '운영', '클레임'].map(cat => (
                                                             <React.Fragment key={cat}>
                                                                 <tr style={{ background: '#eef2ff', borderTop: '2px solid #c7d2fe' }}>
                                                                     <td style={{ fontWeight: '900', color: 'var(--primary-color)', padding: '12px 20px', fontSize: '14px' }}>📁 {cat} 관리 그룹</td>
@@ -552,7 +557,7 @@ const RoleManagementPage = ({ user }) => {
                                                                     </td>
                                                                     <td style={{ textAlign: 'center', fontWeight: '700', fontSize: '11px', color: '#6366f1' }}>
                                                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                                                                            <span style={{ color: '#64748b', fontSize: '10px' }}>편집(E)</span>
+                                                                            <span style={{ color: '#64748b', fontSize: '10px' }}>작성/편집</span>
                                                                             <button type="button" onClick={() => handleBatchPermission(cat, 'EDIT')} className="secondary" style={{ fontSize: '11px', padding: '3px 12px', fontWeight: '800', borderRadius: '6px' }}>ALL</button>
                                                                         </div>
                                                                     </td>
@@ -632,7 +637,7 @@ const RoleManagementPage = ({ user }) => {
 
             {/* History Modal */}
             {isHistoryModalOpen && (
-                <div className="drawer-overlay" onClick={() => setIsHistoryModalOpen(false)}>
+                <div className="drawer-overlay">
                     <div className="drawer" style={{ width: '1000px', height: '80vh', borderRadius: '28px' }} onClick={e => e.stopPropagation()}>
                         <div className="drawer-header" style={{ padding: '30px 45px' }}>
                             <h3 style={{ margin: 0, fontWeight: '900', fontSize: '20px' }}>⌛ [{targetRoleName}] 변경 히스토리 요약</h3>

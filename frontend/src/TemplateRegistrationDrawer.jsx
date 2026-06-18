@@ -94,7 +94,7 @@ const TemplateRegistrationDrawer = ({ template, onClose, user }) => {
     };
 
     return (
-        <div className="drawer-overlay" onClick={() => onClose()}>
+        <div className="drawer-overlay">
             <div className="drawer modern-drawer" onClick={(e) => e.stopPropagation()} style={{ width: '800px' }}>
                 {/* 1. Fixed Header Area */}
                 <div className="drawer-header">

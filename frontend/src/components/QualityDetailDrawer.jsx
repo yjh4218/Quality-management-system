@@ -179,7 +179,7 @@ const QualityDetailDrawer = ({
     if (!isOpen) return null;
 
     return (
-        <div className="drawer-overlay" onClick={onClose}>
+        <div className="drawer-overlay">
             <div 
                 className="drawer" 
                 onClick={(e) => e.stopPropagation()}

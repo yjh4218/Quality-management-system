@@ -128,6 +128,8 @@ api.interceptors.response.use(
                 errorMsg = "요청 처리 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.";
             } else if (error.response?.data?.message) {
                 errorMsg = error.response.data.message;
+            } else if (typeof error.response?.data === 'string' && error.response.data.trim()) {
+                errorMsg = error.response.data;
             } else if (error.message) {
                 errorMsg = error.message;
             }
@@ -162,7 +164,17 @@ api.interceptors.response.use(
 
                                 await axios.post(`${getBaseURL()}/api/bug-reports`, {
                                     description: `[자동 전송] 에러 발생: ${errorMsg}`,
-                                    steps: error.stack || 'API 요청 중 에러 발생',
+                                    steps: [
+                                        error.stack || 'API 요청 중 에러 발생',
+                                        '',
+                                        `[요청 정보]`,
+                                        `Method: ${error.config?.method?.toUpperCase() || 'N/A'}`,
+                                        `URL: ${error.config?.url || 'N/A'}`,
+                                        `Status: ${error.response?.status || 'N/A'} ${error.response?.statusText || ''}`,
+                                        '',
+                                        `[요청 데이터]`,
+                                        error.config?.data ? (typeof error.config.data === 'string' ? error.config.data.substring(0, 2000) : 'FormData/Binary') : 'N/A'
+                                    ].join('\n'),
                                     screenName: window.__QMS_ACTIVE_PAGE__ || window.location.pathname,
                                     url: window.location.href,
                                     severity: 'HIGH',
@@ -223,8 +235,8 @@ export const findPassword = (data) => api.post('/api/auth/find-password', data);
 export const changePassword = (data) => api.post('/api/auth/change-password', data);
 
 // System Settings
-export const getSystemSettings = () => api.get('/api/settings').then(res => res.data);
-export const saveSystemSettings = (settings) => api.post('/api/settings', settings).then(res => res.data);
+export const getSystemSettings = () => api.get('/api/system-settings').then(res => res.data);
+export const saveSystemSettings = (settings) => api.post('/api/system-settings', settings).then(res => res.data);
 
 // Admin APIs
 export const getUsers = (params = {}) => {
@@ -302,6 +314,7 @@ export const updateManufacturer = (id, m) => api.put(`/api/manufacturers/${id}`,
 export const deleteManufacturer = (id) => api.delete(`/api/manufacturers/${id}`);
 export const restoreManufacturer = (id) => api.post(`/api/manufacturers/${id}/restore`);
 export const hardDeleteManufacturer = (id) => api.delete(`/api/manufacturers/${id}/hard`);
+export const getCompanyDepartmentsAndEmails = (companyName) => api.get('/api/manufacturers/departments', { params: { companyName } });
 
 // Brand APIs
 export const getBrands = () => api.get('/api/brands');
@@ -330,6 +343,10 @@ export const uploadIngredients = (file) => {
 export const getProductHistory = (id) => api.get(`/api/products/${id}/history`);
 export const deleteProduct = (id) => api.delete(`/api/products/${id}`);
 export const restoreProduct = (id) => api.post(`/api/products/${id}/restore`);
+export const restoreDeletedClaim = (id) => api.post(`/api/claims/${id}/restore`);
+export const getActiveMailTemplates = (category) => api.get(`/api/mail-templates/active${category ? `?category=${category}` : ''}`);
+export const getClaimEmailPreview = (id, templateCode) => api.get(`/api/claims/${id}/email-preview?templateCode=${templateCode}`);
+export const sendClaimEmail = (id, emailForm) => api.post(`/api/claims/${id}/send-email`, emailForm);
 export const hardDeleteProduct = (id) => api.delete(`/api/products/${id}/hard`);
 export const checkDuplicateItemCode = (itemCode) => api.get(`/api/products/check-duplicate/${itemCode}`);
 export const loadMasterProduct = (itemCode) => api.get(`/api/products/master/${itemCode}`);
@@ -378,6 +395,8 @@ export const deleteProductionAudit = (id) => api.delete(`/api/production-audits/
 export const toggleProductDisclosure = (itemCode, isDisclosed) => 
     api.patch(`/api/production-audits/pending/${encodeURIComponent(itemCode)}/disclosure`, { isDisclosed });
 export const getProductionAuditHistory = (id) => api.get(`/api/production-audits/${id}/history`);
+export const getProductionAuditEmailPreview = (id) => api.get(`/api/production-audits/${id}/email-preview`);
+export const sendProductionAuditEmail = (id, emailRequest) => api.post(`/api/production-audits/${id}/send-email`, emailRequest);
 export const exportAuditsExcel = (params) => {
     const queryParams = new URLSearchParams();
     if (params.manufacturerName) queryParams.append('manufacturerName', params.manufacturerName);
@@ -466,6 +485,7 @@ export const getClaims = (params = {}, config = {}) => {
     if (params.country) queryParams.append('country', params.country);
     if (params.qualityStatus) queryParams.append('qualityStatus', params.qualityStatus);
     if (params.claimNumber) queryParams.append('claimNumber', params.claimNumber);
+    if (params.manufacturer) queryParams.append('manufacturer', params.manufacturer);
     if (params.sharedWithManufacturer !== undefined && params.sharedWithManufacturer !== '') {
         queryParams.append('sharedWithManufacturer', params.sharedWithManufacturer);
     }
@@ -486,6 +506,8 @@ export const getClaimDashboard = (params = {}, config = {}) => {
     
     return api.get(url, config);
 };
+
+export const getClaimById = (id, fromEmail = false) => api.get(`/api/claims/${id}${fromEmail ? '?fromEmail=true' : ''}`);
 export const createClaim = (claim) => api.post('/api/claims', claim);
 export const updateClaim = (id, data) => api.put(`/api/claims/${id}`, data);
 export const deleteClaim = (id) => api.delete(`/api/claims/${id}`);
@@ -510,6 +532,7 @@ export const exportClaimsExcel = (params) => {
     if (params.country) queryParams.append('country', params.country);
     if (params.qualityStatus) queryParams.append('qualityStatus', params.qualityStatus);
     if (params.claimNumber) queryParams.append('claimNumber', params.claimNumber);
+    if (params.manufacturer) queryParams.append('manufacturer', params.manufacturer);
     return api.get(`/api/claims/export?${queryParams.toString()}`, { responseType: 'blob' });
 };
 export const getClaimDashboardStats = (startDate, endDate, itemCode, productName, manufacturer) => {
@@ -566,6 +589,38 @@ export const saveManufacturerAudit = (data) => {
     return api.post('/api/manufacturer-audits', data).then(res => res.data);
 };
 export const deleteManufacturerAudit = (id) => api.delete(`/api/manufacturer-audits/${id}`);
+
+// --- Mail Template APIs ---
+export const getMailTemplates = () => api.get('/api/mail-templates');
+export const createMailTemplate = (data) => api.post('/api/mail-templates', data);
+export const updateMailTemplate = (id, data) => api.put(`/api/mail-templates/${id}`, data);
+export const deleteMailTemplate = (id) => api.delete(`/api/mail-templates/${id}`);
+
+// --- Announcement APIs ---
+export const getAnnouncements = () => api.get('/api/announcements');
+export const getActiveAnnouncements = () => api.get('/api/announcements/active');
+export const saveAnnouncement = (data) => {
+    if (data.id) return api.put(`/api/announcements/${data.id}`, data);
+    return api.post('/api/announcements', data);
+};
+export const deleteAnnouncement = (id) => api.delete(`/api/announcements/${id}`);
+
+// --- Announcement Category APIs ---
+export const getAnnouncementCategories = () => api.get('/api/announcements/categories');
+export const saveAnnouncementCategory = (data) => {
+    if (data.id) return api.put(`/api/announcements/categories/${data.id}`, data);
+    return api.post('/api/announcements/categories', data);
+};
+export const deleteAnnouncementCategory = (id) => api.delete(`/api/announcements/categories/${id}`);
+
+// --- Announcement Email ---
+export const sendAnnouncementEmail = (id) => api.post(`/api/announcements/${id}/send-email`);
+
+export const getMailCategories = () => api.get('/api/mail-categories');
+export const createMailCategory = (data) => api.post('/api/mail-categories', data);
+export const updateMailCategory = (id, data) => api.put(`/api/mail-categories/${id}`, data);
+export const deleteMailCategory = (id) => api.delete(`/api/mail-categories/${id}`);
+
 export const exportAuditToExcel = (id) => api.get(`/api/manufacturer-audits/${id}/export/excel`, { responseType: 'blob' }).then(res => res.data);
 export const getManufacturerAuditHistory = (id) => api.get(`/api/manufacturer-audits/${id}/history`).then(res => res.data);
 
@@ -583,4 +638,16 @@ export const deleteManufacturerCategory = (id) => api.delete(`/api/manufacturer-
 export const getSystemSetting = (key) => api.get(`/api/system-settings/${key}`).then(res => res.data);
 export const saveSystemSetting = (setting) => api.post('/api/system-settings', setting).then(res => res.data);
 
+// --- Notification APIs ---
+export const getMyNotifications = () => api.get('/api/notifications');
+export const getUnreadNotificationCount = () => api.get('/api/notifications/unread-count', { skipLoading: true });
+export const readNotification = (id) => api.post(`/api/notifications/${id}/read`);
+export const readAllNotifications = () => api.post('/api/notifications/read-all');
+export const deleteNotification = (id) => api.delete(`/api/notifications/${id}`);
+
 export default api;
+
+export const getProductTestReports = (productId) => api.get(`/api/products/${productId}/test-reports`);
+export const addProductTestReport = (productId, data) => api.post(`/api/products/${productId}/test-reports`, data);
+export const deleteProductTestReport = (reportId) => api.delete(`/api/products/test-reports/${reportId}`);
+

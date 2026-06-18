@@ -219,7 +219,7 @@ ${selectedReport.serverError || '없음'}
                 </div>
 
                 {selectedReport && (
-                    <div style={{ width: '400px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #dee2e6', padding: '20px', overflowY: 'auto' }}>
+                    <div style={{ width: '500px', minWidth: '500px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #dee2e6', padding: '20px', overflowY: 'auto' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                             <h3 style={{ margin: 0 }}>Report Detail</h3>
                             <div style={{ display: 'flex', gap: '8px' }}>
@@ -275,9 +275,8 @@ ${selectedReport.serverError || '없음'}
                                 whiteSpace: 'pre-wrap',
                                 wordBreak: 'break-all',
                                 overflowWrap: 'anywhere',
-                                maxHeight: '200px',
-                                overflowY: 'auto',
-                                color: '#444'
+                                color: '#444',
+                                fontFamily: 'monospace'
                             }}>
                                 {selectedReport.steps || '기록 없음'}
                             </div>
@@ -296,8 +295,6 @@ ${selectedReport.serverError || '없음'}
                                     whiteSpace: 'pre-wrap',
                                     wordBreak: 'break-all',
                                     overflowWrap: 'anywhere',
-                                    maxHeight: '150px',
-                                    overflowY: 'auto',
                                     color: '#c92a2a',
                                     fontFamily: 'monospace'
                                 }}>
@@ -308,7 +305,7 @@ ${selectedReport.serverError || '없음'}
 
                         <div className="info-group" style={{ marginBottom: '15px' }}>
                             <label style={{ fontWeight: 'bold', fontSize: '13px' }}>상세 내용</label>
-                            <div style={{ backgroundColor: '#fff', padding: '10px', borderRadius: '4px', border: '1px solid #eee', fontSize: '14px', marginTop: '5px', whiteSpace: 'pre-wrap' }}>
+                            <div style={{ backgroundColor: '#fff', padding: '10px', borderRadius: '4px', border: '1px solid #eee', fontSize: '14px', marginTop: '5px', whiteSpace: 'pre-wrap', wordBreak: 'break-all', overflowWrap: 'anywhere' }}>
                                 {selectedReport.description}
                             </div>
                         </div>

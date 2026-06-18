@@ -48,6 +48,7 @@ public class ClaimController {
             @RequestParam(required = false) String country,
             @RequestParam(required = false) String qualityStatus,
             @RequestParam(required = false) String claimNumber,
+            @RequestParam(required = false) String manufacturer,
             @RequestParam(required = false) String sharedWithManufacturer) {
         User user = getUser(userDetails);
         String roleStr = user.getRole();
@@ -57,12 +58,15 @@ public class ClaimController {
         
         System.out.println("DEBUG: Incoming Request with sharedFilter String = [" + sharedWithManufacturer + "]");
         
-        return ResponseEntity.ok(claimService.searchClaims(roleStr, user.getCompanyName(), startDate, endDate, itemCode, productName, lotNumber, country, qualityStatus, claimNumber, sharedWithManufacturer));
+        return ResponseEntity.ok(claimService.searchClaims(roleStr, user.getCompanyName(), startDate, endDate, itemCode, productName, lotNumber, country, qualityStatus, claimNumber, manufacturer, sharedWithManufacturer));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Claim> getClaim(@PathVariable Long id, @AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(claimService.getClaim(id, getUser(userDetails)));
+    public ResponseEntity<Claim> getClaim(
+            @PathVariable Long id, 
+            @RequestParam(required = false, defaultValue = "false") boolean fromEmail,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(claimService.getClaim(id, getUser(userDetails), fromEmail));
     }
 
     @GetMapping("/debug/status")
@@ -97,10 +101,47 @@ public class ClaimController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
-    public ResponseEntity<Void> deleteClaim(@PathVariable Long id, @AuthenticationPrincipal UserDetails userDetails) {
-        claimService.deleteClaim(id, getUser(userDetails));
-        return ResponseEntity.ok().build();
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> deleteClaim(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        User user = getUser(userDetails);
+        claimService.deleteClaim(id, user);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/send-email")
+    public ResponseEntity<java.util.Map<String, Object>> sendEmailToManufacturer(
+            @PathVariable Long id,
+            @RequestBody java.util.Map<String, String> emailRequest,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        User user = getUser(userDetails);
+        try {
+            boolean isMock = claimService.sendCustomEmailToManufacturer(id, emailRequest, user);
+            java.util.Map<String, Object> res = new java.util.HashMap<>();
+            res.put("success", true);
+            res.put("isMock", isMock);
+            res.put("message", isMock ? "SMTP_NOT_CONFIGURED" : "EMAIL_SENT");
+            return ResponseEntity.ok(res);
+        } catch (Exception e) {
+            log.error("Failed to send email for claim {}", id, e);
+            java.util.Map<String, Object> errorRes = new java.util.HashMap<>();
+            errorRes.put("success", false);
+            errorRes.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(errorRes);
+        }
+    }
+
+    @GetMapping("/{id}/email-preview")
+    public ResponseEntity<java.util.Map<String, Object>> getClaimEmailPreview(
+            @PathVariable Long id,
+            @RequestParam String templateCode) {
+        try {
+            return ResponseEntity.ok(claimService.getClaimEmailPreview(id, templateCode));
+        } catch (Exception e) {
+            log.error("Failed to generate email preview for claim {}", id, e);
+            return ResponseEntity.badRequest().build();
+        }
     }
 
     @PutMapping("/{id}")
@@ -129,6 +170,7 @@ public class ClaimController {
     }
 
     @GetMapping("/{id}/history")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
     public ResponseEntity<List<ClaimHistory>> getClaimHistory(@PathVariable Long id) {
         return ResponseEntity.ok(claimService.getClaimHistory(id));
     }
@@ -146,7 +188,8 @@ public class ClaimController {
             return ResponseEntity.badRequest().body("파일 크기는 5MB를 초과할 수 없습니다.");
         }
 
-        Claim claim = claimService.getClaim(id, getUser(userDetails));
+
+        Claim claim = claimService.getClaim(id, getUser(userDetails), false);
         String fileName = fileStorageService.storeFile(file, productName != null ? productName : "claim_" + id);
         claim.setManufacturerResponsePdf("/uploads/" + fileName);
         claimService.saveClaim(claim);
@@ -180,6 +223,7 @@ public class ClaimController {
             @RequestParam(required = false) String country,
             @RequestParam(required = false) String qualityStatus,
             @RequestParam(required = false) String claimNumber,
+            @RequestParam(required = false) String manufacturer,
             @RequestParam(required = false) String sharedWithManufacturer) throws java.io.IOException {
         
         String username = userDetails.getUsername();
@@ -192,7 +236,7 @@ public class ClaimController {
                 roleStr = "ROLE_" + roleStr;
             }
     
-            byte[] excelFile = claimService.exportClaims(username, roleStr, user.getCompanyName(), startDate, endDate, itemCode, productName, lotNumber, country, qualityStatus, claimNumber, sharedWithManufacturer);
+            byte[] excelFile = claimService.exportClaims(username, roleStr, user.getCompanyName(), startDate, endDate, itemCode, productName, lotNumber, country, qualityStatus, claimNumber, manufacturer, sharedWithManufacturer);
             
             return ResponseEntity.ok()
                     .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=Claim_Export.xlsx")

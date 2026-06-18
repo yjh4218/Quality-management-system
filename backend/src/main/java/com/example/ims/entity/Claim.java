@@ -147,4 +147,10 @@ public class Claim {
     
     @UpdateTimestamp
     private LocalDateTime updatedAt;
+
+    private LocalDateTime emailSentAt; // 제조사 메일 발송 일시
+
+    @Version
+    private Long version;
 }
+

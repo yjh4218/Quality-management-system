@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createClaim, updateClaim, uploadClaimResponse, uploadClaimPhoto, getClaimHistory, deleteClaim } from './api';
 import * as api from './api';
+import { toast } from 'react-toastify';
 import ProductSearchPopup from './ProductSearchPopup';
 import SaveConfirmModal from './components/SaveConfirmModal';
 import { usePermissions } from './usePermissions';
@@ -40,7 +41,9 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
         mfrTerminationDate: '',
         qualityRemarks: '',
         mfrRemarks: '',
-        mfrStatus: '1. 접수'
+        mfrStatus: '1. 접수',
+        emailSentAt: '',
+        version: 0
     });
 
     const stands = user?.roles || [];
@@ -52,15 +55,39 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
     const { canEdit: canEditClaim, canDelete: canDeleteClaim } = usePermissions(user);
     const hasGlobalEdit = canEditClaim('claims');
 
+
+
     const canEditCs = (!readOnly) && hasGlobalEdit && (!isManufacturer);
     const canEditQuality = (!readOnly) && hasGlobalEdit && (isAdmin || isQuality || isManufacturer);
-    const canEditMfr = (!readOnly) && hasGlobalEdit && (isAdmin || isManufacturer);
+    const canEditMfr = (!readOnly) && (isAdmin || isManufacturer);
 
     const [isSearchPopupOpen, setIsSearchPopupOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('details');
     const [history, setHistory] = useState([]);
     const [loading, setLoading] = useState(false);
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+
+    const [templates, setTemplates] = useState([]);
+    const [selectedTemplate, setSelectedTemplate] = useState('');
+    const [isSendingEmail, setIsSendingEmail] = useState(false);
+    const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+    const [emailForm, setEmailForm] = useState({ toEmail: '', subject: '', body: '' });
+    const [initialToEmail, setInitialToEmail] = useState('');
+    const [deptEmails, setDeptEmails] = useState({});
+    const [selectedDepts, setSelectedDepts] = useState([]);
+    const [emailModalTab, setEmailModalTab] = useState('preview');
+    const isSavingRef = React.useRef(false);
+
+    useEffect(() => {
+        if (!isManufacturer) {
+            api.getActiveMailTemplates('CLAIM')
+               .then(res => {
+                   setTemplates(res.data);
+                   if (res.data.length > 0) setSelectedTemplate(res.data[0].templateCode);
+               })
+               .catch(err => console.error("Failed to load templates", err));
+        }
+    }, [isManufacturer]);
 
     const loadHistory = async () => {
         if (!claim) return;
@@ -188,7 +215,9 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                 mfrRemarks: claim.mfrRemarks || '',
                 mfrStatus: claim.mfrStatus || '1. 접수',
                 createdAt: claim.createdAt || '',
-                updatedAt: claim.updatedAt || ''
+                updatedAt: claim.updatedAt || '',
+                emailSentAt: claim.emailSentAt || '',
+                version: claim.version || 0
             });
         }
     }, [claim]);
@@ -212,9 +241,198 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
             } catch (error) {}
         }
     };
-    
     const removePhoto = (indexToRemove) => {
         setFormData(prev => ({ ...prev, claimPhotos: prev.claimPhotos.filter((_, idx) => idx !== indexToRemove) }));
+    };
+
+    const handleResponsePdfUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        if (!claim || !claim.id) {
+            alert("저장된 클레임에 대해서만 보고서를 첨부할 수 있습니다. 먼저 저장해 주세요.");
+            return;
+        }
+        
+        if (file.size > 5 * 1024 * 1024) {
+            alert("파일 크기는 5MB를 초과할 수 없습니다.");
+            return;
+        }
+        
+        const allowedExtensions = /(\.pdf|\.jpg|\.jpeg)$/i;
+        if (!allowedExtensions.exec(file.name)) {
+            alert("PDF 또는 JPG/JPEG 파일만 업로드 가능합니다.");
+            return;
+        }
+        
+        try {
+            toast.info("파일을 업로드 중입니다...");
+            const res = await uploadClaimResponse(claim.id, file, claim.productName || formData.productName);
+            
+            // 파일 업로드 시 백엔드에서 엔티티가 직접 저장되어 버전이 올라갔으므로, 최신 버전을 다시 조회하여 동기화합니다.
+            const updatedClaimRes = await api.getClaimById(claim.id);
+            const updatedClaim = updatedClaimRes.data;
+            
+            setFormData(prev => ({ 
+                ...prev, 
+                manufacturerResponsePdf: res.data,
+                version: updatedClaim.version || 0 
+            }));
+            
+            toast.success("대체 보고서 파일이 업로드되었습니다.");
+            if (onSaved) onSaved(updatedClaim);
+        } catch (error) {
+            console.error(error);
+            const serverMsg = error.response?.data?.message || error.response?.data || "파일 업로드에 실패했습니다.";
+            toast.error(`업로드 실패: ${serverMsg}`);
+        }
+    };
+
+    const removeResponsePdf = () => {
+        if (window.confirm("첨부된 대체 보고서를 삭제하시겠습니까?")) {
+            setFormData(prev => ({ ...prev, manufacturerResponsePdf: '' }));
+        }
+    };
+
+    const handleOpenEmailModal = async () => {
+        if (!claim || !claim.id) {
+            toast.warn("저장된 클레임만 메일을 발송할 수 있습니다. 먼저 저장해주세요.");
+            return;
+        }
+        if (!selectedTemplate) {
+            toast.warn("발송할 메일 양식을 선택해주세요.");
+            return;
+        }
+
+        try {
+            const res = await api.getClaimEmailPreview(claim.id, selectedTemplate);
+            const { toEmail, subject, body } = res.data;
+
+            // Load departments and pre-check '품질팀' and '영업팀'
+            let loadedDeptEmails = {};
+            const companyName = claim?.manufacturer || formData?.manufacturer;
+            if (companyName) {
+                try {
+                    const deptRes = await api.getCompanyDepartmentsAndEmails(companyName);
+                    loadedDeptEmails = deptRes.data || {};
+                    setDeptEmails(loadedDeptEmails);
+                } catch (deptErr) {
+                    console.error("Failed to load departments", deptErr);
+                }
+            }
+
+            const defaultDepts = [];
+            let defaultEmails = [];
+            if (loadedDeptEmails['품질팀']) {
+                defaultDepts.push('품질팀');
+                defaultEmails = [...defaultEmails, ...loadedDeptEmails['품질팀'].map(e => e.trim())];
+            }
+            if (loadedDeptEmails['영업팀']) {
+                defaultDepts.push('영업팀');
+                defaultEmails = [...defaultEmails, ...loadedDeptEmails['영업팀'].map(e => e.trim())];
+            }
+
+            const uniqueEmails = [...new Set(defaultEmails.filter(Boolean))];
+
+            setSelectedDepts(defaultDepts);
+            setEmailForm({
+                toEmail: uniqueEmails.join(', '),
+                subject: subject || '',
+                body: body || ''
+            });
+            setInitialToEmail('');
+            setEmailModalTab('preview');
+            setIsEmailModalOpen(true);
+        } catch (error) {
+            toast.error("메일 템플릿 정보를 가져오지 못했습니다.");
+        }
+    };
+
+    const handleDeptToggle = (deptName) => {
+        const isChecked = selectedDepts.includes(deptName);
+        const newDepts = isChecked 
+            ? selectedDepts.filter(d => d !== deptName)
+            : [...selectedDepts, deptName];
+            
+        setSelectedDepts(newDepts);
+
+        // Rebuild toEmail to ONLY include emails of checked departments
+        const currentEmails = [];
+        newDepts.forEach(d => {
+            if (deptEmails[d]) {
+                deptEmails[d].forEach(email => {
+                    const trimmed = email.trim();
+                    if (trimmed && !currentEmails.includes(trimmed)) {
+                        currentEmails.push(trimmed);
+                    }
+                });
+            }
+        });
+        
+        setEmailForm(prev => ({ ...prev, toEmail: currentEmails.join(', ') }));
+    };
+
+    const handleSendEmail = async () => {
+        if (!emailForm.toEmail.trim()) {
+            toast.error("수신자 이메일을 입력해 주세요.");
+            return;
+        }
+        setIsSendingEmail(true);
+        try {
+            // [추가] 메일 발송 전 현재 상태(특히 sharedWithManufacturer)를 DB에 저장
+            const sanitizedData = { ...formData };
+            // 중복 메일 전송 방지: updateClaim 단에서는 기존 sharedWithManufacturer(보통 false)를 유지함으로써, false->true 상태 변경에 의한 시스템 자동 이메일 알림 트리거를 차단합니다.
+            if (claim) {
+                sanitizedData.sharedWithManufacturer = claim.sharedWithManufacturer;
+            }
+            const dateFields = ['receiptDate', 'expectedRetrievalDate', 'recallDate', 'qualityReceivedDate', 'terminationDate', 'mfrRecallDate', 'mfrTerminationDate'];
+            dateFields.forEach(field => {
+                if (sanitizedData[field] === '') {
+                    sanitizedData[field] = null;
+                }
+            });
+            if (claim && claim.id) {
+                // [버전 동기화] DB에서 최신 버전을 가져와서 낙관적 락 충돌 방지
+                try {
+                    const latestRes = await api.getClaimById(claim.id);
+                    sanitizedData.version = latestRes.data.version || 0;
+                } catch (versionErr) {
+                    console.warn('최신 버전 조회 실패, 기존 버전 사용:', versionErr);
+                }
+                await updateClaim(claim.id, sanitizedData);
+            }
+
+            const res = await api.sendClaimEmail(claim.id, emailForm);
+            
+            // 메일 전송 완료 후 백엔드에서 이메일 전송 시간 및 공유 상태 등이 갱신되어 저장되므로 최신 데이터를 가져옵니다.
+            const updatedClaimRes = await api.getClaimById(claim.id);
+            const updatedClaim = updatedClaimRes.data;
+            
+            setFormData(prev => ({
+                ...prev,
+                sharedWithManufacturer: updatedClaim.sharedWithManufacturer,
+                emailSentAt: updatedClaim.emailSentAt || '',
+                version: updatedClaim.version || 0
+            }));
+            
+            if (onSaved) onSaved(updatedClaim);
+            onClose();
+
+            // SMTP Mock mode warning
+            if (res.data?.isMock || res.data?.message === "SMTP_NOT_CONFIGURED") {
+                toast.info("💡 SMTP 서버 미설정으로 [Mock 모드]가 동작했습니다. mock_emails 폴더에 메일이 저장되었습니다.", { autoClose: 8000 });
+            } else {
+                toast.success("메일 발송을 요청했습니다.");
+            }
+            setIsEmailModalOpen(false);
+        } catch (error) {
+            console.error(error);
+            const errorData = error.response?.data;
+            const errorMsg = typeof errorData === 'string' ? errorData : (errorData?.message || "메일 발송 요청에 실패했습니다.");
+            toast.error(`[발송 실패] ${errorMsg}`);
+        } finally {
+            setIsSendingEmail(false);
+        }
     };
 
     const handleClaimDelete = async () => {
@@ -239,8 +457,9 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
 
     const handleConfirmSave = async () => {
         setIsConfirmOpen(false);
-        if (loading) return;
+        if (loading || isSavingRef.current) return;
         
+        isSavingRef.current = true;
         const sanitizedData = { ...formData };
         const dateFields = ['receiptDate', 'expectedRetrievalDate', 'recallDate', 'qualityReceivedDate', 'terminationDate', 'mfrRecallDate', 'mfrTerminationDate'];
         dateFields.forEach(field => {
@@ -265,11 +484,12 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
             alert(`저장 중에 오류가 발생했습니다.\n${serverMsg}\n날짜 형식이 올바른지 확인해주세요.`);
         } finally {
             setLoading(false);
+            isSavingRef.current = false;
         }
     };
 
     return (
-        <div className="drawer-overlay" onClick={onClose}>
+        <div className="drawer-overlay">
             <div className="drawer" onClick={e => e.stopPropagation()}>
                 {/* 1. Header Section */}
                 <div className="drawer-header">
@@ -416,18 +636,82 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                         </h3>
                                         {(isAdmin || isQuality) && (
                                             <div style={{ 
-                                                display: 'flex', alignItems: 'center', gap: '12px', padding: '15px', 
-                                                background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', 
+                                                display: 'flex', flexDirection: 'column', gap: '15px', padding: '20px', 
+                                                background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', 
                                                 marginBottom: '20px' 
                                             }}>
-                                                <label style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#4a5568' }}>🛡️ 제조사 데이터 공유 활성화</label>
-                                                <input type="checkbox" checked={formData.sharedWithManufacturer} onChange={e => setFormData(p => ({ ...p, sharedWithManufacturer: e.target.checked }))} style={{ width: '18px', height: '18px' }} />
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                    <label className="custom-checkbox" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 'bold', color: '#1e293b' }}>
+                                                        <input 
+                                                            type="checkbox" 
+                                                            name="sharedWithManufacturer" 
+                                                            checked={formData.sharedWithManufacturer} 
+                                                            onChange={(e) => setFormData(p => ({ ...p, sharedWithManufacturer: e.target.checked }))}
+                                                            disabled={!canEditQuality}
+                                                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                                        />
+                                                        클레임 제조사 공개 여부 (QMS 시스템 권한)
+                                                    </label>
+                                                    <span style={{ fontSize: '12px', color: '#64748b' }}>* 체크 시 제조사 담당자가 로그인하여 해당 클레임을 조회하고 의견을 작성할 수 있습니다.</span>
+                                                </div>
+                                                
+                                                {(!isManufacturer) && formData.emailSentAt && (
+                                                    <div style={{ fontSize: '13px', color: '#4f46e5', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        📧 제조사 전달 메일 발송 일시: <span style={{ color: '#1e293b' }}>{formData.emailSentAt.substring(0, 16).replace('T', ' ')}</span>
+                                                    </div>
+                                                )}
+                                                
+                                                
+                                                {formData.sharedWithManufacturer && (
+                                                    <>
+                                                        <div style={{ height: '1px', background: '#e2e8f0', margin: '5px 0' }}></div>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                                                            <span style={{ fontWeight: 'bold', color: '#334155' }}>📧 알림 메일 즉시 발송</span>
+                                                            <select 
+                                                                value={selectedTemplate} 
+                                                                onChange={(e) => setSelectedTemplate(e.target.value)}
+                                                                style={{ padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', minWidth: '200px' }}
+                                                            >
+                                                                {templates.length === 0 && <option value="">이용 가능한 양식 없음</option>}
+                                                                {templates.map(t => (
+                                                                    <option key={t.templateCode} value={t.templateCode}>{t.templateName}</option>
+                                                                ))}
+                                                            </select>
+                                                            <button 
+                                                                type="button" 
+                                                                onClick={handleOpenEmailModal} 
+                                                                disabled={isSendingEmail || !selectedTemplate}
+                                                                className="primary"
+                                                                style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', fontWeight: 'bold' }}
+                                                            >
+                                                                {isSendingEmail ? (
+                                                                    <><div className="spinner-ring" style={{ width: '14px', height: '14px', borderWidth: '2px' }}></div> 처리 중...</>
+                                                                ) : (
+                                                                    <>메일 발송하기</>
+                                                                )}
+                                                            </button>
+                                                            <span style={{ fontSize: '12px', color: '#64748b' }}>* 버튼 클릭 시 해당 양식으로 메일 내용 미리보기가 표시됩니다.</span>
+                                                        </div>
+                                                    </>
+                                                )}
                                             </div>
                                         )}
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
                                             <div className="form-group" style={{ marginBottom: 0 }}>
                                                 <label>품질팀 처리 상태</label>
-                                                <input type="text" value={formData.qualityStatus} readOnly style={{ backgroundColor: '#edf2f7', fontWeight: 'bold' }} />
+                                                <select 
+                                                    name="qualityStatus" 
+                                                    value={formData.qualityStatus} 
+                                                    onChange={handleChange} 
+                                                    disabled={!canEditQuality}
+                                                    style={{ fontWeight: 'bold' }}
+                                                >
+                                                    <option value="0. 접수">0. 접수</option>
+                                                    <option value="1. 클레임 접수">1. 클레임 접수</option>
+                                                    <option value="2. 원인분석/개선방안">2. 원인분석/개선방안</option>
+                                                    <option value="3. 재발방지 수립/적용">3. 재발방지 수립/적용</option>
+                                                    <option value="4. 클레임 종결">4. 클레임 종결</option>
+                                                </select>
                                             </div>
                                             <div className="form-group" style={{ marginBottom: 0 }}>
                                                 <label>품질팀 클레임 종결일</label>
@@ -459,7 +743,7 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                 )}
 
                                 {/* 제조사 담당자 기재 구역 */}
-                                {((isManufacturer || formData.sharedWithManufacturer)) && (
+                                {(isManufacturer || (formData.sharedWithManufacturer && (isAdmin || isQuality))) && (
                                     <div className="card" style={{ borderLeft: '5px solid #ed8936' }}>
                                         <h3>
                                             <span style={{ color: '#ed8936' }}>🏭</span> 제조사 담당자 의견
@@ -467,7 +751,18 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
                                             <div className="form-group" style={{ marginBottom: 0 }}>
                                                 <label>제조사 처리 상태</label>
-                                                <input type="text" value={formData.mfrStatus} readOnly style={{ backgroundColor: '#fff', border: '1px solid #fbd38d', fontWeight: 'bold' }} />
+                                                <select 
+                                                    name="mfrStatus" 
+                                                    value={formData.mfrStatus} 
+                                                    onChange={handleChange} 
+                                                    disabled={!canEditMfr}
+                                                    style={{ border: '1px solid #fbd38d', fontWeight: 'bold' }}
+                                                >
+                                                    <option value="1. 접수">1. 접수</option>
+                                                    <option value="2. 원인분석">2. 원인분석</option>
+                                                    <option value="3. 대책수립">3. 대책수립</option>
+                                                    <option value="4. 클레임 종결">4. 클레임 종결</option>
+                                                </select>
                                             </div>
                                             <div className="form-group" style={{ marginBottom: 0 }}>
                                                 <label>제조사 종결일자</label>
@@ -494,6 +789,117 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                         <div className="form-group">
                                             <label>제조사 재발방지 대책</label>
                                             <textarea name="mfrPreventativeAction" value={formData.mfrPreventativeAction} onChange={handleChange} disabled={!canEditMfr} rows="3" />
+                                        </div>
+
+                                        {/* 클레임 대체 보고서 첨부 섹션 */}
+                                        <div className="form-group" style={{ marginTop: '20px', borderTop: '1px dashed #e2e8f0', paddingTop: '20px' }}>
+                                            <label style={{ fontWeight: 'bold', color: '#4a5568', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                📂 클레임 대체 보고서 첨부 (PDF, JPG)
+                                            </label>
+                                            
+                                            {formData.manufacturerResponsePdf ? (
+                                                <div style={{ 
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    gap: '15px', 
+                                                    marginTop: '10px', 
+                                                    padding: '12px 16px', 
+                                                    background: '#f8fafc', 
+                                                    border: '1px solid #e2e8f0', 
+                                                    borderRadius: '8px' 
+                                                }}>
+                                                    {/* 미리보기 영역 */}
+                                                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                        {formData.manufacturerResponsePdf.toLowerCase().endsWith('.pdf') ? (
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                <span style={{ fontSize: '24px' }}>📄</span>
+                                                                <a 
+                                                                    href={formData.manufacturerResponsePdf.startsWith('http') ? formData.manufacturerResponsePdf : `http://localhost:8080${formData.manufacturerResponsePdf}`} 
+                                                                    target="_blank" 
+                                                                    rel="noopener noreferrer"
+                                                                    style={{ color: '#3182ce', fontWeight: 'bold', textDecoration: 'underline', fontSize: '13px' }}
+                                                                >
+                                                                    {decodeURIComponent(formData.manufacturerResponsePdf.split('/').pop()).replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/, '') || '대체_보고서.pdf'}
+                                                                </a>
+                                                            </div>
+                                                        ) : (
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                                <img 
+                                                                    src={formData.manufacturerResponsePdf.startsWith('http') ? formData.manufacturerResponsePdf : `http://localhost:8080${formData.manufacturerResponsePdf}`} 
+                                                                    alt="대체 보고서" 
+                                                                    style={{ maxWidth: '120px', maxHeight: '120px', objectFit: 'contain', borderRadius: '6px', border: '1px solid #cbd5e0', cursor: 'pointer' }}
+                                                                    onClick={() => window.open(formData.manufacturerResponsePdf.startsWith('http') ? formData.manufacturerResponsePdf : `http://localhost:8080${formData.manufacturerResponsePdf}`, '_blank')}
+                                                                />
+                                                                <span style={{ fontSize: '11px', color: '#718096' }}>* 이미지 클릭 시 원본 보기</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* 제거 버튼 */}
+                                                    {canEditMfr && (
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={removeResponsePdf} 
+                                                            className="secondary"
+                                                            style={{ 
+                                                                padding: '6px 12px', 
+                                                                background: '#fee2e2', 
+                                                                color: '#ef4444', 
+                                                                border: '1px solid #fca5a5', 
+                                                                borderRadius: '6px',
+                                                                fontSize: '12px',
+                                                                fontWeight: 'bold',
+                                                                cursor: 'pointer',
+                                                                transition: 'all 0.2s'
+                                                            }}
+                                                            onMouseEnter={(e) => { e.currentTarget.style.background = '#fca5a5'; }}
+                                                            onMouseLeave={(e) => { e.currentTarget.style.background = '#fee2e2'; }}
+                                                        >
+                                                            제거
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div style={{ marginTop: '10px' }}>
+                                                    {canEditMfr ? (
+                                                        <div style={{ 
+                                                            display: 'inline-block', 
+                                                            position: 'relative',
+                                                            background: '#fff',
+                                                            border: '1px solid #cbd5e0',
+                                                            borderRadius: '6px',
+                                                            padding: '8px 16px',
+                                                            cursor: 'pointer',
+                                                            textAlign: 'center',
+                                                            fontSize: '13px',
+                                                            fontWeight: 'bold',
+                                                            color: '#4a5568',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#cbd5e0'; e.currentTarget.style.background = '#f7fafc'; }}
+                                                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#cbd5e0'; e.currentTarget.style.background = '#fff'; }}
+                                                        >
+                                                            📁 보고서 파일 업로드 (PDF, JPG)
+                                                            <input 
+                                                                type="file" 
+                                                                accept=".pdf, image/jpeg, image/jpg" 
+                                                                onChange={handleResponsePdfUpload}
+                                                                style={{ 
+                                                                    position: 'absolute', 
+                                                                    top: 0, 
+                                                                    left: 0, 
+                                                                    width: '100%', 
+                                                                    height: '100%', 
+                                                                    opacity: 0, 
+                                                                    cursor: 'pointer' 
+                                                                }} 
+                                                            />
+                                                        </div>
+                                                    ) : (
+                                                        <span style={{ fontSize: '13px', color: '#a0aec0', fontStyle: 'italic' }}>등록된 대체 보고서가 없습니다.</span>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 )}
@@ -565,7 +971,7 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                             </button>
                         )}
                         <button type="button" className="secondary" onClick={onClose} style={{ minWidth: '80px' }}>닫기</button>
-                        {canEditQuality && (
+                        {(canEditQuality || canEditMfr) && (
                             <button 
                                 type="submit" 
                                 form="claim-form"
@@ -596,6 +1002,166 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                     onClose={() => setIsConfirmOpen(false)}
                     onConfirm={handleConfirmSave}
                 />
+            )}
+            
+            {isEmailModalOpen && (
+                <div className="modal-overlay" style={{ zIndex: 1100 }}>
+                    <div className="modal-content" onClick={e => e.stopPropagation()} style={{ width: '700px', maxWidth: '95vw', borderRadius: '16px', backdropFilter: 'blur(20px)', background: 'rgba(255, 255, 255, 0.95)', border: '1px solid rgba(255, 255, 255, 0.3)', boxShadow: '0 20px 40px rgba(0, 0, 0, 0.15)' }}>
+                        <div className="modal-header" style={{ borderBottom: '1px solid #edf2f7', padding: '20px 25px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#1a202c', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    📧 클레임 알림 메일 발송 미리보기
+                                </h3>
+                                <button onClick={() => setIsEmailModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#a0aec0' }}>
+                                    ×
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div className="modal-body" style={{ padding: '25px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                            <div className="form-group">
+                                <label style={{ fontWeight: '700', fontSize: '14px', color: '#4a5568', marginBottom: '8px', display: 'block' }}>수신자 이메일</label>
+                                <input 
+                                    type="email" 
+                                    value={emailForm.toEmail} 
+                                    onChange={(e) => setEmailForm({ ...emailForm, toEmail: e.target.value })}
+                                    placeholder="이메일 주소를 쉼표로 구분하여 여러 개 입력할 수 있습니다" 
+                                    style={{ width: '100%', height: '45px', borderRadius: '8px', border: '1px solid #cbd5e0', padding: '0 15px', fontSize: '14px' }} 
+                                />
+                                {!emailForm.toEmail && (
+                                    <p style={{ margin: '6px 0 0 0', color: '#e53e3e', fontSize: '12px', fontWeight: '600' }}>
+                                        ⚠️ 제조사에 등록된 이메일이 없습니다. 이메일 주소를 직접 입력해 주세요.
+                                    </p>
+                                )}
+                            </div>
+
+                            {Object.keys(deptEmails).length > 0 && (
+                                <div className="form-group">
+                                    <label style={{ fontWeight: '700', fontSize: '14px', color: '#4a5568', marginBottom: '8px', display: 'block' }}>
+                                        🏢 제조사 내 수신 부서/팀 필터 (체크 시 수신 주소 목록에 자동 추가)
+                                    </label>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', background: '#f7fafc', padding: '10px 15px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                        {Object.keys(deptEmails).map(dept => (
+                                            <label key={dept} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '600', color: '#4a5568', cursor: 'pointer', margin: 0 }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedDepts.includes(dept)}
+                                                    onChange={() => handleDeptToggle(dept)}
+                                                    style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                                                />
+                                                <span>{dept} ({deptEmails[dept].length}명)</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="form-group">
+                                <label style={{ fontWeight: '700', fontSize: '14px', color: '#4a5568', marginBottom: '8px', display: 'block' }}>메일 제목</label>
+                                <input 
+                                    type="text" 
+                                    value={emailForm.subject} 
+                                    onChange={(e) => setEmailForm({ ...emailForm, subject: e.target.value })}
+                                    placeholder="메일 제목을 입력하세요" 
+                                    style={{ width: '100%', height: '45px', borderRadius: '8px', border: '1px solid #cbd5e0', padding: '0 15px', fontSize: '14px', fontWeight: '600' }} 
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <div style={{ display: 'flex', gap: '4px', borderBottom: '1px solid #edf2f7', marginBottom: '12px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setEmailModalTab('preview')}
+                                        style={{
+                                            padding: '8px 16px',
+                                            background: emailModalTab === 'preview' ? '#3182ce' : 'transparent',
+                                            color: emailModalTab === 'preview' ? '#fff' : '#4a5568',
+                                            border: 'none',
+                                            borderTopLeftRadius: '6px',
+                                            borderTopRightRadius: '6px',
+                                            cursor: 'pointer',
+                                            fontSize: '13px',
+                                            fontWeight: 'bold',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        👁️ 실제 메일 미리보기 (HTML 렌더링)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setEmailModalTab('edit')}
+                                        style={{
+                                            padding: '8px 16px',
+                                            background: emailModalTab === 'edit' ? '#3182ce' : 'transparent',
+                                            color: emailModalTab === 'edit' ? '#fff' : '#4a5568',
+                                            border: 'none',
+                                            borderTopLeftRadius: '6px',
+                                            borderTopRightRadius: '6px',
+                                            cursor: 'pointer',
+                                            fontSize: '13px',
+                                            fontWeight: 'bold',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        ✍️ 메일 내용 직접 편집 (HTML 코드)
+                                    </button>
+                                </div>
+
+                                {emailModalTab === 'preview' ? (
+                                    <div style={{
+                                        border: '1px solid #cbd5e0',
+                                        borderRadius: '8px',
+                                        padding: '20px',
+                                        background: '#fff',
+                                        maxHeight: '300px',
+                                        overflowY: 'auto',
+                                        boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.06)',
+                                        fontSize: '14px',
+                                        color: '#2d3748',
+                                        lineHeight: '1.6'
+                                    }}>
+                                        <div dangerouslySetInnerHTML={{ __html: emailForm.body }} />
+                                    </div>
+                                ) : (
+                                    <textarea 
+                                        value={emailForm.body} 
+                                        onChange={(e) => setEmailForm({ ...emailForm, body: e.target.value })}
+                                        placeholder="메일 본문 내용을 입력하세요" 
+                                        style={{ width: '100%', minHeight: '220px', borderRadius: '8px', border: '1px solid #cbd5e0', padding: '15px', fontSize: '14px', fontFamily: 'monospace', lineHeight: '1.5', resize: 'vertical' }} 
+                                    />
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="modal-footer" style={{ borderTop: '1px solid #edf2f7', padding: '15px 25px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                            <button 
+                                onClick={() => setIsEmailModalOpen(false)} 
+                                className="secondary" 
+                                style={{ padding: '10px 20px', borderRadius: '8px', cursor: 'pointer' }}
+                                disabled={isSendingEmail}
+                            >
+                                취소
+                            </button>
+                            <button 
+                                onClick={handleSendEmail} 
+                                className="primary" 
+                                style={{ padding: '10px 25px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}
+                                disabled={isSendingEmail}
+                            >
+                                {isSendingEmail ? (
+                                    <>
+                                        <span style={{ width: '16px', height: '16px', border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block', animation: 'spin 1s linear infinite' }} />
+                                        <span>전송 중...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span>🚀 확인 및 발송</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

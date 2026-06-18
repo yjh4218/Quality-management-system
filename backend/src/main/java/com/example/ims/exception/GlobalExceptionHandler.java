@@ -82,6 +82,18 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * [추가] 낙관적 락 충돌 시 발생하는 예외 처리 (409 Conflict).
+     */
+    @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<Map<String, String>> handleOptimisticLockingFailureException(org.springframework.orm.ObjectOptimisticLockingFailureException ex) {
+        log.warn("Optimistic locking failure: {}", ex.getMessage());
+        Map<String, String> response = new HashMap<>();
+        response.put("error", "OptimisticLockingFailure");
+        response.put("message", "다른 사용자가 이 클레임의 정보를 변경하였습니다. 최신 정보를 다시 조회해 주십시오.");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    /**
      * 권한 부족(403) 예외 처리. (이 처리가 없으면 RuntimeException으로 매핑되어 400 에러를 반환함)
      */
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
@@ -99,17 +111,17 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, String>> handleRuntimeException(RuntimeException ex, WebRequest request) {
+        String message = ex.getMessage();
         // [Task 14] Jackson, Hibernate 등 라이브러리 내부 예외는 500으로 전달하여 디버깅 용이성 확보
         if (ex.getClass().getName().contains("jackson") || 
             ex.getClass().getName().contains("hibernate") ||
-            ex.getMessage().contains("Interceptor") ||
-            ex.getMessage().contains("ByteBuddy")) {
+            (message != null && (message.contains("Interceptor") || message.contains("ByteBuddy")))) {
             return handleGlobalException(ex, request);
         }
 
-        log.warn("Runtime exception (400): {}", ex.getMessage());
+        log.warn("Runtime exception (400): {}", message);
         Map<String, String> response = new HashMap<>();
-        response.put("message", ex.getMessage());
+        response.put("message", message != null ? message : "알 수 없는 오류가 발생했습니다.");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
