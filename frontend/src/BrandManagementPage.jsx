@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getBrands, createBrand, deleteBrand } from './api';
+import { getBrands, createBrand, updateBrand, deleteBrand } from './api';
 import { usePermissions } from './usePermissions';
 import { toast } from 'react-toastify';
 
@@ -12,6 +12,11 @@ const BrandManagementPage = ({ user, onNavigate }) => {
     const [brands, setBrands] = useState([]);
     const [newName, setNewName] = useState('');
     const [newType, setNewType] = useState('기타');
+
+    // 인라인 수정 상태 관리
+    const [editingId, setEditingId] = useState(null);
+    const [editName, setEditName] = useState('');
+    const [editType, setEditType] = useState('기타');
 
     const { canEdit: checkEdit, canDelete: checkDelete } = usePermissions(user);
     const canEdit = checkEdit('brands');
@@ -44,6 +49,33 @@ const BrandManagementPage = ({ user, onNavigate }) => {
             fetchBrands();
         } catch (error) {
             toast.error("등록 실패: 이미 존재하는 브랜드명이거나 서버 오류입니다.");
+        }
+    };
+
+    const handleStartEdit = (brand) => {
+        setEditingId(brand.id);
+        setEditName(brand.name);
+        setEditType(brand.type || '기타');
+    };
+
+    const handleCancelEdit = () => {
+        setEditingId(null);
+        setEditName('');
+        setEditType('기타');
+    };
+
+    const handleSaveEdit = async (id) => {
+        if (!editName.trim()) {
+            toast.warn("브랜드명을 입력해 주세요.");
+            return;
+        }
+        try {
+            await updateBrand(id, { name: editName, type: editType });
+            toast.success("브랜드 정보가 수정되었습니다.");
+            setEditingId(null);
+            fetchBrands();
+        } catch (error) {
+            toast.error("수정 실패: 이미 존재하는 브랜드명이거나 서버 오류입니다.");
         }
     };
 
@@ -194,7 +226,7 @@ const BrandManagementPage = ({ user, onNavigate }) => {
                                 <th style={{ padding: '12px 16px', width: '150px' }}>브랜드 유형</th>
                                 <th style={{ padding: '12px 16px', width: '150px' }}>등록일자</th>
                                 <th style={{ padding: '12px 16px', width: '150px' }}>등록 제품 수</th>
-                                <th style={{ padding: '12px 16px', width: '100px', textAlign: 'center' }}>작업</th>
+                                <th style={{ padding: '12px 16px', width: '180px', textAlign: 'center' }}>작업</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -203,20 +235,50 @@ const BrandManagementPage = ({ user, onNavigate }) => {
                                     <td style={{ padding: '16px', color: '#94a3b8', fontWeight: '800' }}>
                                         {String(index + 1).padStart(2, '0')}
                                     </td>
+                                    
+                                    {/* 브랜드명 에디터 분기 */}
                                     <td style={{ padding: '16px', fontWeight: '800', color: '#1e293b' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <span>🔖</span>
-                                            <span>{b.name}</span>
-                                        </div>
+                                        {editingId === b.id ? (
+                                            <input
+                                                type="text"
+                                                value={editName}
+                                                onChange={e => setEditName(e.target.value)}
+                                                style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #3b82f6', fontSize: '14px', width: '90%', fontWeight: '800' }}
+                                            />
+                                        ) : (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <span>🔖</span>
+                                                <span>{b.name}</span>
+                                            </div>
+                                        )}
                                     </td>
+                                    
+                                    {/* 유형 에디터 분기 */}
                                     <td style={{ padding: '16px', color: '#475569' }}>
-                                        <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '600' }}>
-                                            {b.type || '기타'}
-                                        </span>
+                                        {editingId === b.id ? (
+                                            <select
+                                                value={editType}
+                                                onChange={e => setEditType(e.target.value)}
+                                                style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #3b82f6', fontSize: '13px', backgroundColor: '#fff' }}
+                                            >
+                                                <option value="스킨케어">🧴 스킨케어</option>
+                                                <option value="메이크업">💄 메이크업</option>
+                                                <option value="바디케어">🛁 바디케어</option>
+                                                <option value="헤어케어">💇 헤어케어</option>
+                                                <option value="이너뷰티">💊 이너뷰티</option>
+                                                <option value="기타">📦 기타</option>
+                                            </select>
+                                        ) : (
+                                            <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '600' }}>
+                                                {b.type || '기타'}
+                                            </span>
+                                        )}
                                     </td>
+                                    
                                     <td style={{ padding: '16px', color: '#64748b' }}>
                                         {formatDate(b.createdAt)}
                                     </td>
+                                    
                                     <td style={{ padding: '16px' }}>
                                         <button
                                             onClick={() => handleBrandClick(b.name)}
@@ -234,29 +296,70 @@ const BrandManagementPage = ({ user, onNavigate }) => {
                                                 gap: '4px'
                                             }}
                                             title="해당 브랜드 제품 필터링 조회"
+                                            disabled={editingId === b.id}
                                         >
                                             📦 {b.productCount || 0} 개 건
                                         </button>
                                     </td>
+                                    
+                                    {/* 액션 버튼 에디터 분기 */}
                                     <td style={{ padding: '16px', textAlign: 'center' }}>
-                                        <button
-                                            onClick={() => handleDelete(b.id)}
-                                            className="secondary"
-                                            style={{
-                                                padding: '6px 16px',
-                                                fontSize: '12px',
-                                                borderRadius: '8px',
-                                                color: '#ef4444',
-                                                background: '#fef2f2',
-                                                border: '1px solid #fee2e2',
-                                                fontWeight: '800',
-                                                opacity: canDelete ? 1 : 0.5,
-                                                cursor: canDelete ? 'pointer' : 'not-allowed'
-                                            }}
-                                            disabled={!canDelete}
-                                        >
-                                            삭제
-                                        </button>
+                                        {editingId === b.id ? (
+                                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                                                <button
+                                                    onClick={() => handleSaveEdit(b.id)}
+                                                    className="primary"
+                                                    style={{ padding: '6px 12px', fontSize: '12px', borderRadius: '6px', backgroundColor: '#10b981', color: '#fff', border: 'none', fontWeight: '800', cursor: 'pointer' }}
+                                                >
+                                                    저장
+                                                </button>
+                                                <button
+                                                    onClick={handleCancelEdit}
+                                                    className="outline"
+                                                    style={{ padding: '6px 12px', fontSize: '12px', borderRadius: '6px', backgroundColor: '#fff', color: '#64748b', border: '1px solid #cbd5e1', fontWeight: '800', cursor: 'pointer' }}
+                                                >
+                                                    취소
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                                                <button
+                                                    onClick={() => handleStartEdit(b)}
+                                                    style={{
+                                                        padding: '6px 12px',
+                                                        fontSize: '12px',
+                                                        borderRadius: '8px',
+                                                        color: '#2563eb',
+                                                        background: '#eff6ff',
+                                                        border: '1px solid #dbeafe',
+                                                        fontWeight: '800',
+                                                        opacity: canEdit ? 1 : 0.5,
+                                                        cursor: canEdit ? 'pointer' : 'not-allowed'
+                                                    }}
+                                                    disabled={!canEdit}
+                                                >
+                                                    수정
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(b.id)}
+                                                    className="secondary"
+                                                    style={{
+                                                        padding: '6px 12px',
+                                                        fontSize: '12px',
+                                                        borderRadius: '8px',
+                                                        color: '#ef4444',
+                                                        background: '#fef2f2',
+                                                        border: '1px solid #fee2e2',
+                                                        fontWeight: '800',
+                                                        opacity: canDelete ? 1 : 0.5,
+                                                        cursor: canDelete ? 'pointer' : 'not-allowed'
+                                                    }}
+                                                    disabled={!canDelete}
+                                                >
+                                                    삭제
+                                                </button>
+                                            </div>
+                                        )}
                                     </td>
                                 </tr>
                             ))}

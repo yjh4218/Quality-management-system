@@ -33,6 +33,25 @@ public class BrandController {
         return ResponseEntity.ok(saved);
     }
 
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Brand> update(@PathVariable Long id, @RequestBody Brand brandDetails, @AuthenticationPrincipal UserDetails userDetails) {
+        Brand brand = brandRepository.findById(id).orElse(null);
+        if (brand == null) {
+            return ResponseEntity.notFound().build();
+        }
+        String oldJson = auditLogService.toCompactJson(brand);
+        
+        brand.setName(brandDetails.getName());
+        brand.setType(brandDetails.getType());
+        
+        Brand updated = brandRepository.save(brand);
+        auditLogService.logEntityChange("BRAND", updated.getId(), "UPDATE", userDetails.getUsername(),
+                null, userDetails.getUsername(), null, null,
+                "브랜드 정보 수정: " + updated.getName(), oldJson, updated);
+        return ResponseEntity.ok(updated);
+    }
+
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable Long id, @AuthenticationPrincipal UserDetails userDetails) {

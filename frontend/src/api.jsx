@@ -319,6 +319,7 @@ export const getCompanyDepartmentsAndEmails = (companyName) => api.get('/api/man
 // Brand APIs
 export const getBrands = () => api.get('/api/brands');
 export const createBrand = (brand) => api.post('/api/brands', brand);
+export const updateBrand = (id, brand) => api.put(`/api/brands/${id}`, brand);
 export const deleteBrand = (id) => api.delete(`/api/brands/${id}`);
 
 // Product APIs
