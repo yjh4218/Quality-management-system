@@ -42,9 +42,25 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
         if (lastNavData.current === navigationData) return;
         lastNavData.current = navigationData;
 
-        if (navigationData && navigationData.id) {
-            handleAutoOpen(navigationData.id);
-            if (onNavigated) onNavigated();
+        if (navigationData) {
+            if (navigationData.id) {
+                handleAutoOpen(navigationData.id);
+                if (onNavigated) onNavigated();
+            } else if (navigationData.brandName) {
+                setSearchFields(prev => ({ ...prev, brand: navigationData.brandName }));
+                // Trigger fetch with new search fields
+                setLoading(true);
+                api.searchProducts({ brand: navigationData.brandName, page: 0, size: defaultPageSize })
+                    .then(res => {
+                        setRowData(res.data.content || []);
+                        setTotalPages(res.data.totalPages || 1);
+                        setPage(0);
+                    })
+                    .catch(() => alert("제품 검색에 실패했습니다."))
+                    .finally(() => setLoading(false));
+
+                if (onNavigated) onNavigated();
+            }
         }
     }, [navigationData]);
 

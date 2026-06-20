@@ -1161,7 +1161,7 @@ const App = () => {
                                 {canAccess('announcements') && tab.page === 'announcements' && <AnnouncementManagementPage user={user} onNavigate={handleNavigate} />}
                                 {canAccess('notifications') && tab.page === 'notifications' && <NotificationListPage user={user} onNavigate={handleNavigate} />}
 
-                                {tab.page === 'brands' && <BrandManagementPage user={user} />}
+                                {tab.page === 'brands' && <BrandManagementPage user={user} onNavigate={handleNavigate} />}
                                 {tab.page === 'manufacturers' && <ManufacturerManagementPage user={user} />}
                                 {tab.page === 'salesChannels' && <SalesChannelManagement user={user} />}
                                 {tab.page === 'manufacturerCategories' && <ManufacturerCategoryPage user={user} />}
