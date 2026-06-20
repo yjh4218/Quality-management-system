@@ -471,6 +471,13 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
         setLoading(true);
         try {
             if (claim) {
+                // [버전 동기화] DB에서 최신 버전을 가져와서 낙관적 락 충돌 방지
+                try {
+                    const latestRes = await api.getClaimById(claim.id);
+                    sanitizedData.version = latestRes.data.version || 0;
+                } catch (versionErr) {
+                    console.warn('최신 버전 조회 실패, 기존 버전 사용:', versionErr);
+                }
                 await updateClaim(claim.id, sanitizedData);
                 alert("수정되었습니다.");
             } else {

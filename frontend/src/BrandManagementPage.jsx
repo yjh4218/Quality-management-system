@@ -136,12 +136,11 @@ const BrandManagementPage = ({ user, onNavigate }) => {
                                 style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '13px', backgroundColor: '#fff' }}
                                 disabled={!canEdit}
                             >
-                                <option value="스킨케어">🧴 스킨케어</option>
-                                <option value="메이크업">💄 메이크업</option>
-                                <option value="바디케어">🛁 바디케어</option>
-                                <option value="헤어케어">💇 헤어케어</option>
-                                <option value="이너뷰티">💊 이너뷰티</option>
-                                <option value="기타">📦 기타</option>
+                                <option value="화장품(스킨케어)">🧴 화장품(스킨케어)</option>
+                                <option value="화장품(헤어케어)">💇 화장품(헤어케어)</option>
+                                <option value="공산품">📦 공산품</option>
+                                <option value="반려동물(사료)">🐾 반려동물(사료)</option>
+                                <option value="기타">🌐 기타</option>
                             </select>
                             <input
                                 type="text"
@@ -261,12 +260,11 @@ const BrandManagementPage = ({ user, onNavigate }) => {
                                                 onChange={e => setEditType(e.target.value)}
                                                 style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #3b82f6', fontSize: '13px', backgroundColor: '#fff' }}
                                             >
-                                                <option value="스킨케어">🧴 스킨케어</option>
-                                                <option value="메이크업">💄 메이크업</option>
-                                                <option value="바디케어">🛁 바디케어</option>
-                                                <option value="헤어케어">💇 헤어케어</option>
-                                                <option value="이너뷰티">💊 이너뷰티</option>
-                                                <option value="기타">📦 기타</option>
+                                                <option value="화장품(스킨케어)">🧴 화장품(스킨케어)</option>
+                                                <option value="화장품(헤어케어)">💇 화장품(헤어케어)</option>
+                                                <option value="공산품">📦 공산품</option>
+                                                <option value="반려동물(사료)">🐾 반려동물(사료)</option>
+                                                <option value="기타">🌐 기타</option>
                                             </select>
                                         ) : (
                                             <span style={{ padding: '4px 8px', borderRadius: '6px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', fontSize: '12px', fontWeight: '600' }}>
