@@ -89,24 +89,24 @@ public class SystemInitializationService {
             // products의 brand_id로 brands 테이블의 name을 조회하여, p.brand_name 등으로 변경하거나 null 처리를 복구
             // products 엔티티에 직접적인 String manufacturer (Deprecated) 등이 있고 연관관계 엔티티(brand_id, manufacturer_id)가 있으므로 동기화
             jdbcTemplate.execute(
-                "UPDATE products p " +
-                "SET p.manufacturer = (SELECT m.name FROM manufacturers m WHERE m.id = p.manufacturer_id) " +
-                "WHERE p.manufacturer_id IS NOT NULL"
+                "UPDATE products " +
+                "SET manufacturer = (SELECT m.name FROM manufacturers m WHERE m.id = products.manufacturer_id) " +
+                "WHERE manufacturer_id IS NOT NULL"
             );
 
             // 2. 클레임 정보의 품목코드 기준 제품명, 제조사 정보 동기화
             jdbcTemplate.execute(
-                "UPDATE claims c " +
-                "SET c.product_name = (SELECT p.product_name FROM products p WHERE p.item_code = c.item_code AND (p.is_deleted = false OR p.is_deleted IS NULL) LIMIT 1), " +
-                "    c.manufacturer = (SELECT m.name FROM manufacturers m JOIN products p ON p.manufacturer_id = m.id WHERE p.item_code = c.item_code AND (p.is_deleted = false OR p.is_deleted IS NULL) LIMIT 1) " +
-                "WHERE EXISTS (SELECT 1 FROM products p WHERE p.item_code = c.item_code AND (p.is_deleted = false OR p.is_deleted IS NULL))"
+                "UPDATE claims " +
+                "SET product_name = (SELECT p.product_name FROM products p WHERE p.item_code = claims.item_code AND (p.is_deleted = false OR p.is_deleted IS NULL) LIMIT 1), " +
+                "    manufacturer = (SELECT m.name FROM manufacturers m JOIN products p ON p.manufacturer_id = m.id WHERE p.item_code = claims.item_code AND (p.is_deleted = false OR p.is_deleted IS NULL) LIMIT 1) " +
+                "WHERE EXISTS (SELECT 1 FROM products p WHERE p.item_code = claims.item_code AND (p.is_deleted = false OR p.is_deleted IS NULL))"
             );
 
             // 3. 클레임 품목코드 중 등록되어 있지 않은(products 테이블에 매핑되지 않는) 클레임은 논리 또는 물리 삭제 처리
             // soft delete (is_deleted = true) 규칙 적용
             int deletedCount = jdbcTemplate.update(
-                "UPDATE claims c SET c.is_deleted = true, c.deleted_at = CURRENT_TIMESTAMP " +
-                "WHERE NOT EXISTS (SELECT 1 FROM products p WHERE p.item_code = c.item_code AND (p.is_deleted = false OR p.is_deleted IS NULL))"
+                "UPDATE claims SET is_deleted = true, deleted_at = CURRENT_TIMESTAMP " +
+                "WHERE NOT EXISTS (SELECT 1 FROM products p WHERE p.item_code = claims.item_code AND (p.is_deleted = false OR p.is_deleted IS NULL))"
             );
             log.info(">>>> [SYSTEM INIT] Claim alignment completed. Soft-deleted {} claims without valid product code.", deletedCount);
         } catch (Exception e) {
