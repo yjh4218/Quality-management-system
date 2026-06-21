@@ -3,11 +3,14 @@
 FROM maven:3.8.5-openjdk-17 AS build
 WORKDIR /app
 
-# 백엔드 프로젝트 파일 복사
+# 백엔드 프로젝트 pom.xml 복사 및 의존성 캐싱
 COPY backend/pom.xml ./backend/
-COPY backend/src ./backend/src
+WORKDIR /app/backend
+RUN mvn dependency:go-offline -B
 
-# 의존성 다운로드 및 빌드 실행 (테스트는 시간 단축을 위해 스킵)
+# 백엔드 소스 파일 복사 및 컴파일
+WORKDIR /app
+COPY backend/src ./backend/src
 WORKDIR /app/backend
 RUN mvn clean package -DskipTests
 
