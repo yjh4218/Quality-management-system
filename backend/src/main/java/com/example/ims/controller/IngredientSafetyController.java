@@ -34,11 +34,33 @@ public class IngredientSafetyController {
     }
 
     @GetMapping("/list")
-    public ResponseEntity<ApiResponse<List<com.example.ims.entity.RegulatoryIngredient>>> listAllIngredients() {
+    public ResponseEntity<ApiResponse<org.springframework.data.domain.Page<com.example.ims.entity.RegulatoryIngredient>>> listAllIngredients(
+            @RequestParam(value = "search", required = false) String search,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "50") int size) {
         try {
-            return ResponseEntity.ok(ApiResponse.success(ingredientService.getAllRegulatoryIngredients()));
+            org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+            org.springframework.data.domain.Page<com.example.ims.entity.RegulatoryIngredient> result = 
+                    ingredientService.getRegulatoryIngredientsPaged(search, pageable);
+            return ResponseEntity.ok(ApiResponse.success(result));
         } catch (Exception e) {
-            log.error("Failed to list ingredients", e);
+            log.error("Failed to list paged ingredients", e);
+            throw e;
+        }
+    }
+
+    @GetMapping("/history")
+    public ResponseEntity<ApiResponse<org.springframework.data.domain.Page<com.example.ims.entity.IngredientRegulationHistory>>> getRegulationHistory(
+            @RequestParam(value = "search", required = false) String search,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "50") int size) {
+        try {
+            org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+            org.springframework.data.domain.Page<com.example.ims.entity.IngredientRegulationHistory> result = 
+                    ingredientService.getRegulationHistoryPaged(search, pageable);
+            return ResponseEntity.ok(ApiResponse.success(result));
+        } catch (Exception e) {
+            log.error("Failed to list paged ingredient history", e);
             throw e;
         }
     }

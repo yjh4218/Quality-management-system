@@ -119,10 +119,11 @@ api.interceptors.response.use(
         }
 
         const isLoginRequest = error.config && error.config.url && (error.config.url.endsWith('/auth/login') || error.config.url.includes('/auth/login'));
+        const isBugReportRequest = error.config && error.config.url && (error.config.url.endsWith('/api/bug-reports') || error.config.url.includes('/api/bug-reports'));
         
         if (error.response && error.response.status === 401 && !isLoginRequest) {
             window.dispatchEvent(new Event('auth-unauthorized'));
-        } else if (!isLoginRequest && !(error.config && error.config.skipToast)) {
+        } else if (!isLoginRequest && !isBugReportRequest && !(error.config && error.config.skipToast)) {
             let errorMsg = "서버와 통신 중 문제가 발생했습니다.";
             if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
                 errorMsg = "요청 처리 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.";
@@ -133,81 +134,69 @@ api.interceptors.response.use(
             } else if (error.message) {
                 errorMsg = error.message;
             }
-            
-            toast.error(
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontSize: '20px' }}>⚠️</span>
-                        <span style={{ fontWeight: 600 }}>{errorMsg}</span>
-                    </div>
-                    <div style={{ fontSize: '13px', color: '#666' }}>
-                        증상이 지속되면 관리자에게 문의하세요.
-                    </div>
-                    <button 
-                        onClick={async (e) => {
-                            e.stopPropagation();
-                            const btn = e.currentTarget;
-                            btn.disabled = true;
-                            btn.innerText = "⏳ 전송 중...";
-                            
-                            try {
-                                // [수정] responseType: 'blob'인 경우 에러 데이터가 Blob 객체로 오므로 텍스트로 변환 필요
-                                let serverErrorData = error.response?.data;
-                                if (serverErrorData instanceof Blob) {
-                                    try {
-                                        const blobText = await serverErrorData.text();
-                                        serverErrorData = JSON.parse(blobText);
-                                    } catch (parseError) {
-                                        serverErrorData = "Blob data (not JSON)";
-                                    }
-                                }
+            const isSystemBug = !error.response || (error.response.status >= 500) || error.code === 'ECONNABORTED';
 
-                                await axios.post(`${getBaseURL()}/api/bug-reports`, {
-                                    description: `[자동 전송] 에러 발생: ${errorMsg}`,
-                                    steps: [
-                                        error.stack || 'API 요청 중 에러 발생',
-                                        '',
-                                        `[요청 정보]`,
-                                        `Method: ${error.config?.method?.toUpperCase() || 'N/A'}`,
-                                        `URL: ${error.config?.url || 'N/A'}`,
-                                        `Status: ${error.response?.status || 'N/A'} ${error.response?.statusText || ''}`,
-                                        '',
-                                        `[요청 데이터]`,
-                                        error.config?.data ? (typeof error.config.data === 'string' ? error.config.data.substring(0, 2000) : 'FormData/Binary') : 'N/A'
-                                    ].join('\n'),
-                                    screenName: window.__QMS_ACTIVE_PAGE__ || window.location.pathname,
-                                    url: window.location.href,
-                                    severity: 'HIGH',
-                                    serverError: serverErrorData ? JSON.stringify(serverErrorData, null, 2) : 'N/A'
-                                }, { withCredentials: true });
-                                
-                                toast.success("✅ 버그 리포트가 관리자에게 즉시 전달되었습니다.");
-                                btn.innerText = "✅ 전달 완료";
-                            } catch (err) {
-                                toast.error("❌ 리포트 전송에 실패했습니다.");
-                                btn.disabled = false;
-                                btn.innerText = "🐞 다시 시도";
+            if (isSystemBug) {
+                // [자동 전송 로직] 시스템 치명적 에러(500+, 네트워크 장애, 타임아웃) 발생 시 즉시 자동으로 버그 리포트를 등록합니다.
+                (async () => {
+                    try {
+                        let serverErrorData = error.response?.data;
+                        if (serverErrorData instanceof Blob) {
+                            try {
+                                const blobText = await serverErrorData.text();
+                                serverErrorData = JSON.parse(blobText);
+                            } catch (parseError) {
+                                serverErrorData = "Blob data (not JSON)";
                             }
-                        }}
-                        style={{
-                            backgroundColor: '#e74c3c',
-                            color: 'white',
-                            border: 'none',
-                            padding: '6px 12px',
-                            borderRadius: '6px',
-                            fontSize: '12px',
-                            fontWeight: 'bold',
-                            cursor: 'pointer',
-                            alignSelf: 'flex-start',
-                            marginTop: '4px',
-                            boxShadow: '0 2px 4px rgba(231, 76, 60, 0.2)'
-                        }}
-                    >
-                        🐞 버그 리포트 즉시 전달하기
-                    </button>
-                </div>,
-                { autoClose: 10000 } // 사용자가 클릭할 시간을 충분히 확보
-            );
+                        }
+
+                        await axios.post(`${getBaseURL()}/api/bug-reports`, {
+                            description: `[시스템 자동 감지] API 에러 발생: ${errorMsg}`,
+                            steps: [
+                                error.stack || 'API 요청 중 에러 발생',
+                                '',
+                                `[요청 정보]`,
+                                `Method: ${error.config?.method?.toUpperCase() || 'N/A'}`,
+                                `URL: ${error.config?.url || 'N/A'}`,
+                                `Status: ${error.response?.status || 'N/A'} ${error.response?.statusText || ''}`,
+                                '',
+                                `[요청 데이터]`,
+                                error.config?.data ? (typeof error.config.data === 'string' ? error.config.data.substring(0, 2000) : 'FormData/Binary') : 'N/A'
+                            ].join('\n'),
+                            screenName: window.__QMS_ACTIVE_PAGE__ || window.location.pathname,
+                            url: window.location.href,
+                            severity: 'CRITICAL',
+                            serverError: serverErrorData ? JSON.stringify(serverErrorData, null, 2) : 'N/A'
+                        }, { withCredentials: true });
+                        
+                        toast.error(
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{ fontSize: '20px' }}>🚨</span>
+                                    <span style={{ fontWeight: 600 }}>{errorMsg}</span>
+                                </div>
+                                <div style={{ fontSize: '13px', color: '#666' }}>
+                                    시스템 치명적 오류가 자동 감지되어 버그 리포트가 관리자에게 즉시 자동 전송되었습니다.
+                                </div>
+                            </div>,
+                            { autoClose: 5000 }
+                        );
+                    } catch (reportErr) {
+                        console.error("Failed to automatically report bug:", reportErr);
+                    }
+                })();
+            } else {
+                // 4xx 비즈니스 규칙 위반 또는 단순 유효성 검증 실패인 경우 toast 경고만 보여주고 버그 리포트는 생략합니다.
+                toast.error(
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '20px' }}>⚠️</span>
+                            <span style={{ fontWeight: 600 }}>{errorMsg}</span>
+                        </div>
+                    </div>,
+                    { autoClose: 4000 }
+                );
+            }
         }
         return Promise.reject(error);
     }
@@ -378,6 +367,9 @@ export const downloadIngredientTemplate = () => api.get('/api/products/ingredien
 
 // Packaging Spec APIs
 export const getPackagingSpecs = (productId) => api.get(`/api/packaging-specs/product/${productId}`);
+export const getFullPackagingSpec = (productId) => api.get(`/api/packaging-specs/full/product/${productId}`);
+export const saveFullPackagingSpec = (dto) => api.post('/api/packaging-specs/save-full', dto);
+export const getProductInfoByItemCode = (itemCode) => api.get(`/api/packaging-specs/product-info/${itemCode}`);
 export const createPackagingSpec = (productId) => api.post(`/api/packaging-specs/product/${productId}`);
 export const savePackagingSpec = (spec) => api.post('/api/packaging-specs', spec); // This might be used for updates
 export const copyMasterPackagingSpec = (productId, masterProductId) => 
@@ -411,6 +403,7 @@ export const getMasterTemplates = () => api.get('/api/admin/master-data/template
 export const saveMasterTemplate = (template) => api.post('/api/admin/master-data/templates', template);
 export const getMasterRules = () => api.get('/api/admin/master-data/rules');
 export const saveMasterRule = (rule) => api.post('/api/admin/master-data/rules', rule);
+export const deleteMasterRule = (id) => api.delete(`/api/admin/master-data/rules/${id}`);
 export const getMasterMaterials = () => api.get('/api/admin/master-data/materials');
 export const getMasterMaterialsSearch = (params = {}) => {
     const queryParams = new URLSearchParams();

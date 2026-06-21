@@ -54,13 +54,13 @@ const PackagingRulePage = ({ user }) => {
         { 
             headerName: "설정된 규칙 수", 
             width: 140, 
-            valueGetter: (params) => rules.filter(r => r.channel?.id === params.data.id).length + "개"
+            valueGetter: (params) => rules.filter(r => r.channel && String(r.channel.id) === String(params.data.id)).length + "개"
         },
         { 
             headerName: "스티커 등록", 
             width: 120, 
             cellRenderer: (params) => (
-                stickers.some(s => s.channel?.id === params.data.id) 
+                stickers.some(s => s.channel && String(s.channel.id) === String(params.data.id)) 
                 ? <span className="badge success">등록됨</span> 
                 : <span className="badge warning">미등록</span>
             )

@@ -107,9 +107,7 @@ public class SecurityConfig {
                 "http://127.0.0.1:5173"
             ));
             // 개발/스테이징 보조 패턴 허용
-            configuration.addAllowedOriginPattern("https://*.hf.space");
-            configuration.addAllowedOriginPattern("https://*.onrender.com");
-            configuration.addAllowedOriginPattern("https://qualitymange.pages.dev");
+            configuration.addAllowedOrigin("https://qualitymange.pages.dev");
         }
 
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));

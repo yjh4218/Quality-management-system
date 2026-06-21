@@ -88,13 +88,48 @@ const ProductDrawer = ({ product, onClose, user }) => {
     const [testReports, setTestReports] = useState([]);
     const [testReportPreview, setTestReportPreview] = useState({ open: false, url: '', type: '', name: '' });
     const [packagingSpecs, setPackagingSpecs] = useState([]);
+    const [specRevisions, setSpecRevisions] = useState([]);
+    const [specComponents, setSpecComponents] = useState([]);
     const [currentSpec, setCurrentSpec] = useState({
+        barcode: '',
+        labNumber: '',
+        plannerName: '',
+        designerName: '',
+        qcName: '',
+        managementType: '러닝',
+        barcodeManager: '',
+        approvalChainJson: '[]',
+        markingMethod: '',
+        markingStandard: '',
+        outboxLayoutImage: '',
         packagingMethodText: '',
-        packagingMethodImage: '',
-        inboxSpec: '',
-        zipperBagSpec: '',
-        outboxSpec: '',
-        palletStackingSpec: '',
+        markingLocationImage: '',
+        inboxType: '',
+        inboxQty: '',
+        inboxSize: '',
+        inboxTapeBanding: 'N',
+        inboxInterlayerSheet: 'N',
+        inboxMaterial: '',
+        inboxRemarks: '',
+        outboxType: '',
+        outboxQty: '',
+        outboxSize: '',
+        outboxTapeBanding: 'N',
+        outboxInterlayerSheet: 'N',
+        outboxMaterial: '',
+        outboxRemarks: '',
+        palletTypeStr: '',
+        palletStackingMethod: '',
+        palletSize: '',
+        palletHeightLimit: '',
+        palletPrecautions: '',
+        inboxLayoutImage: '',
+        outboxLayoutImageFile: '',
+        palletLayoutImage: '',
+        oneOutboxWeight: '',
+        onePalletWeight: '',
+        onePalletHeight: '',
+        remarks: '',
         palletType: '',
         lotAndExpiryFormat: '',
         signatureJson: '[]',
@@ -106,6 +141,69 @@ const ProductDrawer = ({ product, onClose, user }) => {
     const [masterTemplates, setMasterTemplates] = useState([]);
     const [masterRules, setMasterRules] = useState([]);
 
+    const [specSubTab, setSpecSubTab] = useState('sheet1');
+
+    const handleSaveFullSpec = async () => {
+        try {
+            const payload = {
+                spec: {
+                    ...currentSpec,
+                    product: { id: product.id }
+                },
+                revisions: specRevisions,
+                components: specComponents
+            };
+            const res = await api.saveFullPackagingSpec(payload);
+            if (res.data) {
+                toast.success("포장사양서가 성공적으로 저장되었습니다.");
+                fetchPackagingSpecs(product.id);
+            }
+        } catch (error) {
+            toast.error("포장사양서 저장에 실패했습니다.");
+            console.error(error);
+        }
+    };
+
+    const handleAddRevision = () => {
+        const nextNo = specRevisions.length + 1;
+        setSpecRevisions([...specRevisions, {
+            revisionNo: nextNo,
+            content: '',
+            revisionDate: new Date().toISOString().split('T')[0],
+            revisionAuthor: user?.username || 'system'
+        }]);
+    };
+
+    const handleRemoveRevision = (idx) => {
+        setSpecRevisions(specRevisions.filter((_, i) => i !== idx));
+    };
+
+    const handleRevisionChange = (idx, field, val) => {
+        const updated = [...specRevisions];
+        updated[idx][field] = val;
+        setSpecRevisions(updated);
+    };
+
+    const handleAddSpecComponent = () => {
+        setSpecComponents([...specComponents, {
+            componentName: '',
+            specDetails: '',
+            sizeDimension: '',
+            quantity: 1,
+            supplier: '',
+            remarks: ''
+        }]);
+    };
+
+    const handleRemoveSpecComponent = (idx) => {
+        setSpecComponents(specComponents.filter((_, i) => i !== idx));
+    };
+
+    const handleSpecComponentChange = (idx, field, val) => {
+        const updated = [...specComponents];
+        updated[idx][field] = val;
+        setSpecComponents(updated);
+    };
     const { canEdit: canEditProduct, canDelete: canDeleteProduct, isAdmin } = usePermissions(user);
     const canEdit = canEditProduct('products');
     const isDimensionsConfirmed = formData.dimensions?.status === '확정';
@@ -246,6 +344,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                         productIngredients: fullProduct.productIngredients || [],
                         photoAuditDisclosed: fullProduct.photoAuditDisclosed || false
                     }));
+                    fetchPackagingSpecs(product.id, fullProduct);
                 } catch (error) {
                     // Fallback to passed product prop
                     setFormData(enrichWithCalculations({
@@ -285,11 +384,11 @@ const ProductDrawer = ({ product, onClose, user }) => {
                         productIngredients: product.productIngredients || [],
                         photoAuditDisclosed: product.photoAuditDisclosed || false
                     }));
+                    fetchPackagingSpecs(product.id, product);
                 }
             };
             fetchFullProduct();
             fetchHistory(product.id);
-            fetchPackagingSpecs(product.id);
             fetchTestReports(product.id);
         } else {
             resetForm();
@@ -363,13 +462,90 @@ const ProductDrawer = ({ product, onClose, user }) => {
         }
     };
 
-    const fetchPackagingSpecs = async (id) => {
+    const fetchPackagingSpecs = async (id, loadedProduct = null) => {
         try {
             const res = await api.getPackagingSpecs(id);
-            setPackagingSpecs(res.data);
+            setPackagingSpecs(res.data || []);
+            
+            // 통합 포장사양서 로드
+            const fullRes = await api.getFullPackagingSpec(id);
+            if (fullRes && fullRes.data) {
+                const { spec, revisions, components } = fullRes.data;
+                if (spec) {
+                    // Auto-fill empty spec fields using product details
+                    const prod = loadedProduct || formData;
+                    if (prod) {
+                        const updatedSpec = { ...spec };
+                        
+                        if (!updatedSpec.inboxQty && prod.inboxInfo?.inboxQuantity) {
+                            updatedSpec.inboxQty = prod.inboxInfo.inboxQuantity;
+                        }
+                        if (!updatedSpec.inboxSize && prod.inboxInfo?.inboxLength && prod.inboxInfo?.inboxWidth && prod.inboxInfo?.inboxHeight) {
+                            updatedSpec.inboxSize = `${prod.inboxInfo.inboxLength}x${prod.inboxInfo.inboxWidth}x${prod.inboxInfo.inboxHeight}`;
+                        }
+                        if (!updatedSpec.outboxQty && prod.outboxInfo?.outboxQuantity) {
+                            updatedSpec.outboxQty = prod.outboxInfo.outboxQuantity;
+                        }
+                        if (!updatedSpec.outboxSize && prod.outboxInfo?.outboxLength && prod.outboxInfo?.outboxWidth && prod.outboxInfo?.outboxHeight) {
+                            updatedSpec.outboxSize = `${prod.outboxInfo.outboxLength}x${prod.outboxInfo.outboxWidth}x${prod.outboxInfo.outboxHeight}`;
+                        }
+                        if (!updatedSpec.oneOutboxWeight && prod.outboxInfo?.outboxWeight) {
+                            updatedSpec.oneOutboxWeight = prod.outboxInfo.outboxWeight;
+                        }
+                        if (!updatedSpec.palletSize && prod.palletInfo?.palletLength && prod.palletInfo?.palletWidth) {
+                            updatedSpec.palletSize = `${prod.palletInfo.palletLength}x${prod.palletInfo.palletWidth}`;
+                        }
+                        if (!updatedSpec.onePalletHeight && prod.palletInfo?.palletHeight) {
+                            updatedSpec.onePalletHeight = prod.palletInfo.palletHeight;
+                        }
+                        if (!updatedSpec.palletHeightLimit && prod.palletInfo?.palletHeight) {
+                            updatedSpec.palletHeightLimit = prod.palletInfo.palletHeight;
+                        }
+                        if (!updatedSpec.onePalletWeight && prod.palletInfo?.palletQuantity && prod.outboxInfo?.outboxWeight) {
+                            updatedSpec.onePalletWeight = (parseFloat(prod.outboxInfo.outboxWeight) * parseInt(prod.palletInfo.palletQuantity)).toFixed(1);
+                        }
+                        setCurrentSpec(updatedSpec);
+                    } else {
+                        setCurrentSpec(spec);
+                    }
+                }
+                setSpecRevisions(revisions || []);
+                setSpecComponents(components || []);
+            }
         } catch (error) {
-            // Specs fail
+            console.error("포장사양서 상세 로드 실패: ", error);
         }
+    };
+
+    const checkChannelRules = () => {
+        const warnings = [];
+        const selectedCh = formData.channels && formData.channels[0];
+        if (!selectedCh) return warnings;
+
+        const rules = (masterRules || []).filter(r => r.channel && String(r.channel.id) === String(selectedCh.id));
+        
+        rules.forEach(rule => {
+            const val = rule.ruleValue;
+            const msg = rule.warningMessage || `${rule.ruleType} 규칙 위반`;
+            
+            if (rule.ruleType === 'MAX_BOX_HEIGHT' || rule.ruleType === 'LOAD_HEIGHT') {
+                const limit = parseFloat(val);
+                const height = parseFloat(currentSpec.onePalletHeight || 0);
+                if (!isNaN(limit) && height > limit) {
+                    warnings.push(`⚠️ [${selectedCh.name} 규칙 위반] ${msg} (제한: ${limit}mm, 현재: ${height}mm)`);
+                }
+            } else if (rule.ruleType === 'STICKER_REQUIRED') {
+                if (!currentSpec.applyChannelSticker) {
+                    warnings.push(`⚠️ [${selectedCh.name} 규칙 위반] ${msg} (스티커 부착 필수이나 미설정 상태)`);
+                }
+            } else if (rule.ruleType === 'PALLET_SPEC') {
+                if (val && currentSpec.palletTypeStr && !currentSpec.palletTypeStr.toLowerCase().includes(val.toLowerCase())) {
+                    warnings.push(`⚠️ [${selectedCh.name} 규칙 위반] ${msg} (지정 규격: ${val}, 현재: ${currentSpec.palletTypeStr})`);
+                }
+            }
+        });
+        
+        return warnings;
     };
 
     const fetchTestReports = async (id) => {
@@ -958,7 +1134,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
                         {/* Channel Selection Checkboxes */}
                         <div style={{ marginBottom: '20px' }}>
-                            <label style={{ fontSize: '13px', fontWeight: '600', color: '#555', marginBottom: '8px', display: 'block' }}>📢 유통 채널 (복수 선택 가능)</label>
+                            <label style={{ fontSize: '13px', fontWeight: '600', color: '#555', marginBottom: '8px', display: 'block' }}>📢 유통 채널 (단일 선택)</label>
                             <div style={{
                                 display: 'grid',
                                 gridTemplateColumns: 'repeat(4, 1fr)',
@@ -971,13 +1147,13 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                 {salesChannels.map(channel => (
                                     <label key={channel.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
                                         <input
-                                            type="checkbox"
+                                            type="radio"
+                                            name="productChannel"
                                             checked={(formData.channels || []).some(c => c.id === channel.id)}
                                             onChange={(e) => {
-                                                const newChannels = e.target.checked
-                                                    ? [...(formData.channels || []), channel]
-                                                    : (formData.channels || []).filter(c => c.id !== channel.id);
-                                                setFormData({ ...formData, channels: newChannels });
+                                                if (e.target.checked) {
+                                                    setFormData({ ...formData, channels: [channel] });
+                                                }
                                             }}
                                             disabled={!canEdit}
                                         />
@@ -1647,313 +1823,493 @@ const ProductDrawer = ({ product, onClose, user }) => {
                         )}
 
                         {activeTab === 'packaging' && (
-                    <div className="tab-pane">
-                        {/* 📢 채널별 준수 규칙 배너 (Card 형태) */}
-                        <div className="card" style={{ padding: '20px', marginBottom: '25px', background: '#fffaf0', border: '1px solid #fbd38d', borderRadius: '12px' }}>
-                            <h3 style={{ margin: '0 0 15px 0', fontSize: '16px', color: '#9c4221', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                📢 유통 채널별 규격 준수 안내
-                            </h3>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                {(formData.channels || []).length === 0 ? (
-                                    <p style={{ margin: 0, fontSize: '13px', color: '#666' }}>등록된 유통 채널이 없습니다. [상세 정보] 탭에서 채널을 선택해 주세요.</p>
-                                ) : (formData.channels || []).map(channel => {
-                                    const matchedRules = (masterRules || []).filter(r => r.channel?.id === channel.id);
-                                    if (matchedRules.length === 0) return null;
-                                    return (
-                                        <div key={channel.id} style={{ borderLeft: '4px solid #fbd38d', paddingLeft: '12px', marginBottom: '5px' }}>
-                                            <div style={{ fontWeight: 'bold', fontSize: '12px', color: '#7b341e' }}>{channel.name}</div>
-                                            {matchedRules.map((rule, rIdx) => (
-                                                <div key={rIdx} style={{ fontSize: '12px' }}>• {rule.warningMessage || '규칙 준수 필요'}</div>
-                                            ))}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
-                        {/* 📂 포장사양서 마스터 및 요약 카드 */}
-                        <div className="card" style={{ padding: '25px', marginBottom: '25px', border: '1px solid #edf2f7', borderRadius: '12px', background: '#e7f5ff' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                                <h3 style={{ margin: 0, fontSize: '17px', color: '#003366', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <span style={{ color: '#3182ce' }}>📂</span> 포장사양서 제작 및 관리
-                                </h3>
-                                {permissions.canManageDisclosure && (
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', background: formData.photoAuditDisclosed ? '#eef2ff' : '#f8fafc', padding: '8px 12px', borderRadius: '8px', border: `1px solid ${formData.photoAuditDisclosed ? '#c7d2fe' : '#e2e8f0'}`, transition: 'all 0.2s' }}>
-                                        <input type="checkbox" name="photoAuditDisclosed" checked={formData.photoAuditDisclosed} onChange={handleChange} disabled={!canEdit} style={{ width: '18px', height: '18px' }} />
-                                        <span style={{ fontSize: '13px', fontWeight: '800', color: formData.photoAuditDisclosed ? '#4338ca' : '#718096' }}>📸 사진감리 제조사 공개</span>
-                                    </label>
-                                )}
-                                <div style={{ display: 'flex', gap: '8px' }}>
-                                    {canEdit && (
-                                        <button type="button" onClick={handleCopyMasterSpec} className="secondary" style={{ padding: '4px 12px', fontSize: '12px' }}>🛡️ 마스터 사양 복제</button>
-                                    )}
-                                    <button type="button" onClick={handleDownloadSpecExcel} className="secondary" style={{ padding: '4px 12px', fontSize: '12px' }}>📥 Excel</button>
+                            <div className="tab-pane" style={{ animation: 'fadeIn 0.3s ease' }}>
+                                {/* 탭 메뉴 헤더 */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '2px solid #edf2f7', paddingBottom: '10px' }}>
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        <button type="button" onClick={() => setSpecSubTab('sheet1')} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: specSubTab === 'sheet1' ? '#003366' : 'transparent', color: specSubTab === 'sheet1' ? '#fff' : '#4a5568', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' }}>
+                                            📄 Sheet 1: 사양서 양식
+                                        </button>
+                                        <button type="button" onClick={() => setSpecSubTab('sheet2')} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: specSubTab === 'sheet2' ? '#003366' : 'transparent', color: specSubTab === 'sheet2' ? '#fff' : '#4a5568', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' }}>
+                                            📦 Sheet 2: 현품표 아웃박스
+                                        </button>
+                                        <button type="button" onClick={() => setSpecSubTab('sheet3')} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: specSubTab === 'sheet3' ? '#003366' : 'transparent', color: specSubTab === 'sheet3' ? '#fff' : '#4a5568', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' }}>
+                                            🧱 Sheet 3: 현품표 팔레트
+                                        </button>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        {canEdit && (
+                                            <button type="button" onClick={handleSaveFullSpec} className="primary" style={{ background: '#10b981', borderColor: '#10b981', color: '#fff', fontSize: '12px', padding: '6px 14px' }}>
+                                                💾 사양서 저장
+                                            </button>
+                                        )}
+                                        {product && (
+                                            <>
+                                                <button type="button" onClick={handleDownloadSpecExcel} className="button secondary" style={{ fontSize: '11px', padding: '6px 12px' }}>
+                                                    📥 Excel 다운
+                                                </button>
+                                                <button type="button" onClick={handleDownloadSpecPdf} className="button secondary" style={{ fontSize: '11px', padding: '6px 12px', color: '#d32f2f', borderColor: '#d32f2f' }}>
+                                                    📄 PDF 다운
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
 
-                            {/* Feature 9: Read-only Header Information */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', padding: '15px', background: '#fff', borderRadius: '8px', border: '1px solid #d1e9ff', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)' }}>
-                                <div><label style={{ fontSize: '11px', color: '#666', marginBottom: '4px', display: 'block' }}>품목코드</label><div style={{ fontWeight: 'bold', fontSize: '13px' }}>{formData.itemCode || '-'}</div></div>
-                                <div><label style={{ fontSize: '11px', color: '#666', marginBottom: '4px', display: 'block' }}>제품명</label><div style={{ fontWeight: 'bold', fontSize: '13px' }}>{formData.productName || '-'}</div></div>
-                                <div><label style={{ fontSize: '11px', color: '#666', marginBottom: '4px', display: 'block' }}>유통채널</label><div style={{ fontWeight: 'bold', fontSize: '13px' }}>{(formData.channels || []).map(c => c.name).join(', ') || '-'}</div></div>
-                                <div><label style={{ fontSize: '11px', color: '#666', marginBottom: '4px', display: 'block' }}>용량/중량</label><div style={{ fontWeight: 'bold', fontSize: '13px' }}>{formData.capacity || formData.weight || '-'}</div></div>
-                                <div><label style={{ fontSize: '11px', color: '#666', marginBottom: '4px', display: 'block' }}>사용기한</label><div style={{ fontWeight: 'bold', fontSize: '13px' }}>{formData.shelfLifeMonths ? `${formData.shelfLifeMonths}개월` : '-'}</div></div>
-                                <div><label style={{ fontSize: '11px', color: '#666', marginBottom: '4px', display: 'block' }}>포장단위</label><div style={{ fontWeight: 'bold', fontSize: '13px' }}>{formData.inboxInfo?.inboxQuantity || '0'}ea / {formData.outboxInfo?.outboxQuantity || '0'}ea</div></div>
-                            </div>
-                        </div>
-
-                            {/* 카드 3: 구성품 정보 (BOM Master 매핑) */}
-                            <div className="card" style={{ padding: '25px', marginBottom: '25px', border: '1px solid #edf2f7', borderRadius: '12px' }}>
-                                <h3 style={{ margin: '0 0 20px 0', fontSize: '17px', color: '#2d3748', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <span style={{ color: '#eb4d4b' }}>📋</span> 구성품 정보 (BOM Master)
-                                </h3>
-                                <div style={{ overflowX: 'auto', background: '#fff', borderRadius: '8px', border: '1px solid #eee' }}>
-                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                                        <thead style={{ background: '#f8f9fa' }}>
-                                            <tr>
-                                                <th style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid #eee' }}>구성품명</th>
-                                                <th style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid #eee' }}>재질(ReadOnly)</th>
-                                                <th style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid #eee' }}>제조사(ReadOnly)</th>
-                                                <th style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid #eee' }}>규격</th>
-                                                <th style={{ padding: '10px', textAlign: 'center', borderBottom: '1px solid #eee' }}>수량</th>
-                                                <th style={{ padding: '10px', textAlign: 'center', borderBottom: '1px solid #eee' }}>삭제</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {(currentSpec.bomItems || []).map((item, idx) => {
-                                                const master = masterMaterials.find(m => m.id === item.masterMaterialId) || {};
+                                {/* 📢 채널별 준수 규칙 배너 */}
+                                <div style={{ padding: '15px 20px', marginBottom: '20px', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '12px' }}>
+                                    <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#b45309', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        📢 채널별 포장 규격 자동 연동 규칙
+                                    </h4>
+                                    <div style={{ fontSize: '12px', color: '#78350f' }}>
+                                        {(formData.channels || []).length === 0 ? (
+                                            <span>선택된 유통 채널이 없습니다. [상세 정보] 탭에서 채널을 지정하세요.</span>
+                                        ) : (
+                                            formData.channels.map(ch => {
+                                                const rules = (masterRules || []).filter(r => r.channel?.id === ch.id);
                                                 return (
-                                                    <tr key={idx} style={{ borderBottom: '1px solid #f1f1f1' }}>
-                                                        <td style={{ padding: '8px' }}>
-                                                            <div style={{ display: 'flex', gap: '5px' }}>
-                                                                <input
-                                                                    value={master.componentName || ''}
-                                                                    readOnly
-                                                                    placeholder="마스터 선택"
-                                                                    style={{ flex: 1, padding: '4px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '12px', background: '#f8f9fa' }}
-                                                                />
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => {
-                                                                        setSelectedBomIndex(idx);
-                                                                        setIsBomSearchOpen(true);
-                                                                    }}
-                                                                    className="secondary"
-                                                                    style={{ padding: '4px 8px', fontSize: '11px' }}
-                                                                    disabled={!canEdit}
-                                                                >
-                                                                    🔍
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                        <td style={{ padding: '8px', color: '#666' }}>{master.material || '-'}</td>
-                                                        <td style={{ padding: '8px', color: '#666' }}>{master.manufacturer || '-'}</td>
-                                                        <td style={{ padding: '8px' }}>
-                                                            <input
-                                                                value={item.specification || ''}
-                                                                readOnly
-                                                                placeholder="마스터 정보 연동"
-                                                                style={{ width: '100%', padding: '4px', borderRadius: '4px', border: '1px solid #ddd', background: '#f8f9fa' }}
-                                                            />
-                                                        </td>
-                                                        <td style={{ padding: '8px', textAlign: 'center' }}>
-                                                            <input
-                                                                type="number"
-                                                                value={item.usageCount || 1}
-                                                                onChange={e => {
-                                                                    const newBoms = [...currentSpec.bomItems];
-                                                                    newBoms[idx].usageCount = parseFloat(e.target.value);
-                                                                    setCurrentSpec({ ...currentSpec, bomItems: newBoms });
-                                                                }}
-                                                                disabled={!canEdit}
-                                                                style={{ width: '60px', padding: '4px', textAlign: 'center', borderRadius: '4px', border: '1px solid #ddd' }}
-                                                            />
-                                                        </td>
-                                                        <td style={{ padding: '8px', textAlign: 'center' }}>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    const newBoms = currentSpec.bomItems.filter((_, i) => i !== idx);
-                                                                    setCurrentSpec({ ...currentSpec, bomItems: newBoms });
-                                                                }}
-                                                                disabled={!canEdit}
-                                                                style={{ background: 'none', border: 'none', color: '#dc3545', cursor: canEdit ? 'pointer' : 'not-allowed', fontSize: '18px', opacity: canEdit ? 1 : 0.3 }}
-                                                            >×</button>
+                                                    <div key={ch.id} style={{ marginBottom: '4px' }}>
+                                                        <strong>{ch.name}:</strong> {rules.length > 0 ? rules.map(r => r.warningMessage).join(' / ') : '지정된 전용 규칙 없음'}
+                                                    </div>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                </div>
+
+                                {specSubTab === 'sheet1' && (
+                                    <div>
+                                        {/* 기본 정보 카드 */}
+                                        <div className="card" style={{ padding: '20px', marginBottom: '20px', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+                                            <h3 style={{ margin: '0 0 15px 0', fontSize: '15px', color: '#1e293b', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
+                                                🔍 기본 정보
+                                            </h3>
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                                                <div className="form-group">
+                                                    <label style={{ fontSize: '11px', color: '#475569' }}>브랜드명</label>
+                                                    <input type="text" readOnly value={formData.brand?.brandName || '-'} style={{ background: '#f8fafc', fontSize: '12px' }} />
+                                                </div>
+                                                <div className="form-group">
+                                                    <label style={{ fontSize: '11px', color: '#475569' }}>품명(국문)</label>
+                                                    <input type="text" readOnly value={formData.productName || '-'} style={{ background: '#f8fafc', fontSize: '12px' }} />
+                                                </div>
+                                                <div className="form-group">
+                                                    <label style={{ fontSize: '11px', color: '#475569' }}>품명(영문)</label>
+                                                    <input type="text" readOnly value={formData.englishProductName || '-'} style={{ background: '#f8fafc', fontSize: '12px' }} />
+                                                </div>
+                                                <div className="form-group">
+                                                    <label style={{ fontSize: '11px', color: '#475569' }}>품목코드</label>
+                                                    <input type="text" readOnly value={formData.itemCode || '-'} style={{ background: '#f8fafc', fontSize: '12px' }} />
+                                                </div>
+                                                <div className="form-group">
+                                                    <label style={{ fontSize: '11px', color: '#475569' }}>제조사</label>
+                                                    <input type="text" readOnly value={formData.manufacturerInfo?.name || '-'} style={{ background: '#f8fafc', fontSize: '12px' }} />
+                                                </div>
+                                                <div className="form-group">
+                                                    <label style={{ fontSize: '11px', color: '#475569' }}>사용기한 / 개봉 후 기한</label>
+                                                    <input type="text" readOnly value={`${formData.shelfLifeMonths || '-'}개월 / ${formData.openedShelfLifeMonths || '-'}개월`} style={{ background: '#f8fafc', fontSize: '12px' }} />
+                                                </div>
+                                                <div className="form-group">
+                                                    <label style={{ fontSize: '11px', color: '#475569' }}>바코드</label>
+                                                    <input type="text" value={currentSpec.barcode || ''} onChange={e => setCurrentSpec({...currentSpec, barcode: e.target.value})} disabled={!canEdit} style={{ fontSize: '12px' }} />
+                                                </div>
+                                                <div className="form-group">
+                                                    <label style={{ fontSize: '11px', color: '#475569' }}>랩 넘버</label>
+                                                    <input type="text" value={currentSpec.labNumber || ''} onChange={e => setCurrentSpec({...currentSpec, labNumber: e.target.value})} disabled={!canEdit} style={{ fontSize: '12px' }} />
+                                                </div>
+                                                <div className="form-group">
+                                                    <label style={{ fontSize: '11px', color: '#475569' }}>바코드 담당자</label>
+                                                    <input type="text" value={currentSpec.barcodeManager || ''} onChange={e => setCurrentSpec({...currentSpec, barcodeManager: e.target.value})} disabled={!canEdit} style={{ fontSize: '12px' }} />
+                                                </div>
+                                                <div className="form-group">
+                                                    <label style={{ fontSize: '11px', color: '#475569' }}>기획 담당</label>
+                                                    <input type="text" value={currentSpec.plannerName || ''} onChange={e => setCurrentSpec({...currentSpec, plannerName: e.target.value})} disabled={!canEdit} style={{ fontSize: '12px' }} />
+                                                </div>
+                                                <div className="form-group">
+                                                    <label style={{ fontSize: '11px', color: '#475569' }}>디자인 담당</label>
+                                                    <input type="text" value={currentSpec.designerName || ''} onChange={e => setCurrentSpec({...currentSpec, designerName: e.target.value})} disabled={!canEdit} style={{ fontSize: '12px' }} />
+                                                </div>
+                                                <div className="form-group">
+                                                    <label style={{ fontSize: '11px', color: '#475569' }}>품질관리 담당</label>
+                                                    <input type="text" value={currentSpec.qcName || ''} onChange={e => setCurrentSpec({...currentSpec, qcName: e.target.value})} disabled={!canEdit} style={{ fontSize: '12px' }} />
+                                                </div>
+                                                <div className="form-group">
+                                                    <label style={{ fontSize: '11px', color: '#475569' }}>관리품 구분</label>
+                                                    <select value={currentSpec.managementType || '러닝'} onChange={e => setCurrentSpec({...currentSpec, managementType: e.target.value})} disabled={!canEdit} style={{ fontSize: '12px' }}>
+                                                        <option value="벌크 신규">벌크 신규</option>
+                                                        <option value="사양 변경">사양 변경</option>
+                                                        <option value="러닝">러닝</option>
+                                                    </select>
+                                                </div>
+                                                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                                                    <label style={{ fontSize: '11px', color: '#475569' }}>결재 라인 (기획/디자인/구매/품질 + 검토일)</label>
+                                                    <input type="text" value={currentSpec.approvalChainJson || ''} onChange={e => setCurrentSpec({...currentSpec, approvalChainJson: e.target.value})} disabled={!canEdit} style={{ fontSize: '12px' }} placeholder='[{"role":"기획", "name":"홍길동", "date":"2026-06-21"}]' />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* 개정 내역 테이블 */}
+                                        <div className="card" style={{ padding: '20px', marginBottom: '20px', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                                <h3 style={{ margin: 0, fontSize: '15px', color: '#1e293b' }}>📝 개정 내역</h3>
+                                                {canEdit && (
+                                                    <button type="button" onClick={handleAddRevision} className="secondary" style={{ fontSize: '11px', padding: '4px 8px' }}>
+                                                        + 개정내역 추가
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                                                <thead>
+                                                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                                        <th style={{ padding: '8px', textAlign: 'center', width: '80px' }}>NO.</th>
+                                                        <th style={{ padding: '8px', textAlign: 'left' }}>개정 내용</th>
+                                                        <th style={{ padding: '8px', textAlign: 'center', width: '150px' }}>개정일</th>
+                                                        <th style={{ padding: '8px', textAlign: 'center', width: '120px' }}>개정자</th>
+                                                        {canEdit && <th style={{ padding: '8px', textAlign: 'center', width: '60px' }}>삭제</th>}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {specRevisions.map((rev, idx) => (
+                                                        <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                            <td style={{ padding: '6px', textAlign: 'center' }}>
+                                                                <input type="number" value={rev.revisionNo || ''} onChange={e => handleRevisionChange(idx, 'revisionNo', parseInt(e.target.value))} disabled={!canEdit} style={{ width: '60px', textAlign: 'center', fontSize: '12px' }} />
+                                                            </td>
+                                                            <td style={{ padding: '6px' }}>
+                                                                <input type="text" value={rev.content || ''} onChange={e => handleRevisionChange(idx, 'content', e.target.value)} disabled={!canEdit} style={{ width: '100%', fontSize: '12px' }} />
+                                                            </td>
+                                                            <td style={{ padding: '6px', textAlign: 'center' }}>
+                                                                <input type="date" value={rev.revisionDate || ''} onChange={e => handleRevisionChange(idx, 'revisionDate', e.target.value)} disabled={!canEdit} style={{ width: '130px', fontSize: '12px' }} />
+                                                            </td>
+                                                            <td style={{ padding: '6px', textAlign: 'center' }}>
+                                                                <input type="text" value={rev.revisionAuthor || ''} onChange={e => handleRevisionChange(idx, 'revisionAuthor', e.target.value)} disabled={!canEdit} style={{ width: '100px', textAlign: 'center', fontSize: '12px' }} />
+                                                            </td>
+                                                            {canEdit && (
+                                                                <td style={{ padding: '6px', textAlign: 'center' }}>
+                                                                    <button type="button" onClick={() => handleRemoveRevision(idx)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '14px', cursor: 'pointer' }}>&times;</button>
+                                                                </td>
+                                                            )}
+                                                        </tr>
+                                                    ))}
+                                                    {specRevisions.length === 0 && (
+                                                        <tr>
+                                                            <td colSpan={canEdit ? 5 : 4} style={{ textAlign: 'center', color: '#94a3b8', padding: '15px' }}>등록된 개정이력이 없습니다.</td>
+                                                        </tr>
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        {/* 구성품 리스트 테이블 */}
+                                        <div className="card" style={{ padding: '20px', marginBottom: '20px', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                                <h3 style={{ margin: 0, fontSize: '15px', color: '#1e293b' }}> B2B 구성품 리스트</h3>
+                                                {canEdit && (
+                                                    <button type="button" onClick={handleAddSpecComponent} className="secondary" style={{ fontSize: '11px', padding: '4px 8px' }}>
+                                                        + 구성품 추가
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                                                <thead>
+                                                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                                        <th style={{ padding: '8px', textAlign: 'left' }}>구성품명</th>
+                                                        <th style={{ padding: '8px', textAlign: 'left' }}>재질 및 세부사양</th>
+                                                        <th style={{ padding: '8px', textAlign: 'left' }}>규격 및 사이즈</th>
+                                                        <th style={{ padding: '8px', textAlign: 'center', width: '80px' }}>입수량</th>
+                                                        <th style={{ padding: '8px', textAlign: 'left' }}>업체</th>
+                                                        <th style={{ padding: '8px', textAlign: 'left' }}>비고</th>
+                                                        {canEdit && <th style={{ padding: '8px', textAlign: 'center', width: '60px' }}>삭제</th>}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {specComponents.map((comp, idx) => (
+                                                        <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                            <td style={{ padding: '6px' }}>
+                                                                <input type="text" value={comp.componentName || ''} onChange={e => handleSpecComponentChange(idx, 'componentName', e.target.value)} disabled={!canEdit} style={{ width: '100%', fontSize: '12px' }} />
+                                                            </td>
+                                                            <td style={{ padding: '6px' }}>
+                                                                <input type="text" value={comp.specDetails || ''} onChange={e => handleSpecComponentChange(idx, 'specDetails', e.target.value)} disabled={!canEdit} style={{ width: '100%', fontSize: '12px' }} />
+                                                            </td>
+                                                            <td style={{ padding: '6px' }}>
+                                                                <input type="text" value={comp.sizeDimension || ''} onChange={e => handleSpecComponentChange(idx, 'sizeDimension', e.target.value)} disabled={!canEdit} style={{ width: '100%', fontSize: '12px' }} />
+                                                            </td>
+                                                            <td style={{ padding: '6px', textAlign: 'center' }}>
+                                                                <input type="number" value={comp.quantity || 1} onChange={e => handleSpecComponentChange(idx, 'quantity', parseInt(e.target.value))} disabled={!canEdit} style={{ width: '65px', textAlign: 'center', fontSize: '12px' }} />
+                                                            </td>
+                                                            <td style={{ padding: '6px' }}>
+                                                                <input type="text" value={comp.supplier || ''} onChange={e => handleSpecComponentChange(idx, 'supplier', e.target.value)} disabled={!canEdit} style={{ width: '100%', fontSize: '12px' }} />
+                                                            </td>
+                                                            <td style={{ padding: '6px' }}>
+                                                                <input type="text" value={comp.remarks || ''} onChange={e => handleSpecComponentChange(idx, 'remarks', e.target.value)} disabled={!canEdit} style={{ width: '100%', fontSize: '12px' }} />
+                                                            </td>
+                                                            {canEdit && (
+                                                                <td style={{ padding: '6px', textAlign: 'center' }}>
+                                                                    <button type="button" onClick={() => handleRemoveSpecComponent(idx)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '14px', cursor: 'pointer' }}>&times;</button>
+                                                                </td>
+                                                            )}
+                                                        </tr>
+                                                    ))}
+                                                    {specComponents.length === 0 && (
+                                                        <tr>
+                                                            <td colSpan={canEdit ? 7 : 6} style={{ textAlign: 'center', color: '#94a3b8', padding: '15px' }}>등록된 구성품이 없습니다.</td>
+                                                        </tr>
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        {/* 아웃박스 & 착인 기준 */}
+                                        <div className="card" style={{ padding: '20px', marginBottom: '20px', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+                                            <h3 style={{ margin: '0 0 15px 0', fontSize: '15px', color: '#1e293b' }}>📦 아웃박스 & 착인 기준</h3>
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '12px' }}>
+                                                <div className="form-group">
+                                                    <label style={{ fontSize: '11px', color: '#475569' }}>제품 착인기준 - 표기 방법</label>
+                                                    <input type="text" value={currentSpec.markingMethod || ''} onChange={e => setCurrentSpec({...currentSpec, markingMethod: e.target.value})} disabled={!canEdit} style={{ fontSize: '12px' }} placeholder="예: 레이저 인쇄" />
+                                                </div>
+                                                <div className="form-group">
+                                                    <label style={{ fontSize: '11px', color: '#475569' }}>제품 착인기준 - 표기 기준</label>
+                                                    <input type="text" value={currentSpec.markingStandard || ''} onChange={e => setCurrentSpec({...currentSpec, markingStandard: e.target.value})} disabled={!canEdit} style={{ fontSize: '12px' }} placeholder="예: 제조일로부터 24개월" />
+                                                </div>
+                                            </div>
+                                            <div className="form-group" style={{ marginBottom: '12px' }}>
+                                                <label style={{ fontSize: '11px', color: '#475569' }}>포장방법 (서술)</label>
+                                                <textarea value={currentSpec.packagingMethodText || ''} onChange={e => setCurrentSpec({...currentSpec, packagingMethodText: e.target.value})} disabled={!canEdit} style={{ width: '100%', height: '80px', fontSize: '12px' }} placeholder="서수형 포장 조립 순서 설명..." />
+                                            </div>
+                                        </div>
+
+                                        {/* 적재사항 및 검증 */}
+                                        <div className="card" style={{ padding: '20px', marginBottom: '20px', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                                                <h3 style={{ margin: 0, fontSize: '15px', color: '#1e293b' }}>📐 적재 사양 및 검증</h3>
+                                                {canEdit && (
+                                                    <button
+                                                        type="button"
+                                                        className="outline"
+                                                        style={{ fontSize: '11px', padding: '4px 10px', height: 'auto', border: '1px solid #2563eb', color: '#2563eb', borderRadius: '6px', background: 'transparent', cursor: 'pointer' }}
+                                                        onClick={() => {
+                                                            const inboxSz = formData.inboxInfo?.inboxLength && formData.inboxInfo?.inboxWidth && formData.inboxInfo?.inboxHeight 
+                                                                ? `${formData.inboxInfo.inboxLength}x${formData.inboxInfo.inboxWidth}x${formData.inboxInfo.inboxHeight}` 
+                                                                : currentSpec.inboxSize;
+                                                            const outboxSz = formData.outboxInfo?.outboxLength && formData.outboxInfo?.outboxWidth && formData.outboxInfo?.outboxHeight 
+                                                                ? `${formData.outboxInfo.outboxLength}x${formData.outboxInfo.outboxWidth}x${formData.outboxInfo.outboxHeight}` 
+                                                                : currentSpec.outboxSize;
+                                                            const palletSz = formData.palletInfo?.palletLength && formData.palletInfo?.palletWidth 
+                                                                ? `${formData.palletInfo.palletLength}x${formData.palletInfo.palletWidth}` 
+                                                                : currentSpec.palletSize;
+                                                                
+                                                            setCurrentSpec({
+                                                                ...currentSpec,
+                                                                inboxQty: formData.inboxInfo?.inboxQuantity || currentSpec.inboxQty,
+                                                                inboxSize: inboxSz,
+                                                                outboxQty: formData.outboxInfo?.outboxQuantity || currentSpec.outboxQty,
+                                                                outboxSize: outboxSz,
+                                                                palletSize: palletSz,
+                                                                onePalletHeight: formData.palletInfo?.palletHeight || currentSpec.onePalletHeight,
+                                                                palletHeightLimit: formData.palletInfo?.palletHeight || currentSpec.palletHeightLimit,
+                                                                oneOutboxWeight: formData.outboxInfo?.outboxWeight || currentSpec.oneOutboxWeight,
+                                                                onePalletWeight: formData.palletInfo?.palletQuantity && formData.outboxInfo?.outboxWeight
+                                                                    ? (parseFloat(formData.outboxInfo.outboxWeight) * parseInt(formData.palletInfo.palletQuantity)).toFixed(1)
+                                                                    : currentSpec.onePalletWeight
+                                                            });
+                                                            toast.info("제품 마스터의 규격 및 적재 정보가 동기화되었습니다.");
+                                                        }}
+                                                     >
+                                                        🔄 제품 마스터 규격 연동
+                                                    </button>
+                                                )}
+                                            </div>
+                                            
+                                            {/* 실시간 검증 경고 배너 */}
+                                            <div style={{ marginBottom: '15px' }}>
+                                                {parseFloat(currentSpec.oneOutboxWeight || 0) > 12 && (
+                                                    <div style={{ padding: '8px 12px', marginBottom: '6px', background: '#fee2e2', border: '1px solid #ef4444', borderRadius: '8px', color: '#b91c1c', fontSize: '12px', fontWeight: 'bold' }}>
+                                                        ⚠️ 1 아웃박스 중량이 제한치(12kg)를 초과했습니다! (현재: {currentSpec.oneOutboxWeight}kg)
+                                                    </div>
+                                                )}
+                                                {parseFloat(currentSpec.onePalletWeight || 0) > 630 && (
+                                                    <div style={{ padding: '8px 12px', marginBottom: '6px', background: '#fee2e2', border: '1px solid #ef4444', borderRadius: '8px', color: '#b91c1c', fontSize: '12px', fontWeight: 'bold' }}>
+                                                        ⚠️ 1 팔레트 중량이 제한치(630kg)를 초과했습니다! (현재: {currentSpec.onePalletWeight}kg)
+                                                    </div>
+                                                )}
+                                                {parseFloat(currentSpec.onePalletHeight || 0) > 1500 && (
+                                                    <div style={{ padding: '8px 12px', marginBottom: '6px', background: '#fee2e2', border: '1px solid #ef4444', borderRadius: '8px', color: '#b91c1c', fontSize: '12px', fontWeight: 'bold' }}>
+                                                        ⚠️ 1 팔레트 적재 높이가 제한치(1,500mm)를 초과했습니다! (현재: {currentSpec.onePalletHeight}mm)
+                                                    </div>
+                                                )}
+                                                {checkChannelRules().map((warn, wIdx) => (
+                                                    <div key={wIdx} style={{ padding: '8px 12px', marginBottom: '6px', background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '8px', color: '#b45309', fontSize: '12px', fontWeight: 'bold' }}>
+                                                        {warn}
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', marginBottom: '15px' }}>
+                                                <div style={{ border: '1px solid #f1f5f9', padding: '12px', borderRadius: '8px', background: '#f8fafc' }}>
+                                                    <strong style={{ fontSize: '12px', color: '#334155', display: 'block', marginBottom: '8px' }}>📦 인박스</strong>
+                                                    <div className="form-group"><label style={{ fontSize: '10px' }}>구분</label><input type="text" value={currentSpec.inboxType || ''} onChange={e => setCurrentSpec({...currentSpec, inboxType: e.target.value})} disabled={!canEdit} style={{ fontSize: '11px' }} /></div>
+                                                    <div className="form-group"><label style={{ fontSize: '10px' }}>입수량 (ea)</label><input type="number" value={currentSpec.inboxQty || ''} onChange={e => setCurrentSpec({...currentSpec, inboxQty: parseInt(e.target.value)})} disabled={!canEdit} style={{ fontSize: '11px' }} /></div>
+                                                    <div className="form-group"><label style={{ fontSize: '10px' }}>사이즈 (장x폭x고)</label><input type="text" value={currentSpec.inboxSize || ''} onChange={e => setCurrentSpec({...currentSpec, inboxSize: e.target.value})} disabled={!canEdit} style={{ fontSize: '11px' }} placeholder="예: 300x200x150" /></div>
+                                                    <div className="form-group"><label style={{ fontSize: '10px' }}>재질</label><input type="text" value={currentSpec.inboxMaterial || ''} onChange={e => setCurrentSpec({...currentSpec, inboxMaterial: e.target.value})} disabled={!canEdit} style={{ fontSize: '11px' }} /></div>
+                                                </div>
+                                                <div style={{ border: '1px solid #f1f5f9', padding: '12px', borderRadius: '8px', background: '#f8fafc' }}>
+                                                    <strong style={{ fontSize: '12px', color: '#334155', display: 'block', marginBottom: '8px' }}>📦 아웃박스</strong>
+                                                    <div className="form-group"><label style={{ fontSize: '10px' }}>구분</label><input type="text" value={currentSpec.outboxType || ''} onChange={e => setCurrentSpec({...currentSpec, outboxType: e.target.value})} disabled={!canEdit} style={{ fontSize: '11px' }} /></div>
+                                                    <div className="form-group"><label style={{ fontSize: '10px' }}>입수량 (ea)</label><input type="number" value={currentSpec.outboxQty || ''} onChange={e => setCurrentSpec({...currentSpec, outboxQty: parseInt(e.target.value)})} disabled={!canEdit} style={{ fontSize: '11px' }} /></div>
+                                                    <div className="form-group"><label style={{ fontSize: '10px' }}>사이즈 (장x폭x고)</label><input type="text" value={currentSpec.outboxSize || ''} onChange={e => setCurrentSpec({...currentSpec, outboxSize: e.target.value})} disabled={!canEdit} style={{ fontSize: '11px' }} placeholder="예: 600x400x300" /></div>
+                                                    <div className="form-group"><label style={{ fontSize: '10px' }}>재질</label><input type="text" value={currentSpec.outboxMaterial || ''} onChange={e => setCurrentSpec({...currentSpec, outboxMaterial: e.target.value})} disabled={!canEdit} style={{ fontSize: '11px' }} /></div>
+                                                </div>
+                                                <div style={{ border: '1px solid #f1f5f9', padding: '12px', borderRadius: '8px', background: '#f8fafc' }}>
+                                                    <strong style={{ fontSize: '12px', color: '#334155', display: 'block', marginBottom: '8px' }}>🧱 팔레트 적재</strong>
+                                                    <div className="form-group"><label style={{ fontSize: '10px' }}>종류</label><input type="text" value={currentSpec.palletTypeStr || ''} onChange={e => setCurrentSpec({...currentSpec, palletTypeStr: e.target.value})} disabled={!canEdit} style={{ fontSize: '11px' }} placeholder="예: AJU 11형 플라스틱" /></div>
+                                                    <div className="form-group"><label style={{ fontSize: '10px' }}>적재방법</label><input type="text" value={currentSpec.palletStackingMethod || ''} onChange={e => setCurrentSpec({...currentSpec, palletStackingMethod: e.target.value})} disabled={!canEdit} style={{ fontSize: '11px' }} placeholder="예: 6단 엇갈려 쌓기" /></div>
+                                                    <div className="form-group"><label style={{ fontSize: '10px' }}>사이즈</label><input type="text" value={currentSpec.palletSize || ''} onChange={e => setCurrentSpec({...currentSpec, palletSize: e.target.value})} disabled={!canEdit} style={{ fontSize: '11px' }} placeholder="예: 1100x1100" /></div>
+                                                    <div className="form-group"><label style={{ fontSize: '10px' }}>높이 제한 (mm)</label><input type="text" value={currentSpec.palletHeightLimit || ''} onChange={e => setCurrentSpec({...currentSpec, palletHeightLimit: e.target.value})} disabled={!canEdit} style={{ fontSize: '11px' }} placeholder="예: 1500" /></div>
+                                                </div>
+                                            </div>
+
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px' }}>
+                                                <div className="form-group">
+                                                    <label style={{ fontSize: '11px', color: '#475569' }}>1 아웃박스 중량 (kg) [제한: 12kg]</label>
+                                                    <input type="number" step="0.01" value={currentSpec.oneOutboxWeight || ''} onChange={e => setCurrentSpec({...currentSpec, oneOutboxWeight: parseFloat(e.target.value) || ''})} disabled={!canEdit} style={{ borderColor: parseFloat(currentSpec.oneOutboxWeight || 0) > 12 ? '#ef4444' : '#ddd', fontSize: '12px' }} />
+                                                </div>
+                                                <div className="form-group">
+                                                    <label style={{ fontSize: '11px', color: '#475569' }}>1 팔레트 중량 (kg) [제한: 630kg]</label>
+                                                    <input type="number" step="0.1" value={currentSpec.onePalletWeight || ''} onChange={e => setCurrentSpec({...currentSpec, onePalletWeight: parseFloat(e.target.value) || ''})} disabled={!canEdit} style={{ borderColor: parseFloat(currentSpec.onePalletWeight || 0) > 630 ? '#ef4444' : '#ddd', fontSize: '12px' }} />
+                                                </div>
+                                                <div className="form-group">
+                                                    <label style={{ fontSize: '11px', color: '#475569' }}>1 팔레트 높이 (mm) [제한: 1,500mm]</label>
+                                                    <input type="number" step="1" value={currentSpec.onePalletHeight || ''} onChange={e => setCurrentSpec({...currentSpec, onePalletHeight: parseFloat(e.target.value) || ''})} disabled={!canEdit} style={{ borderColor: parseFloat(currentSpec.onePalletHeight || 0) > 1500 ? '#ef4444' : '#ddd', fontSize: '12px' }} />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* 특이사항 */}
+                                        <div className="card" style={{ padding: '20px', marginBottom: '20px', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+                                            <h3 style={{ margin: '0 0 15px 0', fontSize: '15px', color: '#1e293b' }}>📝 특이사항</h3>
+                                            <textarea value={currentSpec.remarks || ''} onChange={e => setCurrentSpec({...currentSpec, remarks: e.target.value})} disabled={!canEdit} style={{ width: '100%', height: '80px', fontSize: '12px' }} placeholder="공장 출하 또는 적재 보관 시 특이 우려 사항 자유 서술..." />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {specSubTab === 'sheet2' && (
+                                    <div className="card" style={{ padding: '25px', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#f8fafc' }}>
+                                        <h3 style={{ margin: '0 0 20px 0', fontSize: '16px', color: '#1e293b', borderBottom: '2px solid #e2e8f0', paddingBottom: '10px' }}>
+                                            📦 Sheet 2: 현품표 아웃박스 시각화
+                                        </h3>
+                                        
+                                        {/* 현품표 가상 카드 레이아웃 */}
+                                        <div style={{ maxWidth: '500px', margin: '0 auto', background: '#fff', border: '2px solid #000', padding: '20px', fontFamily: 'monospace', color: '#000' }}>
+                                            <div style={{ textAlign: 'center', fontSize: '20px', fontWeight: 'bold', borderBottom: '2px solid #000', paddingBottom: '10px', marginBottom: '15px' }}>
+                                                [ 아 웁 박 스 현 품 표 ]
+                                            </div>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                                                <tbody>
+                                                    <tr style={{ borderBottom: '1px solid #000' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold', width: '120px' }}>품목코드:</td>
+                                                        <td style={{ padding: '8px' }}>{formData.itemCode || '-'}</td>
+                                                    </tr>
+                                                    <tr style={{ borderBottom: '1px solid #000' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>제품명:</td>
+                                                        <td style={{ padding: '8px' }}>{formData.productName || '-'}</td>
+                                                    </tr>
+                                                    <tr style={{ borderBottom: '1px solid #000' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>입수량:</td>
+                                                        <td style={{ padding: '8px' }}>{currentSpec.outboxQty ? `${currentSpec.outboxQty} EA` : '0 EA'}</td>
+                                                    </tr>
+                                                    <tr style={{ borderBottom: '1px solid #000' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>박스 규격:</td>
+                                                        <td style={{ padding: '8px' }}>{currentSpec.outboxSize || '-'}</td>
+                                                    </tr>
+                                                    <tr style={{ borderBottom: '1px solid #000' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>중 량:</td>
+                                                        <td style={{ padding: '8px' }}>{currentSpec.oneOutboxWeight ? `${currentSpec.oneOutboxWeight} kg` : '- kg'}</td>
+                                                    </tr>
+                                                    <tr style={{ borderBottom: '1px solid #000' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>제조일자:</td>
+                                                        <td style={{ padding: '8px' }}>[ 생산 배치일 별도 표기 ]</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>제조사:</td>
+                                                        <td style={{ padding: '8px' }}>{formData.manufacturerInfo?.name || '-'}</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                            <div style={{ marginTop: '20px', borderTop: '2px dashed #000', paddingTop: '15px', textAlign: 'center' }}>
+                                                {/* 가상 바코드 */}
+                                                <div style={{ letterSpacing: '8px', fontSize: '24px', fontWeight: 'bold', margin: '10px 0' }}>
+                                                    ||||| | |||| ||| ||
+                                                </div>
+                                                <div style={{ fontSize: '12px' }}>{currentSpec.barcode || 'BARCODE-NOT-SET'}</div>
+                                            </div>
+                                        </div>
+
+                                        {/* 3D / 이미지 가상 캔버스 영역 설계 */}
+                                        <div style={{ marginTop: '25px', padding: '20px', background: '#fff', border: '1px dashed #cbd5e1', borderRadius: '8px', textAlign: 'center' }}>
+                                            <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#475569', marginBottom: '8px' }}>📸 아웃박스 외관 및 착인 위치 이미지 (3D 모델/도면 연동부)</div>
+                                            <div style={{ height: '180px', background: '#f1f5f9', borderRadius: '6px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#94a3b8', fontSize: '12px' }}>
+                                                [ 이미지 드래그 업로드 또는 3D WebGL 캔버스 렌더링 영역 ]
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {specSubTab === 'sheet3' && (
+                                    <div className="card" style={{ padding: '25px', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#f8fafc' }}>
+                                        <h3 style={{ margin: '0 0 20px 0', fontSize: '16px', color: '#1e293b', borderBottom: '2px solid #e2e8f0', paddingBottom: '10px' }}>
+                                            🧱 Sheet 3: 현품표 팔레트 시각화
+                                        </h3>
+                                        
+                                        {/* 팔레트 현품표 가상 카드 */}
+                                        <div style={{ maxWidth: '500px', margin: '0 auto', background: '#fff', border: '2px solid #000', padding: '20px', fontFamily: 'monospace', color: '#000' }}>
+                                            <div style={{ textAlign: 'center', fontSize: '20px', fontWeight: 'bold', borderBottom: '2px solid #000', paddingBottom: '10px', marginBottom: '15px' }}>
+                                                [ 팔 레 트 현 품 표 ]
+                                            </div>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                                                <tbody>
+                                                    <tr style={{ borderBottom: '1px solid #000' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold', width: '120px' }}>적재 제품:</td>
+                                                        <td style={{ padding: '8px' }}>{formData.productName || '-'} ({formData.itemCode || '-'})</td>
+                                                    </tr>
+                                                    <tr style={{ borderBottom: '1px solid #000' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>팔레트 종류:</td>
+                                                        <td style={{ padding: '8px' }}>{currentSpec.palletTypeStr || '-'}</td>
+                                                    </tr>
+                                                    <tr style={{ borderBottom: '1px solid #000' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>적재 단수/방법:</td>
+                                                        <td style={{ padding: '8px' }}>{currentSpec.palletStackingMethod || '-'} / 높이제한: {currentSpec.palletHeightLimit || '-'}mm</td>
+                                                    </tr>
+                                                    <tr style={{ borderBottom: '1px solid #000' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>총 적재 높이:</td>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold', color: parseFloat(currentSpec.onePalletHeight || 0) > 1500 ? '#ef4444' : '#000' }}>
+                                                            {currentSpec.onePalletHeight ? `${currentSpec.onePalletHeight} mm` : '- mm'}
+                                                            {parseFloat(currentSpec.onePalletHeight || 0) > 1500 && ' (초과)'}
                                                         </td>
                                                     </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                    <button
-                                        type="button"
-                                        onClick={() => setCurrentSpec({ ...currentSpec, bomItems: [...(currentSpec.bomItems || []), { masterMaterialId: '', specification: '', usageCount: 1 }] })}
-                                        style={{ width: '100%', padding: '10px', background: 'transparent', border: 'none', color: '#007bff', fontSize: '12px', cursor: canEdit ? 'pointer' : 'not-allowed', opacity: canEdit ? 1 : 0.5 }}
-                                        disabled={!canEdit}
-                                    >
-                                        + 구성품 추가
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* 카드 4: 세부 포장 및 적재 사양 */}
-                            <div className="card" style={{ padding: '25px', marginBottom: '25px', border: '1px solid #edf2f7', borderRadius: '12px' }}>
-                                <h3 style={{ margin: '0 0 20px 0', fontSize: '17px', color: '#2d3748', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <span style={{ color: '#f0932b' }}>📦</span> 세부 포장 및 적재 사양
-                                </h3>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px', marginBottom: '20px' }}>
-                                    <div className="form-group">
-                                        <label style={{ fontSize: '11px', fontWeight: 'bold' }}>📤 인박스/입수사양 (Feature 10b)</label>
-                                        <textarea
-                                            value={currentSpec.inboxSpec || ''}
-                                            onChange={e => setCurrentSpec({ ...currentSpec, inboxSpec: e.target.value })}
-                                            disabled={!canEdit}
-                                            style={{ width: '100%', height: '60px', padding: '8px', borderRadius: '4px', fontSize: '12px' }}
-                                            placeholder="입수량, 내품 보호 방식 등"
-                                        />
-                                    </div>
-                                    <div className="form-group">
-                                        <label style={{ fontSize: '11px', fontWeight: 'bold' }}>🛍️ 지퍼백 사양 (Feature 10c)</label>
-                                        <textarea
-                                            value={currentSpec.zipperBagSpec || ''}
-                                            onChange={e => setCurrentSpec({ ...currentSpec, zipperBagSpec: e.target.value })}
-                                            disabled={!canEdit}
-                                            style={{ width: '100%', height: '60px', padding: '8px', borderRadius: '4px', fontSize: '12px' }}
-                                            placeholder="규격, 재질, 부착 위치 등"
-                                        />
-                                    </div>
-                                    <div className="form-group">
-                                        <label style={{ fontSize: '11px', fontWeight: 'bold' }}>📦 아웃박스 사양 (Feature 10d)</label>
-                                        <textarea
-                                            value={currentSpec.outboxSpec || ''}
-                                            onChange={e => setCurrentSpec({ ...currentSpec, outboxSpec: e.target.value })}
-                                            disabled={!canEdit}
-                                            style={{ width: '100%', height: '60px', padding: '8px', borderRadius: '4px', fontSize: '12px' }}
-                                            placeholder="박스 테이핑 방식, 중량물 주의 표기 등"
-                                        />
-                                    </div>
-                                    <div className="form-group">
-                                        <label style={{ fontSize: '11px', fontWeight: 'bold' }}>🧱 팔레트 적재 및 팔레트</label>
-                                        <div style={{ display: 'flex', gap: '5px', marginBottom: '5px' }}>
-                                            <select
-                                                value={currentSpec.palletType || ''}
-                                                onChange={e => setCurrentSpec({ ...currentSpec, palletType: e.target.value })}
-                                                disabled={!canEdit}
-                                                style={{ width: '100%', padding: '6px', fontSize: '12px', borderRadius: '4px' }}
-                                            >
-                                                <option value="">팔레트 선택</option>
-                                                <option value="AJU">아주(1,100)</option>
-                                                <option value="WOODEN_FUMIGATED">나무 훈증(1,200)</option>
-                                                <option value="DISPOSABLE_EXPORT">수출용 일회용</option>
-                                            </select>
+                                                    <tr style={{ borderBottom: '1px solid #000' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>총 적재 중량:</td>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold', color: parseFloat(currentSpec.onePalletWeight || 0) > 630 ? '#ef4444' : '#000' }}>
+                                                            {currentSpec.onePalletWeight ? `${currentSpec.onePalletWeight} kg` : '- kg'}
+                                                            {parseFloat(currentSpec.onePalletWeight || 0) > 630 && ' (초과)'}
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>적재 시 주의사항:</td>
+                                                        <td style={{ padding: '8px', whiteSpace: 'pre-wrap' }}>{currentSpec.palletPrecautions || '낙하 주의 및 보호 필름 랩핑 필수'}</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
                                         </div>
-                                        <textarea
-                                            value={currentSpec.palletStackingSpec || ''}
-                                            onChange={e => setCurrentSpec({ ...currentSpec, palletStackingSpec: e.target.value })}
-                                            disabled={!canEdit}
-                                            style={{ width: '100%', height: '30px', padding: '6px', borderRadius: '4px', fontSize: '12px' }}
-                                            placeholder="적재 단수, 랩핑 횟수 등"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="form-group">
-                                    <label style={{ fontSize: '11px', fontWeight: 'bold' }}>🔢 제조번호 및 사용기한 입력란 (Feature 10f)</label>
-                                    <input
-                                        value={currentSpec.lotAndExpiryFormat || ''}
-                                        onChange={e => setCurrentSpec({ ...currentSpec, lotAndExpiryFormat: e.target.value })}
-                                        disabled={!canEdit}
-                                        style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '12px' }}
-                                        placeholder="예: EXP YYYY.MM.DD / LOT A001 (착인/압인 위치 및 방식)"
-                                    />
-                                </div>
-                            </div>
 
-                            {/* 카드 5: 포장방법 및 이미지 */}
-                            <div className="card" style={{ padding: '25px', marginBottom: '25px', border: '1px solid #edf2f7', borderRadius: '12px' }}>
-                                <h3 style={{ margin: '0 0 20px 0', fontSize: '17px', color: '#2d3748', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <span style={{ color: '#be2edd' }}>📝</span> 포장방법 및 이미지
-                                </h3>
-                                <div className="form-group" style={{ marginBottom: '15px' }}>
-                                    <div style={{ marginBottom: '8px' }}>
-                                        <label style={{ fontSize: '11px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>📋 포장방법 설명 (템플릿 활용)</label>
-                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                                            {masterTemplates.length > 0 ? masterTemplates.map(t => (
-                                                <button
-                                                    key={t.id}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        if (window.confirm(`[${t.productType}] 템플릿을 적용하시겠습니까?`)) {
-                                                            setCurrentSpec(prev => ({ ...prev, packagingMethodText: t.templateText }));
-                                                        }
-                                                    }}
-                                                    className="secondary"
-                                                    style={{
-                                                        fontSize: '10px',
-                                                        padding: '2px 8px',
-                                                        background: t.productType === formData.productType ? '#003366' : '#e9ecef',
-                                                        color: t.productType === formData.productType ? '#fff' : '#495057',
-                                                        border: '1px solid #ced4da',
-                                                        borderRadius: '4px'
-                                                    }}
-                                                >
-                                                    ⚡ {t.productType}
-                                                </button>
-                                            )) : (
-                                                <span style={{ fontSize: '10px', color: '#999' }}>등록된 템플릿 탐색 중...</span>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <textarea
-                                        value={currentSpec.packagingMethodText || ''}
-                                        onChange={e => setCurrentSpec({ ...currentSpec, packagingMethodText: e.target.value })}
-                                        style={{ width: '100%', height: '80px', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-                                        placeholder="포장방법에 대한 상세 내용을 기재하세요."
-                                    />
-                                </div>
-                            </div>
-
-                            {/* 카드 6: 등록된 포장사양서 목록 */}
-                            <div className="card" style={{ padding: '25px', marginBottom: '25px', border: '1px solid #edf2f7', borderRadius: '12px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #edf2f7', paddingBottom: '10px', marginBottom: '15px' }}>
-                                    <h3 style={{ margin: 0, fontSize: '17px', color: '#2d3748', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <span style={{ color: '#4834d4' }}>📋</span> 등록된 포장사양서 목록
-                                    </h3>
-                                    {product && (
-                                        <div style={{ display: 'flex', gap: '8px' }}>
-                                            <button type="button" onClick={handleDownloadSpecExcel} className="button secondary" style={{ fontSize: '11px', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                                📥 엑셀(Excel) 다운로드
-                                            </button>
-                                            <button type="button" onClick={handleDownloadSpecPdf} className="button secondary" style={{ fontSize: '11px', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: '5px', color: '#d32f2f', borderColor: '#d32f2f' }}>
-                                                📄 PDF 다운로드
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                                {packagingSpecs.length === 0 && <p style={{ textAlign: 'center', color: '#999', padding: '20px' }}>등록된 사양서가 없습니다.</p>}
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '15px' }}>
-                                    {packagingSpecs.map(spec => (
-                                        <div key={spec.id} style={{ border: '1px solid #eee', padding: '10px', borderRadius: '5px', fontSize: '13px', background: '#fff' }}>
-                                            <div style={{ fontWeight: 'bold', color: '#0056b3', marginBottom: '8px', borderBottom: '1px solid #ddd', paddingBottom: '4px' }}>
-                                                버전 v{spec.version || 1}
-                                                <span style={{ fontSize: '11px', color: '#666', fontWeight: 'normal', marginLeft: '10px' }}>
-                                                    개정사항: {spec.revisionNotes || '신규 등록'}
-                                                </span>
+                                        {/* 팔레트 입형태 적재 이미지 가상 캔버스 */}
+                                        <div style={{ marginTop: '25px', padding: '20px', background: '#fff', border: '1px dashed #cbd5e1', borderRadius: '8px', textAlign: 'center' }}>
+                                            <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#475569', marginBottom: '8px' }}>📸 팔레트 적재 형태 도면 / 이미지</div>
+                                            <div style={{ height: '180px', background: '#f1f5f9', borderRadius: '6px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#94a3b8', fontSize: '12px' }}>
+                                                [ 적재 3D 시뮬레이터 캔버스 영역 ]
                                             </div>
-                                            <div style={{ whiteSpace: 'pre-wrap', color: '#333', marginBottom: '8px' }}>
-                                                <strong>포장방법 설명:</strong><br />
-                                                {spec.packagingMethodText || '기재 내용 없음'}
-                                            </div>
-                                            {spec.packagingMethodImage && (
-                                                <div style={{ marginTop: '5px', border: '1px solid #ddd', borderRadius: '4px', overflow: 'hidden', display: 'inline-block' }}>
-                                                    <img src={getFileUrl(spec.packagingMethodImage)} alt="포장방법" style={{ maxWidth: '100%', maxHeight: '120px', display: 'block', cursor: 'pointer' }} onClick={() => window.open(getFileUrl(spec.packagingMethodImage), '_blank')} />
-                                                </div>
-                                            )}
-                                            <div style={{ fontSize: '10px', color: '#999', marginTop: '5px' }}>수정: {spec.lastModifiedBy} ({spec.lastModifiedAt?.split('T')[0]})</div>
                                         </div>
-                                    ))}
-                                </div>
+                                    </div>
+                                )}
                             </div>
-                        </div>
                         )}
                     </form>
                 </div>

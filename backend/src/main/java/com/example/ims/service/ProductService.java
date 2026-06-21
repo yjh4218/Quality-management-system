@@ -431,6 +431,13 @@ public class ProductService {
         Product saved = productRepository.save(product);
         String newJson = captureJson(saved);
         
+        // Cascade soft delete to ProductionAudit
+        productionAuditRepository.findByItemCode(product.getItemCode()).ifPresent(audit -> {
+            audit.setIsDeleted(true);
+            audit.setDeletedAt(LocalDateTime.now());
+            productionAuditRepository.save(audit);
+        });
+        
         eventPublisher.publishEvent(com.example.ims.event.EntityChangeEvent.builder()
                 .entityType("PRODUCT")
                 .entityId(id)
@@ -464,6 +471,11 @@ public class ProductService {
         Product saved = productRepository.save(product);
         String newJson = captureJson(saved);
         
+        // Cascade restore to ProductionAudit
+        productionAuditRepository.findDeletedAuditsByItemCode(product.getItemCode()).forEach(audit -> {
+            productionAuditRepository.restoreAudit(audit.getId());
+        });
+        
         eventPublisher.publishEvent(com.example.ims.event.EntityChangeEvent.builder()
                 .entityType("PRODUCT")
                 .entityId(id)
@@ -492,6 +504,11 @@ public class ProductService {
         }
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
+
+        // Cascade hard delete to ProductionAudit
+        productionAuditRepository.findDeletedAuditsByItemCode(product.getItemCode()).forEach(audit -> productionAuditRepository.delete(audit));
+        productionAuditRepository.findByItemCode(product.getItemCode())
+                .ifPresent(audit -> productionAuditRepository.delete(audit));
 
         // [추가] 영구 삭제 시 연결된 모든 파일 물리적 삭제
         if (product.getImagePath() != null) fileStorageService.deleteFile(product.getImagePath());
@@ -557,6 +574,7 @@ public class ProductService {
         return historyRepository.findByProductIdOrderByModifiedAtDesc(productId);
     }
 
+    @Transactional(readOnly = true)
     public Product loadMasterProduct(String itemCode) {
         Product master = productRepository.findByItemCode(itemCode)
                 .orElseThrow(() -> new RuntimeException("Master product not found"));

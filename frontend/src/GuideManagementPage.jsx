@@ -57,7 +57,8 @@ const GuideManagementPage = ({ user }) => {
                 return;
             }
 
-            const validSections = selectedGuide.sections.filter(s => s.subtitle.trim() || s.content.trim());
+            // s.subtitle 또는 s.content가 undefined/null 일 때 trim() 에러 방지 방어 코드 적용
+            const validSections = selectedGuide.sections.filter(s => (s.subtitle || '').trim() || (s.content || '').trim());
             if (validSections.length === 0) {
                 toast.error("최소 하나의 유효한 섹션 내용을 입력해 주세요.");
                 return;
@@ -73,7 +74,72 @@ const GuideManagementPage = ({ user }) => {
             setIsEditing(false);
             fetchGuides();
         } catch (error) {
-            toast.error("저장 중 오류가 발생했습니다.");
+            console.error("Save guide error:", error);
+            // API 에러(네트워크/HTTP 500 등)인 경우에는 api.jsx 전역 인터셉터가 처리하도록 위임
+            if (error.response || error.config) {
+                return;
+            }
+            
+            // 순수 프론트엔드 런타임 JS 에러인 경우에만 사용자에게 버그 리포트 전송 UI 제공
+            let errorMsg = error.message || "저장 중 런타임 오류가 발생했습니다.";
+            toast.error(
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '20px' }}>⚠️</span>
+                        <span style={{ fontWeight: 600 }}>{errorMsg}</span>
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#666' }}>
+                        시스템 내부 오류가 발생했습니다. 아래 버튼을 눌러 버그 리포트를 관리자에게 제출해 주세요.
+                    </div>
+                    <button 
+                        onClick={async (e) => {
+                            e.stopPropagation();
+                            const btn = e.currentTarget;
+                            btn.disabled = true;
+                            btn.innerText = "⏳ 전송 중...";
+                            try {
+                                const { getBaseURL } = await import('./api');
+                                const axios = (await import('axios')).default;
+                                await axios.post(`${getBaseURL()}/api/bug-reports`, {
+                                    description: `[프론트엔드 런타임 에러] ${errorMsg}`,
+                                    steps: [
+                                        error.stack || '프론트엔드 코드 실행 중 예외 발생',
+                                        `[컴포넌트] GuideManagementPage`,
+                                        `[요청 정보]`,
+                                        `SelectedGuide: ${JSON.stringify(selectedGuide)}`
+                                    ].join('\n'),
+                                    screenName: "guideManagement",
+                                    url: window.location.href,
+                                    severity: 'HIGH',
+                                    serverError: 'N/A'
+                                }, { withCredentials: true });
+                                toast.success("✅ 버그 리포트가 관리자에게 즉시 전달되었습니다.");
+                                btn.innerText = "✅ 전달 완료";
+                            } catch (err) {
+                                toast.error("❌ 리포트 전송에 실패했습니다.");
+                                btn.disabled = false;
+                                btn.innerText = "🐞 다시 시도";
+                            }
+                        }}
+                        style={{
+                            backgroundColor: '#e74c3c',
+                            color: 'white',
+                            border: 'none',
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            alignSelf: 'flex-start',
+                            marginTop: '4px',
+                            boxShadow: '0 2px 4px rgba(231, 76, 60, 0.2)'
+                        }}
+                    >
+                        🐞 버그 리포트 즉시 전달하기
+                    </button>
+                </div>,
+                { autoClose: 10000 }
+            );
         }
     };
 
@@ -84,7 +150,8 @@ const GuideManagementPage = ({ user }) => {
             toast.success("가이드가 삭제되었습니다.");
             fetchGuides();
         } catch (error) {
-            toast.error("삭제 실패");
+            console.error("Delete guide error:", error);
+            // 중복 토스트 제거
         }
     };
 

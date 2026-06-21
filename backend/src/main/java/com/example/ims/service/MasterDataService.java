@@ -123,6 +123,17 @@ public class MasterDataService {
         return saved;
     }
 
+    @Transactional
+    public void deleteRule(Long id) {
+        ChannelPackagingRule rule = ruleRepository.findById(id).orElse(null);
+        if (rule != null) {
+            ruleRepository.delete(rule);
+            if (rule.getChannel() != null) {
+                packagingSpecService.syncRulesForChannel(rule.getChannel());
+            }
+        }
+    }
+
     // --- Master Packaging Material (Feature 11) ---
     @Transactional(readOnly = true)
     public List<MasterPackagingMaterial> getAllMaterials(String username) {

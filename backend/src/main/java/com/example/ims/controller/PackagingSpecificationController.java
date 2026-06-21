@@ -5,6 +5,8 @@ import com.example.ims.entity.Product;
 import com.example.ims.repository.PackagingSpecificationRepository;
 import com.example.ims.repository.ProductRepository;
 import com.example.ims.service.PackagingSpecExportService;
+import com.example.ims.dto.PackagingSpecFullDto;
+import com.example.ims.service.PackagingSpecService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpHeaders;
@@ -25,6 +27,7 @@ public class PackagingSpecificationController {
     private final PackagingSpecificationRepository specRepository;
     private final ProductRepository productRepository;
     private final PackagingSpecExportService exportService;
+    private final PackagingSpecService specService;
 
     @GetMapping("/product/{productId}")
     public ResponseEntity<List<PackagingSpecification>> getSpecsByProduct(@PathVariable Long productId) {
@@ -131,6 +134,7 @@ public class PackagingSpecificationController {
                     .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                     .body(resource);
         } catch (Exception e) {
+            e.printStackTrace();
             return ResponseEntity.internalServerError().build();
         }
     }
@@ -152,5 +156,36 @@ public class PackagingSpecificationController {
         } catch (Exception e) {
             return ResponseEntity.internalServerError().build();
         }
+    }
+
+    @GetMapping("/full/product/{productId}")
+    public ResponseEntity<PackagingSpecFullDto> getFullSpecByProduct(@PathVariable Long productId) {
+        try {
+            PackagingSpecFullDto fullDto = specService.getFullSpecByProductId(productId);
+            return ResponseEntity.ok(fullDto);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @PostMapping("/save-full")
+    public ResponseEntity<PackagingSpecFullDto> saveFullSpec(@RequestBody PackagingSpecFullDto dto,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        try {
+            String username = userDetails != null ? userDetails.getUsername() : "system";
+            PackagingSpecFullDto saved = specService.saveFullSpec(dto, username);
+            return ResponseEntity.ok(saved);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @GetMapping("/product-info/{itemCode}")
+    public ResponseEntity<Product> getProductInfoByItemCode(@PathVariable String itemCode) {
+        return productRepository.findByItemCode(itemCode)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 }

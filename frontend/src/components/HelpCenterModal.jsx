@@ -9,9 +9,11 @@ import { getPageGuide } from '../api';
  * @param {string} props.currentPage - 현재 활성화된 페이지 키
  * @param {Function} props.onClose - 모달 닫기 핸들러
  */
-const HelpCenterModal = ({ currentPage, onClose }) => {
+const HelpCenterModal = ({ currentPage, onClose, user }) => {
     const [guide, setGuide] = useState(null);
     const [loading, setLoading] = useState(true);
+
+    const isManufacturer = user?.roles?.some(r => r.authority?.includes('MANUFACTURER'));
 
     useEffect(() => {
         const fetchGuide = async () => {
@@ -48,7 +50,7 @@ const HelpCenterModal = ({ currentPage, onClose }) => {
                     <h3>💡 {loading ? "가이드 로딩 중..." : guide?.title}</h3>
                     <button className="close-button" onClick={onClose}>
                         <span className="icon">✕</span> 닫기
-                    </button>
+                     </button>
                 </div>
                 
                 <div className="modal-body white-bg">
@@ -60,6 +62,27 @@ const HelpCenterModal = ({ currentPage, onClose }) => {
                                 QMS 전문 사용자 가이드입니다. 각 화면의 목적과 주요 동작 방식을 확인하세요.
                             </div>
                             
+                            {isManufacturer && (
+                                <div style={{
+                                    backgroundColor: '#eff6ff',
+                                    border: '1px solid #bfdbfe',
+                                    borderRadius: '12px',
+                                    padding: '16px',
+                                    marginBottom: '20px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '6px'
+                                }}>
+                                    <div style={{ fontWeight: '800', color: '#1d4ed8', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        🤝 제조사 담당자 필수 업무 요령
+                                    </div>
+                                    <div style={{ fontSize: '13px', color: '#1e40af', lineHeight: '1.5' }}>
+                                        이 페이지는 완제품 품질 관리에 필수적인 연동 지점을 제공합니다. 
+                                        제조 사양 변경 또는 품질 이상 징후 감증 시 즉각 소명 등록 또는 품질 담당자 핫라인으로 보고해 주세요.
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="help-sections">
                                 {guide?.sections?.map((section, idx) => (
                                     <div key={idx} className="help-section-card">

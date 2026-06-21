@@ -37,12 +37,15 @@ public class ClaimService {
 
     @Transactional(readOnly = true)
     public List<Claim> getClaims(String role, String companyName) {
+        List<Claim> claims;
         if (role != null && role.contains("MANUFACTURER")) {
-            return claimRepository.findByManufacturer(cleanCompanyName(companyName)).stream()
+            claims = claimRepository.findByManufacturer(cleanCompanyName(companyName)).stream()
                     .filter(Claim::isSharedWithManufacturer)
                     .collect(java.util.stream.Collectors.toList());
+        } else {
+            claims = claimRepository.findAll();
         }
-        return claimRepository.findAll();
+        return claims;
     }
 
     @Transactional(readOnly = true)
@@ -130,7 +133,6 @@ public class ClaimService {
                     c.setPreventativeAction(null);
                 }
             }
-
             log.debug("Found {} claims for search criteria", results.size());
             return results;
         } catch (Exception e) {
@@ -280,6 +282,7 @@ public class ClaimService {
             }
         }
 
+        org.hibernate.Hibernate.initialize(claim.getClaimPhotos());
         return claim;
     }
 
@@ -320,6 +323,35 @@ public class ClaimService {
     @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
     public Claim updateClaim(Long id, Claim updatedData, User user) {
         Claim existing = getClaim(id, user, false);
+        
+        // [보안] 제조사 권한인 경우 본사 전용 관리 필드 수정 차단
+        boolean isManufacturer = user.getRole().contains("ROLE_MANUFACTURER") || "제조사".equals(user.getDepartment());
+        if (isManufacturer) {
+            if (!Objects.equals(cleanCompanyName(user.getCompanyName()), cleanCompanyName(existing.getManufacturer()))) {
+                throw new RuntimeException("귀사(협력사)에 할당되지 않은 클레임은 수정할 수 없습니다.");
+            }
+            // 제조사 전용 외의 필드가 악의적으로 변경되지 않도록 무력화 및 기존값 유지
+            updatedData.setItemCode(existing.getItemCode());
+            updatedData.setProductName(existing.getProductName());
+            updatedData.setLotNumber(existing.getLotNumber());
+            updatedData.setManufacturer(existing.getManufacturer());
+            updatedData.setOccurrenceQty(existing.getOccurrenceQty());
+            updatedData.setPrimaryCategory(existing.getPrimaryCategory());
+            updatedData.setSecondaryCategory(existing.getSecondaryCategory());
+            updatedData.setTertiaryCategory(existing.getTertiaryCategory());
+            updatedData.setClaimContent(existing.getClaimContent());
+            updatedData.setQualityCheckNeeded(existing.getQualityCheckNeeded());
+            updatedData.setConsumerReplyNeeded(existing.getConsumerReplyNeeded());
+            updatedData.setProductRetrievalNeeded(existing.getProductRetrievalNeeded());
+            updatedData.setExpectedRetrievalDate(existing.getExpectedRetrievalDate());
+            updatedData.setClaimPhotos(existing.getClaimPhotos());
+            updatedData.setRecallDate(existing.getRecallDate());
+            updatedData.setRootCauseAnalysis(existing.getRootCauseAnalysis());
+            updatedData.setPreventativeAction(existing.getPreventativeAction());
+            updatedData.setQualityStatus(existing.getQualityStatus());
+            updatedData.setSharedWithManufacturer(existing.isSharedWithManufacturer());
+            updatedData.setTerminationDate(existing.getTerminationDate());
+        }
         
         // 제조사가 이전에 대책서(원인분석/재발방지대책)를 제출했었는지 여부 백업
         boolean wasMfrSubmitted = (existing.getMfrRootCauseAnalysis() != null && !existing.getMfrRootCauseAnalysis().isEmpty())

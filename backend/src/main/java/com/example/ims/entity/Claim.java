@@ -96,7 +96,7 @@ public class Claim {
     private boolean sharedWithManufacturer; // [고도화 3] 제조사 노출 여부 스위치
     private LocalDate terminationDate;    // [고도화 2] 5단계 종결 시점
 
-    @ElementCollection(fetch = FetchType.EAGER)
+    @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "claim_photos", joinColumns = @JoinColumn(name = "claim_id"))
     @Column(name = "photo_url", columnDefinition = "TEXT")
     @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.LONGVARCHAR)

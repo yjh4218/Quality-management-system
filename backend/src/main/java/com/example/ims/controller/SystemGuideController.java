@@ -39,6 +39,7 @@ public class SystemGuideController {
         if (existing != null) {
             existing.setTitle(guide.getTitle());
             existing.setContent(guide.getContent());
+            existing.setSectionsJson(guide.getSectionsJson());
             existing.setUpdatedBy(guide.getUpdatedBy());
             return ResponseEntity.ok(systemPageGuideRepository.save(existing));
         }

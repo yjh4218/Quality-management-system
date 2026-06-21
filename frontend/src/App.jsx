@@ -33,6 +33,7 @@ import AccessLogPage from './AccessLogPage.jsx';
 import BugReportPage from './BugReportPage.jsx';
 import AnnouncementManagementPage from './AnnouncementManagementPage.jsx';
 import NotificationListPage from './NotificationListPage.jsx';
+import ManufacturerGuidePage from './ManufacturerGuidePage.jsx';
 
 const PAGE_INFO = {
     dashboard: { title: '📊 시스템 대시보드' },
@@ -64,7 +65,8 @@ const PAGE_INFO = {
     bugReports: { title: '🐞 버그 리포트 관리' },
     ingredientCompliance: { title: '🧪 성분 안전성 검토' },
     mailTemplates: { title: '📧 제조사 전달 메일 관리' },
-    announcements: { title: '📢 전체공지' }
+    announcements: { title: '📢 전체공지' },
+    manufacturerGuide: { title: '🤝 제조사 협업 가이드' }
 };
 
 // [추가] 글로벌 에러 핸들링을 위한 Error Boundary 컴포넌트
@@ -658,7 +660,7 @@ const App = () => {
     const hasMonitoringAccess = canAccess('dashboard') || canAccess('announcements') || canAccess('notifications');
     const hasSystemAccess = canAccess('users') || canAccess('logs') || canAccess('roles') || canAccess('guideManagement') || canAccess('dashboardMgmt') || canAccess('trashBin') || canAccess('accessLogs') || canAccess('bugReports') || canAccess('mailTemplates');
     const hasProductsAccess = canAccess('products') || canAccess('brands') || canAccess('ingredientCompliance') || canAccess('bomMaster') || canAccess('bomCategories');
-    const hasPartnerAccess = canAccess('manufacturers') || canAccess('manufacturerCategories') || canAccess('salesChannels');
+    const hasPartnerAccess = canAccess('manufacturers') || canAccess('manufacturerCategories') || canAccess('salesChannels') || canAccess('manufacturerGuide');
     const hasAuditAccess = canAccess('manufacturerAudits') || canAccess('manufacturerAuditDashboard') || canAccess('manufacturerAuditItems');
     const hasQualityAccess = canAccess('qualityPhotoAudit') || canAccess('packagingTemplates') || canAccess('packagingRules') || canAccess('quality') || canAccess('releaseRecord');
     const hasClaimAccess = canAccess('claims') || canAccess('claimDashboard');
@@ -670,7 +672,7 @@ const App = () => {
             case 'monitoring': return ['dashboard', 'announcements', 'notifications'].includes(activePage);
             case 'system': return ['users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin', 'accessLogs', 'bugReports', 'mailTemplates'].includes(activePage);
             case 'products': return ['products', 'brands', 'ingredientCompliance', 'bomMaster', 'bomCategories'].includes(activePage);
-            case 'partner': return ['manufacturers', 'manufacturerCategories', 'salesChannels'].includes(activePage);
+            case 'partner': return ['manufacturers', 'manufacturerCategories', 'salesChannels', 'manufacturerGuide'].includes(activePage);
             case 'audit': return ['manufacturerAudits', 'manufacturerAuditDashboard', 'manufacturerAuditItems'].includes(activePage);
             case 'quality': return ['qualityPhotoAudit', 'packagingTemplates', 'packagingRules', 'quality', 'releaseRecord'].includes(activePage);
             case 'claim': return ['claims', 'claimDashboard'].includes(activePage);
@@ -901,6 +903,11 @@ const App = () => {
                                 {canAccess('salesChannels') && (
                                     <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'salesChannels' ? 'active' : ''}`} onClick={() => handleNavigate('salesChannels')}>
                                         🌐 유통 채널 관리
+                                    </button>
+                                )}
+                                {canAccess('manufacturerGuide') && (
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'manufacturerGuide' ? 'active' : ''}`} onClick={() => handleNavigate('manufacturerGuide')}>
+                                        🤝 제조사 협업 가이드
                                     </button>
                                 )}
                             </div>
@@ -1217,6 +1224,9 @@ const App = () => {
                                 {tab.page === 'manufacturerAuditItems' && <ManufacturerAuditItemPage user={user} />}
                                 {tab.page === 'manufacturerAudits' && <ManufacturerAuditPage user={user} />}
                                 {tab.page === 'manufacturerAuditDashboard' && <ManufacturerAuditDashboard user={user} onNavigate={handleNavigate} />}
+                                {canAccess('manufacturerGuide') && tab.page === 'manufacturerGuide' && (
+                                    <ManufacturerGuidePage user={user} />
+                                )}
                                 {canAccess('trashBin') && tab.page === 'trashBin' && <TrashBinPage user={user} />}
                                 {canAccess('accessLogs') && tab.page === 'accessLogs' && <AccessLogPage user={user} />}
                                 {canAccess('bugReports') && tab.page === 'bugReports' && <BugReportPage user={user} />}
@@ -1239,6 +1249,7 @@ const App = () => {
                 <HelpCenterModal 
                     currentPage={tabs.find(t => t.id === activeTabId)?.page} 
                     onClose={() => setIsHelpOpen(false)} 
+                    user={user}
                 />
             )}
 

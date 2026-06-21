@@ -6,7 +6,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.example.ims.dto.PackagingSpecFullDto;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -21,6 +24,8 @@ public class PackagingSpecService {
     private final ProductRepository productRepository;
     private final MasterDataService masterDataService;
     private final PackagingSpecBomItemRepository bomItemRepository;
+    private final PackagingSpecRevisionRepository revisionRepository;
+    private final PackagingSpecComponentRepository componentRepository;
 
     @Transactional(readOnly = true)
     public List<PackagingSpecification> getSpecsByProductId(Long productId) {
@@ -170,5 +175,107 @@ public class PackagingSpecService {
         if (product.getChannels() == null) return false;
         return product.getChannels().stream()
                 .anyMatch(ch -> ch.getName().contains("EU") || ch.getName().contains("AMZ"));
+    }
+
+    @Transactional
+    public PackagingSpecFullDto saveFullSpec(PackagingSpecFullDto dto, String username) {
+        PackagingSpecification spec = dto.getSpec();
+        if (spec.getProduct() != null && spec.getProduct().getId() != null) {
+            Product prod = productRepository.findById(spec.getProduct().getId())
+                    .orElseThrow(() -> new RuntimeException("Product not found"));
+            spec.setProduct(prod);
+        }
+        
+        spec.setLastModifiedBy(username);
+        
+        // 버전 계산 및 개정 노트 세팅
+        List<PackagingSpecification> existingSpecs = specRepository.findByProductId(spec.getProduct().getId());
+        PackagingSpecification latestSpec = null;
+        int maxVersion = 0;
+        for (PackagingSpecification existing : existingSpecs) {
+            if (existing.getVersion() != null && existing.getVersion() > maxVersion) {
+                if (spec.getId() == null || !existing.getId().equals(spec.getId())) {
+                    maxVersion = existing.getVersion();
+                    latestSpec = existing;
+                }
+            }
+        }
+        
+        if (spec.getVersion() == null) {
+            spec.setVersion(maxVersion + 1);
+        }
+        
+        if (latestSpec == null && spec.getId() == null) {
+            spec.setRevisionNotes("최초 등록");
+        } else if (spec.getRevisionNotes() == null || spec.getRevisionNotes().isEmpty()) {
+            spec.setRevisionNotes("포장사양 업데이트");
+        }
+        
+        PackagingSpecification savedSpec = specRepository.save(spec);
+        Long specId = savedSpec.getId();
+        
+        // 1. 개정 이력 저장
+        revisionRepository.deleteBySpecId(specId);
+        List<PackagingSpecRevision> revisions = dto.getRevisions();
+        if (revisions != null) {
+            revisions.forEach(r -> {
+                r.setSpecId(specId);
+                if (r.getRevisionDate() == null) {
+                    r.setRevisionDate(LocalDate.now());
+                }
+            });
+            revisionRepository.saveAll(revisions);
+        }
+        
+        // 2. 구성품 리스트 저장
+        componentRepository.deleteBySpecId(specId);
+        List<PackagingSpecComponent> components = dto.getComponents();
+        if (components != null) {
+            components.forEach(c -> c.setSpecId(specId));
+            componentRepository.saveAll(components);
+        }
+        
+        return new PackagingSpecFullDto(savedSpec, revisions, components);
+    }
+
+    @Transactional(readOnly = true)
+    public PackagingSpecFullDto getFullSpecByProductId(Long productId) {
+        List<PackagingSpecification> specs = specRepository.findByProductId(productId);
+        
+        // 없으면 빈 스펙을 만들어서 내려줌
+        if (specs.isEmpty()) {
+            Product prod = productRepository.findById(productId)
+                    .orElseThrow(() -> new RuntimeException("Product not found"));
+            
+            PackagingSpecification newSpec = PackagingSpecification.builder()
+                    .product(prod)
+                    .version(1)
+                    .applyChannelSticker(shouldApplySticker(prod))
+                    .palletType(calculateDefaultPalette(prod))
+                    .build();
+            
+            // 제품 유형별 기본 포장방법 자동 지정
+            masterDataService.getTemplateByType(prod.getProductType())
+                    .ifPresent(template -> {
+                        String summary = template.getSteps().stream()
+                                .map(step -> String.format("Step %d: %s", step.getStepNumber(), step.getInstruction()))
+                                .collect(Collectors.joining("\n"));
+                        newSpec.setPackagingMethodText(summary);
+                    });
+            
+            return new PackagingSpecFullDto(newSpec, new java.util.ArrayList<>(), new java.util.ArrayList<>());
+        }
+        
+        // 가장 버전이 높은 최신 것을 사용
+        PackagingSpecification latestSpec = specs.stream()
+                .max((a, b) -> Integer.compare(
+                        a.getVersion() != null ? a.getVersion() : 0, 
+                        b.getVersion() != null ? b.getVersion() : 0))
+                .orElse(specs.get(0));
+        
+        List<PackagingSpecRevision> revisions = revisionRepository.findBySpecId(latestSpec.getId());
+        List<PackagingSpecComponent> components = componentRepository.findBySpecId(latestSpec.getId());
+        
+        return new PackagingSpecFullDto(latestSpec, revisions, components);
     }
 }

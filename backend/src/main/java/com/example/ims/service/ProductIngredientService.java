@@ -22,11 +22,32 @@ import java.util.Optional;
 public class ProductIngredientService {
 
     private final RegulatoryIngredientRepository regulatoryRepository;
+    private final com.example.ims.repository.IngredientRegulationHistoryRepository historyRepository;
     private final RegulatoryCrawlerService crawlerService;
 
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<com.example.ims.entity.RegulatoryIngredient> getAllRegulatoryIngredients() {
         return regulatoryRepository.findAll();
+    }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<com.example.ims.entity.RegulatoryIngredient> getRegulatoryIngredientsPaged(
+            String search, org.springframework.data.domain.Pageable pageable) {
+        if (search == null || search.trim().isEmpty()) {
+            return regulatoryRepository.findAll(pageable);
+        }
+        String query = search.trim();
+        return regulatoryRepository.findByKoreanNameContainingOrInciNameContainingIgnoreCase(query, query, pageable);
+    }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<com.example.ims.entity.IngredientRegulationHistory> getRegulationHistoryPaged(
+            String search, org.springframework.data.domain.Pageable pageable) {
+        if (search == null || search.trim().isEmpty()) {
+            return historyRepository.findAll(pageable);
+        }
+        String query = search.trim();
+        return historyRepository.findByKoreanNameContainingOrInciNameContainingIgnoreCase(query, query, pageable);
     }
 
     public void triggerManualSync(List<String> countries) {
@@ -259,24 +280,69 @@ public class ProductIngredientService {
         com.example.ims.entity.RegulatoryIngredient existing = regulatoryRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Ingredient not found with id: " + id));
         
-        // Update basic info
-        if (updated.getKoreanName() != null) existing.setKoreanName(updated.getKoreanName());
-        if (updated.getCasNumber() != null) existing.setCasNumber(updated.getCasNumber());
-        if (updated.getRemarks() != null) existing.setRemarks(updated.getRemarks());
-        
-        // Update Statuses
-        if (updated.getKrStatus() != null) existing.setKrStatus(updated.getKrStatus());
-        if (updated.getKrLimit() != null) existing.setKrLimit(updated.getKrLimit());
-        if (updated.getEuStatus() != null) existing.setEuStatus(updated.getEuStatus());
-        if (updated.getEuLimit() != null) existing.setEuLimit(updated.getEuLimit());
-        if (updated.getCnStatus() != null) existing.setCnStatus(updated.getCnStatus());
-        if (updated.getCnLimit() != null) existing.setCnLimit(updated.getCnLimit());
-        if (updated.getUsStatus() != null) existing.setUsStatus(updated.getUsStatus());
-        if (updated.getUsLimit() != null) existing.setUsLimit(updated.getUsLimit());
-        if (updated.getJpStatus() != null) existing.setJpStatus(updated.getJpStatus());
-        if (updated.getJpLimit() != null) existing.setJpLimit(updated.getJpLimit());
+        String updater = "ADMIN";
+        String inci = existing.getInciName();
+        String kor = existing.getKoreanName();
+        String cas = existing.getCasNumber();
 
-        // Update Granular Limits (Sync list from DTO)
+        if (updated.getKoreanName() != null && !updated.getKoreanName().equals(existing.getKoreanName())) {
+            logHistory(inci, updated.getKoreanName(), cas, "ALL", "koreanName", existing.getKoreanName(), updated.getKoreanName(), updater);
+            existing.setKoreanName(updated.getKoreanName());
+        }
+        if (updated.getCasNumber() != null && !updated.getCasNumber().equals(existing.getCasNumber())) {
+            logHistory(inci, kor, updated.getCasNumber(), "ALL", "casNumber", existing.getCasNumber(), updated.getCasNumber(), updater);
+            existing.setCasNumber(updated.getCasNumber());
+        }
+        if (updated.getRemarks() != null && !updated.getRemarks().equals(existing.getRemarks())) {
+            logHistory(inci, kor, cas, "ALL", "remarks", existing.getRemarks(), updated.getRemarks(), updater);
+            existing.setRemarks(updated.getRemarks());
+        }
+
+        if (updated.getKrStatus() != null && !updated.getKrStatus().equals(existing.getKrStatus())) {
+            logHistory(inci, kor, cas, "KR", "status", existing.getKrStatus(), updated.getKrStatus(), updater);
+            existing.setKrStatus(updated.getKrStatus());
+        }
+        if (updated.getKrLimit() != null && !updated.getKrLimit().equals(existing.getKrLimit())) {
+            logHistory(inci, kor, cas, "KR", "limit", String.valueOf(existing.getKrLimit()), String.valueOf(updated.getKrLimit()), updater);
+            existing.setKrLimit(updated.getKrLimit());
+        }
+
+        if (updated.getEuStatus() != null && !updated.getEuStatus().equals(existing.getEuStatus())) {
+            logHistory(inci, kor, cas, "EU", "status", existing.getEuStatus(), updated.getEuStatus(), updater);
+            existing.setEuStatus(updated.getEuStatus());
+        }
+        if (updated.getEuLimit() != null && !updated.getEuLimit().equals(existing.getEuLimit())) {
+            logHistory(inci, kor, cas, "EU", "limit", String.valueOf(existing.getEuLimit()), String.valueOf(updated.getEuLimit()), updater);
+            existing.setEuLimit(updated.getEuLimit());
+        }
+
+        if (updated.getCnStatus() != null && !updated.getCnStatus().equals(existing.getCnStatus())) {
+            logHistory(inci, kor, cas, "CN", "status", existing.getCnStatus(), updated.getCnStatus(), updater);
+            existing.setCnStatus(updated.getCnStatus());
+        }
+        if (updated.getCnLimit() != null && !updated.getCnLimit().equals(existing.getCnLimit())) {
+            logHistory(inci, kor, cas, "CN", "limit", String.valueOf(existing.getCnLimit()), String.valueOf(updated.getCnLimit()), updater);
+            existing.setCnLimit(updated.getCnLimit());
+        }
+
+        if (updated.getUsStatus() != null && !updated.getUsStatus().equals(existing.getUsStatus())) {
+            logHistory(inci, kor, cas, "US", "status", existing.getUsStatus(), updated.getUsStatus(), updater);
+            existing.setUsStatus(updated.getUsStatus());
+        }
+        if (updated.getUsLimit() != null && !updated.getUsLimit().equals(existing.getUsLimit())) {
+            logHistory(inci, kor, cas, "US", "limit", String.valueOf(existing.getUsLimit()), String.valueOf(updated.getUsLimit()), updater);
+            existing.setUsLimit(updated.getUsLimit());
+        }
+
+        if (updated.getJpStatus() != null && !updated.getJpStatus().equals(existing.getJpStatus())) {
+            logHistory(inci, kor, cas, "JP", "status", existing.getJpStatus(), updated.getJpStatus(), updater);
+            existing.setJpStatus(updated.getJpStatus());
+        }
+        if (updated.getJpLimit() != null && !updated.getJpLimit().equals(existing.getJpLimit())) {
+            logHistory(inci, kor, cas, "JP", "limit", String.valueOf(existing.getJpLimit()), String.valueOf(updated.getJpLimit()), updater);
+            existing.setJpLimit(updated.getJpLimit());
+        }
+
         if (updated.getIngredientLimitDetails() != null) {
             existing.getLimitDetails().clear();
             for (com.example.ims.dto.IngredientLimitDetailDto dto : updated.getIngredientLimitDetails()) {
@@ -293,5 +359,22 @@ public class ProductIngredientService {
         }
 
         return regulatoryRepository.save(existing);
+    }
+
+    private void logHistory(String inci, String kor, String cas, String country, String field, String oldVal, String newVal, String updater) {
+        if (oldVal == null && newVal == null) return;
+        if (oldVal != null && oldVal.equals(newVal)) return;
+
+        historyRepository.save(com.example.ims.entity.IngredientRegulationHistory.builder()
+                .inciName(inci)
+                .koreanName(kor)
+                .casNumber(cas)
+                .changeType("UPDATE")
+                .country(country)
+                .fieldName(field)
+                .oldValue(oldVal)
+                .newValue(newVal)
+                .updatedBy(updater)
+                .build());
     }
 }

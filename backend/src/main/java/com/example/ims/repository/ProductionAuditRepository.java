@@ -42,6 +42,9 @@ public interface ProductionAuditRepository extends JpaRepository<ProductionAudit
     @org.springframework.data.jpa.repository.Query(value = "SELECT * FROM production_audit WHERE is_deleted = true ORDER BY upload_date DESC", nativeQuery = true)
     List<ProductionAudit> findDeletedAudits();
 
+    @org.springframework.data.jpa.repository.Query(value = "SELECT * FROM production_audit WHERE is_deleted = true AND item_code = :itemCode ORDER BY upload_date DESC", nativeQuery = true)
+    List<ProductionAudit> findDeletedAuditsByItemCode(@org.springframework.data.repository.query.Param("itemCode") String itemCode);
+
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.data.jpa.repository.Query(value = "UPDATE production_audit SET is_deleted = false WHERE id = :id", nativeQuery = true)
     void restoreAudit(Long id);

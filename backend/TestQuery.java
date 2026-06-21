@@ -12,9 +12,10 @@ public class TestQuery {
         try (Connection conn = DriverManager.getConnection(url, user, password);
              Statement stmt = conn.createStatement()) {
             
-            ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM regulatory_ingredient");
-            if (rs.next()) {
-                System.out.println("Total ingredients in DB: " + rs.getInt(1));
+            System.out.println("--- Querying system_settings ---");
+            ResultSet rs = stmt.executeQuery("SELECT setting_key, setting_value, description FROM system_settings");
+            while (rs.next()) {
+                System.out.println(rs.getString(1) + " : " + rs.getString(2) + " (" + rs.getString(3) + ")");
             }
         }
     }

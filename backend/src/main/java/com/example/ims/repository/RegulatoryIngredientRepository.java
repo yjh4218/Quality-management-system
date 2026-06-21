@@ -9,6 +9,9 @@ public interface RegulatoryIngredientRepository extends JpaRepository<Regulatory
     List<RegulatoryIngredient> findByInciName(String inciName);
     List<RegulatoryIngredient> findByKoreanName(String koreanName);
     List<RegulatoryIngredient> findByKoreanNameContaining(String koreanName);
+    org.springframework.data.domain.Page<RegulatoryIngredient> findByKoreanNameContainingOrInciNameContainingIgnoreCase(String koreanName, String inciName, org.springframework.data.domain.Pageable pageable);
+    org.springframework.data.domain.Page<RegulatoryIngredient> findByKoreanNameContainingIgnoreCase(String koreanName, org.springframework.data.domain.Pageable pageable);
+    org.springframework.data.domain.Page<RegulatoryIngredient> findByInciNameContainingIgnoreCase(String inciName, org.springframework.data.domain.Pageable pageable);
     
     @Transactional
     void deleteBySourceApi(String sourceApi);

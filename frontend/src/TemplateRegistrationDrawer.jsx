@@ -23,6 +23,7 @@ const TemplateRegistrationDrawer = ({ template, onClose, user }) => {
         steps: []
     });
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
     const { canEdit: checkEdit } = usePermissions(user);
     const canEdit = checkEdit('packagingTemplates');
 

@@ -5,7 +5,10 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "regulatory_ingredients")
+@Table(name = "regulatory_ingredients", indexes = {
+    @Index(name = "idx_reg_inci", columnList = "inciName"),
+    @Index(name = "idx_reg_korean", columnList = "koreanName")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -57,7 +60,7 @@ public class RegulatoryIngredient {
     @Column(columnDefinition = "TEXT")
     private String remarks;
 
-    @OneToMany(mappedBy = "ingredient", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @OneToMany(mappedBy = "ingredient", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     @com.fasterxml.jackson.annotation.JsonProperty("limitDetails")
     private java.util.List<IngredientLimitDetail> limitDetails = new java.util.ArrayList<>();

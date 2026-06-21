@@ -5,9 +5,15 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import com.example.ims.service.PackagingSpecService;
+import com.example.ims.service.PackagingSpecExportService;
+import com.example.ims.service.DashboardService;
+import com.example.ims.repository.UserRepository;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.io.StringWriter;
+import java.io.PrintWriter;
 
 /**
  * Temporary Debug Controller to check Supabase data integrity.
@@ -20,6 +26,54 @@ import java.util.Map;
 public class DebugController {
 
     private final JdbcTemplate jdbcTemplate;
+    private final PackagingSpecService specService;
+    private final PackagingSpecExportService exportService;
+    private final DashboardService dashboardService;
+    private final UserRepository userRepository;
+
+    @GetMapping("/test-dashboard")
+    public Object testDashboard() {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            com.example.ims.entity.User user = userRepository.findByUsername("admin")
+                    .orElseThrow(() -> new RuntimeException("admin user not found"));
+            result.put("action", "getDashboardData");
+            result.put("data", dashboardService.getDashboardData(user));
+        } catch (Exception e) {
+            StringWriter sw = new StringWriter();
+            e.printStackTrace(new PrintWriter(sw));
+            result.put("error_message", e.getMessage());
+            result.put("stack_trace", sw.toString());
+        }
+        return result;
+    }
+
+    @GetMapping("/test-spec")
+    public Object testSpec() {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            result.put("action", "getFullSpecByProductId");
+            result.put("data", specService.getFullSpecByProductId(42L));
+        } catch (Exception e) {
+            StringWriter sw = new StringWriter();
+            e.printStackTrace(new PrintWriter(sw));
+            result.put("error_message", e.getMessage());
+            result.put("stack_trace", sw.toString());
+            return result;
+        }
+
+        try {
+            result.put("action2", "generateExcel");
+            byte[] bytes = exportService.generateExcel(42L);
+            result.put("excel_bytes_len", bytes != null ? bytes.length : 0);
+        } catch (Exception e) {
+            StringWriter sw = new StringWriter();
+            e.printStackTrace(new PrintWriter(sw));
+            result.put("error_message2", e.getMessage());
+            result.put("stack_trace2", sw.toString());
+        }
+        return result;
+    }
 
     @GetMapping("/db-check")
     public Map<String, Object> checkData() {

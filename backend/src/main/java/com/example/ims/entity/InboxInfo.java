@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 @Builder
 public class InboxInfo {
     @Builder.Default
-    private boolean hasInbox = true; // 없음 체크용
+    private Boolean hasInbox = true; // 없음 체크용
 
     private Double inboxWidth;
     private Double inboxLength;

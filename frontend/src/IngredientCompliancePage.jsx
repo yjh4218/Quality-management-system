@@ -8,7 +8,7 @@ const IngredientCompliancePage = ({ user }) => {
     const { canEdit, hasPerm, isAdmin } = usePermissions(user);
     const hasSyncPermission = canEdit('ingredientCompliance') || hasPerm('INGREDIENT_SAFETY_SYNC') || isAdmin;
 
-    const [activeTab, setActiveTab] = useState('analysis'); // 'analysis' or 'lookup'
+    const [activeTab, setActiveTab] = useState('analysis'); // 'analysis', 'lookup', or 'history'
     const [file, setFile] = useState(null);
     const [analysisResults, setAnalysisResults] = useState([]);
     const [dbIngredients, setDbIngredients] = useState([]);
@@ -18,10 +18,25 @@ const IngredientCompliancePage = ({ user }) => {
         inciName: '',
         status: ''
     });
+    const [searchKeyword, setSearchKeyword] = useState('');
+    const [page, setPage] = useState(0);
+    const [size] = useState(50);
+    const [totalElements, setTotalElements] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
     const [globalSyncing, setGlobalSyncing] = useState(false);
     const [editModal, setEditModal] = useState({ isOpen: false, data: null });
     const [showConfirmModal, setShowConfirmModal] = useState(false); // [FIX] 동기화 확인 팝업 상태 추가
     const [saving, setSaving] = useState(false);
+    
+    // 규제 변경 이력 상태
+    const [historyData, setHistoryData] = useState([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
+    const [historySearch, setHistorySearch] = useState('');
+    const [historySearchInput, setHistorySearchInput] = useState('');
+    const [historyPage, setHistoryPage] = useState(0);
+    const [historyTotalElements, setHistoryTotalElements] = useState(0);
+    const [historyTotalPages, setHistoryTotalPages] = useState(0);
+
     const fileInputRef = useRef(null);
     const gridRef = useRef(null);
 
@@ -35,18 +50,21 @@ const IngredientCompliancePage = ({ user }) => {
 
     useEffect(() => {
         if (activeTab === 'lookup' && !globalSyncing) {
-            fetchDbIngredients();
+            fetchDbIngredients(page, searchKeyword);
+        } else if (activeTab === 'history') {
+            fetchHistoryData(historyPage, historySearch);
         }
-    }, [activeTab, globalSyncing]);
+    }, [activeTab, globalSyncing, page, searchKeyword, historyPage, historySearch]);
 
     // [FIX] 동기화 완료 감지 → 자동 데이터 새로고침 + 토스트 알림
     useEffect(() => {
         if (prevSyncingRef.current === true && globalSyncing === false) {
             showToast('✅ 식약처(MFDS) 규제 데이터 동기화가 완료되었습니다! 최신 데이터가 자동으로 로드됩니다.', 'success');
-            fetchDbIngredients();
+            setPage(0);
+            fetchDbIngredients(0, searchKeyword);
         }
         prevSyncingRef.current = globalSyncing;
-    }, [globalSyncing]);
+    }, [globalSyncing, searchKeyword]);
 
     const checkSyncStatus = async () => {
         try {
@@ -61,20 +79,39 @@ const IngredientCompliancePage = ({ user }) => {
         }
     };
 
-    const fetchDbIngredients = async () => {
+    const fetchDbIngredients = async (currentPage = page, currentSearch = searchKeyword) => {
         setLookupLoading(true);
         try {
-            const response = await api.get('/api/quality/ingredients/list', { skipLoading: true, skipToast: true });
-            // Backend returns ApiResponse { success, data, message }
-            const list = response.data.data || response.data;
-            if (Array.isArray(list)) {
-                setDbIngredients(list);
+            const response = await api.get(`/api/quality/ingredients/list?page=${currentPage}&size=${size}&search=${encodeURIComponent(currentSearch)}`, { skipLoading: true, skipToast: true });
+            const pageData = response.data.data;
+            if (pageData) {
+                setDbIngredients(pageData.content || []);
+                setTotalElements(pageData.totalElements || 0);
+                setTotalPages(pageData.totalPages || 0);
             }
         } catch (error) {
             console.error('Fetch error:', error);
             showToast('규제 성분 데이터를 불러오는 중 오류가 발생했습니다.', 'error');
         } finally {
             setLookupLoading(false);
+        }
+    };
+
+    const fetchHistoryData = async (currentPage = historyPage, currentSearch = historySearch) => {
+        setHistoryLoading(true);
+        try {
+            const response = await api.get(`/api/quality/ingredients/history?page=${currentPage}&size=${size}&search=${encodeURIComponent(currentSearch)}`, { skipLoading: true, skipToast: true });
+            const pageData = response.data.data;
+            if (pageData) {
+                setHistoryData(pageData.content || []);
+                setHistoryTotalElements(pageData.totalElements || 0);
+                setHistoryTotalPages(pageData.totalPages || 0);
+            }
+        } catch (error) {
+            console.error('Fetch history error:', error);
+            showToast('규제 변경 이력을 불러오는 중 오류가 발생했습니다.', 'error');
+        } finally {
+            setHistoryLoading(false);
         }
     };
 
@@ -136,29 +173,17 @@ const IngredientCompliancePage = ({ user }) => {
     };
 
     const filteredIngredients = useMemo(() => {
-        return dbIngredients.filter(item => {
-            if (!item) return false;
-
-            const inci = item.inciName ? item.inciName.toLowerCase() : "";
-            const kor = item.koreanName ? item.koreanName.toLowerCase() : "";
-            const search = searchFields.inciName.toLowerCase();
-
-            const matchesInci = inci.includes(search);
-            const matchesKorean = kor.includes(search);
-            const matchesStatus = !searchFields.status ||
-                [item.krStatus, item.euStatus, item.cnStatus, item.usStatus, item.jpStatus].includes(searchFields.status);
-
-            return (matchesInci || matchesKorean) && matchesStatus;
-        });
-    }, [dbIngredients, searchFields]);
+        return dbIngredients; // API를 통해 이미 백엔드에서 필터링 및 페이징이 되어 넘어옴
+    }, [dbIngredients]);
 
     const stats = useMemo(() => {
-        const total = dbIngredients.length;
+        const total = totalElements;
+        // 현재 페이지 내에서 카운팅하여 대략적인 비율 표시용도로 활용
         const prohibited = dbIngredients.filter(i => [i.krStatus, i.euStatus, i.cnStatus, i.usStatus, i.jpStatus].includes('PROHIBITED')).length;
         const restricted = dbIngredients.filter(i => [i.krStatus, i.euStatus, i.cnStatus, i.usStatus, i.jpStatus].includes('RESTRICTED')).length;
         const allowed = total - prohibited - restricted;
         return { total, prohibited, restricted, allowed };
-    }, [dbIngredients]);
+    }, [dbIngredients, totalElements]);
 
     const colDefs = useMemo(() => [
         { field: "sourceApi", headerName: "출처", filter: true, width: 100 },
@@ -570,9 +595,15 @@ const IngredientCompliancePage = ({ user }) => {
                         >
                             🔍 규제 성분 DB 조회
                         </button>
+                        <button
+                            className={`tab-item ${activeTab === 'history' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('history')}
+                        >
+                            🔄 규제 변경 이력
+                        </button>
                     </div>
 
-                    {activeTab === 'analysis' ? (
+                    {activeTab === 'analysis' && (
                         <>
                             <div className="content-card mb-4">
                                 <div className="upload-section">
@@ -638,7 +669,9 @@ const IngredientCompliancePage = ({ user }) => {
                                 </div>
                             )}
                         </>
-                    ) : (
+                    )}
+
+                    {activeTab === 'lookup' && (
                         <div className="lookup-container animate-fade-in" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '5px' }}>
                             {/* 검색 필터 영역 */}
                             <div className="filter-card">
@@ -650,6 +683,13 @@ const IngredientCompliancePage = ({ user }) => {
                                             placeholder="영문명 또는 한글명 검색..."
                                             value={searchFields.inciName}
                                             onChange={(e) => setSearchFields({ ...searchFields, inciName: e.target.value })}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    setPage(0);
+                                                    setSearchKeyword(searchFields.inciName);
+                                                    fetchDbIngredients(0, searchFields.inciName);
+                                                }
+                                            }}
                                         />
                                     </div>
                                     <div className="filter-item">
@@ -665,10 +705,19 @@ const IngredientCompliancePage = ({ user }) => {
                                         </select>
                                     </div>
                                     <div className="filter-actions">
-                                        <button className="btn-outline" onClick={() => setSearchFields({ inciName: '', status: '' })}>
+                                        <button className="btn-outline" onClick={() => {
+                                            setSearchFields({ inciName: '', status: '' });
+                                            setSearchKeyword('');
+                                            setPage(0);
+                                            fetchDbIngredients(0, '');
+                                        }}>
                                             ♻️ 검색 초기화
                                         </button>
-                                        <button className="btn-primary" onClick={fetchDbIngredients}>
+                                        <button className="btn-primary" onClick={() => {
+                                            setPage(0);
+                                            setSearchKeyword(searchFields.inciName);
+                                            fetchDbIngredients(0, searchFields.inciName);
+                                        }}>
                                             🔍 검색
                                         </button>
                                     </div>
@@ -686,14 +735,212 @@ const IngredientCompliancePage = ({ user }) => {
                                         onRowDoubleClicked={(e) => setEditModal({ isOpen: true, data: { ...e.data } })}
                                         loadingOverlayComponent={() => <div>데이터를 불러오는 중...</div>}
                                         noRowsOverlayComponent={() => <div>검색 결과가 없습니다.</div>}
-                                        pagination={true}
-                                        paginationPageSize={100}
-                                        paginationPageSizeSelector={false}
+                                        pagination={false}
                                         animateRows={true}
                                         rowHeight={60}
                                         headerHeight={50}
                                         suppressCellFocus={true}
                                     />
+                                </div>
+                                {/* 하단 페이징 바 */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 15px', background: '#fff', borderTop: '1px solid #e2e8f0', borderRadius: '0 0 10px 10px' }}>
+                                    <span style={{ fontSize: '14px', color: '#4a5568' }}>
+                                        총 <strong>{totalElements}</strong>개 성분 (페이지 {page + 1} / {totalPages || 1})
+                                    </span>
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        <button 
+                                            className="btn-outline" 
+                                            style={{ padding: '6px 12px', fontSize: '13px', cursor: page === 0 ? 'not-allowed' : 'pointer' }}
+                                            disabled={page === 0} 
+                                            onClick={() => {
+                                                const prevPage = page - 1;
+                                                setPage(prevPage);
+                                            }}
+                                        >
+                                            ◀ 이전
+                                        </button>
+                                        <button 
+                                            className="btn-outline" 
+                                            style={{ padding: '6px 12px', fontSize: '13px', cursor: (page + 1) >= totalPages ? 'not-allowed' : 'pointer' }}
+                                            disabled={(page + 1) >= totalPages} 
+                                            onClick={() => {
+                                                const nextPage = page + 1;
+                                                setPage(nextPage);
+                                            }}
+                                        >
+                                            다음 ▶
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'history' && (
+                        <div className="lookup-container animate-fade-in" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                            {/* 검색 필터 영역 */}
+                            <div className="filter-card">
+                                <div className="filter-grid" style={{ gridTemplateColumns: '1fr auto' }}>
+                                    <div className="filter-item">
+                                        <label>🧪 성분명 (INCI / 한글)</label>
+                                        <input
+                                            type="text"
+                                            placeholder="영문명 또는 한글명 이력 검색..."
+                                            value={historySearchInput}
+                                            onChange={(e) => setHistorySearchInput(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    setHistoryPage(0);
+                                                    setHistorySearch(historySearchInput);
+                                                    fetchHistoryData(0, historySearchInput);
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                    <div className="filter-actions">
+                                        <button className="btn-outline" onClick={() => {
+                                            setHistorySearchInput('');
+                                            setHistorySearch('');
+                                            setHistoryPage(0);
+                                            fetchHistoryData(0, '');
+                                        }}>
+                                            ♻️ 검색 초기화
+                                        </button>
+                                        <button className="btn-primary" onClick={() => {
+                                            setHistoryPage(0);
+                                            setHistorySearch(historySearchInput);
+                                            fetchHistoryData(0, historySearchInput);
+                                        }}>
+                                            🔍 검색
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 변경 이력 테이블 카드 */}
+                            <div className="grid-card animate-fade-in" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #edf2f7', background: '#f8fafc' }}>
+                                    <h3 style={{ fontSize: '15px', fontWeight: '800', color: '#2d3748', margin: 0 }}>글로벌 규제 기준 변경 이력</h3>
+                                    <span className="violation-tag" style={{ background: '#ebf8ff', color: '#2b6cb0', borderColor: '#bee3f8', margin: 0 }}>
+                                        총 {historyTotalElements}개 이력
+                                    </span>
+                                </div>
+                                
+                                {historyLoading ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 0', gap: '12px' }}>
+                                        <div className="spinner-large" style={{ width: '40px', height: '40px' }}></div>
+                                        <span style={{ fontSize: '13px', color: '#4a5568' }}>이력 데이터를 불러오는 중...</span>
+                                    </div>
+                                ) : historyData.length === 0 ? (
+                                    <div style={{ textAlign: 'center', padding: '60px 0', color: '#a0aec0', fontSize: '14px' }}>
+                                        규제 기준 변경 이력이 존재하지 않습니다.
+                                    </div>
+                                ) : (
+                                    <div style={{ flex: 1, overflowY: 'auto', maxHeight: '550px' }}>
+                                        <table className="modern-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                            <thead>
+                                                <tr style={{ background: '#f7fafc', borderBottom: '2px solid #edf2f7', textAlign: 'left' }}>
+                                                    <th style={{ padding: '12px 16px', width: '100px' }}>국가</th>
+                                                    <th style={{ padding: '12px 16px' }}>성분 정보 (INCI / Kor)</th>
+                                                    <th style={{ padding: '12px 16px', width: '120px' }}>변경 항목</th>
+                                                    <th style={{ padding: '12px 16px' }}>이전 값</th>
+                                                    <th style={{ padding: '12px 16px', width: '30px', textAlign: 'center' }}></th>
+                                                    <th style={{ padding: '12px 16px' }}>이후 값</th>
+                                                    <th style={{ padding: '12px 16px', width: '130px' }}>작업자</th>
+                                                    <th style={{ padding: '12px 16px', width: '180px' }}>변경 일시</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {historyData.map((item) => (
+                                                    <tr key={item.id} style={{ borderBottom: '1px solid #edf2f7' }}>
+                                                        <td style={{ padding: '12px 16px' }}>
+                                                            <span style={{
+                                                                display: 'inline-block',
+                                                                padding: '2px 8px',
+                                                                borderRadius: '4px',
+                                                                fontSize: '11px',
+                                                                fontWeight: 'bold',
+                                                                background: item.country === 'KR' ? '#ebf8ff' : item.country === 'EU' ? '#f0fff4' : item.country === 'CN' ? '#fffaf0' : '#fff5f5',
+                                                                color: item.country === 'KR' ? '#2b6cb0' : item.country === 'EU' ? '#22543d' : item.country === 'CN' ? '#dd6b20' : '#9b2c2c',
+                                                                border: `1px solid ${item.country === 'KR' ? '#bee3f8' : item.country === 'EU' ? '#c6f6d5' : item.country === 'CN' ? '#ffeebc' : '#fed7d7'}`
+                                                            }}>
+                                                                {item.country === 'ALL' ? '공통' : item.country}
+                                                            </span>
+                                                        </td>
+                                                        <td style={{ padding: '12px 16px' }}>
+                                                            <div style={{ fontWeight: 'bold', color: '#2d3748', fontSize: '13px' }}>{item.inciName}</div>
+                                                            <div style={{ fontSize: '11px', color: '#718096' }}>
+                                                                {item.koreanName || '-'} {item.casNumber ? `(${item.casNumber})` : ''}
+                                                            </div>
+                                                        </td>
+                                                        <td style={{ padding: '12px 16px', fontWeight: '600', color: '#4a5568', fontSize: '13px' }}>
+                                                            {item.fieldName === 'status' ? '규제 상태' :
+                                                             item.fieldName === 'limit' ? '배합 한도' :
+                                                             item.fieldName === 'koreanName' ? '국문 성분명' :
+                                                             item.fieldName === 'casNumber' ? 'CAS 번호' :
+                                                             item.fieldName === 'remarks' ? '비고' : item.fieldName}
+                                                        </td>
+                                                        <td style={{ padding: '12px 16px', fontSize: '13px' }}>
+                                                            {item.fieldName === 'status' ? getStatusPill(item.oldValue) : (item.oldValue === 'null' || !item.oldValue ? <span style={{ color: '#a0aec0' }}>없음</span> : `${item.oldValue}${item.fieldName === 'limit' && item.oldValue !== 'null' ? '%' : ''}`)}
+                                                        </td>
+                                                        <td style={{ padding: '12px 16px', textAlign: 'center', color: '#a0aec0' }}>➔</td>
+                                                        <td style={{ padding: '12px 16px', fontSize: '13px' }}>
+                                                            {item.fieldName === 'status' ? getStatusPill(item.newValue) : (item.newValue === 'null' || !item.newValue ? <span style={{ color: '#a0aec0' }}>없음</span> : `${item.newValue}${item.fieldName === 'limit' && item.newValue !== 'null' ? '%' : ''}`)}
+                                                        </td>
+                                                        <td style={{ padding: '12px 16px' }}>
+                                                            <span style={{
+                                                                fontSize: '11px',
+                                                                fontWeight: '600',
+                                                                color: item.updatedBy === 'SYSTEM_AUTO' ? '#319795' : '#4a5568',
+                                                                background: item.updatedBy === 'SYSTEM_AUTO' ? '#e6fffa' : '#f7fafc',
+                                                                padding: '2px 6px',
+                                                                borderRadius: '4px',
+                                                                border: `1px solid ${item.updatedBy === 'SYSTEM_AUTO' ? '#b2f5ea' : '#e2e8f0'}`
+                                                            }}>
+                                                                {item.updatedBy === 'SYSTEM_AUTO' ? '🤖 자동 동기화' : `👤 ${item.updatedBy}`}
+                                                            </span>
+                                                        </td>
+                                                        <td style={{ padding: '12px 16px', fontSize: '12px', color: '#718096' }}>
+                                                            {new Date(item.updatedAt).toLocaleString()}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+
+                                {/* 하단 페이징 바 */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 15px', background: '#fff', borderTop: '1px solid #e2e8f0', borderRadius: '0 0 10px 10px' }}>
+                                    <span style={{ fontSize: '13px', color: '#4a5568' }}>
+                                        총 <strong>{historyTotalElements}</strong>개 변경 이력 (페이지 {historyPage + 1} / {historyTotalPages || 1})
+                                    </span>
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        <button 
+                                            className="btn-outline" 
+                                            style={{ padding: '6px 12px', fontSize: '13px', cursor: historyPage === 0 ? 'not-allowed' : 'pointer' }}
+                                            disabled={historyPage === 0} 
+                                            onClick={() => {
+                                                const prevPage = historyPage - 1;
+                                                setHistoryPage(prevPage);
+                                                fetchHistoryData(prevPage, historySearch);
+                                            }}
+                                        >
+                                            ◀ 이전
+                                        </button>
+                                        <button 
+                                            className="btn-outline" 
+                                            style={{ padding: '6px 12px', fontSize: '13px', cursor: (historyPage + 1) >= historyTotalPages ? 'not-allowed' : 'pointer' }}
+                                            disabled={(historyPage + 1) >= historyTotalPages} 
+                                            onClick={() => {
+                                                const nextPage = historyPage + 1;
+                                                setHistoryPage(nextPage);
+                                                fetchHistoryData(nextPage, historySearch);
+                                            }}
+                                        >
+                                            다음 ▶
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
