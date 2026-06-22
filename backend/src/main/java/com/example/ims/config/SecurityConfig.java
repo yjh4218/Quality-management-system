@@ -39,6 +39,8 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable) 
                 .authorizeHttpRequests(auth -> auth
+                        // [CORS PATCH] OPTIONS preflight 요청 무조건 허용
+                        .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                         // [SECURITY PATCH] 관리자 전용 시스템 경로 권한 강화
                         .requestMatchers("/api/admin/system/health").permitAll() 
                         .requestMatchers("/api/debug/**").permitAll()
@@ -79,6 +81,13 @@ public class SecurityConfig {
                 )
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, authException) -> {
+                            String origin = request.getHeader("Origin");
+                            if (origin != null) {
+                                response.setHeader("Access-Control-Allow-Origin", origin);
+                                response.setHeader("Access-Control-Allow-Credentials", "true");
+                                response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+                                response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With, Accept, Origin");
+                            }
                             response.setStatus(HttpStatus.UNAUTHORIZED.value());
                             response.setContentType("application/json;charset=UTF-8");
                             // [SECURITY PATCH] 내부 예외 메시지 노출 차단
