@@ -189,7 +189,7 @@ const RuleRegistrationDrawer = ({ initialChannel, onClose, user }) => {
                                             <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e293b', marginBottom: '4px' }}>
                                                 값: {r.ruleValue || '(없음)'}
                                             </div>
-                                            <div style={{ fontSize: '11px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            <div style={{ fontSize: '11px', color: '#64748b', whiteSpace: 'pre-line', overflow: 'visible', marginTop: '6px', borderTop: '1px dashed #e2e8f0', paddingTop: '6px' }}>
                                                 {r.warningMessage}
                                             </div>
                                         </div>

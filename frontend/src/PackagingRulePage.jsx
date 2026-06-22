@@ -47,14 +47,64 @@ const PackagingRulePage = ({ user }) => {
         setIsDrawerOpen(true);
     };
 
+    const rulesByChannel = useMemo(() => {
+        const map = {};
+        rules.forEach(r => {
+            if (r.channel && r.channel.id) {
+                const channelId = String(r.channel.id);
+                if (!map[channelId]) {
+                    map[channelId] = {};
+                }
+                map[channelId][r.ruleType] = r;
+            }
+        });
+        return map;
+    }, [rules]);
+
+    const getRuleValue = useCallback((channelId, ruleType) => {
+        const channelRules = rulesByChannel[String(channelId)];
+        return channelRules && channelRules[ruleType] ? channelRules[ruleType].ruleValue : '-';
+    }, [rulesByChannel]);
+
     const columnDefs = useMemo(() => [
         { field: "id", headerName: "ID", width: 80, pinned: 'left' },
-        { field: "name", headerName: "유통 채널명", flex: 1, filter: true, cellStyle: { fontWeight: '800', color: '#1a202c' } },
-        { field: "description", headerName: "채널 설명", flex: 2, filter: true },
+        { field: "name", headerName: "유통 채널명", width: 150, filter: true, pinned: 'left', cellStyle: { fontWeight: '800', color: '#1a202c' } },
+        { field: "description", headerName: "채널 설명", width: 200, filter: true },
+        { 
+            headerName: "팔레트 규격", 
+            width: 250, 
+            valueGetter: (params) => getRuleValue(params.data.id, 'PALLET_SPEC')
+        },
+        { 
+            headerName: "스티커 여부", 
+            width: 120, 
+            cellRenderer: (params) => {
+                const val = getRuleValue(params.data.id, 'STICKER_REQUIRED');
+                if (val === '부착') {
+                    return <span className="badge success" style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '12px' }}>부착</span>;
+                } else if (val === '미부착') {
+                    return <span className="badge neutral" style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '12px', backgroundColor: '#e2e8f0', color: '#475569' }}>미부착</span>;
+                }
+                return <span style={{ color: '#94a3b8' }}>-</span>;
+            }
+        },
+        { 
+            headerName: "적재 높이", 
+            width: 200, 
+            valueGetter: (params) => getRuleValue(params.data.id, 'LOAD_HEIGHT')
+        },
+        { 
+            headerName: "사용기한 포맷", 
+            width: 160, 
+            valueGetter: (params) => getRuleValue(params.data.id, 'LABELING')
+        },
         { 
             headerName: "설정된 규칙 수", 
-            width: 140, 
-            valueGetter: (params) => rules.filter(r => r.channel && String(r.channel.id) === String(params.data.id)).length + "개"
+            width: 120, 
+            valueGetter: (params) => {
+                const channelRules = rulesByChannel[String(params.data.id)];
+                return channelRules ? Object.keys(channelRules).length + "개" : "0개";
+            }
         },
         { 
             headerName: "스티커 등록", 
@@ -67,7 +117,7 @@ const PackagingRulePage = ({ user }) => {
         },
         {
             headerName: "관리",
-            width: 140,
+            width: 120,
             sortable: false,
             filter: false,
             pinned: 'right',
@@ -83,7 +133,7 @@ const PackagingRulePage = ({ user }) => {
                 </div>
             )
         }
-    ], [rules, stickers]);
+    ], [rulesByChannel, stickers, getRuleValue]);
 
     return (
         <div className="page-container" style={{ padding: '24px', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: '#f1f5f9' }}>

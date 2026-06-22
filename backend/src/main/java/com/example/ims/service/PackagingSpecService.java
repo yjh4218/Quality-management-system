@@ -139,21 +139,52 @@ public class PackagingSpecService {
     }
 
     private void applyChannelRulesToSpec(PackagingSpecification spec, List<ChannelPackagingRule> rules) {
+        StringBuilder remarksBuilder = new StringBuilder();
+        if (spec.getRemarks() != null && !spec.getRemarks().isEmpty()) {
+            remarksBuilder.append(spec.getRemarks());
+        }
+
         for (ChannelPackagingRule rule : rules) {
+            if (rule.getRuleType() == null) continue;
             switch (rule.getRuleType()) {
-                case "LABELING":
-                case "PROMOTION":
-                    // 착인/라벨링 관련 규칙 반영
-                    spec.setLotAndExpiryFormat(rule.getWarningMessage()); // 완전 대체
-                    break;
-                case "LOGISTICS":
-                    if ("PALLET_SPEC".equals(rule.getRuleValue())) {
-                        // 규격 정보는 비고나 사양에 추가 가능하지만, 여기선 단순 매핑
+                case "PALLET_SPEC":
+                    spec.setPalletTypeStr(rule.getRuleValue());
+                    if (rule.getRuleValue() != null) {
+                        if (rule.getRuleValue().contains("1,100")) {
+                            spec.setPalletSize("1,100 x 1,100 mm");
+                        } else if (rule.getRuleValue().contains("1219")) {
+                            spec.setPalletSize("1,219 x 1,016 x 120 mm");
+                        } else {
+                            spec.setPalletSize(rule.getRuleValue());
+                        }
                     }
                     break;
-                // 추가적인 규칙 타입에 대한 매핑 로직 확장 가능
+
+                case "STICKER_REQUIRED":
+                    spec.setApplyChannelSticker("부착".equals(rule.getRuleValue()));
+                    break;
+
+                case "LOAD_HEIGHT":
+                    spec.setPalletHeightLimit(rule.getRuleValue());
+                    break;
+
+                case "LABELING":
+                    spec.setLotAndExpiryFormat(rule.getRuleValue());
+                    if (rule.getWarningMessage() != null && !rule.getWarningMessage().isEmpty()) {
+                        if (remarksBuilder.length() > 0) {
+                            remarksBuilder.append("\n");
+                        }
+                        remarksBuilder.append("[채널 표기 특이사항]\n").append(rule.getWarningMessage());
+                    }
+                    break;
             }
         }
+
+        if (remarksBuilder.length() > 0) {
+            spec.setRemarks(remarksBuilder.toString());
+        }
+
+        spec.setPalletType(calculateDefaultPalette(spec.getProduct()));
     }
 
     private Integer getNextVersion(Long productId) {
@@ -161,20 +192,27 @@ public class PackagingSpecService {
     }
 
     private PaletteType calculateDefaultPalette(Product product) {
-        if (product.getChannels() == null || product.getChannels().isEmpty()) return PaletteType.DISPOSABLE_EXPORT;
+        if (product == null || product.getChannels() == null || product.getChannels().isEmpty()) {
+            return PaletteType.DISPOSABLE_EXPORT;
+        }
 
         for (SalesChannel channel : product.getChannels()) {
-            if (channel.getName().contains("국내") || channel.getName().contains("OY")) return PaletteType.AJU;
-            if (channel.getName().contains("EU/ON")) return PaletteType.WOODEN_FUMIGATED;
+            String name = channel.getName();
+            if (name.contains("일반") || name.contains("OY") || name.contains("PX") || name.contains("JP/ON")) {
+                return PaletteType.AJU;
+            }
+            if (name.contains("EU/ON")) {
+                return PaletteType.WOODEN_FUMIGATED;
+            }
         }
         
         return PaletteType.DISPOSABLE_EXPORT;
     }
 
     private boolean shouldApplySticker(Product product) {
-        if (product.getChannels() == null) return false;
+        if (product == null || product.getChannels() == null) return false;
         return product.getChannels().stream()
-                .anyMatch(ch -> ch.getName().contains("EU") || ch.getName().contains("AMZ"));
+                .anyMatch(ch -> ch.getName().contains("EU") || ch.getName().contains("AMZ") || ch.getName().contains("HALAL"));
     }
 
     @Transactional

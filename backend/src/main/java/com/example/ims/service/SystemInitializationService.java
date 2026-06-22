@@ -1,7 +1,11 @@
 package com.example.ims.service;
 
 import com.example.ims.entity.User;
+import com.example.ims.entity.SalesChannel;
+import com.example.ims.entity.ChannelPackagingRule;
 import com.example.ims.repository.UserRepository;
+import com.example.ims.repository.SalesChannelRepository;
+import com.example.ims.repository.ChannelPackagingRuleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -24,6 +28,8 @@ public class SystemInitializationService {
     private final org.springframework.core.env.Environment env;
     private final MailCategoryService mailCategoryService;
     private final MailTemplateService mailTemplateService;
+    private final SalesChannelRepository salesChannelRepository;
+    private final ChannelPackagingRuleRepository channelPackagingRuleRepository;
 
     @Transactional
     public void seedAndRepairData(String adminInitialPassword) {
@@ -59,6 +65,15 @@ public class SystemInitializationService {
         repairOtherTablesSchema(); // [추가] 소프트 델리트 및 기타 스키마 보정
         repairRegulatoryIngredientsTableSchema(); // Drop unique constraints/indexes on regulatory_ingredients for full sync
         seedDummyProducts(); // Seed dummy products for testing
+
+        // [추가] 유통 채널 및 포장 규칙 시딩
+        try {
+            seedSalesChannels();
+            seedChannelPackagingRules();
+            log.info(">>>> [SYSTEM INIT] Sales channels and packaging rules seeded successfully.");
+        } catch (Exception e) {
+            log.error(">>>> [SYSTEM INIT] [ERROR] Failed to seed sales channels/packaging rules: {}", e.getMessage(), e);
+        }
 
         // Page guides are now handled entirely by Bulk Migration and use
         // SystemPageGuide entity
@@ -715,6 +730,161 @@ public class SystemInitializationService {
             }
         } catch (Exception e) {
             log.warn(">>>> [SYSTEM INIT] Could not seed dummy products: {}", e.getMessage());
+        }
+    }
+
+    private void seedSalesChannels() {
+        log.info(">>>> [SYSTEM INIT] Seeding Sales Channels...");
+        String[][] channels = {
+            {"일반(공용)", "국내 일반 공용 채널"},
+            {"올리브영(OY)", "CJ 올리브영 유통"},
+            {"군마트용(PX)", "군부대 PX/마트 유통"},
+            {"JP/ON", "일본 온라인 유통"},
+            {"JP/OFF", "일본 오프라인 유통"},
+            {"JP/ON(AMZ)", "일본 아마존 온라인"},
+            {"GLB", "글로벌 유통"},
+            {"AU/ON(AMZ)", "호주 아마존 온라인"},
+            {"US/ON(AMZ)", "미국 아마존 온라인"},
+            {"GLB/EU", "유럽 글로벌 유통"},
+            {"OY/US", "올리브영 미국"},
+            {"EU/ON(AMZ)", "유럽 아마존 온라인"},
+            {"OTC", "OTC 약국/드러그스토어"},
+            {"HALAL", "할랄 인증 유통"}
+        };
+
+        for (String[] ch : channels) {
+            String name = ch[0];
+            String desc = ch[1];
+            if (!salesChannelRepository.existsByName(name)) {
+                salesChannelRepository.save(SalesChannel.builder()
+                    .name(name)
+                    .description(desc)
+                    .active(true)
+                    .updatedBy("system")
+                    .build());
+                log.info(">>>> [SYSTEM INIT] Seeded Sales Channel: {}", name);
+            }
+        }
+    }
+
+    private void seedChannelPackagingRules() {
+        log.info(">>>> [SYSTEM INIT] Seeding Channel Packaging Rules...");
+        
+        seedRule("일반(공용)", "PALLET_SPEC", "아주팔레트 (1,100 x 1,100 mm)", null);
+        seedRule("일반(공용)", "STICKER_REQUIRED", "미부착", null);
+        seedRule("일반(공용)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하", null);
+        seedRule("일반(공용)", "LABELING", "EXP YYYYMMDD까지", "1. 사용기한 착인 또는 압인 시 'EXP YYYYMMDD까지' 기재");
+
+        seedRule("올리브영(OY)", "PALLET_SPEC", "아주팔레트 (1,100 x 1,100 mm)", null);
+        seedRule("올리브영(OY)", "STICKER_REQUIRED", "미부착", null);
+        seedRule("올리브영(OY)", "LOAD_HEIGHT", "PLT 제외, 1050mm 이하", null);
+        seedRule("올리브영(OY)", "LABELING", "EXP YYYYMMDD까지", 
+                 "1. 인박스 사용 시 B형 인박스 사용, 인박스에 박스 테이프 부착 금지\n" +
+                 "2. 아웃박스 포장 중 단상자 POP 등으로 빈공간 발생 시 비닐 에어캡으로 공간 완충 필요 (부직포, 발포지, 폐지, 신문지 등 사용 금지)\n" +
+                 "3. 사용기한 착인 또는 압인 시 'EXP YYYYMMDD까지' 기재\n" +
+                 "4. 인박스 현품표 사용 시 '바코드' 미기재 필수");
+
+        seedRule("군마트용(PX)", "PALLET_SPEC", "아주팔레트 (1,100 x 1,100 mm)", null);
+        seedRule("군마트용(PX)", "STICKER_REQUIRED", "미부착", null);
+        seedRule("군마트용(PX)", "LOAD_HEIGHT", "PLT 제외, 1050mm 이하", null);
+        seedRule("군마트용(PX)", "LABELING", "EXP YYYYMMDD까지",
+                 "1. 용기 및 단상자에 군마트용 문구 기재 확인 필수\n" +
+                 "2. 아웃박스 바코드 별도 운영 -> 반드시 확인 후 아웃박스 현품표에 아웃박스 바코드 기재 필요\n" +
+                 "3. 사용기한 착인 또는 압인 시 'EXP YYYYMMDD까지' 기재");
+
+        seedRule("JP/ON", "PALLET_SPEC", "아주팔레트 (1,100 x 1,100 mm)", null);
+        seedRule("JP/ON", "STICKER_REQUIRED", "미부착", null);
+        seedRule("JP/ON", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하", null);
+        seedRule("JP/ON", "LABELING", "EXP YYYYMMDD까지",
+                 "1. 7매 마스크 품목에 한해 제조번호만 압인하며, 사용기한 압인 금지\n" +
+                 "2. 사용기한 착인 또는 압인 시 'EXP YYYYMMDD까지' 기재");
+
+        seedRule("JP/OFF", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
+        seedRule("JP/OFF", "STICKER_REQUIRED", "미부착", null);
+        seedRule("JP/OFF", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
+        seedRule("JP/OFF", "LABELING", "사용기한 착인 금지",
+                 "1. 전 품목 사용기한 착인 또는 압인 금지, 제조번호만 착인 또는 압인\n" +
+                 "2. 일문 패키지\n" +
+                 "3. 인박스, 아웃박스, 팔레트 현품표에 사용기한 기재 금지\n" +
+                 "4. 인박스(+현품표) 필수\n" +
+                 "5. 기획세트의 경우, 모든 구성품의 로트 착인하며, 인박스, 아웃박스, 팔레트 현품표에도 모든 구성품의 로트 착인");
+
+        seedRule("JP/ON(AMZ)", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
+        seedRule("JP/ON(AMZ)", "STICKER_REQUIRED", "미부착", null);
+        seedRule("JP/ON(AMZ)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
+        seedRule("JP/ON(AMZ)", "LABELING", "EXP MM-DD-YYYY",
+                 "1. 일문 패키지 + AMZ바코드(X바코드)\n" +
+                 "2. 7매 마스크 품목의 경우, 지퍼백 포장 시 주의사항 문구 '※ご注意ください※\n" +
+                 "このビニール袋には、7枚入りマスクパック가 [7袋]入っています。\n" +
+                 "出荷時は[1袋ずつ] 取り出して出荷してください。' 표시 하고, 7매[7袋]와 1매입[1袋ずつ] 글자 굵게(bold) 필수 기재\n" +
+                 "3. 사용기한 착인 또는 압인 시 'EXP MM-DD-YYYY' 기재");
+
+        seedRule("GLB", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
+        seedRule("GLB", "STICKER_REQUIRED", "미부착", null);
+        seedRule("GLB", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
+        seedRule("GLB", "LABELING", "EXP MM-DD-YYYY", "1. 사용기한 착인 또는 압인 시 'EXP MM-DD-YYYY' 기재");
+
+        seedRule("AU/ON(AMZ)", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
+        seedRule("AU/ON(AMZ)", "STICKER_REQUIRED", "미부착", null);
+        seedRule("AU/ON(AMZ)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
+        seedRule("AU/ON(AMZ)", "LABELING", "EXP MM-DD-YYYY",
+                 "1. AMZ바코드(X바코드) 확인 필수\n" +
+                 "2. 사용기한 착인 또는 압인 시 'EXP MM-DD-YYYY' 기재");
+
+        seedRule("US/ON(AMZ)", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
+        seedRule("US/ON(AMZ)", "STICKER_REQUIRED", "부착", null);
+        seedRule("US/ON(AMZ)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
+        seedRule("US/ON(AMZ)", "LABELING", "EXP MM-DD-YYYY",
+                 "1. AMZ바코드(X바코드) 확인 필수\n" +
+                 "2. 사용기한 착인 또는 압인 시 'EXP MM-DD-YYYY' 기재");
+
+        seedRule("GLB/EU", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
+        seedRule("GLB/EU", "STICKER_REQUIRED", "부착", null);
+        seedRule("GLB/EU", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
+        seedRule("GLB/EU", "LABELING", "EXP DDMMYYYY", "1. 사용기한 착인 또는 압인 시 'EXP DDMMYYYY' 기재");
+
+        seedRule("OY/US", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
+        seedRule("OY/US", "STICKER_REQUIRED", "미부착", null);
+        seedRule("OY/US", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
+        seedRule("OY/US", "LABELING", "EXP YYYYMMDD까지",
+                 "1. 인박스 사용 시 B형 인박스 사용, 인박스에 박스 테이프 부착 금지\n" +
+                 "2. 아웃박스 포장 중 단상자 POP 등으로 빈공간 발생 시 비닐 에어캡으로 공간 완충 필요 (부직포, 발포지, 폐지, 신문지 등 사용 금지)\n" +
+                 "3. 사용기한 착인 또는 압인 시 'EXP YYYYMMDD까지' 기재\n" +
+                 "4. 인박스 현품표 사용 시 '바코드' 미기재 필수");
+
+        seedRule("EU/ON(AMZ)", "PALLET_SPEC", "수출용 목재 팔렛트(1219*1016*120) - 바닥보드 5개 / 훈증처리(GMA) 필수", null);
+        seedRule("EU/ON(AMZ)", "STICKER_REQUIRED", "부착", null);
+        seedRule("EU/ON(AMZ)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
+        seedRule("EU/ON(AMZ)", "LABELING", "EXP DDMMYYYY",
+                 "1. AMZ바코드(X바코드) 확인 필수\n" +
+                 "2. 사용기한 착인 또는 압인 시 'EXP DDMMYYYY' 기재");
+
+        seedRule("OTC", "PALLET_SPEC", "국내 생산 : 수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm) / 미국 생산 : 수출용 목재 팔렛트(1219*1016*120) - 바닥보드 5개 / 훈증처리(GMA) 필수", null);
+        seedRule("OTC", "STICKER_REQUIRED", "미부착", null);
+        seedRule("OTC", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
+        seedRule("OTC", "LABELING", "EXP YYYY-MM", "1. 사용기한 착인 또는 압인 시 'EXP  YYYY-MM' 기재");
+
+        seedRule("HALAL", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
+        seedRule("HALAL", "STICKER_REQUIRED", "부착", null);
+        seedRule("HALAL", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
+        seedRule("HALAL", "LABELING", "신설 예정", "신설 예정");
+    }
+
+    private void seedRule(String channelName, String ruleType, String value, String warning) {
+        SalesChannel channel = salesChannelRepository.findByName(channelName).orElse(null);
+        if (channel == null) {
+            log.error(">>>> [SYSTEM INIT] Channel not found for seeding rule: {}", channelName);
+            return;
+        }
+        if (!channelPackagingRuleRepository.findByChannelAndRuleType(channel, ruleType).isPresent()) {
+            channelPackagingRuleRepository.save(ChannelPackagingRule.builder()
+                .channel(channel)
+                .ruleType(ruleType)
+                .ruleValue(value)
+                .warningMessage(warning)
+                .updatedBy("system")
+                .build());
+            log.info(">>>> [SYSTEM INIT] Seeded Packaging Rule: {} -> {}", channelName, ruleType);
         }
     }
 }
