@@ -84,6 +84,8 @@ const ProductDrawer = ({ product, onClose, user }) => {
     const [isMasterSearchOpen, setIsMasterSearchOpen] = useState(false);
     const [isBomSearchOpen, setIsBomSearchOpen] = useState(false);
     const [selectedBomIndex, setSelectedBomIndex] = useState(null);
+    const [bomSearchMode, setBomSearchMode] = useState(''); // 'add', 'edit' or empty
+    const [isSpecLoaded, setIsSpecLoaded] = useState(false);
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
     const [testReports, setTestReports] = useState([]);
     const [testReportPreview, setTestReportPreview] = useState({ open: false, url: '', type: '', name: '' });
@@ -451,6 +453,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
             photoAuditDisclosed: false
         });
         setHistory([]);
+        setIsSpecLoaded(false);
     };
 
     const fetchHistory = async (id) => {
@@ -471,6 +474,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
             const fullRes = await api.getFullPackagingSpec(id);
             if (fullRes && fullRes.data) {
                 const { spec, revisions, components } = fullRes.data;
+                setIsSpecLoaded(true);
                 if (spec) {
                     // Auto-fill empty spec fields using product details
                     const prod = loadedProduct || formData;
@@ -503,6 +507,11 @@ const ProductDrawer = ({ product, onClose, user }) => {
                         }
                         if (!updatedSpec.onePalletWeight && prod.palletInfo?.palletQuantity && prod.outboxInfo?.outboxWeight) {
                             updatedSpec.onePalletWeight = (parseFloat(prod.outboxInfo.outboxWeight) * parseInt(prod.palletInfo.palletQuantity)).toFixed(1);
+                        }
+                        if (!updatedSpec.markingStandard && (prod.shelfLifeMonths || prod.openedShelfLifeMonths)) {
+                            const shelfLifeStr = prod.shelfLifeMonths ? `제조일로부터 ${prod.shelfLifeMonths}개월` : '';
+                            const openedStr = prod.openedShelfLifeMonths ? `개봉 후 ${prod.openedShelfLifeMonths}개월` : '';
+                            updatedSpec.markingStandard = [shelfLifeStr, openedStr].filter(Boolean).join(' / ');
                         }
                         setCurrentSpec(updatedSpec);
                     } else {
@@ -873,7 +882,26 @@ const ProductDrawer = ({ product, onClose, user }) => {
     };
 
     const handleBomSelect = (m) => {
-        if (selectedBomIndex !== null) {
+        if (bomSearchMode === 'add') {
+            setSpecComponents([...specComponents, {
+                componentName: m.componentName || '',
+                specDetails: m.detailedMaterial || m.material || '',
+                sizeDimension: m.specification || '',
+                quantity: 1,
+                supplier: m.manufacturer || '',
+                remarks: ''
+            }]);
+        } else if (bomSearchMode === 'edit' && selectedBomIndex !== null) {
+            const updated = [...specComponents];
+            updated[selectedBomIndex] = {
+                ...updated[selectedBomIndex],
+                componentName: m.componentName || '',
+                specDetails: m.detailedMaterial || m.material || '',
+                sizeDimension: m.specification || '',
+                supplier: m.manufacturer || ''
+            };
+            setSpecComponents(updated);
+        } else if (selectedBomIndex !== null) {
             const newBoms = [...currentSpec.bomItems];
             newBoms[selectedBomIndex] = {
                 ...newBoms[selectedBomIndex],
@@ -882,6 +910,9 @@ const ProductDrawer = ({ product, onClose, user }) => {
             };
             setCurrentSpec({ ...currentSpec, bomItems: newBoms });
         }
+        setIsBomSearchOpen(false);
+        setBomSearchMode('');
+        setSelectedBomIndex(null);
     };
 
     const handleCopyMasterSpec = async () => {
@@ -987,6 +1018,17 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
         try {
             if (product) {
+                if (isSpecLoaded) {
+                    const specPayload = {
+                        spec: {
+                            ...currentSpec,
+                            product: { id: product.id }
+                        },
+                        revisions: specRevisions,
+                        components: specComponents
+                    };
+                    await api.saveFullPackagingSpec(specPayload);
+                }
                 await updateProduct(product.id, payload);
                 alert("제품 정보가 업데이트되었습니다.");
             } else {
@@ -2002,7 +2044,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                         {/* 구성품 리스트 테이블 */}
                                         <div className="card" style={{ padding: '20px', marginBottom: '20px', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                                                <h3 style={{ margin: 0, fontSize: '15px', color: '#1e293b' }}> B2B 구성품 리스트</h3>
+                                                <h3 style={{ margin: 0, fontSize: '15px', color: '#1e293b' }}> 제품 구성품 리스트</h3>
                                                 {canEdit && (
                                                     <button type="button" onClick={handleAddSpecComponent} className="secondary" style={{ fontSize: '11px', padding: '4px 8px' }}>
                                                         + 구성품 추가

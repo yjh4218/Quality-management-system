@@ -10,5 +10,5 @@ import java.util.Optional;
 @Repository
 public interface ChannelPackagingRuleRepository extends JpaRepository<ChannelPackagingRule, Long> {
     List<ChannelPackagingRule> findByChannel(SalesChannel channel);
-    Optional<ChannelPackagingRule> findByChannelAndRuleType(SalesChannel channel, String ruleType);
+    List<ChannelPackagingRule> findByChannelAndRuleType(SalesChannel channel, String ruleType);
 }

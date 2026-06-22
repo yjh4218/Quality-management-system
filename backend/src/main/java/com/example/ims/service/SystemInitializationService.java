@@ -876,7 +876,7 @@ public class SystemInitializationService {
             log.error(">>>> [SYSTEM INIT] Channel not found for seeding rule: {}", channelName);
             return;
         }
-        if (!channelPackagingRuleRepository.findByChannelAndRuleType(channel, ruleType).isPresent()) {
+        if (channelPackagingRuleRepository.findByChannelAndRuleType(channel, ruleType).isEmpty()) {
             channelPackagingRuleRepository.save(ChannelPackagingRule.builder()
                 .channel(channel)
                 .ruleType(ruleType)

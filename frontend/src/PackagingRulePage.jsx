@@ -73,7 +73,10 @@ const PackagingRulePage = ({ user }) => {
         { 
             headerName: "팔레트 규격", 
             width: 250, 
-            valueGetter: (params) => getRuleValue(params.data.id, 'PALLET_SPEC')
+            valueGetter: (params) => getRuleValue(params.data.id, 'PALLET_SPEC'),
+            wrapText: true,
+            autoHeight: true,
+            cellStyle: { lineHeight: '20px', padding: '8px 0', fontSize: '13px' }
         },
         { 
             headerName: "스티커 여부", 
@@ -81,9 +84,9 @@ const PackagingRulePage = ({ user }) => {
             cellRenderer: (params) => {
                 const val = getRuleValue(params.data.id, 'STICKER_REQUIRED');
                 if (val === '부착') {
-                    return <span className="badge success" style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '12px' }}>부착</span>;
+                    return <span className="badge success" style={{ padding: '6px 10px', borderRadius: '6px', fontSize: '13px', fontWeight: 'bold' }}>부착</span>;
                 } else if (val === '미부착') {
-                    return <span className="badge neutral" style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '12px', backgroundColor: '#e2e8f0', color: '#475569' }}>미부착</span>;
+                    return <span className="badge neutral" style={{ padding: '6px 10px', borderRadius: '6px', fontSize: '13px', backgroundColor: '#e2e8f0', color: '#475569', fontWeight: 'bold' }}>미부착</span>;
                 }
                 return <span style={{ color: '#94a3b8' }}>-</span>;
             }
@@ -91,12 +94,16 @@ const PackagingRulePage = ({ user }) => {
         { 
             headerName: "적재 높이", 
             width: 200, 
-            valueGetter: (params) => getRuleValue(params.data.id, 'LOAD_HEIGHT')
+            valueGetter: (params) => getRuleValue(params.data.id, 'LOAD_HEIGHT'),
+            wrapText: true,
+            autoHeight: true,
+            cellStyle: { lineHeight: '20px', padding: '8px 0', fontSize: '13px' }
         },
         { 
             headerName: "사용기한 포맷", 
             width: 160, 
-            valueGetter: (params) => getRuleValue(params.data.id, 'LABELING')
+            valueGetter: (params) => getRuleValue(params.data.id, 'LABELING'),
+            cellStyle: { fontSize: '13px' }
         },
         { 
             headerName: "설정된 규칙 수", 
@@ -111,8 +118,8 @@ const PackagingRulePage = ({ user }) => {
             width: 120, 
             cellRenderer: (params) => (
                 stickers.some(s => s.channel && String(s.channel.id) === String(params.data.id)) 
-                ? <span className="badge success">등록됨</span> 
-                : <span className="badge warning">미등록</span>
+                ? <span className="badge success" style={{ padding: '6px 10px', borderRadius: '6px', fontSize: '13px', fontWeight: 'bold' }}>등록됨</span> 
+                : <span className="badge warning" style={{ padding: '6px 10px', borderRadius: '6px', fontSize: '13px', fontWeight: 'bold' }}>미등록</span>
             )
         },
         {
@@ -126,7 +133,7 @@ const PackagingRulePage = ({ user }) => {
                     <button 
                         className="secondary" 
                         onClick={() => { setSelectedChannel(params.data); setIsDrawerOpen(true); }}
-                        style={{ padding: '4px 12px', fontSize: '12px', fontWeight: '800' }}
+                        style={{ padding: '6px 14px', fontSize: '13px', fontWeight: '800', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer' }}
                     >
                         규칙 관리
                     </button>
@@ -204,7 +211,7 @@ const PackagingRulePage = ({ user }) => {
                 <div className="ag-theme-alpine" style={{ flex: 1, width: '100%', minHeight: '500px' }}>
                     <AgGridReact
                         theme="legacy"
-                        rowHeight={55}
+                        rowHeight={65}
                         rowData={channels}
                         columnDefs={columnDefs}
                         pagination={true}
