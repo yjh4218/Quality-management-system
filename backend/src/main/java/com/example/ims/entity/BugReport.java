@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EntityListeners(org.springframework.data.jpa.domain.support.AuditingEntityListener.class)
 public class BugReport {
 
     @Id
@@ -46,8 +47,9 @@ public class BugReport {
 
     private String severity; // LOW, MEDIUM, HIGH, CRITICAL
 
-    @CreationTimestamp
+    @org.springframework.data.annotation.CreatedDate
     private LocalDateTime createdAt;
 
+    @org.springframework.data.annotation.LastModifiedDate
     private LocalDateTime updatedAt;
 }

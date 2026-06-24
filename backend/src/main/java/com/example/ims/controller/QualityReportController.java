@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import com.example.ims.util.UploadType;
 
 @RestController
 @RequestMapping("/api/quality")
@@ -154,7 +155,7 @@ public class QualityReportController {
             return ResponseEntity.badRequest().body("File is empty");
         }
         
-        String fileName = fileStorageService.storeFile(file, productName);
+        String fileName = fileStorageService.storeFile(file, UploadType.COA_FILE, productName);
         return ResponseEntity.ok("/uploads/" + fileName);
     }
 

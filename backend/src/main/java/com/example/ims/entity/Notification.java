@@ -7,6 +7,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import jakarta.persistence.EntityListeners;
 
 import java.time.LocalDateTime;
 
@@ -20,6 +23,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EntityListeners(org.springframework.data.jpa.domain.support.AuditingEntityListener.class)
 public class Notification {
 
     @Id
@@ -61,11 +65,11 @@ public class Notification {
     @Column(name = "is_deleted", nullable = false)
     private boolean isDeleted = false;
 
-    @CreationTimestamp
+    @CreatedDate
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    @UpdateTimestamp
+    @LastModifiedDate
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 }

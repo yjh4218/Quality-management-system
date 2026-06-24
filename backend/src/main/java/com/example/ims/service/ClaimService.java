@@ -231,19 +231,19 @@ public class ClaimService {
 
     // [고도화 2] 데이터 상태에 따른 5단계 자동 상태 판정 (최고 단계 기준, 역전이 지원)
     private void determineStatus(Claim claim) {
-        String status = "0. 접수";
+        com.example.ims.entity.ClaimStatus status = com.example.ims.entity.ClaimStatus.RECEIPT;
 
         if (claim.getTerminationDate() != null) {
-            status = "4. 클레임 종결";
+            status = com.example.ims.entity.ClaimStatus.TERMINATED;
         } else if (claim.getPreventativeAction() != null && !claim.getPreventativeAction().isEmpty()) {
-            status = "3. 재발방지 수립/적용";
+            status = com.example.ims.entity.ClaimStatus.PREVENTATIVE;
         } else if (claim.getRootCauseAnalysis() != null && !claim.getRootCauseAnalysis().isEmpty()) {
-            status = "2. 원인분석/개선방안";
+            status = com.example.ims.entity.ClaimStatus.ROOT_CAUSE;
         } else if ("수령".equals(claim.getQualityReceivedReturnedProduct()) && claim.getQualityReceivedDate() != null) {
-            status = "1. 클레임 접수";
+            status = com.example.ims.entity.ClaimStatus.CLAIM_RECEIPT;
         }
 
-        claim.setQualityStatus(status);
+        claim.setQualityStatus(status.getValue());
     }
 
     // [수정] 제조사 4단계 자동 상태 판정 (1.접수, 2.원인분석, 3.대책수립, 4.종결)
@@ -288,7 +288,7 @@ public class ClaimService {
 
     @Transactional(readOnly = true)
     public List<ClaimHistory> getClaimHistory(Long claimId) {
-        return claimHistoryRepository.findByClaimIdOrderByModifiedAtDesc(claimId);
+        return claimHistoryRepository.findByClaimIdOrderByModifiedAtDesc(claimId, org.springframework.data.domain.PageRequest.of(0, 100));
     }
 
     private void compareAndSave(Long claimId, User user, String field, String oldVal, String newVal) {
@@ -794,7 +794,7 @@ public class ClaimService {
 
         // 5. Unclosed Claims (All time, but limited by filtered base)
         List<Claim> unclosedClaims = allFilteredClaims.stream()
-                .filter(c -> c.getQualityStatus() == null || !c.getQualityStatus().contains("5단계"))
+                .filter(c -> c.getQualityStatus() == null || !com.example.ims.entity.ClaimStatus.TERMINATED.getValue().equals(c.getQualityStatus()))
                 .sorted(Comparator.comparing(Claim::getReceiptDate, Comparator.nullsLast(Comparator.reverseOrder())))
                 .collect(Collectors.toList());
 

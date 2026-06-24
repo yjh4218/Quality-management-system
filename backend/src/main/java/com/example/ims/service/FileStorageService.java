@@ -108,10 +108,18 @@ public class FileStorageService {
     }
 
     public String storeFile(MultipartFile file) {
-        return storeFile(file, null);
+        return storeFile(file, com.example.ims.util.UploadType.GENERAL, null, null);
     }
 
     public String storeFile(MultipartFile file, String prefix) {
+        return storeFile(file, com.example.ims.util.UploadType.GENERAL, prefix, null);
+    }
+
+    public String storeFile(MultipartFile file, com.example.ims.util.UploadType uploadType, String prefix) {
+        return storeFile(file, uploadType, prefix, null);
+    }
+
+    public String storeFile(MultipartFile file, com.example.ims.util.UploadType uploadType, String prefix, String extraInfo) {
         validateFile(file);
 
         String originalFileName = StringUtils.cleanPath(file.getOriginalFilename());
@@ -120,24 +128,64 @@ public class FileStorageService {
                 throw new RuntimeException("Invalid path sequence in filename: " + originalFileName);
             }
 
-            String fileName;
-            String baseName;
             String extension = "";
-
             int dotIndex = originalFileName.lastIndexOf('.');
             if (dotIndex > 0) {
-                extension = originalFileName.substring(dotIndex);
+                extension = originalFileName.substring(dotIndex).toLowerCase();
             }
 
+            // 파일명 길이 제한 및 특수문자 제거
+            String safePrefix = "";
             if (prefix != null && !prefix.trim().isEmpty()) {
-                baseName = prefix.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
-            } else {
-                baseName = (dotIndex > 0) ? originalFileName.substring(0, dotIndex) : originalFileName;
+                safePrefix = prefix.replaceAll("[\\\\/:*?\"<>|\\s]", "_").trim();
+                if (safePrefix.length() > 50) {
+                    safePrefix = safePrefix.substring(0, 50);
+                }
+            }
+
+            String safeExtra = "";
+            if (extraInfo != null && !extraInfo.trim().isEmpty()) {
+                safeExtra = extraInfo.replaceAll("[\\\\/:*?\"<>|\\s]", "_").trim();
+                if (safeExtra.length() > 50) {
+                    safeExtra = safeExtra.substring(0, 50);
+                }
             }
 
             String timeStamp = java.time.LocalDateTime.now()
                     .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
-            fileName = baseName + "_" + timeStamp + "_" + UUID.randomUUID().toString().substring(0, 8) + extension;
+            String uuidPart = UUID.randomUUID().toString().substring(0, 8);
+
+            String fileName;
+            switch (uploadType) {
+                case AUDIT_PHOTO:
+                    fileName = String.format("%s_사진감리_%s_%s%s", safePrefix, timeStamp, uuidPart, extension);
+                    break;
+                case TEST_REPORT:
+                    String lot = safeExtra.isEmpty() ? "LOT" : safeExtra;
+                    String dateOnly = timeStamp.substring(0, 8);
+                    fileName = String.format("%s_%s_%s_%s%s", safePrefix, lot, dateOnly, uuidPart, extension);
+                    break;
+                case CLAIM_ATTACHMENT:
+                    fileName = String.format("claim_%s_%s_%s%s", safePrefix, timeStamp, uuidPart, extension);
+                    break;
+                case MANUFACTURER_DOC:
+                    String docType = safeExtra.isEmpty() ? "doc" : safeExtra;
+                    String docDate = timeStamp.substring(0, 8);
+                    fileName = String.format("%s_%s_%s_%s%s", safePrefix, docType, docDate, uuidPart, extension);
+                    break;
+                case COA_FILE:
+                    fileName = String.format("coa_%s_%s_%s%s", safePrefix, timeStamp, uuidPart, extension);
+                    break;
+                default:
+                    if (!safePrefix.isEmpty()) {
+                        fileName = String.format("%s_%s_%s%s", safePrefix, timeStamp, uuidPart, extension);
+                    } else {
+                        String base = (dotIndex > 0) ? originalFileName.substring(0, dotIndex) : originalFileName;
+                        if (base.length() > 50) base = base.substring(0, 50);
+                        fileName = String.format("%s_%s_%s%s", base.replaceAll("[\\\\/:*?\"<>|\\s]", "_"), timeStamp, uuidPart, extension);
+                    }
+                    break;
+            }
 
             if ("s3".equalsIgnoreCase(storageType) && s3Client != null) {
                 return uploadToS3(file, fileName);

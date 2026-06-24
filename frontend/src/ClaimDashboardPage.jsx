@@ -163,14 +163,7 @@ function ClaimDashboardPage({ user, onNavigate }) {
 
     const isManufacturer = user?.roles?.some(r => r.authority?.includes('MANUFACTURER'));
 
-    if (!stats && loading) return (
-        <div style={{ padding: '20px', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0f2f5' }}>
-            <div style={{ textAlign: 'center' }}>
-                <div className="spinner-ring" style={{ width: '40px', height: '40px', margin: '0 auto 15px' }}></div>
-                <div style={{ fontSize: '18px', color: '#666' }}>데이터를 분석 중입니다...</div>
-            </div>
-        </div>
-    );
+    if (!stats && loading) return null;
 
     if (!stats) return <div style={{ padding: '20px', textAlign: 'center', color: '#888' }}>대시보드 데이터를 불러올 수 없습니다.</div>;
 

@@ -10,6 +10,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.util.List;
+import com.example.ims.util.UploadType;
 
 @RestController
 @RequestMapping("/api/manufacturer-audits")
@@ -52,7 +53,7 @@ public class ManufacturerAuditController {
             return ResponseEntity.badRequest().body("파일 크기는 3MB를 초과할 수 없습니다.");
         }
 
-        String fileName = fileStorageService.storeFile(file, "audit_photo_" + System.currentTimeMillis());
+        String fileName = fileStorageService.storeFile(file, UploadType.AUDIT_PHOTO, "audit_photo");
         return ResponseEntity.ok("/uploads/" + fileName);
     }
 

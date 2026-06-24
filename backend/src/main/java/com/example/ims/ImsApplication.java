@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @EnableJpaRepositories(basePackages = "com.example.ims.repository")
 @org.springframework.cache.annotation.EnableCaching
 @org.springframework.scheduling.annotation.EnableScheduling
+@org.springframework.data.jpa.repository.config.EnableJpaAuditing
 public class ImsApplication {
 
 	public static void main(String[] args) {

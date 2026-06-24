@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import com.example.ims.entity.ClaimHistory;
 import org.springframework.security.access.prepost.PreAuthorize;
+import com.example.ims.util.UploadType;
 
 import java.util.List;
 
@@ -190,7 +191,8 @@ public class ClaimController {
 
 
         Claim claim = claimService.getClaim(id, getUser(userDetails), false);
-        String fileName = fileStorageService.storeFile(file, productName != null ? productName : "claim_" + id);
+        String prefix = claim.getClaimNumber() != null ? claim.getClaimNumber() : "claim_" + id;
+        String fileName = fileStorageService.storeFile(file, UploadType.CLAIM_ATTACHMENT, prefix);
         claim.setManufacturerResponsePdf("/uploads/" + fileName);
         claimService.saveClaim(claim);
         
@@ -207,7 +209,7 @@ public class ClaimController {
             return ResponseEntity.badRequest().body("파일 크기는 5MB를 초과할 수 없습니다.");
         }
 
-        String fileName = fileStorageService.storeFile(file, "claim_photo_" + System.currentTimeMillis());
+        String fileName = fileStorageService.storeFile(file, UploadType.CLAIM_ATTACHMENT, "claim_photo");
         return ResponseEntity.ok("/uploads/" + fileName);
     }
 

@@ -30,6 +30,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EntityListeners(org.springframework.data.jpa.domain.support.AuditingEntityListener.class)
 public class Claim {
 
     @Id
@@ -142,10 +143,10 @@ public class Claim {
     @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.LONGVARCHAR)
     private String mfrRemarks; // [신설] 제조사 비고
 
-    @CreationTimestamp
+    @org.springframework.data.annotation.CreatedDate
     private LocalDateTime createdAt;
     
-    @UpdateTimestamp
+    @org.springframework.data.annotation.LastModifiedDate
     private LocalDateTime updatedAt;
 
     private LocalDateTime emailSentAt; // 제조사 메일 발송 일시

@@ -16,16 +16,17 @@ import java.time.LocalDateTime;
 @Builder
 @com.fasterxml.jackson.annotation.JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 @lombok.EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@EntityListeners(org.springframework.data.jpa.domain.support.AuditingEntityListener.class)
 public class Brand {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @lombok.EqualsAndHashCode.Include
     private Long id;
 
-    @CreationTimestamp
+    @org.springframework.data.annotation.CreatedDate
     private LocalDateTime createdAt;
 
-    @UpdateTimestamp
+    @org.springframework.data.annotation.LastModifiedDate
     private LocalDateTime updatedAt;
 
     @Column(nullable = false, unique = true)

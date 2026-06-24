@@ -16,6 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import com.example.ims.util.UploadType;
 
 
 import java.io.IOException;
@@ -86,9 +87,19 @@ public class ProductController {
     @PostMapping("/upload")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES', 'QUALITY_TEAM')")
     public ResponseEntity<String> uploadFile(@RequestParam("file") MultipartFile file,
-                                             @RequestParam(value = "productName", required = false) String productName) {
+                                             @RequestParam(value = "productName", required = false) String productName,
+                                             @RequestParam(value = "uploadType", required = false) String uploadType,
+                                             @RequestParam(value = "extraInfo", required = false) String extraInfo) {
         // 파일 업로드 및 저장 처리
-        String fileName = fileStorageService.storeFile(file, productName);
+        UploadType ut = UploadType.GENERAL;
+        if (uploadType != null) {
+            try {
+                ut = UploadType.valueOf(uploadType.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                // Keep general
+            }
+        }
+        String fileName = fileStorageService.storeFile(file, ut, productName, extraInfo);
 
         String fileDownloadUri = ServletUriComponentsBuilder.fromCurrentContextPath()
                 .path("/uploads/")

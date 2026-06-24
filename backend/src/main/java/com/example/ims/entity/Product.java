@@ -28,6 +28,7 @@ import java.time.LocalDateTime;
 @Builder
 @lombok.EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @com.fasterxml.jackson.annotation.JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+@EntityListeners(org.springframework.data.jpa.domain.support.AuditingEntityListener.class)
 public class Product {
 
     @Id
@@ -39,10 +40,10 @@ public class Product {
     @Builder.Default
     private Long version = 0L;
 
-    @CreationTimestamp
+    @org.springframework.data.annotation.CreatedDate
     private LocalDateTime createdAt;
-
-    @UpdateTimestamp
+ 
+    @org.springframework.data.annotation.LastModifiedDate
     private LocalDateTime updatedAt;
 
     /**

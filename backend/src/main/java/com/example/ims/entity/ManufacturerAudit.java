@@ -22,6 +22,7 @@ import java.util.List;
 @Builder
 @org.hibernate.annotations.SQLRestriction("(is_deleted = false OR is_deleted IS NULL)")
 @com.fasterxml.jackson.annotation.JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
+@EntityListeners(org.springframework.data.jpa.domain.support.AuditingEntityListener.class)
 public class ManufacturerAudit {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -83,10 +84,10 @@ public class ManufacturerAudit {
     private String auditor; // 점검 담당자
     private String modifierInfo;
 
-    @CreationTimestamp
+    @org.springframework.data.annotation.CreatedDate
     private LocalDateTime createdAt;
 
-    @UpdateTimestamp
+    @org.springframework.data.annotation.LastModifiedDate
     private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "audit", cascade = CascadeType.ALL, orphanRemoval = true)

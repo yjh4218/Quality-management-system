@@ -30,7 +30,6 @@ public class BugReportService {
         BugReport report = bugReportRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Bug report not found"));
         report.setStatus(status);
-        report.setUpdatedAt(LocalDateTime.now());
         return bugReportRepository.save(report);
     }
 }
