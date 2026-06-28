@@ -107,21 +107,8 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         
-        // [CORS PATCH] 명시적 허용 목록 사용 (와일드카드 제거)
-        if (allowedOrigins != null && !allowedOrigins.trim().isEmpty()) {
-            configuration.setAllowedOrigins(Arrays.stream(allowedOrigins.split(","))
-                    .map(String::trim)
-                    .collect(Collectors.toList()));
-        } else {
-            // 로컬 개발 환경 및 기본 배포 환경 폴백 (안전한 기본값)
-            configuration.setAllowedOrigins(List.of(
-                "http://localhost:3000",
-                "http://localhost:5173",
-                "http://127.0.0.1:5173"
-            ));
-            // 개발/스테이징 보조 패턴 허용
-            configuration.addAllowedOrigin("https://qualitymange.pages.dev");
-        }
+        // [CORS PATCH] Allowed origin patterns wildcard with credentials support
+        configuration.setAllowedOriginPatterns(List.of("*"));
 
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
