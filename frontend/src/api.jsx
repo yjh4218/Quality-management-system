@@ -684,10 +684,20 @@ export const addProductTestReport = (productId, data) => api.post(`/api/products
 export const deleteProductTestReport = (reportId) => api.delete(`/api/products/test-reports/${reportId}`);
 
 // [오프라인 큐 전송 기능] 저장된 미전송 버그리포트를 서버가 정상화되었을 때 전송합니다.
+let isFlushing = false;
+let lastFlushTime = 0;
+
 export const flushPendingBugReports = async () => {
+    // 동시 실행 방지 및 최소 10초 쿨다운을 적용해 무한 루프 요동을 원천적으로 막습니다.
+    const now = Date.now();
+    if (isFlushing || (now - lastFlushTime < 10000)) return;
+    
     try {
         const queue = JSON.parse(localStorage.getItem('qms_pending_bug_reports') || '[]');
         if (queue.length === 0) return;
+        
+        isFlushing = true;
+        lastFlushTime = now;
         
         console.log(`[QMS] Flushing ${queue.length} pending offline bug reports...`);
         const remaining = [];
@@ -695,7 +705,11 @@ export const flushPendingBugReports = async () => {
         for (const report of queue) {
             try {
                 // withCredentials를 활용하여 현재 로그인 상태의 세션을 태워 보냅니다.
-                await axios.post(`${getBaseURL()}/api/bug-reports`, report, { withCredentials: true });
+                // 큐 flush 도중 발생하는 오류에 대해서는 다시 interceptor가 가로채서 큐를 무한 증식시키지 않도록 일반 axios를 그대로 사용하며 전송합니다.
+                await axios.post(`${getBaseURL()}/api/bug-reports`, report, { 
+                    withCredentials: true,
+                    headers: { 'Content-Type': 'application/json' }
+                });
             } catch (err) {
                 console.error("Failed to flush single offline report, retaining in queue:", err);
                 remaining.push(report);
@@ -710,11 +724,13 @@ export const flushPendingBugReports = async () => {
         }
     } catch (err) {
         console.error("Error during flushing pending bug reports:", err);
+    } finally {
+        isFlushing = false;
     }
 };
 
 // 모듈이 처음 로드될 때 및 주기적으로 flush 시도
 setTimeout(() => {
     flushPendingBugReports();
-}, 2000);
+}, 5000);
 
