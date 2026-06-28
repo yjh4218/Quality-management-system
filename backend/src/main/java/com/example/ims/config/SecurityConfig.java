@@ -107,9 +107,23 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         
-        // [CORS PATCH] Allowed origin patterns wildcard with credentials support
-        configuration.setAllowedOriginPatterns(List.of("*"));
-
+        // [CORS PATCH] 설정된 Allowed Origins가 있을 경우 사용하며, 없을 시 안전한 기본 허용 패턴 적용
+        List<String> originsList = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList());
+                
+        if (originsList.isEmpty()) {
+            originsList = List.of(
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "https://qualitymange.pages.dev",
+                "https://*.pages.dev",
+                "https://*.hf.space"
+            );
+        }
+        
+        configuration.setAllowedOriginPatterns(originsList);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setExposedHeaders(List.of("Set-Cookie", "Authorization"));

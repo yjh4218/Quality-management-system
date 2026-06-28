@@ -111,6 +111,9 @@ api.interceptors.response.use(
             }
         }
 
+        // 서버와의 정상 통신이 성공했으므로, 혹시 오프라인 상태에서 쌓였던 버그리포트가 있다면 비동기로 flush합니다.
+        flushPendingBugReports();
+
         return response;
     },
     (error) => {
@@ -139,35 +142,37 @@ api.interceptors.response.use(
             if (isSystemBug) {
                 // [자동 전송 로직] 시스템 치명적 에러(500+, 네트워크 장애, 타임아웃) 발생 시 즉시 자동으로 버그 리포트를 등록합니다.
                 (async () => {
-                    try {
-                        let serverErrorData = error.response?.data;
-                        if (serverErrorData instanceof Blob) {
-                            try {
-                                const blobText = await serverErrorData.text();
-                                serverErrorData = JSON.parse(blobText);
-                            } catch (parseError) {
-                                serverErrorData = "Blob data (not JSON)";
-                            }
+                    let serverErrorData = error.response?.data;
+                    if (serverErrorData instanceof Blob) {
+                        try {
+                            const blobText = await serverErrorData.text();
+                            serverErrorData = JSON.parse(blobText);
+                        } catch (parseError) {
+                            serverErrorData = "Blob data (not JSON)";
                         }
+                    }
 
-                        await axios.post(`${getBaseURL()}/api/bug-reports`, {
-                            description: `[시스템 자동 감지] API 에러 발생: ${errorMsg}`,
-                            steps: [
-                                error.stack || 'API 요청 중 에러 발생',
-                                '',
-                                `[요청 정보]`,
-                                `Method: ${error.config?.method?.toUpperCase() || 'N/A'}`,
-                                `URL: ${error.config?.url || 'N/A'}`,
-                                `Status: ${error.response?.status || 'N/A'} ${error.response?.statusText || ''}`,
-                                '',
-                                `[요청 데이터]`,
-                                error.config?.data ? (typeof error.config.data === 'string' ? error.config.data.substring(0, 2000) : 'FormData/Binary') : 'N/A'
-                            ].join('\n'),
-                            screenName: window.__QMS_ACTIVE_PAGE__ || window.location.pathname,
-                            url: window.location.href,
-                            severity: 'CRITICAL',
-                            serverError: serverErrorData ? JSON.stringify(serverErrorData, null, 2) : 'N/A'
-                        }, { withCredentials: true });
+                    const bugReportPayload = {
+                        description: `[시스템 자동 감지] API 에러 발생: ${errorMsg}`,
+                        steps: [
+                            error.stack || 'API 요청 중 에러 발생',
+                            '',
+                            `[요청 정보]`,
+                            `Method: ${error.config?.method?.toUpperCase() || 'N/A'}`,
+                            `URL: ${error.config?.url || 'N/A'}`,
+                            `Status: ${error.response?.status || 'N/A'} ${error.response?.statusText || ''}`,
+                            '',
+                            `[요청 데이터]`,
+                            error.config?.data ? (typeof error.config.data === 'string' ? error.config.data.substring(0, 2000) : 'FormData/Binary') : 'N/A'
+                        ].join('\n'),
+                        screenName: window.__QMS_ACTIVE_PAGE__ || window.location.pathname,
+                        url: window.location.href,
+                        severity: 'CRITICAL',
+                        serverError: serverErrorData ? JSON.stringify(serverErrorData, null, 2) : 'N/A'
+                    };
+
+                    try {
+                        await axios.post(`${getBaseURL()}/api/bug-reports`, bugReportPayload, { withCredentials: true });
                         
                         toast.error(
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -182,7 +187,15 @@ api.interceptors.response.use(
                             { autoClose: 5000 }
                         );
                     } catch (reportErr) {
-                        console.error("Failed to automatically report bug:", reportErr);
+                        console.error("Failed to automatically report bug, saving to offline queue:", reportErr);
+                        try {
+                            const queue = JSON.parse(localStorage.getItem('qms_pending_bug_reports') || '[]');
+                            if (queue.length >= 20) queue.shift();
+                            queue.push({ ...bugReportPayload, queuedAt: new Date().toISOString() });
+                            localStorage.setItem('qms_pending_bug_reports', JSON.stringify(queue));
+                        } catch (lsErr) {
+                            console.error("Failed to write to localStorage:", lsErr);
+                        }
                     }
                 })();
             } else {
@@ -669,4 +682,39 @@ export default api;
 export const getProductTestReports = (productId) => api.get(`/api/products/${productId}/test-reports`);
 export const addProductTestReport = (productId, data) => api.post(`/api/products/${productId}/test-reports`, data);
 export const deleteProductTestReport = (reportId) => api.delete(`/api/products/test-reports/${reportId}`);
+
+// [오프라인 큐 전송 기능] 저장된 미전송 버그리포트를 서버가 정상화되었을 때 전송합니다.
+export const flushPendingBugReports = async () => {
+    try {
+        const queue = JSON.parse(localStorage.getItem('qms_pending_bug_reports') || '[]');
+        if (queue.length === 0) return;
+        
+        console.log(`[QMS] Flushing ${queue.length} pending offline bug reports...`);
+        const remaining = [];
+        
+        for (const report of queue) {
+            try {
+                // withCredentials를 활용하여 현재 로그인 상태의 세션을 태워 보냅니다.
+                await axios.post(`${getBaseURL()}/api/bug-reports`, report, { withCredentials: true });
+            } catch (err) {
+                console.error("Failed to flush single offline report, retaining in queue:", err);
+                remaining.push(report);
+            }
+        }
+        
+        if (remaining.length > 0) {
+            localStorage.setItem('qms_pending_bug_reports', JSON.stringify(remaining));
+        } else {
+            localStorage.removeItem('qms_pending_bug_reports');
+            console.log("[QMS] All pending bug reports flushed successfully.");
+        }
+    } catch (err) {
+        console.error("Error during flushing pending bug reports:", err);
+    }
+};
+
+// 모듈이 처음 로드될 때 및 주기적으로 flush 시도
+setTimeout(() => {
+    flushPendingBugReports();
+}, 2000);
 

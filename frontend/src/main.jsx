@@ -36,28 +36,44 @@ const theme = createTheme({
 });
 
 // Global error tracker to automatically send bug reports
+const queueFailedBugReport = (report) => {
+  try {
+    const queue = JSON.parse(localStorage.getItem('qms_pending_bug_reports') || '[]');
+    // Limit queue size to 20 to avoid clogging local storage
+    if (queue.length >= 20) queue.shift();
+    queue.push({ ...report, queuedAt: new Date().toISOString() });
+    localStorage.setItem('qms_pending_bug_reports', JSON.stringify(queue));
+  } catch (err) {
+    console.error('Failed to queue bug report locally:', err);
+  }
+};
+
 window.addEventListener('error', async (event) => {
   const isBugReportRequest = event.filename && (event.filename.includes('/api/bug-reports') || event.filename.includes('bug-reports'));
   if (isBugReportRequest) return;
   
+  const report = {
+    description: `[프론트엔드 자동 감지] 런타임 오류: ${event.message || '알 수 없는 오류'}`,
+    steps: [
+      `Error: ${event.error?.stack || event.message || 'No stack trace'}`,
+      `File: ${event.filename || 'N/A'}`,
+      `Line/Col: ${event.lineno || 0}:${event.colno || 0}`,
+      `UserAgent: ${navigator.userAgent}`
+    ].join('\n'),
+    screenName: window.__QMS_ACTIVE_PAGE__ || window.location.pathname,
+    url: window.location.href,
+    severity: 'HIGH',
+    serverError: 'FRONTEND_RUNTIME_EXCEPTION'
+  };
+
   try {
     const axios = (await import('axios')).default;
-    const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
-    await axios.post(`${baseURL}/api/bug-reports`, {
-      description: `[프론트엔드 자동 감지] 런타임 오류: ${event.message || '알 수 없는 오류'}`,
-      steps: [
-        `Error: ${event.error?.stack || event.message || 'No stack trace'}`,
-        `File: ${event.filename || 'N/A'}`,
-        `Line/Col: ${event.lineno || 0}:${event.colno || 0}`,
-        `UserAgent: ${navigator.userAgent}`
-      ].join('\n'),
-      screenName: window.__QMS_ACTIVE_PAGE__ || window.location.pathname,
-      url: window.location.href,
-      severity: 'HIGH',
-      serverError: 'FRONTEND_RUNTIME_EXCEPTION'
-    }, { withCredentials: true });
+    // VITE_API_BASE_URL 환경 변수가 올바른 키입니다.
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+    await axios.post(`${apiBase}/api/bug-reports`, report, { withCredentials: true });
   } catch (err) {
-    console.error('Failed to auto-report frontend error:', err);
+    console.error('Failed to auto-report frontend error, queuing locally:', err);
+    queueFailedBugReport(report);
   }
 });
 
@@ -68,23 +84,26 @@ window.addEventListener('unhandledrejection', async (event) => {
     return;
   }
   
+  const errorMsg = reason?.message || (typeof reason === 'string' ? reason : JSON.stringify(reason));
+  const report = {
+    description: `[프론트엔드 자동 감지] 비동기 처리 오류: ${errorMsg}`,
+    steps: [
+      `Reason: ${reason?.stack || errorMsg || 'No reason specified'}`,
+      `UserAgent: ${navigator.userAgent}`
+    ].join('\n'),
+    screenName: window.__QMS_ACTIVE_PAGE__ || window.location.pathname,
+    url: window.location.href,
+    severity: 'HIGH',
+    serverError: 'FRONTEND_UNHANDLED_REJECTION'
+  };
+
   try {
     const axios = (await import('axios')).default;
-    const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
-    const errorMsg = reason?.message || (typeof reason === 'string' ? reason : JSON.stringify(reason));
-    await axios.post(`${baseURL}/api/bug-reports`, {
-      description: `[프론트엔드 자동 감지] 비동기 처리 오류: ${errorMsg}`,
-      steps: [
-        `Reason: ${reason?.stack || errorMsg || 'No reason specified'}`,
-        `UserAgent: ${navigator.userAgent}`
-      ].join('\n'),
-      screenName: window.__QMS_ACTIVE_PAGE__ || window.location.pathname,
-      url: window.location.href,
-      severity: 'HIGH',
-      serverError: 'FRONTEND_UNHANDLED_REJECTION'
-    }, { withCredentials: true });
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+    await axios.post(`${apiBase}/api/bug-reports`, report, { withCredentials: true });
   } catch (err) {
-    console.error('Failed to auto-report unhandled promise rejection:', err);
+    console.error('Failed to auto-report unhandled promise rejection, queuing locally:', err);
+    queueFailedBugReport(report);
   }
 });
 
