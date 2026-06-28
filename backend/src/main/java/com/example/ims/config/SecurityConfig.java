@@ -79,7 +79,7 @@ public class SecurityConfig {
                         .logoutUrl("/api/auth/logout")
                         .invalidateHttpSession(true)
                         .clearAuthentication(true) 
-                        .deleteCookies("QMS_SESSION", "JSESSIONID", "SESSION")
+                        .deleteCookies("QMS_SESSION_V2", "QMS_SESSION", "JSESSIONID", "SESSION")
                         .logoutSuccessHandler(logoutSuccessHandler)
                 )
                 .exceptionHandling(ex -> ex
