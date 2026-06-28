@@ -127,7 +127,7 @@ api.interceptors.response.use(
         
         if (error.response && error.response.status === 401 && !isLoginRequest && !isSilentAuthCheck) {
             window.dispatchEvent(new Event('auth-unauthorized'));
-        } else if (!isLoginRequest && !isBugReportRequest && !(error.config && error.config.skipToast)) {
+        } else if (!isLoginRequest && !isBugReportRequest && !isSilentAuthCheck && !(error.config && error.config.skipToast)) {
             let errorMsg = "서버와 통신 중 문제가 발생했습니다.";
             if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
                 errorMsg = "요청 처리 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.";
