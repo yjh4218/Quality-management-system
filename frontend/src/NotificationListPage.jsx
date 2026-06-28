@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getMyNotifications, readNotification, readAllNotifications, deleteNotification } from './api';
+import { getMyNotifications, readNotification, readAllNotifications, deleteNotification, getClaimById } from './api';
 import { toast } from 'react-toastify';
 
 /**
@@ -46,12 +46,10 @@ const NotificationListPage = ({ user, onNavigate }) => {
                 const itemCode = searchParams.get('itemCode');
 
                 if (claimId) {
-                    import('./api').then(({ getClaimById }) => {
-                        getClaimById(claimId, false).then(res => {
-                            if (res && res.data) {
-                                onNavigate('claims', res.data);
-                            }
-                        });
+                    getClaimById(claimId, false).then(res => {
+                        if (res && res.data) {
+                            onNavigate('claims', res.data);
+                        }
                     });
                 } else if (itemCode) {
                     onNavigate('qualityPhotoAudit', { auditId, itemCode });
@@ -238,13 +236,22 @@ const NotificationListPage = ({ user, onNavigate }) => {
                                         🔍 상세 화면 이동
                                     </button>
                                 )}
-                                {!n.read && !n.linkUrl && (
+                                {!n.read && (
                                     <button 
                                         className="secondary"
-                                        onClick={() => handleRead(n.id, null)}
+                                        onClick={async () => {
+                                            try {
+                                                await readNotification(n.id);
+                                                fetchNotifications();
+                                                toast.success("알림을 확인 처리했습니다.");
+                                            } catch (err) {
+                                                console.error("Failed to read notification", err);
+                                                toast.error("알림 확인 처리에 실패했습니다.");
+                                            }
+                                        }}
                                         style={{ padding: '8px 14px', fontSize: '12.5px' }}
                                     >
-                                        확인 완료
+                                        확인
                                     </button>
                                 )}
                                 <button 

@@ -3,10 +3,15 @@ package com.example.ims.service;
 import com.example.ims.entity.Manufacturer;
 import com.example.ims.repository.ManufacturerRepository;
 import com.example.ims.repository.UserRepository;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import lombok.RequiredArgsConstructor;
+import com.example.ims.dto.ManufacturerScorecardDto;
+import com.example.ims.entity.ManufacturerAudit;
+import com.example.ims.entity.Claim;
+import com.example.ims.repository.ManufacturerAuditRepository;
+import com.example.ims.repository.ClaimRepository;
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -16,6 +21,49 @@ public class ManufacturerService {
     private final ManufacturerRepository manufacturerRepository;
     private final AuditLogService auditLogService;
     private final UserRepository userRepository;
+    private final ManufacturerAuditRepository manufacturerAuditRepository;
+    private final ClaimRepository claimRepository;
+
+    @Transactional(readOnly = true)
+    public ManufacturerScorecardDto getScorecard(Long manufacturerId) {
+        Manufacturer mfr = getById(manufacturerId);
+        
+        // 1. Audit scores
+        List<ManufacturerAudit> audits = manufacturerAuditRepository.findByManufacturerId(manufacturerId);
+        double avgAuditScore = 100.0;
+        if (!audits.isEmpty()) {
+            double total = audits.stream().mapToDouble(ManufacturerAudit::getTotalScore).sum();
+            avgAuditScore = total / audits.size();
+        }
+
+        // 2. Claim counts within 1 year
+        LocalDate oneYearAgo = LocalDate.now().minusYears(1);
+        List<Claim> claims = claimRepository.findByManufacturer(mfr.getName());
+        int recentClaimCount = (int) claims.stream()
+                .filter(c -> c.getReceiptDate() != null && c.getReceiptDate().isAfter(oneYearAgo))
+                .count();
+
+        // 3. Deductions (2 points per claim, max deduction 30)
+        double claimDeduction = Math.min(recentClaimCount * 2.0, 30.0);
+
+        // 4. Final Score & Grade
+        double finalScore = Math.max(avgAuditScore - claimDeduction, 0.0);
+        String grade = "D";
+        if (finalScore >= 90.0) grade = "A";
+        else if (finalScore >= 80.0) grade = "B";
+        else if (finalScore >= 70.0) grade = "C";
+
+        return ManufacturerScorecardDto.builder()
+                .manufacturerId(manufacturerId)
+                .manufacturerName(mfr.getName())
+                .auditCount(audits.size())
+                .averageAuditScore(avgAuditScore)
+                .claimCount(recentClaimCount)
+                .claimDeduction(claimDeduction)
+                .finalScore(finalScore)
+                .grade(grade)
+                .build();
+    }
 
     public List<Manufacturer> getAll(String username) {
         com.example.ims.entity.User user = userRepository.findByUsername(username)

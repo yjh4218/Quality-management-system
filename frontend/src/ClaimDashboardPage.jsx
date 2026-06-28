@@ -16,6 +16,7 @@ let globalDashboardPromise = null;
 
 function ClaimDashboardPage({ user, onNavigate }) {
     const hasEffectRun = useRef(false);
+    const gridRef = useRef();
     
     const [stats, setStats] = useState(globalDashboardData.stats);
     const [claims, setClaims] = useState(globalDashboardData.claims);
@@ -33,6 +34,22 @@ function ClaimDashboardPage({ user, onNavigate }) {
     const [modalTitle, setModalTitle] = useState('');
     const [modalData, setModalData] = useState([]);
     const [detailRow, setDetailRow] = useState(null);
+
+    const [gridPage, setGridPage] = useState(0);
+    const [gridTotalPages, setGridTotalPages] = useState(1);
+    const [gridPageSize, setGridPageSize] = useState(10);
+
+    const onPaginationChanged = useCallback(() => {
+        if (gridRef.current && gridRef.current.api) {
+            setGridPage(gridRef.current.api.paginationGetCurrentPage());
+            setGridTotalPages(gridRef.current.api.paginationGetTotalPages());
+        }
+    }, []);
+
+    const handlePageSizeChange = (e) => {
+        const newSize = Number(e.target.value);
+        setGridPageSize(newSize);
+    };
 
     const load = useCallback(async (force = false) => {
         const currentKey = `${startDate}-${endDate}-${itemCode}-${productName}-${manufacturer}`;
@@ -382,17 +399,57 @@ function ClaimDashboardPage({ user, onNavigate }) {
             </div>
 
             {/* Grid Area - Search Results */}
-            <div className="card" style={{ marginTop: '20px', flex: 1, minHeight: '400px', display: 'flex', flexDirection: 'column' }}>
+            <div className="card" style={{ marginTop: '20px', flex: 1, minHeight: '520px', display: 'flex', flexDirection: 'column' }}>
                 <h3 style={{ margin: '0 0 10px 0', fontSize: '16px' }}>📋 클레임 조회 결과 목록 (총 {claims?.length || 0}건)</h3>
-                <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
+                <div className="ag-theme-alpine" style={{ flex: 1, width: '100%', minHeight: '350px' }}>
                     <AgGridReact
                         theme="legacy"
+                        ref={gridRef}
                         rowData={claims || []}
                         columnDefs={columnDefs}
                         pagination={true}
-                        paginationPageSize={10}
+                        paginationPageSize={gridPageSize}
+                        suppressPaginationPanel={true}
+                        onPaginationChanged={onPaginationChanged}
                         onRowDoubleClicked={handleRowDoubleClick}
                     />
+                </div>
+                
+                {/* Custom Pagination Controls with Native HTML Select */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px', padding: '10px 5px', borderTop: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '13px', color: '#64748b' }}>페이지 표시 개수:</span>
+                        <select 
+                            value={gridPageSize} 
+                            onChange={handlePageSizeChange}
+                            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', backgroundColor: '#fff', cursor: 'pointer', outline: 'none' }}
+                        >
+                            <option value={10}>10개씩 보기</option>
+                            <option value={20}>20개씩 보기</option>
+                            <option value={50}>50개씩 보기</option>
+                            <option value={100}>100개씩 보기</option>
+                        </select>
+                    </div>
+                    
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                        <button
+                            disabled={gridPage === 0}
+                            onClick={() => gridRef.current?.api?.paginationGoToPreviousPage()}
+                            style={{ padding: '6px 16px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', cursor: gridPage === 0 ? 'default' : 'pointer', opacity: gridPage === 0 ? 0.5 : 1 }}
+                        >
+                            ◀ 이전
+                        </button>
+                        <span style={{ fontSize: '13px', color: '#475569', fontWeight: 'bold' }}>
+                            {gridPage + 1} / {gridTotalPages || 1} 페이지
+                        </span>
+                        <button
+                            disabled={gridPage >= gridTotalPages - 1}
+                            onClick={() => gridRef.current?.api?.paginationGoToNextPage()}
+                            style={{ padding: '6px 16px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', cursor: gridPage >= gridTotalPages - 1 ? 'default' : 'pointer', opacity: gridPage >= gridTotalPages - 1 ? 0.5 : 1 }}
+                        >
+                            다음 ▶
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -404,13 +461,16 @@ function ClaimDashboardPage({ user, onNavigate }) {
                             <h3 style={{ margin: 0 }}>{modalTitle}</h3>
                             <button onClick={() => setModalOpen(false)} style={{ fontSize: '24px', border: 'none', background: 'none', cursor: 'pointer' }}>&times;</button>
                         </div>
-                        <div className="ag-theme-alpine" style={{ flex: 1 }}>
+                        <div className="ag-theme-alpine" style={{ height: 'calc(100% - 60px)', width: '100%' }}>
                             <AgGridReact
                                 theme="legacy"
                                 rowData={modalData}
                                 columnDefs={columnDefs}
                                 pagination={true}
+                                paginationPageSize={10}
+                                suppressPaginationPanel={false}
                                 onRowDoubleClicked={handleRowDoubleClick}
+                                popupParent={document.body}
                             />
                         </div>
                     </div>

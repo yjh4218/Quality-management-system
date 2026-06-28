@@ -151,6 +151,12 @@ public class Claim {
 
     private LocalDateTime emailSentAt; // 제조사 메일 발송 일시
 
+    @Builder.Default
+    private Boolean isCriticalClaim = false;
+
+    @Builder.Default
+    private String criticalRequestStatus = "PENDING"; // PENDING, SUBMITTED, RE_REQUESTED, APPROVED
+
     @Version
     private Long version;
 }

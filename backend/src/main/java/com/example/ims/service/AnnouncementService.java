@@ -38,6 +38,7 @@ public class AnnouncementService {
     private final ManufacturerRepository manufacturerRepository;
     private final EmailService emailService;
     private final AnnouncementCategoryRepository announcementCategoryRepository;
+    private final com.example.ims.repository.NotificationSettingRepository notificationSettingRepository;
 
     /**
      * 모든 전체공지 목록 조회 (관리자 또는 공지 모니터링 관리 페이지용)
@@ -189,6 +190,16 @@ public class AnnouncementService {
                 .modifier(modifier)
                 .description("Created new announcement: " + saved.getTitle() + " (" + newNumber + ")")
                 .newEntity(saved)
+                .build());
+
+        // [알림 연동] 공지사항 등록 시 매핑된 알림 이벤트 발행
+        eventPublisher.publishEvent(com.example.ims.event.NotificationEvent.builder()
+                .sourceDomain("ANNOUNCEMENT")
+                .sourceAction("CREATE")
+                .title("📣 신규 공지사항 등록 알림")
+                .message(String.format("새로운 공지사항이 등록되었습니다: %s", saved.getTitle()))
+                .category("ANNOUNCEMENT")
+                .linkUrl("/announcements")
                 .build());
 
         return saved;

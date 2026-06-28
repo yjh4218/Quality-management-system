@@ -80,6 +80,7 @@ public class SystemInitializationService {
 
         repairAllSequences();
         alignProductsAndClaimsData();
+        seedNotificationSettings();
 
         log.info(">>>> [SYSTEM INIT] Data Seeding & Repair Completed.");
         performDataAudit();
@@ -640,24 +641,26 @@ public class SystemInitializationService {
                 jdbcTemplate.update("INSERT INTO brands (name) VALUES (?)", "더파운더즈");
             }
 
+            // [보조] manufacturers 테이블에 "한국콜마"가 없으면 먼저 인서트
+            Integer kolmarMfrExists = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM manufacturers WHERE name = '한국콜마'", Integer.class);
+            if (kolmarMfrExists == null || kolmarMfrExists == 0) {
+                jdbcTemplate.update("INSERT INTO manufacturers (identification_code, manufacturer_code, name, category, contact_person, phone_number, email, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        "M001", "M001", "한국콜마", "화장품", "김콜마", "010-9999-8888", "kolmar@example.com", true);
+                log.info(">>>> [SYSTEM INIT] Seeded '한국콜마' manufacturer early for products.");
+            }
+            Long mfrId = jdbcTemplate.queryForObject("SELECT id FROM manufacturers WHERE name = '한국콜마' LIMIT 1", Long.class);
+
             Integer productCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM products", Integer.class);
             if (productCount == null || productCount == 0) {
                 Long brandId = jdbcTemplate.queryForObject("SELECT id FROM brands LIMIT 1", Long.class);
                 
-                Integer mfrCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM manufacturers", Integer.class);
-                if (mfrCount == null || mfrCount == 0) {
-                    jdbcTemplate.update("INSERT INTO manufacturers (identification_code, manufacturer_code, name, category, contact_person, phone_number, email, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                            "M-2026-001", "M-2026-001", "글로벌 코스메틱", "화장품", "이영희", "010-1234-5678", "global@example.com", true);
-                }
-                Long mfrId = jdbcTemplate.queryForObject("SELECT id FROM manufacturers LIMIT 1", Long.class);
-                
                 jdbcTemplate.update(
-                        "INSERT INTO products (item_code, product_name, english_product_name, brand_id, manufacturer_id, capacity, weight, status, active, is_deleted, created_at, updated_at, is_master, is_parent, is_planning_set, photo_audit_disclosed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?, ?, ?, ?)",
+                        "INSERT INTO products (item_code, product_name, english_product_name, brand_id, manufacturer_id, capacity, weight, status, active, is_deleted, created_at, updated_at, is_master, is_parent, is_planning_set, photo_audit_disclosed, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?, ?, ?, ?, 0)",
                         "PRD-2026-001", "모이스처 수분 크림 50ml", "Moisture Cream 50ml", brandId, mfrId, "50ml", "100g", "양산", true, false, false, false, false, false
                 );
                 
                 jdbcTemplate.update(
-                        "INSERT INTO products (item_code, product_name, english_product_name, brand_id, manufacturer_id, capacity, weight, status, active, is_deleted, created_at, updated_at, is_master, is_parent, is_planning_set, photo_audit_disclosed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?, ?, ?, ?)",
+                        "INSERT INTO products (item_code, product_name, english_product_name, brand_id, manufacturer_id, capacity, weight, status, active, is_deleted, created_at, updated_at, is_master, is_parent, is_planning_set, photo_audit_disclosed, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?, ?, ?, ?, 0)",
                         "PRD-2026-002", "안티에이징 세럼 30ml", "Anti-aging Serum 30ml", brandId, mfrId, "30ml", "80g", "가안", true, false, false, false, false, false
                 );
             }
@@ -666,31 +669,30 @@ public class SystemInitializationService {
             Integer parentExists = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM products WHERE item_code = 'PARENT-001'", Integer.class);
             if (parentExists == null || parentExists == 0) {
                 Long brandId = jdbcTemplate.queryForObject("SELECT id FROM brands LIMIT 1", Long.class);
-                Long mfrId = jdbcTemplate.queryForObject("SELECT id FROM manufacturers LIMIT 1", Long.class);
                 jdbcTemplate.update(
-                        "INSERT INTO products (item_code, product_name, english_product_name, brand_id, manufacturer_id, capacity, weight, status, active, is_deleted, created_at, updated_at, is_master, is_parent, is_planning_set, photo_audit_disclosed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?, ?, ?, ?)",
+                        "INSERT INTO products (item_code, product_name, english_product_name, brand_id, manufacturer_id, capacity, weight, status, active, is_deleted, created_at, updated_at, is_master, is_parent, is_planning_set, photo_audit_disclosed, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?, ?, ?, ?, 0)",
                         "PARENT-001", "기준 마스터 본품", "Master Parent Product", brandId, mfrId, "100ml", "150g", "양산", true, false, true, true, false, false
                 );
                 log.info(">>>> [SYSTEM INIT] Seeded 'PARENT-001' parent product.");
             }
-            
-            // [보정] manufacturers 테이블에 "한국콜마"가 없으면 인서트
-            Integer kolmarMfrExists = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM manufacturers WHERE name = '한국콜마'", Integer.class);
-            if (kolmarMfrExists == null || kolmarMfrExists == 0) {
-                jdbcTemplate.update("INSERT INTO manufacturers (identification_code, manufacturer_code, name, category, contact_person, phone_number, email, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                        "M001", "M001", "한국콜마", "화장품", "김콜마", "010-9999-8888", "kolmar@example.com", true);
-                log.info(">>>> [SYSTEM INIT] Seeded '한국콜마' manufacturer.");
+
+            // [보정] 기존에 오등록된 PRD-2026-001, PRD-2026-002, PARENT-001 품목의 제조사를 한국콜마로 강제 업데이트
+            try {
+                int updatedDummyProducts = jdbcTemplate.update(
+                    "UPDATE products SET manufacturer_id = ? WHERE item_code IN ('PRD-2026-001', 'PRD-2026-002', 'PARENT-001')",
+                    mfrId
+                );
+                log.info(">>>> [SYSTEM INIT] Repaired manufacturer for dummy products to '한국콜마'. count: {}", updatedDummyProducts);
+            } catch (Exception e) {
+                log.warn(">>>> [SYSTEM INIT] Could not repair dummy products manufacturer: {}", e.getMessage());
             }
 
             // [보정] KOLMAR- 로 시작하는 제품들의 제조사 정보를 한국콜마로 자동 보정
             try {
-                Long kolmarId = jdbcTemplate.queryForObject("SELECT id FROM manufacturers WHERE name = '한국콜마' LIMIT 1", Long.class);
-                if (kolmarId != null) {
-                    int updatedMfrId = jdbcTemplate.update("UPDATE products SET manufacturer_id = ? WHERE item_code LIKE 'KOLMAR-%' AND manufacturer_id IS NULL", kolmarId);
-                    int updatedMfr = jdbcTemplate.update("UPDATE products SET manufacturer = '한국콜마' WHERE item_code LIKE 'KOLMAR-%' AND manufacturer IS NULL");
-                    int updatedDisclosed = jdbcTemplate.update("UPDATE products SET photo_audit_disclosed = true WHERE item_code LIKE 'KOLMAR-%' AND photo_audit_disclosed IS NULL");
-                    log.info(">>>> [SYSTEM INIT] Repaired manufacturer for KOLMAR products. updatedMfrId: {}, updatedMfr: {}, updatedDisclosed: {}", updatedMfrId, updatedMfr, updatedDisclosed);
-                }
+                int updatedMfrId = jdbcTemplate.update("UPDATE products SET manufacturer_id = ? WHERE item_code LIKE 'KOLMAR-%' AND manufacturer_id IS NULL", mfrId);
+                int updatedMfr = jdbcTemplate.update("UPDATE products SET manufacturer = '한국콜마' WHERE item_code LIKE 'KOLMAR-%' AND manufacturer IS NULL");
+                int updatedDisclosed = jdbcTemplate.update("UPDATE products SET photo_audit_disclosed = true WHERE item_code LIKE 'KOLMAR-%' AND photo_audit_disclosed IS NULL");
+                log.info(">>>> [SYSTEM INIT] Repaired manufacturer for KOLMAR products. updatedMfrId: {}, updatedMfr: {}, updatedDisclosed: {}", updatedMfrId, updatedMfr, updatedDisclosed);
             } catch (Exception e) {
                 log.warn(">>>> [SYSTEM INIT] Could not repair KOLMAR products manufacturer: {}", e.getMessage());
             }
@@ -727,6 +729,65 @@ public class SystemInitializationService {
                 log.info(">>>> [SYSTEM INIT] Repaired/Filled dummy data for empty product fields.");
             } catch (Exception e) {
                 log.warn(">>>> [SYSTEM INIT] Could not fill empty product fields: {}", e.getMessage());
+            }
+
+            // Seed 3 test claims for 한국콜마 (제조사 확인 중 & 답변 완료 상태)
+            try {
+                Integer claimCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM claims WHERE claim_number = 'CLM-20260627-901'", Integer.class);
+                if (claimCount == null || claimCount == 0) {
+                    jdbcTemplate.update(
+                        "INSERT INTO claims (claim_number, receipt_date, country, item_code, product_name, lot_number, manufacturer, occurrence_qty, primary_category, claim_content, quality_status, shared_with_manufacturer, mfr_status, mfr_root_cause_analysis, mfr_preventative_action, is_critical_claim, critical_request_status, is_deleted, created_at, updated_at, version) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
+                        "CLM-20260627-901", java.time.LocalDate.now(), "한국", "PRD-2026-001", "모이스처 수분 크림 50ml", "LOT-202606A", "한국콜마", 100, "용기불량", "튜브 끝단 실링 터짐 현상 발생으로 내용물 누출", "1. 클레임 접수", true, "3. 대책수립", "포장 공정 중 실링 기계의 오작동 및 온도 관리 이탈로 인한 튜브 미세 접착 불량", "실링기 온도 가열 센서 및 압력 감도 조절장치 업그레이드 완료. 작업 시작 전 초물 검사 관리 가이드 추가.", true, "SUBMITTED"
+                    );
+                    jdbcTemplate.update(
+                        "INSERT INTO claims (claim_number, receipt_date, country, item_code, product_name, lot_number, manufacturer, occurrence_qty, primary_category, claim_content, quality_status, shared_with_manufacturer, mfr_status, mfr_root_cause_analysis, mfr_preventative_action, is_critical_claim, critical_request_status, is_deleted, created_at, updated_at, version) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
+                        "CLM-20260627-902", java.time.LocalDate.now(), "일본", "PRD-2026-001", "모이스처 수분 크림 50ml", "LOT-202606B", "한국콜마", 50, "내용물 불량", "크림 층 분리 현상 발생 및 악취 보고", "1. 클레임 접수", true, "3. 대책수립", "원자재 입고 검사 시 유화제의 분산도 균일성 체크 누락으로 인한 장기 보관 안정성 훼손", "제조배치 유화 분산 공정 시간 15분 연장 및 QC 원료 성상 검사 기준표 개정 적용.", true, "SUBMITTED"
+                    );
+                    jdbcTemplate.update(
+                        "INSERT INTO claims (claim_number, receipt_date, country, item_code, product_name, lot_number, manufacturer, occurrence_qty, primary_category, claim_content, quality_status, shared_with_manufacturer, mfr_status, mfr_root_cause_analysis, mfr_preventative_action, is_critical_claim, critical_request_status, is_deleted, created_at, updated_at, version) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
+                        "CLM-20260627-903", java.time.LocalDate.now(), "미국", "PRD-2026-001", "모이스처 수분 크림 50ml", "LOT-202606C", "한국콜마", 200, "포장불량", "단상자 겉면 인쇄 번짐 및 바코드 인식 불가 오류", "1. 클레임 접수", true, "3. 대책수립", "인쇄용 잉크 피딩 롤러의 고압 분사 노즐 이물질 흡착으로 인한 인쇄 불량 발생", "노즐 클리닝 주기를 매 2시간으로 단축하고, 비전 카메라 불량 자동 검출 장치 감도 교정.", true, "SUBMITTED"
+                    );
+                    log.info(">>>> [SYSTEM INIT] Seeded 3 test claims for 한국콜마.");
+                }
+            } catch (Exception e) {
+                log.warn(">>>> [SYSTEM INIT] Could not seed test claims: {}", e.getMessage(), e);
+            }
+
+            // Seed 3 additional test claims for 한국콜마 (등록된 품목코드 매핑)
+            try {
+                Integer newClaimsCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM claims WHERE claim_number = 'CLM-20260627-911'", Integer.class);
+                if (newClaimsCount == null || newClaimsCount == 0) {
+                    jdbcTemplate.update(
+                        "INSERT INTO claims (claim_number, receipt_date, country, item_code, product_name, lot_number, manufacturer, occurrence_qty, primary_category, claim_content, quality_status, shared_with_manufacturer, mfr_status, mfr_root_cause_analysis, mfr_preventative_action, is_critical_claim, critical_request_status, is_deleted, created_at, updated_at, version) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
+                        "CLM-20260627-911", java.time.LocalDate.now(), "한국", "PRD-2026-001", "모이스처 수분 크림 50ml", "LOT-202606D", "한국콜마", 80, "용기불량", "튜브 어깨 씰 부위 균열 및 미세 샘 현상", "1. 클레임 접수", true, "3. 대책수립", "원자재 용기 사출 성형 시 노즐 내 융착 온도 급랭으로 인한 강도 저하", "용기 성양 사출 금형 온도 센서 보강 및 노즐 가열 시간 표준 가이드 수립.", true, "SUBMITTED"
+                    );
+                    jdbcTemplate.update(
+                        "INSERT INTO claims (claim_number, receipt_date, country, item_code, product_name, lot_number, manufacturer, occurrence_qty, primary_category, claim_content, quality_status, shared_with_manufacturer, mfr_status, mfr_root_cause_analysis, mfr_preventative_action, is_critical_claim, critical_request_status, is_deleted, created_at, updated_at, version) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
+                        "CLM-20260627-912", java.time.LocalDate.now(), "일본", "PRD-2026-002", "안티에이징 세럼 30ml", "LOT-202606E", "한국콜마", 30, "이물혼입", "스포이트 캡 내부 미세 유리 파편 발견 보고", "1. 클레임 접수", true, "3. 대책수립", "스포이트 유리 대량 세척 공정 후 이송 컨베이어 벨트 마찰 진동에 의한 미세 크랙 발생", "컨베이어 이송 가이드를 충격 완화 실리콘 가이드로 교체 및 비전 이물 검사장치 검출 감도 설정 변경.", true, "SUBMITTED"
+                    );
+                    jdbcTemplate.update(
+                        "INSERT INTO claims (claim_number, receipt_date, country, item_code, product_name, lot_number, manufacturer, occurrence_qty, primary_category, claim_content, quality_status, shared_with_manufacturer, mfr_status, mfr_root_cause_analysis, mfr_preventative_action, is_critical_claim, critical_request_status, is_deleted, created_at, updated_at, version) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
+                        "CLM-20260627-913", java.time.LocalDate.now(), "미국", "PARENT-001", "기준 마스터 본품", "LOT-202606F", "한국콜마", 10, "기타불량", "박스 패키지 오기재로 인한 오인식 바코드 라벨 부착", "1. 클레임 접수", true, "3. 대책수립", "수동 제품 패킹 중 작업 지시서 오독에 의한 이종 라벨 부착 실수", "라벨 부착 전 바코드 스캐너 3중 대조 인터락 시스템 구축 및 표준 검수 가이드 시행.", true, "SUBMITTED"
+                    );
+                    log.info(">>>> [SYSTEM INIT] Seeded 3 additional test claims for 한국콜마.");
+                }
+            } catch (Exception e) {
+                log.warn(">>>> [SYSTEM INIT] Could not seed additional test claims: {}", e.getMessage(), e);
+            }
+            
+            // [보정] 모든 인서트 완료 후 version 컬럼이 NULL인 데이터들을 최종적으로 0으로 덮어씀 (Optimistic Locking 방어)
+            try {
+                jdbcTemplate.update("UPDATE claims SET version = 0 WHERE version IS NULL");
+                jdbcTemplate.update("UPDATE products SET version = 0 WHERE version IS NULL");
+                log.info(">>>> [SYSTEM INIT] Post-seed version column check/repair completed.");
+            } catch (Exception e) {
+                log.warn(">>>> [SYSTEM INIT] Post-seed version check failed: {}", e.getMessage());
             }
         } catch (Exception e) {
             log.warn(">>>> [SYSTEM INIT] Could not seed dummy products: {}", e.getMessage());
@@ -885,6 +946,61 @@ public class SystemInitializationService {
                 .updatedBy("system")
                 .build());
             log.info(">>>> [SYSTEM INIT] Seeded Packaging Rule: {} -> {}", channelName, ruleType);
+        }
+    }
+
+    private void seedNotificationSettings() {
+        log.info(">>>> [SYSTEM INIT] Seeding Notification Settings rules...");
+        try {
+            jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS notification_settings (" +
+                    "id BIGSERIAL PRIMARY KEY, " +
+                    "event_type VARCHAR(100) NOT NULL UNIQUE, " +
+                    "display_name VARCHAR(255) NOT NULL, " +
+                    "description VARCHAR(1000), " +
+                    "source_domain VARCHAR(100), " +
+                    "source_action VARCHAR(50) DEFAULT 'CREATE', " +
+                    "target_roles VARCHAR(500)" +
+                    ")");
+
+            try {
+                jdbcTemplate.execute("ALTER TABLE notification_settings ADD COLUMN IF NOT EXISTS description VARCHAR(1000)");
+            } catch (Exception ex) {
+                // Ignore if already exists in target H2 database
+            }
+            try {
+                jdbcTemplate.execute("ALTER TABLE notification_settings ADD COLUMN IF NOT EXISTS source_domain VARCHAR(100)");
+                jdbcTemplate.execute("ALTER TABLE notification_settings ADD COLUMN IF NOT EXISTS source_action VARCHAR(50) DEFAULT 'CREATE'");
+            } catch (Exception ex) {
+                // Ignore
+            }
+
+            String[][] settings = {
+                {"MFR_SUBMIT_CAPA", "제조사 대책서 제출", "제조사에서 재발방지 대책 조치 결과를 수립하여 제출했을 때 발생합니다.", "CLAIM", "UPDATE", "ROLE_QUALITY,ROLE_RESPONSIBLE_SALES,ROLE_ADMIN"},
+                {"NEW_CLAIM_SHARE", "신규 클레임 공유", "품질담당자가 신규 클레임을 등록하고 제조사에 공유했을 때 발생합니다.", "CLAIM", "CREATE", "ROLE_MANUFACTURER"},
+                {"RE_REQUEST_CAPA", "대책 재요청 (반려)", "제조사가 제출한 대책이 미흡하여 재발방지 대책을 다시 수립하라고 요청했을 때 발생합니다.", "CLAIM", "UPDATE", "ROLE_MANUFACTURER"},
+                {"NEW_AUDIT", "신규 생산감사 통보", "품질팀에서 신규 생산감사 일정을 수립하여 공유했을 때 발생합니다.", "AUDIT", "CREATE", "ROLE_MANUFACTURER"}
+            };
+
+            for (String[] setting : settings) {
+                Integer exists = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM notification_settings WHERE event_type = ?", 
+                    Integer.class, setting[0]
+                );
+                if (exists == 0) {
+                    jdbcTemplate.update(
+                        "INSERT INTO notification_settings (event_type, display_name, description, source_domain, source_action, target_roles) VALUES (?, ?, ?, ?, ?, ?)",
+                        setting[0], setting[1], setting[2], setting[3], setting[4], setting[5]
+                    );
+                } else {
+                    jdbcTemplate.update(
+                        "UPDATE notification_settings SET description = ?, source_domain = ?, source_action = ? WHERE event_type = ?",
+                        setting[2], setting[3], setting[4], setting[0]
+                    );
+                }
+            }
+            log.info(">>>> [SYSTEM INIT] Notification Settings seeded successfully.");
+        } catch (Exception e) {
+            log.error(">>>> [SYSTEM INIT] [ERROR] Failed to seed notification settings: {}", e.getMessage(), e);
         }
     }
 }

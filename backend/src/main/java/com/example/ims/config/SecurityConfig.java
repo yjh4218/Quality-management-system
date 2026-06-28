@@ -30,6 +30,7 @@ public class SecurityConfig {
     private final CustomAuthenticationFailureHandler failureHandler;
     private final CustomAuthenticationSuccessHandler successHandler;
     private final CustomLogoutSuccessHandler logoutSuccessHandler;
+    private final org.springframework.session.FindByIndexNameSessionRepository<? extends org.springframework.session.Session> sessionRepository;
 
     @Value("${cors.allowed-origins:}")
     private String allowedOrigins;
@@ -44,7 +45,7 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                         // [SECURITY PATCH] 관리자 전용 시스템 경로 권한 강화
                         .requestMatchers("/api/admin/system/health").permitAll() 
-                        .requestMatchers("/api/debug/**").permitAll()
+                        .requestMatchers("/api/debug/**").hasRole("ADMIN")
                         .requestMatchers("/", "/api/auth/login", "/api/auth/logout").permitAll()
                         .requestMatchers("/api/auth/register", "/api/auth/check-username", "/api/auth/find-password", "/api/auth/verify-email").permitAll()
                         .requestMatchers("/api/auth/unlock/**", "/api/auth/reset-password/**").hasRole("ADMIN")
@@ -72,6 +73,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session
                         .sessionFixation().migrateSession() // [보안] 세션 고정 보호 강화
                         .maximumSessions(5) // [추가] 동시 세션 제한 추가
+                        .sessionRegistry(sessionRegistry()) // [보안] Spring Session(JDBC) 연동
                 )
                 .logout(logout -> logout
                         .logoutUrl("/api/auth/logout")
@@ -134,6 +136,11 @@ public class SecurityConfig {
     @Bean
     public CorsFilter corsFilter() {
         return new CorsFilter(corsConfigurationSource());
+    }
+
+    @Bean
+    public org.springframework.security.core.session.SessionRegistry sessionRegistry() {
+        return new org.springframework.session.security.SpringSessionBackedSessionRegistry<>(sessionRepository);
     }
 
     @Bean

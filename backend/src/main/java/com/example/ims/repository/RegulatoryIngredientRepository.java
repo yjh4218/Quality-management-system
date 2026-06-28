@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 public interface RegulatoryIngredientRepository extends JpaRepository<RegulatoryIngredient, Long> {
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = "limitDetails")
     List<RegulatoryIngredient> findByInciName(String inciName);
     List<RegulatoryIngredient> findByKoreanName(String koreanName);
     List<RegulatoryIngredient> findByKoreanNameContaining(String koreanName);
@@ -17,5 +18,8 @@ public interface RegulatoryIngredientRepository extends JpaRepository<Regulatory
     void deleteBySourceApi(String sourceApi);
     
     long countBySourceApi(String sourceApi);
+
+    @org.springframework.data.jpa.repository.Query("SELECT r FROM RegulatoryIngredient r WHERE LOWER(r.koreanName) IN :names OR LOWER(r.inciName) IN :names")
+    List<RegulatoryIngredient> findByNames(@org.springframework.data.repository.query.Param("names") List<String> names);
 }
 

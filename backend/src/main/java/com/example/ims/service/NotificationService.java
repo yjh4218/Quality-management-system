@@ -10,11 +10,13 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 
 @Service
@@ -24,6 +26,48 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
+
+    @lombok.Value
+    public static class UserSseConnection {
+        String username;
+        String role;
+        String companyName;
+        SseEmitter emitter;
+    }
+
+    private final List<UserSseConnection> sseConnections = new CopyOnWriteArrayList<>();
+
+    public SseEmitter subscribe(String username) {
+        User user = userRepository.findByUsername(username).orElse(null);
+        if (user == null) {
+            return null;
+        }
+        String role = user.getRole() != null ? user.getRole() : "";
+        if (!role.isEmpty() && !role.startsWith("ROLE_")) {
+            role = "ROLE_" + role;
+        }
+        return subscribe(username, role, user.getCompanyName());
+    }
+
+    public SseEmitter subscribe(String username, String role, String companyName) {
+        // 30 minutes timeout
+        SseEmitter emitter = new SseEmitter(1800000L);
+        UserSseConnection connection = new UserSseConnection(username, role, companyName, emitter);
+        sseConnections.add(connection);
+
+        emitter.onCompletion(() -> sseConnections.remove(connection));
+        emitter.onTimeout(() -> sseConnections.remove(connection));
+        emitter.onError((ex) -> sseConnections.remove(connection));
+
+        try {
+            // Send initial ping event to establish connection successfully
+            emitter.send(SseEmitter.event().name("connect").data("connected"));
+        } catch (Exception e) {
+            sseConnections.remove(connection);
+        }
+
+        return emitter;
+    }
 
     /**
      * 알림 등록 (NTF-YYYYMMDD-000 일련번호 규칙 적용)
@@ -51,7 +95,60 @@ public class NotificationService {
 
         log.info("[NOTIFICATION] Created notification: {} -> targetUser: {}, targetRole: {}", 
                 notifNum, targetUsername, targetRole);
-        return notificationRepository.save(notification);
+        
+        Notification saved = notificationRepository.save(notification);
+
+        // Transaction post-commit sync to send SSE event
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        sendNotificationToSse(saved);
+                    }
+                }
+            );
+        } else {
+            sendNotificationToSse(saved);
+        }
+
+        return saved;
+    }
+
+    private void sendNotificationToSse(Notification notification) {
+        for (UserSseConnection conn : sseConnections) {
+            boolean shouldSend = false;
+            
+            // Check if notification matches target user constraints
+            if (notification.getTargetUsername() != null) {
+                if (notification.getTargetUsername().equals(conn.getUsername())) {
+                    shouldSend = true;
+                }
+            } else if (notification.getTargetRole() != null) {
+                if (notification.getTargetRole().equals(conn.getRole())) {
+                    // Match manufacturer role company boundaries
+                    if (notification.getTargetCompanyName() == null || 
+                        notification.getTargetCompanyName().equalsIgnoreCase(conn.getCompanyName())) {
+                        shouldSend = true;
+                    }
+                }
+            } else if (notification.getTargetCompanyName() != null) {
+                if (notification.getTargetCompanyName().equalsIgnoreCase(conn.getCompanyName())) {
+                    shouldSend = true;
+                }
+            }
+
+            if (shouldSend) {
+                try {
+                    conn.getEmitter().send(SseEmitter.event()
+                        .name("notification")
+                        .data(notification));
+                    log.info("[SSE] Sent notification event to user: {}", conn.getUsername());
+                } catch (Exception e) {
+                    sseConnections.remove(conn);
+                }
+            }
+        }
     }
 
     /**

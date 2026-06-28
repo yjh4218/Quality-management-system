@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createClaim, updateClaim, uploadClaimResponse, uploadClaimPhoto, getClaimHistory, deleteClaim } from './api';
 import * as api from './api';
 import { toast } from 'react-toastify';
+import DOMPurify from 'dompurify';
 import ProductSearchPopup from './ProductSearchPopup';
 import SaveConfirmModal from './components/SaveConfirmModal';
 import { usePermissions } from './usePermissions';
@@ -33,6 +34,8 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
         manufacturerResponsePdf: '',
         sharedWithManufacturer: false,
         terminationDate: '',
+        isCriticalClaim: false,
+        criticalRequestStatus: 'PENDING',
         
         mfrRootCauseAnalysis: '',
         mfrPreventativeAction: '',
@@ -76,6 +79,8 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
     const [deptEmails, setDeptEmails] = useState({});
     const [selectedDepts, setSelectedDepts] = useState([]);
     const [emailModalTab, setEmailModalTab] = useState('preview');
+    const [reRequestReason, setReRequestReason] = useState('');
+    const [emailActionType, setEmailActionType] = useState('SHARE'); // 'SHARE' or 'RE_REQUEST'
     const isSavingRef = React.useRef(false);
 
     useEffect(() => {
@@ -206,6 +211,8 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                 manufacturerResponsePdf: claim.manufacturerResponsePdf || '',
                 sharedWithManufacturer: claim.sharedWithManufacturer || false,
                 terminationDate: claim.terminationDate || '',
+                isCriticalClaim: claim.isCriticalClaim || false,
+                criticalRequestStatus: claim.criticalRequestStatus || 'PENDING',
                 mfrRootCauseAnalysis: claim.mfrRootCauseAnalysis || '',
                 mfrPreventativeAction: claim.mfrPreventativeAction || '',
                 mfrRecallDate: claim.mfrRecallDate || '',
@@ -341,6 +348,7 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                 body: body || ''
             });
             setInitialToEmail('');
+            setEmailActionType('SHARE');
             setEmailModalTab('preview');
             setIsEmailModalOpen(true);
         } catch (error) {
@@ -379,32 +387,37 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
         }
         setIsSendingEmail(true);
         try {
-            // [추가] 메일 발송 전 현재 상태(특히 sharedWithManufacturer)를 DB에 저장
-            const sanitizedData = { ...formData };
-            // 중복 메일 전송 방지: updateClaim 단에서는 기존 sharedWithManufacturer(보통 false)를 유지함으로써, false->true 상태 변경에 의한 시스템 자동 이메일 알림 트리거를 차단합니다.
-            if (claim) {
-                sanitizedData.sharedWithManufacturer = claim.sharedWithManufacturer;
-            }
-            const dateFields = ['receiptDate', 'expectedRetrievalDate', 'recallDate', 'qualityReceivedDate', 'terminationDate', 'mfrRecallDate', 'mfrTerminationDate'];
-            dateFields.forEach(field => {
-                if (sanitizedData[field] === '') {
-                    sanitizedData[field] = null;
+            let finalClaim = null;
+            if (emailActionType === 'RE_REQUEST') {
+                // 대책 재요청 시: 메일 발송 버튼 클릭 시에만 재요청 API(상태 및 이유 반영) 호출
+                finalClaim = await api.reRequestCriticalCapa(claim.id, reRequestReason);
+            } else {
+                // 일반 메일 발송 시: 기존 저장 로직 수행
+                const sanitizedData = { ...formData };
+                if (claim) {
+                    sanitizedData.sharedWithManufacturer = claim.sharedWithManufacturer;
                 }
-            });
-            if (claim && claim.id) {
-                // [버전 동기화] DB에서 최신 버전을 가져와서 낙관적 락 충돌 방지
-                try {
-                    const latestRes = await api.getClaimById(claim.id);
-                    sanitizedData.version = latestRes.data.version || 0;
-                } catch (versionErr) {
-                    console.warn('최신 버전 조회 실패, 기존 버전 사용:', versionErr);
+                const dateFields = ['receiptDate', 'expectedRetrievalDate', 'recallDate', 'qualityReceivedDate', 'terminationDate', 'mfrRecallDate', 'mfrTerminationDate'];
+                dateFields.forEach(field => {
+                    if (sanitizedData[field] === '') {
+                        sanitizedData[field] = null;
+                    }
+                });
+                if (claim && claim.id) {
+                    try {
+                        const latestRes = await api.getClaimById(claim.id);
+                        sanitizedData.version = latestRes.data.version || 0;
+                    } catch (versionErr) {
+                        console.warn('최신 버전 조회 실패, 기존 버전 사용:', versionErr);
+                    }
+                    await updateClaim(claim.id, sanitizedData);
                 }
-                await updateClaim(claim.id, sanitizedData);
             }
 
+            // 실제 이메일 발송
             const res = await api.sendClaimEmail(claim.id, emailForm);
             
-            // 메일 전송 완료 후 백엔드에서 이메일 전송 시간 및 공유 상태 등이 갱신되어 저장되므로 최신 데이터를 가져옵니다.
+            // 메일 전송 완료 후 최종 데이터 동기화
             const updatedClaimRes = await api.getClaimById(claim.id);
             const updatedClaim = updatedClaimRes.data;
             
@@ -412,29 +425,139 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                 ...prev,
                 sharedWithManufacturer: updatedClaim.sharedWithManufacturer,
                 emailSentAt: updatedClaim.emailSentAt || '',
+                criticalRequestStatus: updatedClaim.criticalRequestStatus,
+                mfrStatus: updatedClaim.mfrStatus,
+                qualityRemarks: updatedClaim.qualityRemarks,
                 version: updatedClaim.version || 0
             }));
             
             if (onSaved) onSaved(updatedClaim);
             onClose();
 
-            // SMTP Mock mode warning
             if (res.data?.isMock || res.data?.message === "SMTP_NOT_CONFIGURED") {
                 toast.info("💡 SMTP 서버 미설정으로 [Mock 모드]가 동작했습니다. mock_emails 폴더에 메일이 저장되었습니다.", { autoClose: 8000 });
             } else {
-                toast.success("메일 발송을 요청했습니다.");
+                toast.success(emailActionType === 'RE_REQUEST' ? "제조사에 대책 재요청 메일이 전송되었습니다." : "메일 발송을 요청했습니다.");
             }
             setIsEmailModalOpen(false);
         } catch (error) {
             console.error(error);
             const errorData = error.response?.data;
-            const errorMsg = typeof errorData === 'string' ? errorData : (errorData?.message || "메일 발송 요청에 실패했습니다.");
-            toast.error(`[발송 실패] ${errorMsg}`);
+            const errorMsg = typeof errorData === 'string' ? errorData : (errorData?.message || "메일 발송 및 재요청 처리에 실패했습니다.");
+            toast.error(`[오류 발생] ${errorMsg}`);
+
+            if (emailActionType === 'RE_REQUEST') {
+                // 대책 재요청 도중 에러가 발생한 경우 자동 버그 리포트 전송
+                try {
+                    await api.submitBugReport({
+                        description: `[품질팀 재요청 오류] 대책 재요청 중 에러 발생: ${error.message || error}`,
+                        steps: [
+                            `Error: ${error.stack || error.message || 'No stack trace'}`,
+                            `Claim ID: ${claim?.id || 'N/A'}`,
+                            `Reason: ${reRequestReason || 'N/A'}`,
+                            `UserAgent: ${navigator.userAgent}`
+                        ].join('\n'),
+                        screenName: 'ClaimDrawer (대책 재요청)',
+                        url: window.location.href,
+                        severity: 'HIGH',
+                        serverError: error.response?.data ? JSON.stringify(error.response.data) : 'FRONTEND_CATCH_EXCEPTION'
+                    });
+                } catch (reportErr) {
+                    console.error("Failed to submit bug report", reportErr);
+                }
+            }
         } finally {
             setIsSendingEmail(false);
         }
     };
 
+    const handleReRequestCapa = async () => {
+        if (!claim || !claim.id) return;
+        const reason = prompt("제조사에 재발방지대책 재요청을 보내는 사유를 입력해 주세요:");
+        if (reason === null) return;
+        if (!reason.trim()) {
+            toast.warn("재요청 사유를 입력하셔야 메일을 발송할 수 있습니다.");
+            return;
+        }
+
+        setReRequestReason(reason);
+        setEmailActionType('RE_REQUEST');
+        setLoading(true);
+
+        try {
+            // 부서별 메일 주소 로드
+            let loadedDeptEmails = {};
+            const companyName = claim?.manufacturer || formData?.manufacturer;
+            if (companyName) {
+                try {
+                    const deptRes = await api.getCompanyDepartmentsAndEmails(companyName);
+                    loadedDeptEmails = deptRes.data || {};
+                    setDeptEmails(loadedDeptEmails);
+                } catch (deptErr) {
+                    console.error("Failed to load departments", deptErr);
+                }
+            }
+
+            const defaultDepts = [];
+            let defaultEmails = [];
+            if (loadedDeptEmails['품질팀']) {
+                defaultDepts.push('품질팀');
+                defaultEmails = [...defaultEmails, ...loadedDeptEmails['품질팀'].map(e => e.trim())];
+            }
+            if (loadedDeptEmails['영업팀']) {
+                defaultDepts.push('영업팀');
+                defaultEmails = [...defaultEmails, ...loadedDeptEmails['영업팀'].map(e => e.trim())];
+            }
+            const uniqueEmails = [...new Set(defaultEmails.filter(Boolean))];
+
+            const subject = `[QMS 대책 재요청] 클레임 번호 ${claim.claimNumber}번에 대한 재발방지대책 보완 요청`;
+            const body = `<html>
+<body style="font-family: 'Malgun Gothic', sans-serif; line-height: 1.6; color: #333;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); background-color: #ffffff;">
+    <h2 style="color: #0f172a; border-bottom: 2px solid #cbd5e1; padding-bottom: 10px; margin-top: 0;">통합 품질 관리 시스템 (QMS)</h2>
+    <p>안녕하세요, ${companyName} 담당자님.</p>
+    <p>더파운더즈 품질팀입니다.<br/>귀사에서 제출하신 클레임에 대한 원인 분석 및 재발방지 대책이 검토 결과 미흡하여 보완(재요청)을 요청드립니다. 아래 내용을 확인 후 재발방지대책 보완 회신을 부탁드립니다.</p>
+    
+    <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #e2e8f0;">
+      <ul style="margin: 0; padding-left: 20px; color: #475569; line-height: 1.8;">
+        <li style="margin-bottom: 8px;"><b>클레임번호:</b> ${claim.claimNumber}</li>
+        <li style="margin-bottom: 8px;"><b>품목코드:</b> ${claim.itemCode || formData.itemCode}</li>
+        <li style="margin-bottom: 8px;"><b>제품명:</b> ${claim.productName || formData.productName}</li>
+        <li style="margin-bottom: 8px;"><b>LOT번호:</b> ${claim.lotNumber || formData.lotNumber}</li>
+        <li style="margin-bottom: 8px;"><b>발생수량:</b> ${claim.occurrenceQty || formData.occurrenceQty || '-'}</li>
+        <li style="margin-bottom: 8px;"><b>클레임 내용:</b> ${claim.claimContent || formData.claimContent}</li>
+        <li style="margin-bottom: 8px; color: #c53030;"><b>대책 재요청 사유:</b> <strong>${reason}</strong></li>
+      </ul>
+    </div>
+    
+    <p>QMS 시스템에 접속하여 보완된 원인 분석 및 재발방지 대책을 다시 수립하여 제출해 주시기 바랍니다.</p>
+    
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="http://localhost:5173/?claimId=${claim.id}&amp;fromEmail=true" style="display: inline-block; padding: 12px 24px; color: #ffffff; background-color: #4f46e5; text-decoration: none; border-radius: 6px; font-weight: bold; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);">🔍 클레임 상세 내용 확인하기</a>
+    </div>
+    
+    <p style="margin-bottom: 0;">감사합니다.</p>
+    <hr style="border: none; border-top: 1px solid #cbd5e1; margin: 20px 0;" />
+    <p style="font-size: 12px; color: #94a3b8; text-align: center; margin: 0;">본 메일은 QMS 시스템에서 자동으로 발송된 메일입니다.</p>
+  </div>
+</body>
+</html>`;
+
+            setSelectedDepts(defaultDepts);
+            setEmailForm({
+                toEmail: uniqueEmails.join(', '),
+                subject: subject,
+                body: body
+            });
+            setInitialToEmail('');
+            setEmailModalTab('preview');
+            setIsEmailModalOpen(true);
+        } catch (error) {
+            toast.error("재발방지대책 재요청 메일 준비 중 실패했습니다.");
+        } finally {
+            setLoading(false);
+        }
+    };
     const handleClaimDelete = async () => {
         if (!claim || !claim.id) return;
         
@@ -661,6 +784,45 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                                     </label>
                                                     <span style={{ fontSize: '12px', color: '#64748b' }}>* 체크 시 제조사 담당자가 로그인하여 해당 클레임을 조회하고 의견을 작성할 수 있습니다.</span>
                                                 </div>
+
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '5px', borderTop: '1px solid #e2e8f0', paddingTop: '15px' }}>
+                                                    <label className="custom-checkbox" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 'bold', color: '#be123c' }}>
+                                                        <input 
+                                                            type="checkbox" 
+                                                            name="isCriticalClaim" 
+                                                            checked={formData.isCriticalClaim} 
+                                                            onChange={(e) => setFormData(p => ({ ...p, isCriticalClaim: e.target.checked }))}
+                                                            disabled={!canEditQuality}
+                                                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                                        />
+                                                        🔥 크리티컬 클레임으로 지정 (제조사 재발방지대책(CAPA) 연계 요구)
+                                                    </label>
+                                                </div>
+
+                                                {formData.isCriticalClaim && (
+                                                    <div style={{ padding: '15px', background: '#fff5f5', borderRadius: '8px', border: '1px solid #feb2b2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#9b2c2c' }}>
+                                                            ⚠️ 재발방지대책 요구 상태: 
+                                                            <span style={{ marginLeft: '6px', color: 
+                                                                formData.criticalRequestStatus === 'APPROVED' ? '#2f855a' : 
+                                                                formData.criticalRequestStatus === 'RE_REQUESTED' ? '#c53030' : '#dd6b20'
+                                                            }}>
+                                                                {formData.criticalRequestStatus === 'PENDING' ? '대책 수립 대기' : 
+                                                                 formData.criticalRequestStatus === 'SUBMITTED' ? '제출 완료 (검토중)' : 
+                                                                 formData.criticalRequestStatus === 'RE_REQUESTED' ? '대책 재요청됨' : '최종 승인 완료'}
+                                                            </span>
+                                                        </span>
+                                                        {(isAdmin || isQuality) && formData.criticalRequestStatus === 'SUBMITTED' && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={handleReRequestCapa}
+                                                                style={{ padding: '6px 12px', fontSize: '12px', color: '#c53030', background: '#fff', border: '1px solid #feb2b2', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
+                                                            >
+                                                                ↩️ 대책 재요청
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
                                                 
                                                 {(!isManufacturer) && formData.emailSentAt && (
                                                     <div style={{ fontSize: '13px', color: '#4f46e5', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -908,6 +1070,34 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                                 </div>
                                             )}
                                         </div>
+
+                                        {/* 크리티컬 클레임 대책 재요청 피드백 루프 (제조사 의견 검토 후 반려) */}
+                                        {formData.isCriticalClaim && (
+                                            <div style={{ marginTop: '20px', borderTop: '1px solid #fecaca', paddingTop: '20px' }}>
+                                                <div style={{ padding: '15px', background: '#fff5f5', borderRadius: '8px', border: '1px solid #feb2b2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#9b2c2c' }}>
+                                                        ⚠️ 재발방지대책 요구 상태: 
+                                                        <span style={{ marginLeft: '6px', color: 
+                                                            formData.criticalRequestStatus === 'APPROVED' ? '#2f855a' : 
+                                                            formData.criticalRequestStatus === 'RE_REQUESTED' ? '#c53030' : '#dd6b20'
+                                                        }}>
+                                                            {formData.criticalRequestStatus === 'PENDING' ? '대책 수립 대기' : 
+                                                             formData.criticalRequestStatus === 'SUBMITTED' ? '제출 완료 (품질팀 검토 중)' : 
+                                                             formData.criticalRequestStatus === 'RE_REQUESTED' ? '대책 재요청됨' : '최종 승인 완료'}
+                                                        </span>
+                                                    </span>
+                                                    {(isAdmin || isQuality) && formData.criticalRequestStatus === 'SUBMITTED' && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleReRequestCapa}
+                                                            style={{ padding: '8px 16px', fontSize: '13px', color: '#c53030', background: '#fff', border: '1px solid #feb2b2', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                                        >
+                                                            ↩️ 제조사 대책 재요청 (반려)
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -1127,7 +1317,7 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                         color: '#2d3748',
                                         lineHeight: '1.6'
                                     }}>
-                                        <div dangerouslySetInnerHTML={{ __html: emailForm.body }} />
+                                        <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(emailForm.body) }} />
                                     </div>
                                 ) : (
                                     <textarea 

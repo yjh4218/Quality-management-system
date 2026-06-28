@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { AgGridReact } from 'ag-grid-react';
-import { getManufacturers, deleteManufacturer } from './api';
+import { getManufacturers, deleteManufacturer, getManufacturerScorecard } from './api';
 import ManufacturerDrawer from './ManufacturerDrawer';
 import { usePermissions } from './usePermissions';
 import { toast } from 'react-toastify';
@@ -19,6 +19,18 @@ const ManufacturerManagementPage = ({ user }) => {
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [loading, setLoading] = useState(true);
     const [quickFilterText, setQuickFilterText] = useState('');
+    const [scorecardData, setScorecardData] = useState(null);
+    const [isScorecardOpen, setIsScorecardOpen] = useState(false);
+
+    const handleShowScorecard = async (mfr) => {
+        try {
+            const res = await getManufacturerScorecard(mfr.id);
+            setScorecardData(res.data);
+            setIsScorecardOpen(true);
+        } catch (error) {
+            toast.error("품질 등급 스코어카드를 불러오지 못했습니다.");
+        }
+    };
 
     const fetchManufacturers = useCallback(async () => {
         try {
@@ -67,13 +79,20 @@ const ManufacturerManagementPage = ({ user }) => {
         { field: "phoneNumber", headerName: "연락처", width: 160, filter: true },
         { field: "email", headerName: "이메일", width: 200, filter: true },
         {
-            headerName: "관리",
-            width: 140,
+            headerName: "품질 등급 및 관리",
+            width: 230,
             sortable: false,
             filter: false,
             pinned: 'right',
             cellRenderer: (params) => (
                 <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', height: '100%', alignItems: 'center' }}>
+                    <button
+                        className="secondary"
+                        onClick={() => handleShowScorecard(params.data)}
+                        style={{ padding: '4px 12px', fontSize: '12px', fontWeight: '800', backgroundColor: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}
+                    >
+                        💯 등급
+                    </button>
                     <button
                         className="secondary"
                         onClick={() => { setSelectedManufacturer(params.data); setIsDrawerOpen(true); }}
@@ -232,6 +251,66 @@ const ManufacturerManagementPage = ({ user }) => {
                     }}
                     canEdit={canEdit}
                 />
+            )}
+
+            {isScorecardOpen && scorecardData && (
+                <div className="drawer-overlay" onClick={(e) => e.target === e.currentTarget && setIsScorecardOpen(false)} style={{ zIndex: 1100 }}>
+                    <div style={{
+                        background: '#ffffff', width: '400px', padding: '30px', borderRadius: '16px',
+                        margin: 'auto', display: 'flex', flexDirection: 'column', gap: '20px',
+                        boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)',
+                        border: '1px solid #e2e8f0', animation: 'fadeIn 0.2s ease-out'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '15px' }}>
+                            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#1e293b' }}>
+                                🏭 품질 등급 스코어카드
+                            </h3>
+                            <button onClick={() => setIsScorecardOpen(false)} style={{ fontSize: '24px', border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8' }}>&times;</button>
+                        </div>
+
+                        <div style={{ textAlign: 'center', padding: '20px 0', backgroundColor: '#f8fafc', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
+                            <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 'bold' }}>{scorecardData.manufacturerName}</div>
+                            <div style={{ fontSize: '72px', fontWeight: '900', color: 
+                                scorecardData.grade === 'A' ? '#10b981' : 
+                                scorecardData.grade === 'B' ? '#3b82f6' : 
+                                scorecardData.grade === 'C' ? '#f59e0b' : '#ef4444',
+                                margin: '10px 0', textShadow: '0 4px 6px rgba(0,0,0,0.05)'
+                            }}>
+                                {scorecardData.grade}
+                            </div>
+                            <div style={{ fontSize: '15px', fontWeight: '800', color: '#334155' }}>
+                                종합 점수: {scorecardData.finalScore.toFixed(1)} / 100 점
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
+                                <span style={{ color: '#64748b', fontSize: '13px', fontWeight: '600' }}>평가 대상 감사 수</span>
+                                <span style={{ color: '#1e293b', fontSize: '13px', fontWeight: '800' }}>{scorecardData.auditCount} 건</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
+                                <span style={{ color: '#64748b', fontSize: '13px', fontWeight: '600' }}>감사 평균 점수 (기본점)</span>
+                                <span style={{ color: '#1e293b', fontSize: '13px', fontWeight: '800' }}>{scorecardData.averageAuditScore.toFixed(1)} 점</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
+                                <span style={{ color: '#64748b', fontSize: '13px', fontWeight: '600' }}>최근 1개년 클레임 건수</span>
+                                <span style={{ color: '#ef4444', fontSize: '13px', fontWeight: '800' }}>{scorecardData.claimCount} 건</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
+                                <span style={{ color: '#64748b', fontSize: '13px', fontWeight: '600' }}>클레임 누적 감점</span>
+                                <span style={{ color: '#ef4444', fontSize: '13px', fontWeight: '800' }}>-{scorecardData.claimDeduction.toFixed(1)} 점</span>
+                            </div>
+                        </div>
+
+                        <div style={{ fontSize: '11px', color: '#94a3b8', lineHeight: '1.4', background: '#f8fafc', padding: '12px', borderRadius: '8px' }}>
+                            💡 <b>평가 기준</b>: 감사 평균 점수를 기본점으로 하되, 최근 1년 내 발생한 CX 품질 클레임 1건당 2점을 감점 처리합니다 (클레임 최대 감점 한도는 -30점입니다).
+                        </div>
+
+                        <button className="primary" onClick={() => setIsScorecardOpen(false)} style={{ padding: '12px', borderRadius: '8px', fontWeight: 'bold' }}>
+                            확인
+                        </button>
+                    </div>
+                </div>
             )}
         </div>
     );

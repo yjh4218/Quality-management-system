@@ -18,6 +18,11 @@ tmp/
 backend/h2_migration_data.json
 backend/DbTest.java
 backend/DbTest.class
+backend/Query*.java
+backend/Decrypt*.java
+backend/Check*.java
+backend/Test*.java
+backend/*.class
 
 # IDE & Build
 .idea/
@@ -47,4 +52,7 @@ out/
 # [SECURITY] Sensitive Properties Files
 backend/src/main/resources/application-local.properties
 backend/src/main/resources/application-secret.properties
+
+# Archives
+*.zip
 

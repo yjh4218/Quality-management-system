@@ -23,6 +23,7 @@ import java.io.PrintWriter;
 @RequestMapping("/api/debug")
 @RequiredArgsConstructor
 @org.springframework.context.annotation.Profile("local")
+@org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
 public class DebugController {
 
     private final JdbcTemplate jdbcTemplate;

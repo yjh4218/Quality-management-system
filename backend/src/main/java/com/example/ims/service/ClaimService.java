@@ -34,6 +34,7 @@ public class ClaimService {
     private final com.example.ims.repository.ManufacturerRepository manufacturerRepository;
     private final MailTemplateService mailTemplateService;
     private final NotificationService notificationService;
+    private final com.example.ims.repository.NotificationSettingRepository notificationSettingRepository;
 
     @Transactional(readOnly = true)
     public List<Claim> getClaims(String role, String companyName) {
@@ -51,7 +52,61 @@ public class ClaimService {
     @Transactional(readOnly = true)
     public List<Claim> searchClaims(String role, String companyName, String startDate, String endDate, String itemCode,
             String productName, String lotNumber, String country, String qualityStatus, String claimNumber,
-            String manufacturer, String sharedFilterStr) {
+            String manufacturer, String sharedFilterStr, Boolean isCriticalClaim) {
+        Specification<Claim> spec = buildClaimSpecification(
+            role, companyName, startDate, endDate, itemCode,
+            productName, lotNumber, country, qualityStatus, claimNumber,
+            manufacturer, sharedFilterStr, isCriticalClaim
+        );
+
+        try {
+            List<Claim> results = claimRepository.findAll(spec);
+
+            // [추가] 제조사 권한일 경우 품질팀의 분석 내역 마스킹 (Security)
+            if (role != null && (role.equals("ROLE_MANUFACTURER") || role.equals("MANUFACTURER"))) {
+                for (Claim c : results) {
+                    c.setRootCauseAnalysis(null);
+                    c.setPreventativeAction(null);
+                }
+            }
+            log.debug("Found {} claims for search criteria", results.size());
+            return results;
+        } catch (Exception e) {
+            log.error("CRITICAL ERROR in claimRepository.findAll(spec): {}", e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<Claim> searchClaimsPaged(String role, String companyName, String startDate, String endDate, String itemCode,
+            String productName, String lotNumber, String country, String qualityStatus, String claimNumber,
+            String manufacturer, String sharedFilterStr, Boolean isCriticalClaim, org.springframework.data.domain.Pageable pageable) {
+        Specification<Claim> spec = buildClaimSpecification(
+            role, companyName, startDate, endDate, itemCode,
+            productName, lotNumber, country, qualityStatus, claimNumber,
+            manufacturer, sharedFilterStr, isCriticalClaim
+        );
+
+        try {
+            org.springframework.data.domain.Page<Claim> results = claimRepository.findAll(spec, pageable);
+
+            // [추가] 제조사 권한일 경우 품질팀의 분석 내역 마스킹 (Security)
+            if (role != null && (role.equals("ROLE_MANUFACTURER") || role.equals("MANUFACTURER"))) {
+                results.getContent().forEach(c -> {
+                    c.setRootCauseAnalysis(null);
+                    c.setPreventativeAction(null);
+                });
+            }
+            return results;
+        } catch (Exception e) {
+            log.error("CRITICAL ERROR in claimRepository.findAll(spec, pageable): {}", e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    private Specification<Claim> buildClaimSpecification(String role, String companyName, String startDate, String endDate, String itemCode,
+            String productName, String lotNumber, String country, String qualityStatus, String claimNumber,
+            String manufacturer, String sharedFilterStr, Boolean isCriticalClaim) {
         Boolean sharedWithManufacturer = null;
         if (sharedFilterStr != null && !sharedFilterStr.trim().isEmpty()) {
             if (sharedFilterStr.equalsIgnoreCase("true") || sharedFilterStr.equals("1")) {
@@ -63,7 +118,7 @@ public class ClaimService {
 
         final Boolean finalSharedValue = sharedWithManufacturer;
 
-        Specification<Claim> spec = (root, query, cb) -> {
+        return (root, query, cb) -> {
             try {
                 List<Predicate> predicates = new ArrayList<>();
 
@@ -114,6 +169,11 @@ public class ClaimService {
                     predicates.add(cb.equal(root.get("sharedWithManufacturer"), finalSharedValue));
                 }
 
+                // 5. [크리티컬 클레임 필터]
+                if (isCriticalClaim != null) {
+                    predicates.add(cb.equal(root.get("isCriticalClaim"), isCriticalClaim));
+                }
+
                 query.orderBy(cb.desc(root.get("receiptDate")));
                 return cb.and(predicates.toArray(new Predicate[0]));
             } catch (Exception e) {
@@ -122,23 +182,6 @@ public class ClaimService {
                 throw e;
             }
         };
-
-        try {
-            List<Claim> results = claimRepository.findAll(spec);
-
-            // [추가] 제조사 권한일 경우 품질팀의 분석 내역 마스킹 (Security)
-            if (role != null && (role.equals("ROLE_MANUFACTURER") || role.equals("MANUFACTURER"))) {
-                for (Claim c : results) {
-                    c.setRootCauseAnalysis(null);
-                    c.setPreventativeAction(null);
-                }
-            }
-            log.debug("Found {} claims for search criteria", results.size());
-            return results;
-        } catch (Exception e) {
-            log.error("CRITICAL ERROR in claimRepository.findAll(spec): {}", e.getMessage(), e);
-            throw e;
-        }
     }
 
     @Transactional
@@ -165,22 +208,19 @@ public class ClaimService {
         boolean isNew = claim.getId() == null;
         Claim saved = claimRepository.save(claim);
 
-        // [알림 연동] 신규 클레임이 등록되고 제조사 공유 상태일 때, 제조사 전체에 알림 발송
+        // [알림 연동] 신규 클레임이 등록되고 제조사 공유 상태일 때, 비동기 이벤트 발행
         if (isNew && saved.isSharedWithManufacturer() && saved.getManufacturer() != null) {
-            try {
-                notificationService.createNotification(
-                    "신규 클레임 접수 알림",
-                    String.format("품목 %s(Lot: %s)에 대한 신규 클레임(%s)이 접수되었습니다. 확인 부탁드립니다.", 
-                        saved.getProductName(), saved.getLotNumber() != null ? saved.getLotNumber() : "-", saved.getClaimNumber()),
-                    "CLAIM",
-                    null, // targetUsername
-                    "ROLE_MANUFACTURER", // targetRole
-                    saved.getManufacturer(), // targetCompanyName
-                    String.format("/claims?claimId=%d", saved.getId()) // linkUrl (클레임 모달 딥링크)
-                );
-            } catch (Exception e) {
-                log.error("Failed to create claim notification: {}", e.getMessage());
-            }
+            eventPublisher.publishEvent(com.example.ims.event.NotificationEvent.builder()
+                .eventType("NEW_CLAIM_SHARE")
+                .sourceDomain("CLAIM")
+                .sourceAction("CREATE")
+                .title("신규 클레임 접수 알림")
+                .message(String.format("품목 %s(Lot: %s)에 대한 신규 클레임(%s)이 접수되었습니다. 확인 부탁드립니다.", 
+                    saved.getProductName(), saved.getLotNumber() != null ? saved.getLotNumber() : "-", saved.getClaimNumber()))
+                .category("CLAIM")
+                .companyName(saved.getManufacturer())
+                .linkUrl(String.format("/claims?claimId=%d", saved.getId()))
+                .build());
         }
 
         // [고도화] 직접 호출 대신 이벤트를 발행하여 AuditLogService와 결합도 해제
@@ -393,20 +433,17 @@ public class ClaimService {
                     log.warn("Cannot send claim notification email: Manufacturer email not found for {}", existing.getManufacturer());
                 }
                 
-                try {
-                    notificationService.createNotification(
-                        "신규 클레임 접수 알림",
-                        String.format("품목 %s(Lot: %s)에 대한 신규 클레임(%s)이 공유되었습니다. 확인 부탁드립니다.", 
-                            existing.getProductName(), existing.getLotNumber() != null ? existing.getLotNumber() : "-", existing.getClaimNumber()),
-                        "CLAIM",
-                        null,
-                        "ROLE_MANUFACTURER",
-                        existing.getManufacturer(),
-                        String.format("/claims?claimId=%d", existing.getId())
-                    );
-                } catch (Exception e) {
-                    log.error("Failed to create claim share notification: {}", e.getMessage());
-                }
+                eventPublisher.publishEvent(com.example.ims.event.NotificationEvent.builder()
+                    .eventType("NEW_CLAIM_SHARE")
+                    .sourceDomain("CLAIM")
+                    .sourceAction("CREATE")
+                    .title("신규 클레임 접수 알림")
+                    .message(String.format("품목 %s(Lot: %s)에 대한 신규 클레임(%s)이 공유되었습니다. 확인 부탁드립니다.", 
+                        existing.getProductName(), existing.getLotNumber() != null ? existing.getLotNumber() : "-", existing.getClaimNumber()))
+                    .category("CLAIM")
+                    .companyName(existing.getManufacturer())
+                    .linkUrl(String.format("/claims?claimId=%d", existing.getId()))
+                    .build());
             }
         }
 
@@ -606,41 +643,29 @@ public class ClaimService {
         boolean mfrSubmitted = (updatedData.getMfrRootCauseAnalysis() != null && !updatedData.getMfrRootCauseAnalysis().isEmpty()) 
                             || (updatedData.getMfrPreventativeAction() != null && !updatedData.getMfrPreventativeAction().isEmpty());
 
+        if (mfrFieldsChanged && mfrSubmitted) {
+            if (existing.getIsCriticalClaim() != null && existing.getIsCriticalClaim()) {
+                if ("PENDING".equals(existing.getCriticalRequestStatus()) || "RE_REQUESTED".equals(existing.getCriticalRequestStatus())) {
+                    existing.setCriticalRequestStatus("SUBMITTED");
+                }
+            }
+        }
+
         Claim saved = claimRepository.save(existing);
 
-        // 제조사가 대책서/원인분석을 새로 기입하거나 수정하여 저장했을 때 품질팀(ROLE_QUALITY) 및 관리자(ROLE_ADMIN)에게 알림 발송
+        // 제조사가 대책서/원인분석을 새로 기입하거나 수정하여 저장했을 때 설정된 수신 권한 역할군에게 알림 발송
         if (mfrFieldsChanged && mfrSubmitted) {
-            // 1. 품질 담당자에게 알림 생성
-            try {
-                notificationService.createNotification(
-                    "제조사 대책서 제출 알림",
-                    String.format("제조사(%s)에서 클레임 %s에 대한 원인분석 및 대책서를 제출하였습니다.", 
-                        saved.getManufacturer(), saved.getClaimNumber()),
-                    "CLAIM",
-                    null,
-                    "ROLE_QUALITY",
-                    null,
-                    String.format("/claims?claimId=%d", saved.getId())
-                );
-            } catch (Exception e) {
-                log.error("Failed to create manufacturer action plan notification for quality: {}", e.getMessage());
-            }
-
-            // 2. 시스템 관리자에게 알림 생성
-            try {
-                notificationService.createNotification(
-                    "제조사 대책서 제출 알림",
-                    String.format("제조사(%s)에서 클레임 %s에 대한 원인분석 및 대책서를 제출하였습니다.", 
-                        saved.getManufacturer(), saved.getClaimNumber()),
-                    "CLAIM",
-                    null,
-                    "ROLE_ADMIN",
-                    null,
-                    String.format("/claims?claimId=%d", saved.getId())
-                );
-            } catch (Exception e) {
-                log.error("Failed to create manufacturer action plan notification for admin: {}", e.getMessage());
-            }
+            eventPublisher.publishEvent(com.example.ims.event.NotificationEvent.builder()
+                .eventType("MFR_SUBMIT_CAPA")
+                .sourceDomain("CLAIM")
+                .sourceAction("UPDATE")
+                .title("제조사 대책서 제출 알림")
+                .message(String.format("제조사(%s)에서 클레임 %s에 대한 원인분석 및 대책서를 제출하였습니다.", 
+                    saved.getManufacturer(), saved.getClaimNumber()))
+                .category("CLAIM")
+                .companyName(null)
+                .linkUrl(String.format("/claims?claimId=%d", saved.getId()))
+                .build());
         }
 
         // [고도화] 이벤트 발행
@@ -677,7 +702,7 @@ public class ClaimService {
         }
 
         List<Claim> allFilteredClaims = searchClaims(role, companyName, effectiveStart.toString(), endDate, itemCode,
-                productName, null, null, null, null, manufacturer, null);
+                productName, null, null, null, null, manufacturer, null, null);
 
         LocalDate oneMonthAgo = now.minusMonths(1);
 
@@ -823,8 +848,8 @@ public class ClaimService {
     /**
      * [고도화] 클레임 목록을 엑셀 파일로 추출합니다.
      */
-    public byte[] exportClaims(String username, String role, String companyName, String startDate, String endDate, String itemCode, String productName, String lotNumber, String country, String qualityStatus, String claimNumber, String manufacturer, String sharedFilterStr) throws java.io.IOException {
-        List<Claim> data = searchClaims(role, companyName, startDate, endDate, itemCode, productName, lotNumber, country, qualityStatus, claimNumber, manufacturer, sharedFilterStr);
+    public byte[] exportClaims(String username, String role, String companyName, String startDate, String endDate, String itemCode, String productName, String lotNumber, String country, String qualityStatus, String claimNumber, String manufacturer, String sharedFilterStr, Boolean isCriticalClaim) throws java.io.IOException {
+        List<Claim> data = searchClaims(role, companyName, startDate, endDate, itemCode, productName, lotNumber, country, qualityStatus, claimNumber, manufacturer, sharedFilterStr, isCriticalClaim);
         
         // [감사 로그] 엑셀 다운로드 이력 기록
         User userObj = userRepository.findByUsername(username).orElse(null);
@@ -1002,5 +1027,37 @@ public class ClaimService {
             name = name.substring(0, idx);
         }
         return name.replace("(주)", "").replace("주식회사", "").trim();
+    }
+
+    @Transactional
+    public Claim reRequestCriticalCapa(Long claimId, String reason, String username) {
+        Claim claim = claimRepository.findById(claimId)
+                .orElseThrow(() -> new IllegalArgumentException("Claim not found."));
+        if (claim.getIsCriticalClaim() == null || !claim.getIsCriticalClaim()) {
+            throw new IllegalStateException("해당 클레임은 크리티컬 클레임이 아닙니다.");
+        }
+        claim.setCriticalRequestStatus("RE_REQUESTED");
+        claim.setMfrStatus("대책 재요청");
+        if (reason != null && !reason.trim().isEmpty()) {
+            claim.setQualityRemarks((claim.getQualityRemarks() != null ? claim.getQualityRemarks() + "\n" : "") + "[대책 재요청 사유] " + reason);
+        }
+        log.info(">>>> [CRITICAL CLAIM] Re-requested CAPA for Claim: {}, User: {}", claim.getClaimNumber(), username);
+        
+        // [알림 연동] 제조사에 대책 재요청 알림 생성
+        if (claim.getManufacturer() != null) {
+            eventPublisher.publishEvent(com.example.ims.event.NotificationEvent.builder()
+                .eventType("RE_REQUEST_CAPA")
+                .sourceDomain("CLAIM")
+                .sourceAction("UPDATE")
+                .title("대책서 재요청 알림")
+                .message(String.format("품목 %s(Lot: %s)에 대한 클레임(%s) 원인분석 및 재발방지대책의 보완(재요청)이 요청되었습니다. 재작성 바랍니다.", 
+                    claim.getProductName(), claim.getLotNumber() != null ? claim.getLotNumber() : "-", claim.getClaimNumber()))
+                .category("CLAIM")
+                .companyName(claim.getManufacturer())
+                .linkUrl(String.format("/claims?claimId=%d", claim.getId()))
+                .build());
+        }
+
+        return claimRepository.save(claim);
     }
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { toast } from 'react-toastify';
-import { getClaims, getClaimDashboard } from './api';
+import { getClaims, getClaimsPaged, getClaimDashboard } from './api';
 import ClaimDrawer from './ClaimDrawer';
 import ProductSearchPopup from './ProductSearchPopup';
 import { usePermissions } from './usePermissions';
@@ -15,6 +15,11 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
     const initializedRef = useRef(false);
     const [loading, setLoading] = useState(false);
     const [exporting, setExporting] = useState(false);
+
+    const [currentPage, setCurrentPage] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
+    const [totalElements, setTotalElements] = useState(0);
+    const pageSize = 50;
 
     const lastSearchRef = useRef('');
 
@@ -39,7 +44,8 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
         qualityStatus: '',
         claimNumber: '',
         sharedWithManufacturer: '',
-        manufacturer: ''
+        manufacturer: '',
+        isCriticalClaim: ''
     });
     const [showSearchPopup, setShowSearchPopup] = useState(false);
 
@@ -47,15 +53,18 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
         user?.companyName === '더파운더즈' ||
         user?.roles?.some(r => ['ROLE_ADMIN', 'ROLE_QUALITY', 'ADMIN', 'QUALITY'].includes(r.authority));
 
-    const loadData = React.useCallback(async (force = false) => {
-        const currentSearchKey = `${searchParams.sharedWithManufacturer}-${searchParams.qualityStatus}`;
+    const loadData = React.useCallback(async (force = false, pageNum = 0) => {
+        const currentSearchKey = `${searchParams.sharedWithManufacturer}-${searchParams.qualityStatus}-${pageNum}`;
         if (!force && lastSearchRef.current === currentSearchKey) return;
         
         lastSearchRef.current = currentSearchKey; // Set early to prevent race conditions
         setLoading(true);
         try {
-            const claimsRes = await getClaims(searchParams);
-            setActualClaims(claimsRes.data || []);
+            const claimsRes = await getClaimsPaged(searchParams, pageNum, pageSize);
+            setActualClaims(claimsRes.data.content || []);
+            setTotalPages(claimsRes.data.totalPages || 0);
+            setTotalElements(claimsRes.data.totalElements || 0);
+            setCurrentPage(pageNum);
         } catch (error) {
             console.error("Failed to load claims", error);
             setActualClaims([]);
@@ -70,7 +79,7 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
     useEffect(() => {
         if (hasFetchedOnMount.current) return;
         hasFetchedOnMount.current = true;
-        loadData(false); // Automated trigger uses the guard
+        loadData(false, 0); // Automated trigger uses the guard
     }, [loadData]);
 
     const isManufacturer = user?.roles?.some(r => r.authority?.includes('MANUFACTURER'));
@@ -143,6 +152,9 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
     };
 
     const getRowStyle = params => {
+        if (params.data && params.data.isCriticalClaim) {
+            return { backgroundColor: '#fff5f5', color: '#be123c', fontWeight: 'bold' };
+        }
         if (params.data && params.data.consumerReplyNeeded === '필요') {
             return { backgroundColor: '#ffe5e5', color: '#b30000', fontWeight: 'bold' };
         }
@@ -242,7 +254,7 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
                         )}
                         <button 
                             className="primary" 
-                            onClick={() => loadData(true)} 
+                            onClick={() => loadData(true, 0)} 
                             disabled={loading}
                             style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px', opacity: loading ? 0.7 : 1 }}
                         >
@@ -252,7 +264,7 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
                             className="outline" 
                             onClick={() => {
                                 const initD = getInitialDates();
-                                setSearchParams({ startDate: initD.start, endDate: initD.end, itemCode: '', productName: '', lotNumber: '', country: '', qualityStatus: '', claimNumber: '', sharedWithManufacturer: '', manufacturer: '' });
+                                setSearchParams({ startDate: initD.start, endDate: initD.end, itemCode: '', productName: '', lotNumber: '', country: '', qualityStatus: '', claimNumber: '', sharedWithManufacturer: '', manufacturer: '', isCriticalClaim: '' });
                             }} 
                             style={{ padding: '10px 16px', fontSize: '14px' }}
                         >
@@ -353,6 +365,33 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
                             </div>
                         </div>
                     )}
+
+                    {/* 크리티컬 클레임 필터 (토글 스타일) */}
+                    <div style={{ gridColumn: 'span 1' }}>
+                        <div 
+                            onClick={() => {
+                                const newVal = searchParams.isCriticalClaim === 'true' ? '' : 'true';
+                                setSearchParams(prev => ({ ...prev, isCriticalClaim: newVal }));
+                            }}
+                            style={{ 
+                                display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
+                                padding: '7px 16px', borderRadius: '8px', 
+                                backgroundColor: searchParams.isCriticalClaim === 'true' ? '#fff5f5' : '#f8fafc',
+                                border: `1px solid ${searchParams.isCriticalClaim === 'true' ? '#feb2b2' : '#e2e8f0'}`,
+                                transition: 'all 0.2s',
+                                height: '38px'
+                            }}
+                        >
+                            <div style={{
+                                width: '14px', height: '14px', borderRadius: '4px',
+                                backgroundColor: searchParams.isCriticalClaim === 'true' ? '#e53e3e' : '#cbd5e1',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '10px'
+                            }}>
+                                {searchParams.isCriticalClaim === 'true' && '✓'}
+                            </div>
+                            <span style={{ fontSize: '13px', fontWeight: 'bold', color: searchParams.isCriticalClaim === 'true' ? '#c53030' : '#64748b' }}>🔥 크리티컬 클레임만</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -364,11 +403,33 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
                     ref={gridRef}
                     rowData={actualClaims}
                     columnDefs={columnDefs}
-                    pagination={true}
-                    paginationPageSize={100}
+                    pagination={false}
                     onRowDoubleClicked={handleRowClick}
                     getRowStyle={getRowStyle}
                 />
+            </div>
+
+            {/* Custom Server-Side Pagination Bar */}
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '15px', marginTop: '15px', padding: '10px 0' }}>
+                <button
+                    className="outline"
+                    disabled={currentPage === 0 || loading}
+                    onClick={() => loadData(true, currentPage - 1)}
+                    style={{ padding: '6px 16px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1', cursor: 'pointer', backgroundColor: '#fff' }}
+                >
+                    ◀ 이전
+                </button>
+                <span style={{ fontSize: '13px', color: '#475569', fontWeight: 'bold' }}>
+                    {currentPage + 1} / {totalPages || 1} 페이지 (총 {totalElements}건)
+                </span>
+                <button
+                    className="outline"
+                    disabled={currentPage >= totalPages - 1 || loading}
+                    onClick={() => loadData(true, currentPage + 1)}
+                    style={{ padding: '6px 16px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1', cursor: 'pointer', backgroundColor: '#fff' }}
+                >
+                    다음 ▶
+                </button>
             </div>
 
             {isDrawerOpen && (
@@ -376,7 +437,7 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
                     claim={selectedClaim}
                     onClose={() => setIsDrawerOpen(false)}
                     onSaved={(updated) => {
-                        loadData(true);
+                        loadData(true, currentPage);
                         if (updated) {
                             setSelectedClaim(updated);
                         }

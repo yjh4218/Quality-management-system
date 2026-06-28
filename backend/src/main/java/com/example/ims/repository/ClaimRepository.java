@@ -49,5 +49,9 @@ public interface ClaimRepository extends JpaRepository<Claim, Long>, JpaSpecific
 
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"claimPhotos"})
     @Override
+    org.springframework.data.domain.Page<Claim> findAll(org.springframework.data.jpa.domain.Specification<Claim> spec, org.springframework.data.domain.Pageable pageable);
+
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"claimPhotos"})
+    @Override
     java.util.Optional<Claim> findById(Long id);
 }

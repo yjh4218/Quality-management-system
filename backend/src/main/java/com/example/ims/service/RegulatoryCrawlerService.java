@@ -176,6 +176,19 @@ public class RegulatoryCrawlerService {
         }
         
         if (koreanName != null) ingredient.setKoreanName(koreanName);
+        
+        // [보안/규제] 글로벌 금지 물질 필드 강제
+        ingredient.setKrStatus("PROHIBITED");
+        ingredient.setKrLimit(0.0);
+        ingredient.setEuStatus("PROHIBITED");
+        ingredient.setEuLimit(0.0);
+        ingredient.setCnStatus("PROHIBITED");
+        ingredient.setCnLimit(0.0);
+        ingredient.setUsStatus("PROHIBITED");
+        ingredient.setUsLimit(0.0);
+        ingredient.setJpStatus("PROHIBITED");
+        ingredient.setJpLimit(0.0);
+        
         repository.save(ingredient);
     }
 
@@ -569,8 +582,58 @@ public class RegulatoryCrawlerService {
     }
 
     private void updateEURegulations(boolean isSystemAuto) {
+        syncEuRegulationsFromGithub(isSystemAuto);
+        syncEuAnnexIISilently(isSystemAuto);
+    }
+
+    private void syncEuRegulationsFromGithub(boolean isSystemAuto) {
+        log.info(">>>> [CRAWLER] Syncing EU CosIng Annex III (Restricted) from GitHub OpenBeautyFacts...");
         try {
-            log.info(">>>> [CRAWLER] Syncing EU (CosIng) Regulations...");
+            String urlString = "https://raw.githubusercontent.com/openfoodfacts/openbeautyfacts/develop/cosing/COSING_Annex.III_v2.csv";
+            String csvData = callApiWithRetry(urlString, 3);
+            if (csvData == null || csvData.trim().isEmpty()) {
+                throw new RuntimeException("Downloaded CSV data is empty");
+            }
+            
+            String[] lines = csvData.split("\\r?\\n");
+            int updatedCount = 0;
+            for (int i = 1; i < lines.length; i++) {
+                String line = lines[i];
+                try {
+                    String[] cols = line.split(",(?=([^\"]*\"[^\"]*\")*[^\"]*$)");
+                    if (cols.length < 3) continue;
+                    
+                    String inciName = cols[1].replace("\"", "").trim();
+                    String cas = cols[2].replace("\"", "").trim();
+                    
+                    if (inciName.isEmpty() || "null".equalsIgnoreCase(inciName)) continue;
+                    
+                    // Safe CAS number length constraint protection
+                    if (cas.length() > 50) {
+                        cas = cas.substring(0, 50);
+                    }
+                    
+                    Double limit = null;
+                    if (cols.length > 7) {
+                        String limitStr = cols[7].replace("\"", "").trim();
+                        java.util.regex.Matcher m = java.util.regex.Pattern.compile("([0-9.]+)\\s*%").matcher(limitStr);
+                        if (m.find()) {
+                            try {
+                                limit = Double.parseDouble(m.group(1));
+                            } catch (Exception e) {}
+                        }
+                    }
+                    
+                    saveOrUpdate(inciName, null, cas, "RESTRICTED", limit, "EU", isSystemAuto);
+                    updatedCount++;
+                } catch (Exception ex) {
+                    log.warn("Failed to process Annex III line: " + line + ", Error: " + ex.getMessage());
+                }
+            }
+            log.info(">>>> [CRAWLER] EU Annex III sync completed successfully. Processed {} ingredients.", updatedCount);
+        } catch (Exception e) {
+            log.error(">>>> [CRAWLER] EU Annex III GitHub sync failed. Falling back to hardcoded defaults. Error: {}", e.getMessage());
+            // Fallback to hardcoded defaults
             saveOrUpdate("Phenoxyethanol", "페녹시에탄올", "122-99-6", "RESTRICTED", 1.0, "EU", isSystemAuto); 
             saveOrUpdate("Salicylic Acid", "살리실릭애씨드", "69-72-7", "RESTRICTED", 0.5, "EU", isSystemAuto);
             saveOrUpdate("Titanium Dioxide", "티타늄디옥사이드", "13463-67-7", "RESTRICTED", 25.0, "EU", isSystemAuto);
@@ -578,8 +641,43 @@ public class RegulatoryCrawlerService {
             saveOrUpdate("Alpha-Arbutin", "알파-알부틴", "84380-01-8", "RESTRICTED", 2.0, "EU", isSystemAuto);
             saveOrUpdate("Triclosan", "트리클로산", "3380-34-5", "RESTRICTED", 0.3, "EU", isSystemAuto);
             saveOrUpdate("Methylisothiazolinone", "메틸이소치아졸리논", "2682-20-4", "PROHIBITED", 0.0, "EU", isSystemAuto);
+        }
+    }
+
+    private void syncEuAnnexIISilently(boolean isSystemAuto) {
+        log.info(">>>> [CRAWLER] Syncing EU CosIng Annex II (Prohibited) from GitHub...");
+        try {
+            String urlString = "https://raw.githubusercontent.com/openfoodfacts/openbeautyfacts/develop/cosing/COSING_Annex.II_v2.csv";
+            String csvData = callApiWithRetry(urlString, 3);
+            if (csvData == null || csvData.trim().isEmpty()) return;
+            
+            String[] lines = csvData.split("\\r?\\n");
+            int updatedCount = 0;
+            for (int i = 1; i < lines.length; i++) {
+                String line = lines[i];
+                try {
+                    String[] cols = line.split(",(?=([^\"]*\"[^\"]*\")*[^\"]*$)");
+                    if (cols.length < 3) continue;
+                    
+                    String inciName = cols[1].replace("\"", "").trim();
+                    String cas = cols[2].replace("\"", "").trim();
+                    
+                    if (inciName.isEmpty() || "null".equalsIgnoreCase(inciName)) continue;
+                    
+                    // Safe CAS number length constraint protection
+                    if (cas.length() > 50) {
+                        cas = cas.substring(0, 50);
+                    }
+                    
+                    saveOrUpdate(inciName, null, cas, "PROHIBITED", 0.0, "EU", isSystemAuto);
+                    updatedCount++;
+                } catch (Exception ex) {
+                    log.warn("Failed to process Annex II line: " + line + ", Error: " + ex.getMessage());
+                }
+            }
+            log.info(">>>> [CRAWLER] EU Annex II sync completed successfully. Processed {} prohibited ingredients.", updatedCount);
         } catch (Exception e) {
-            log.error("Failed to sync EU regulations", e);
+            log.warn(">>>> [CRAWLER] EU Annex II sync skipped: {}", e.getMessage());
         }
     }
 

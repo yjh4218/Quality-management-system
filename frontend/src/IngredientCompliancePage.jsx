@@ -83,7 +83,7 @@ const IngredientCompliancePage = ({ user }) => {
         setLookupLoading(true);
         try {
             const response = await api.get(`/api/quality/ingredients/list?page=${currentPage}&size=${size}&search=${encodeURIComponent(currentSearch)}`, { skipLoading: true, skipToast: true });
-            const pageData = response.data.data;
+            const pageData = response.data;
             if (pageData) {
                 setDbIngredients(pageData.content || []);
                 setTotalElements(pageData.totalElements || 0);
@@ -101,7 +101,7 @@ const IngredientCompliancePage = ({ user }) => {
         setHistoryLoading(true);
         try {
             const response = await api.get(`/api/quality/ingredients/history?page=${currentPage}&size=${size}&search=${encodeURIComponent(currentSearch)}`, { skipLoading: true, skipToast: true });
-            const pageData = response.data.data;
+            const pageData = response.data;
             if (pageData) {
                 setHistoryData(pageData.content || []);
                 setHistoryTotalElements(pageData.totalElements || 0);

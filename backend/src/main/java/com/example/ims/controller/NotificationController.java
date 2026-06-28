@@ -4,10 +4,12 @@ import com.example.ims.dto.ApiResponse;
 import com.example.ims.entity.Notification;
 import com.example.ims.service.NotificationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 import java.util.Map;
@@ -22,6 +24,17 @@ import java.util.Map;
 public class NotificationController {
 
     private final NotificationService notificationService;
+
+    /**
+     * 알림 실시간 수신용 SSE 스트림 구독 엔드포인트
+     */
+    @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter subscribeNotifications(@AuthenticationPrincipal UserDetails userDetails) {
+        if (userDetails == null) {
+            return null;
+        }
+        return notificationService.subscribe(userDetails.getUsername());
+    }
 
     /**
      * 현재 로그인 사용자의 최근 알림 목록 조회 (최대 30개)

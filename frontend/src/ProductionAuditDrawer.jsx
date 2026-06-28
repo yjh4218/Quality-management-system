@@ -9,6 +9,7 @@ import {
 } from './api';
 import * as api from './api';
 import { toast } from 'react-toastify';
+import DOMPurify from 'dompurify';
 import ProductSearchPopup from './ProductSearchPopup';
 import SaveConfirmModal from './components/SaveConfirmModal';
 import { usePermissions } from './usePermissions';
@@ -888,7 +889,7 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
                                             minHeight: '300px',
                                             boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
                                         }}
-                                        dangerouslySetInnerHTML={{ __html: emailForm.body }}
+                                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(emailForm.body) }}
                                     />
                                 ) : (
                                     <textarea 

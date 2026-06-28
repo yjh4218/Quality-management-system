@@ -32,4 +32,6 @@ public interface ManufacturerAuditRepository extends JpaRepository<ManufacturerA
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.data.jpa.repository.Query(value = "UPDATE manufacturer_audits SET is_deleted = false WHERE id = :id", nativeQuery = true)
     void restoreAudit(Long id);
+
+    List<ManufacturerAudit> findByManufacturerId(Long manufacturerId);
 }

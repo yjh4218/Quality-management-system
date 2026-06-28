@@ -115,6 +115,9 @@ public class GlobalExceptionHandler {
         // [Task 14] Jackson, Hibernate 등 라이브러리 내부 예외는 500으로 전달하여 디버깅 용이성 확보
         if (ex.getClass().getName().contains("jackson") || 
             ex.getClass().getName().contains("hibernate") ||
+            ex.getClass().getName().contains("spring") ||
+            ex.getClass().getName().contains("jpa") ||
+            ex.getClass().getName().contains("transaction") ||
             (message != null && (message.contains("Interceptor") || message.contains("ByteBuddy")))) {
             return handleGlobalException(ex, request);
         }

@@ -50,7 +50,8 @@ public class ClaimController {
             @RequestParam(required = false) String qualityStatus,
             @RequestParam(required = false) String claimNumber,
             @RequestParam(required = false) String manufacturer,
-            @RequestParam(required = false) String sharedWithManufacturer) {
+            @RequestParam(required = false) String sharedWithManufacturer,
+            @RequestParam(required = false) Boolean isCriticalClaim) {
         User user = getUser(userDetails);
         String roleStr = user.getRole();
         if (roleStr != null && !roleStr.startsWith("ROLE_")) {
@@ -59,7 +60,38 @@ public class ClaimController {
         
         System.out.println("DEBUG: Incoming Request with sharedFilter String = [" + sharedWithManufacturer + "]");
         
-        return ResponseEntity.ok(claimService.searchClaims(roleStr, user.getCompanyName(), startDate, endDate, itemCode, productName, lotNumber, country, qualityStatus, claimNumber, manufacturer, sharedWithManufacturer));
+        return ResponseEntity.ok(claimService.searchClaims(roleStr, user.getCompanyName(), startDate, endDate, itemCode, productName, lotNumber, country, qualityStatus, claimNumber, manufacturer, sharedWithManufacturer, isCriticalClaim));
+    }
+
+    @GetMapping("/paged")
+    public ResponseEntity<org.springframework.data.domain.Page<Claim>> getClaimsPaged(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
+            @RequestParam(required = false) String itemCode,
+            @RequestParam(required = false) String productName,
+            @RequestParam(required = false) String lotNumber,
+            @RequestParam(required = false) String country,
+            @RequestParam(required = false) String qualityStatus,
+            @RequestParam(required = false) String claimNumber,
+            @RequestParam(required = false) String manufacturer,
+            @RequestParam(required = false) String sharedWithManufacturer,
+            @RequestParam(required = false) Boolean isCriticalClaim,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        User user = getUser(userDetails);
+        String roleStr = user.getRole();
+        if (roleStr != null && !roleStr.startsWith("ROLE_")) {
+            roleStr = "ROLE_" + roleStr;
+        }
+        org.springframework.data.domain.Pageable pageable =
+            org.springframework.data.domain.PageRequest.of(page, size,
+                org.springframework.data.domain.Sort.by("receiptDate").descending());
+
+        return ResponseEntity.ok(claimService.searchClaimsPaged(
+            roleStr, user.getCompanyName(), startDate, endDate, itemCode, productName,
+            lotNumber, country, qualityStatus, claimNumber, manufacturer,
+            sharedWithManufacturer, isCriticalClaim, pageable));
     }
 
     @GetMapping("/{id}")
@@ -226,7 +258,8 @@ public class ClaimController {
             @RequestParam(required = false) String qualityStatus,
             @RequestParam(required = false) String claimNumber,
             @RequestParam(required = false) String manufacturer,
-            @RequestParam(required = false) String sharedWithManufacturer) throws java.io.IOException {
+            @RequestParam(required = false) String sharedWithManufacturer,
+            @RequestParam(required = false) Boolean isCriticalClaim) throws java.io.IOException {
         
         String username = userDetails.getUsername();
         log.info(">>>> [EXPORT] Claim Excel - User: {}", username);
@@ -238,7 +271,7 @@ public class ClaimController {
                 roleStr = "ROLE_" + roleStr;
             }
     
-            byte[] excelFile = claimService.exportClaims(username, roleStr, user.getCompanyName(), startDate, endDate, itemCode, productName, lotNumber, country, qualityStatus, claimNumber, manufacturer, sharedWithManufacturer);
+            byte[] excelFile = claimService.exportClaims(username, roleStr, user.getCompanyName(), startDate, endDate, itemCode, productName, lotNumber, country, qualityStatus, claimNumber, manufacturer, sharedWithManufacturer, isCriticalClaim);
             
             return ResponseEntity.ok()
                     .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=Claim_Export.xlsx")
@@ -248,5 +281,15 @@ public class ClaimController {
             log.error(">>>> [EXPORT] [ERROR] Claim Excel failed for user {}: {}", username, e.getMessage(), e);
             throw e;
         }
+    }
+
+    @PostMapping("/{id}/re-request")
+    @PreAuthorize("hasAnyRole('ADMIN','QUALITY')")
+    public ResponseEntity<Claim> reRequestCriticalCapa(
+            @PathVariable Long id,
+            @RequestBody java.util.Map<String, String> body,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        String reason = body.get("reason");
+        return ResponseEntity.ok(claimService.reRequestCriticalCapa(id, reason, userDetails.getUsername()));
     }
 }

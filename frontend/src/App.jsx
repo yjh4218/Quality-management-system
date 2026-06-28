@@ -21,10 +21,11 @@ import ProductionAuditPage from './ProductionAuditPage.jsx';
 import DashboardManagementPage from './DashboardManagementPage.jsx';
 import TrashBinPage from './TrashBinPage.jsx';
 import MailTemplatePage from './MailTemplatePage.jsx';
+import NotificationSettingsPage from './NotificationSettingsPage.jsx';
 import IngredientCompliancePage from './IngredientCompliancePage.jsx';
 import HelpCenterModal from './components/HelpCenterModal';
 import ProfileModal from './ProfileModal';
-import { getCurrentUser, logout, getMyNotifications, getUnreadNotificationCount, readNotification, readAllNotifications, deleteNotification } from './api';
+import { getCurrentUser, logout, getMyNotifications, getUnreadNotificationCount, readNotification, readAllNotifications, deleteNotification, submitBugReport } from './api';
 import ManufacturerAuditItemPage from './ManufacturerAuditItemPage';
 import ManufacturerAuditPage from './ManufacturerAuditPage';
 import ManufacturerAuditDashboard from './ManufacturerAuditDashboard';
@@ -69,11 +70,10 @@ const PAGE_INFO = {
     manufacturerGuide: { title: '🤝 제조사 협업 가이드' }
 };
 
-// [추가] 글로벌 에러 핸들링을 위한 Error Boundary 컴포넌트
 class ErrorBoundary extends React.Component {
     constructor(props) {
         super(props);
-        this.state = { hasError: false, error: null, errorInfo: null, isReporting: false };
+        this.state = { hasError: false, error: null, errorInfo: null, isReporting: false, autoReported: false };
     }
 
     static getDerivedStateFromError(error) {
@@ -81,17 +81,16 @@ class ErrorBoundary extends React.Component {
     }
 
     componentDidCatch(error, errorInfo) {
-        this.setState({ errorInfo });
+        this.setState({ errorInfo }, () => {
+            this.sendAutoReportBackground();
+        });
         console.error(">>>> [FATAL ERROR] Captured by ErrorBoundary:", error, errorInfo);
-        // 자동 리포팅 시도 (선택 사항)
-        // this.sendAutoReport(error, errorInfo);
     }
 
-    sendAutoReport = async () => {
+    sendAutoReportBackground = async () => {
         const { error, errorInfo } = this.state;
         if (!error) return;
 
-        this.setState({ isReporting: true });
         try {
             const { submitBugReport } = await import('./api');
             await submitBugReport({
@@ -103,12 +102,9 @@ class ErrorBoundary extends React.Component {
                 reporterName: this.props.user?.name || '알 수 없는 사용자',
                 reporterUsername: this.props.user?.username || 'unknown'
             });
-            alert("버그 리포트가 개발팀에 성공적으로 전달되었습니다. 시스템을 새로고침합니다.");
-            window.location.reload();
+            this.setState({ autoReported: true });
         } catch (err) {
-            console.error("Bug report failed", err);
-            alert("리포트 전송에 실패했습니다. 수동으로 새로고침해 주세요.");
-            this.setState({ isReporting: false });
+            console.error("Automatic bug report failed", err);
         }
     };
 
@@ -125,23 +121,19 @@ class ErrorBoundary extends React.Component {
                     </h1>
                     <p style={{ color: '#64748b', marginBottom: '30px', maxWidth: '500px', lineHeight: '1.6' }}>
                         화면을 렌더링하는 중 예상치 못한 오류가 발견되어 보호 모드로 전환되었습니다.<br/>
-                        아래 버튼을 눌러 버그를 신고하시면 개발팀에서 즉시 확인하겠습니다.
+                        <strong style={{ color: '#ef4444' }}>
+                            {this.state.autoReported 
+                                ? "🐞 본 오류는 '버그 리포트 관리'에 실시간으로 자동 신고되었습니다. (접수 완료)" 
+                                : "🐞 본 오류는 '버그 리포트 관리'에 실시간으로 자동 신고 중입니다..."}
+                        </strong>
                     </p>
                     <div style={{ display: 'flex', gap: '15px' }}>
                         <button 
                             className="primary" 
-                            onClick={this.sendAutoReport}
-                            disabled={this.state.isReporting}
+                            onClick={() => window.location.reload()}
                             style={{ padding: '12px 30px', fontWeight: 'bold' }}
                         >
-                            {this.state.isReporting ? '전송 중...' : '🐞 버그 리포트 전송 및 새로고침'}
-                        </button>
-                        <button 
-                            className="secondary" 
-                            onClick={() => window.location.reload()}
-                            style={{ padding: '12px 30px' }}
-                        >
-                            새로고침
+                            🔄 새로고침 및 복구
                         </button>
                     </div>
                     {process.env.NODE_ENV === 'development' && (
@@ -164,6 +156,50 @@ class ErrorBoundary extends React.Component {
 const App = () => {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [user, setUser] = useState(null);
+
+    // [전역 감지] 시스템 자바스크립트 uncaught 에러 및 unhandled rejection 감지 후 자동 버그 신고 연동
+    useEffect(() => {
+        const submitGlobalBugReport = async (errorMsg, stackTrace, source = 'Global JS Error') => {
+            try {
+                await submitBugReport({
+                    screenName: window.__QMS_ACTIVE_PAGE__ || '전역 에러 감지',
+                    url: window.location.href,
+                    severity: 'CRITICAL',
+                    description: `[자동 감지] ${source}: ${errorMsg}`,
+                    steps: `시스템 전역에서 비정상적인 예외 상황이 자동으로 검출되었습니다.\n\n[오류 메시지]\n${errorMsg}\n\n[Stack Trace]\n${stackTrace || 'N/A'}`,
+                    reporterName: user?.name || '알 수 없는 사용자',
+                    reporterUsername: user?.username || 'unknown'
+                });
+                console.log(`>>>> [GLOBAL AUTO REPORT] Automatically sent bug report: ${errorMsg}`);
+            } catch (err) {
+                console.error("Global bug report auto submission failed:", err);
+            }
+        };
+
+        const handleGlobalError = (event) => {
+            const errorMsg = event.message || 'Unknown global error';
+            const stackTrace = event.error?.stack || 'N/A';
+            if (errorMsg.includes('Load failed') || errorMsg.includes('Failed to fetch') || errorMsg.includes('Network Error')) return;
+            submitGlobalBugReport(errorMsg, stackTrace, 'Uncaught Exception');
+        };
+
+        const handleUnhandledRejection = (event) => {
+            const reason = event.reason;
+            const errorMsg = reason instanceof Error ? reason.message : String(reason);
+            const stackTrace = reason instanceof Error ? reason.stack : 'N/A';
+            // Filter out Axios aborted error or other normal promise cancellations if any
+            if (errorMsg.includes('canceled')) return;
+            submitGlobalBugReport(errorMsg, stackTrace, 'Unhandled Rejection');
+        };
+
+        window.addEventListener('error', handleGlobalError);
+        window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+        return () => {
+            window.removeEventListener('error', handleGlobalError);
+            window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+        };
+    }, [user]);
     const [tabs, setTabs] = useState([
         { id: 'dashboard', page: 'dashboard', title: '📊 시스템 대시보드', data: null }
     ]);
@@ -355,14 +391,49 @@ const App = () => {
         }
     };
 
-    // Polling and Click Outside hook
+    // Polling, SSE, and Click Outside hook
     useEffect(() => {
         if (!isLoggedIn) return;
         
         fetchNotifications();
         fetchUnreadCount();
 
-        // 30 seconds Short Polling
+        let eventSource = null;
+        let reconnectTimeout = null;
+        let isClosing = false;
+
+        const connectSSE = () => {
+            if (isClosing) return;
+            eventSource = new EventSource('/api/notifications/stream', { withCredentials: true });
+            
+            eventSource.addEventListener('notification', (event) => {
+                try {
+                    const newNotif = JSON.parse(event.data);
+                    console.log("[SSE] Received new notification:", newNotif);
+                    
+                    fetchNotifications();
+                    fetchUnreadCount();
+                    
+                    // Trigger bell animation
+                    setBellAnimated(true);
+                    setTimeout(() => setBellAnimated(false), 800);
+                } catch (e) {
+                    console.error("[SSE] Failed to parse notification", e);
+                }
+            });
+
+            eventSource.onerror = (err) => {
+                console.error("[SSE] EventSource error, reconnecting in 5s...", err);
+                eventSource.close();
+                reconnectTimeout = setTimeout(() => {
+                    if (isLoggedIn && !isClosing) connectSSE();
+                }, 5000);
+            };
+        };
+
+        connectSSE();
+
+        // 30 seconds Short Polling fallback
         const interval = setInterval(() => {
             fetchUnreadCount();
             if (isNotifOpen) {
@@ -379,6 +450,13 @@ const App = () => {
         document.addEventListener('mousedown', handleOutsideClick);
 
         return () => {
+            isClosing = true;
+            if (eventSource) {
+                eventSource.close();
+            }
+            if (reconnectTimeout) {
+                clearTimeout(reconnectTimeout);
+            }
             clearInterval(interval);
             document.removeEventListener('mousedown', handleOutsideClick);
         };
@@ -488,7 +566,7 @@ const App = () => {
         // 1. 사이드바 그룹 자동 열기
         let targetSection = null;
         if (['dashboard', 'announcements', 'notifications'].includes(pageKey)) targetSection = 'monitoring';
-        else if (['users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin', 'accessLogs', 'bugReports', 'mailTemplates'].includes(pageKey)) targetSection = 'system';
+        else if (['users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin', 'accessLogs', 'bugReports', 'mailTemplates', 'notificationSettings'].includes(pageKey)) targetSection = 'system';
         else if (['products', 'brands', 'ingredientCompliance', 'bomMaster', 'bomCategories'].includes(pageKey)) targetSection = 'products';
         else if (['manufacturers', 'manufacturerCategories', 'salesChannels'].includes(pageKey)) targetSection = 'partner';
         else if (['manufacturerAudits', 'manufacturerAuditDashboard', 'manufacturerAuditItems'].includes(pageKey)) targetSection = 'audit';
@@ -658,7 +736,7 @@ const App = () => {
     const canAccess = (menuKey) => hasPermission(menuKey, 'VIEW');
 
     const hasMonitoringAccess = canAccess('dashboard') || canAccess('announcements') || canAccess('notifications');
-    const hasSystemAccess = canAccess('users') || canAccess('logs') || canAccess('roles') || canAccess('guideManagement') || canAccess('dashboardMgmt') || canAccess('trashBin') || canAccess('accessLogs') || canAccess('bugReports') || canAccess('mailTemplates');
+    const hasSystemAccess = canAccess('users') || canAccess('logs') || canAccess('roles') || canAccess('guideManagement') || canAccess('dashboardMgmt') || canAccess('trashBin') || canAccess('accessLogs') || canAccess('bugReports') || canAccess('mailTemplates') || canAccess('notificationSettings');
     const hasProductsAccess = canAccess('products') || canAccess('brands') || canAccess('ingredientCompliance') || canAccess('bomMaster') || canAccess('bomCategories');
     const hasPartnerAccess = canAccess('manufacturers') || canAccess('manufacturerCategories') || canAccess('salesChannels') || canAccess('manufacturerGuide');
     const hasAuditAccess = canAccess('manufacturerAudits') || canAccess('manufacturerAuditDashboard') || canAccess('manufacturerAuditItems');
@@ -670,7 +748,7 @@ const App = () => {
         const activePage = tabs.find(t => t.id === activeTabId)?.page;
         switch(section) {
             case 'monitoring': return ['dashboard', 'announcements', 'notifications'].includes(activePage);
-            case 'system': return ['users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin', 'accessLogs', 'bugReports', 'mailTemplates'].includes(activePage);
+            case 'system': return ['users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin', 'accessLogs', 'bugReports', 'mailTemplates', 'notificationSettings'].includes(activePage);
             case 'products': return ['products', 'brands', 'ingredientCompliance', 'bomMaster', 'bomCategories'].includes(activePage);
             case 'partner': return ['manufacturers', 'manufacturerCategories', 'salesChannels', 'manufacturerGuide'].includes(activePage);
             case 'audit': return ['manufacturerAudits', 'manufacturerAuditDashboard', 'manufacturerAuditItems'].includes(activePage);
@@ -795,7 +873,7 @@ const App = () => {
                                     </>
                                 )}
 
-                                {(canAccess('guideManagement') || canAccess('dashboardMgmt') || canAccess('trashBin') || canAccess('mailTemplates')) && (
+                                {(canAccess('guideManagement') || canAccess('dashboardMgmt') || canAccess('trashBin') || canAccess('mailTemplates') || canAccess('notificationSettings')) && (
                                     <>
                                         <div className="sidebar-sub-header">설정 및 유지보수</div>
                                         {canAccess('guideManagement') && (
@@ -816,6 +894,11 @@ const App = () => {
                                         {canAccess('mailTemplates') && (
                                             <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'mailTemplates' ? 'active' : ''}`} onClick={() => handleNavigate('mailTemplates')}>
                                                 📧 제조사 전달 메일 관리
+                                            </button>
+                                        )}
+                                        {canAccess('notificationSettings') && (
+                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'notificationSettings' ? 'active' : ''}`} onClick={() => handleNavigate('notificationSettings')}>
+                                                🔔 알림 설정 관리
                                             </button>
                                         )}
                                     </>
@@ -1230,6 +1313,7 @@ const App = () => {
                                 {canAccess('trashBin') && tab.page === 'trashBin' && <TrashBinPage user={user} />}
                                 {canAccess('accessLogs') && tab.page === 'accessLogs' && <AccessLogPage user={user} />}
                                 {canAccess('bugReports') && tab.page === 'bugReports' && <BugReportPage user={user} />}
+                                {canAccess('notificationSettings') && tab.page === 'notificationSettings' && <NotificationSettingsPage user={user} />}
                             </div>
                         </div>
                     ))}

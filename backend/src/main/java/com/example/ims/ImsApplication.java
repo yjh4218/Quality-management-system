@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @org.springframework.cache.annotation.EnableCaching
 @org.springframework.scheduling.annotation.EnableScheduling
 @org.springframework.data.jpa.repository.config.EnableJpaAuditing
+@org.springframework.scheduling.annotation.EnableAsync
 public class ImsApplication {
 
 	public static void main(String[] args) {

@@ -304,6 +304,7 @@ export const deleteManufacturer = (id) => api.delete(`/api/manufacturers/${id}`)
 export const restoreManufacturer = (id) => api.post(`/api/manufacturers/${id}/restore`);
 export const hardDeleteManufacturer = (id) => api.delete(`/api/manufacturers/${id}/hard`);
 export const getCompanyDepartmentsAndEmails = (companyName) => api.get('/api/manufacturers/departments', { params: { companyName } });
+export const getManufacturerScorecard = (id) => api.get(`/api/manufacturers/${id}/scorecard`);
 
 // Brand APIs
 export const getBrands = () => api.get('/api/brands');
@@ -485,6 +486,24 @@ export const getClaims = (params = {}, config = {}) => {
     }
     return api.get(`/api/claims?${queryParams.toString()}`, config);
 };
+export const getClaimsPaged = (params = {}, page = 0, size = 50, config = {}) => {
+    const queryParams = new URLSearchParams();
+    if (params.startDate) queryParams.append('startDate', params.startDate);
+    if (params.endDate) queryParams.append('endDate', params.endDate);
+    if (params.itemCode) queryParams.append('itemCode', params.itemCode);
+    if (params.productName) queryParams.append('productName', params.productName);
+    if (params.lotNumber) queryParams.append('lotNumber', params.lotNumber);
+    if (params.country) queryParams.append('country', params.country);
+    if (params.qualityStatus) queryParams.append('qualityStatus', params.qualityStatus);
+    if (params.claimNumber) queryParams.append('claimNumber', params.claimNumber);
+    if (params.manufacturer) queryParams.append('manufacturer', params.manufacturer);
+    if (params.sharedWithManufacturer !== undefined && params.sharedWithManufacturer !== '') {
+        queryParams.append('sharedWithManufacturer', params.sharedWithManufacturer);
+    }
+    queryParams.append('page', page);
+    queryParams.append('size', size);
+    return api.get(`/api/claims/paged?${queryParams.toString()}`, config);
+};
 export const getDebugStatus = () => api.get('/api/claims/debug/status');
 export const getClaimDashboard = (params = {}, config = {}) => {
     let url = '/api/claims/dashboard';
@@ -505,6 +524,7 @@ export const getClaimById = (id, fromEmail = false) => api.get(`/api/claims/${id
 export const createClaim = (claim) => api.post('/api/claims', claim);
 export const updateClaim = (id, data) => api.put(`/api/claims/${id}`, data);
 export const deleteClaim = (id) => api.delete(`/api/claims/${id}`);
+export const reRequestCriticalCapa = (id, reason) => api.post(`/api/claims/${id}/re-request`, { reason }).then(res => res.data);
 export const uploadClaimResponse = (id, file, productName) => {
     const formData = new FormData();
     formData.append('file', file);
@@ -638,6 +658,11 @@ export const getUnreadNotificationCount = () => api.get('/api/notifications/unre
 export const readNotification = (id) => api.post(`/api/notifications/${id}/read`);
 export const readAllNotifications = () => api.post('/api/notifications/read-all');
 export const deleteNotification = (id) => api.delete(`/api/notifications/${id}`);
+
+// --- Notification Settings APIs ---
+export const getNotificationSettings = () => api.get('/api/notifications/settings').then(res => res.data);
+export const createNotificationSetting = (setting) => api.post('/api/notifications/settings', setting).then(res => res.data);
+export const updateNotificationSetting = (id, payload) => api.put(`/api/notifications/settings/${id}`, payload).then(res => res.data);
 
 export default api;
 

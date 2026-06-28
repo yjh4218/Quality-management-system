@@ -69,4 +69,10 @@ public class ManufacturerController {
         manufacturerService.hardDelete(id, userDetails.getUsername());
         return ResponseEntity.ok().build();
     }
+
+    @GetMapping("/{id}/scorecard")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'MANUFACTURER')")
+    public ResponseEntity<com.example.ims.dto.ManufacturerScorecardDto> getScorecard(@PathVariable Long id) {
+        return ResponseEntity.ok(manufacturerService.getScorecard(id));
+    }
 }

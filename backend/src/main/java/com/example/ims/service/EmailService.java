@@ -308,18 +308,41 @@ public class EmailService {
     }
 
     public boolean sendCustomEmail(String toEmail, String subject, String body) {
+        String htmlBody = body;
+        if (htmlBody != null) {
+            String lowerBody = htmlBody.trim().toLowerCase();
+            if (!lowerBody.startsWith("<html>") && !lowerBody.startsWith("<!doctype")) {
+                // Convert newlines to HTML line breaks
+                htmlBody = htmlBody.replace("\r\n", "<br/>").replace("\n", "<br/>");
+                // Auto-link URLs that are not already inside href attribute
+                htmlBody = htmlBody.replaceAll("(?<!href=\")https?://[a-zA-Z0-9./?=&_~#%+-]+", "<a href=\"$0\" style=\"color: #4f46e5; text-decoration: underline; font-weight: bold;\">$0</a>");
+                // Wrap in unified QMS email system template container
+                htmlBody = "<html>\n<body style=\"font-family: 'Malgun Gothic', sans-serif; line-height: 1.6; color: #333;\">\n" +
+                        "  <div style=\"max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);\">\n" +
+                        "    <h2 style=\"color: #0f172a; border-bottom: 2px solid #cbd5e1; padding-bottom: 10px;\">통합 품질 관리 시스템 (QMS)</h2>\n" +
+                        "    <div style=\"margin: 20px 0; color: #334155;\">\n" +
+                        "      " + htmlBody + "\n" +
+                        "    </div>\n" +
+                        "    <hr style=\"border: none; border-top: 1px solid #cbd5e1; margin: 20px 0;\" />\n" +
+                        "    <p style=\"font-size: 12px; color: #94a3b8; text-align: center;\">본 메일은 QMS 시스템에서 자동으로 발송된 메일입니다.</p>\n" +
+                        "  </div>\n" +
+                        "</body>\n" +
+                        "</html>";
+            }
+        }
+
         if (!isSmtpConfigured()) {
             log.info("==== [MOCK CUSTOM EMAIL SEND] ====");
             log.info("To: {}", toEmail);
             log.info("Subject: {}", subject);
-            log.info("Body: {}", body);
+            log.info("Body: {}", htmlBody);
             log.info("===================================");
             try {
                 java.io.File dir = new java.io.File("mock_emails");
                 if (!dir.exists()) dir.mkdirs();
                 String safeSubject = subject.replaceAll("[\\\\/:*?\"<>|]", "_");
                 java.io.File file = new java.io.File(dir, "email_" + System.currentTimeMillis() + "_" + safeSubject + ".html");
-                java.nio.file.Files.writeString(file.toPath(), "To: " + toEmail + "\nSubject: " + subject + "\n\n" + body);
+                java.nio.file.Files.writeString(file.toPath(), "To: " + toEmail + "\nSubject: " + subject + "\n\n" + htmlBody);
                 log.info("Mock email saved to: {}", file.getAbsolutePath());
             } catch (Exception ex) {
                 log.error("Failed to write mock email to file", ex);
@@ -339,7 +362,7 @@ public class EmailService {
                 subject = "[QMS 시스템] " + subject;
             }
             helper.setSubject(subject);
-            helper.setText(body, true);
+            helper.setText(htmlBody, true);
 
             mailSender.send(message);
             log.info("Custom email sent to: {}", toEmail);
