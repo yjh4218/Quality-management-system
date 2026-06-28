@@ -25,7 +25,7 @@ import NotificationSettingsPage from './NotificationSettingsPage.jsx';
 import IngredientCompliancePage from './IngredientCompliancePage.jsx';
 import HelpCenterModal from './components/HelpCenterModal';
 import ProfileModal from './ProfileModal';
-import { getCurrentUser, logout, getMyNotifications, getUnreadNotificationCount, readNotification, readAllNotifications, deleteNotification, submitBugReport } from './api';
+import { getCurrentUser, logout, getMyNotifications, getUnreadNotificationCount, readNotification, readAllNotifications, deleteNotification, submitBugReport, getBaseURL } from './api';
 import ManufacturerAuditItemPage from './ManufacturerAuditItemPage';
 import ManufacturerAuditPage from './ManufacturerAuditPage';
 import ManufacturerAuditDashboard from './ManufacturerAuditDashboard';
@@ -404,7 +404,7 @@ const App = () => {
 
         const connectSSE = () => {
             if (isClosing) return;
-            eventSource = new EventSource('/api/notifications/stream', { withCredentials: true });
+            eventSource = new EventSource(getBaseURL() + '/api/notifications/stream', { withCredentials: true });
             
             eventSource.addEventListener('notification', (event) => {
                 try {
