@@ -595,7 +595,7 @@ const App = () => {
 
     const fetchUser = async () => {
         try {
-            const response = await getCurrentUser({ skipLoading: true });
+            const response = await getCurrentUser({ skipLoading: true, silentAuthCheck: true });
             console.log(">>>> [DEBUG] Current User Data:", response.data);
             setUser(response.data);
             setIsLoggedIn(true);

@@ -123,8 +123,9 @@ api.interceptors.response.use(
 
         const isLoginRequest = error.config && error.config.url && (error.config.url.endsWith('/auth/login') || error.config.url.includes('/auth/login'));
         const isBugReportRequest = error.config && error.config.url && (error.config.url.endsWith('/api/bug-reports') || error.config.url.includes('/api/bug-reports'));
+        const isSilentAuthCheck = error.config && error.config.silentAuthCheck === true;
         
-        if (error.response && error.response.status === 401 && !isLoginRequest) {
+        if (error.response && error.response.status === 401 && !isLoginRequest && !isSilentAuthCheck) {
             window.dispatchEvent(new Event('auth-unauthorized'));
         } else if (!isLoginRequest && !isBugReportRequest && !(error.config && error.config.skipToast)) {
             let errorMsg = "서버와 통신 중 문제가 발생했습니다.";
