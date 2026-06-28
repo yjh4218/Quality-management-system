@@ -7,22 +7,34 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
 
-    // [Task 15] CORS는 SecurityConfig에서 일괄 관리하므로 여기서 제거
-    @Override
-    public void addCorsMappings(CorsRegistry registry) {
-        // SecurityConfig.corsConfigurationSource()에서 처리함
-    }
+    @org.springframework.beans.factory.annotation.Value("${cors.allowed-origins:}")
+    private String allowedOrigins;
 
-    /* 기존 CORS 설정 (주석 처리)
     @Override
     public void addCorsMappings(CorsRegistry registry) {
+        java.util.List<String> originsList = java.util.Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(java.util.stream.Collectors.toList());
+                
+        if (originsList.isEmpty()) {
+            originsList = java.util.List.of(
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "https://qualitymange.pages.dev",
+                "https://*.pages.dev",
+                "https://*.hf.space"
+            );
+        }
+
         registry.addMapping("/**")
-                .allowedOriginPatterns("http://localhost:*", "http://127.0.0.1:*", "https://*.onrender.com") 
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .allowedOriginPatterns(originsList.toArray(new String[0]))
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH")
                 .allowedHeaders("*")
-                .allowCredentials(true);
+                .exposedHeaders("Set-Cookie", "Authorization")
+                .allowCredentials(true)
+                .maxAge(3600L);
     }
-    */
 
     @Override
     public void addResourceHandlers(
