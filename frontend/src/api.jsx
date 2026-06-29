@@ -80,6 +80,14 @@ api.interceptors.request.use(
             setGlobalLoading(true); // 스피너 시작
         }
         
+        // [HTTP METHOD OVERRIDE] PUT, PATCH, DELETE 시 OPTIONS preflight를 회피하기 위해 POST + _method 쿼리스트링 조합으로 변환
+        const upperMethod = config.method ? config.method.toUpperCase() : '';
+        if (['PUT', 'PATCH', 'DELETE'].includes(upperMethod)) {
+            const separator = config.url.includes('?') ? '&' : '?';
+            config.url = `${config.url}${separator}_method=${upperMethod}`;
+            config.method = 'post';
+        }
+        
         const reqContentType = config.headers?.['Content-Type'] || config.headers?.['content-type'] || '';
         const isUrlEncoded = String(reqContentType).toLowerCase().includes('application/x-www-form-urlencoded');
         const isMultipart = String(reqContentType).toLowerCase().includes('multipart/form-data');

@@ -39,19 +39,40 @@ public class PreflightBypassFilter implements Filter {
             return;
         }
 
-        // text/plain 형식으로 날아온 JSON 데이터를 application/json으로 강제 변환하여 @RequestBody 지원
-        String contentType = request.getContentType();
-        if (contentType != null && contentType.toLowerCase().startsWith("text/plain")) {
-            HttpServletRequestWrapper wrappedRequest = new HttpServletRequestWrapper(request) {
+        // [METHOD OVERRIDE] 쿼리 스트링의 _method 파라미터가 존재하면 HTTP method를 변경된 값으로 강제 재정의
+        String methodParam = request.getParameter("_method");
+        final String overrideMethod = (methodParam != null && !methodParam.trim().isEmpty()) 
+                ? methodParam.toUpperCase().trim() 
+                : null;
+
+        HttpServletRequest wrappedRequest = request;
+
+        if (overrideMethod != null || (request.getContentType() != null && request.getContentType().toLowerCase().startsWith("text/plain"))) {
+            wrappedRequest = new HttpServletRequestWrapper(request) {
+                @Override
+                public String getMethod() {
+                    if (overrideMethod != null) {
+                        return overrideMethod;
+                    }
+                    return super.getMethod();
+                }
+
                 @Override
                 public String getContentType() {
-                    return "application/json;charset=UTF-8";
+                    String contentType = super.getContentType();
+                    if (contentType != null && contentType.toLowerCase().startsWith("text/plain")) {
+                        return "application/json;charset=UTF-8";
+                    }
+                    return contentType;
                 }
 
                 @Override
                 public String getHeader(String name) {
                     if ("Content-Type".equalsIgnoreCase(name)) {
-                        return "application/json;charset=UTF-8";
+                        String contentType = super.getContentType();
+                        if (contentType != null && contentType.toLowerCase().startsWith("text/plain")) {
+                            return "application/json;charset=UTF-8";
+                        }
                     }
                     return super.getHeader(name);
                 }
@@ -59,14 +80,16 @@ public class PreflightBypassFilter implements Filter {
                 @Override
                 public Enumeration<String> getHeaders(String name) {
                     if ("Content-Type".equalsIgnoreCase(name)) {
-                        return Collections.enumeration(List.of("application/json;charset=UTF-8"));
+                        String contentType = super.getContentType();
+                        if (contentType != null && contentType.toLowerCase().startsWith("text/plain")) {
+                            return Collections.enumeration(List.of("application/json;charset=UTF-8"));
+                        }
                     }
                     return super.getHeaders(name);
                 }
             };
-            chain.doFilter(wrappedRequest, res);
-        } else {
-            chain.doFilter(req, res);
         }
+
+        chain.doFilter(wrappedRequest, res);
     }
 }
