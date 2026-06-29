@@ -81,7 +81,10 @@ api.interceptors.request.use(
         }
         
         // [CORS PREFLIGHT BYPASS] OPTIONS preflight 요청을 원천 회피하기 위해 JSON 요청을 text/plain으로 우회 전송
-        if (config.data && !(config.data instanceof FormData) && typeof config.data === 'object') {
+        if (config.data && 
+            !(config.data instanceof FormData) && 
+            !(config.data instanceof URLSearchParams) && 
+            typeof config.data === 'object') {
             config.headers['Content-Type'] = 'text/plain;charset=UTF-8';
             config.data = JSON.stringify(config.data);
         }
