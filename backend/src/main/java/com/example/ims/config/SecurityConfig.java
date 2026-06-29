@@ -122,7 +122,7 @@ public class SecurityConfig {
             );
         }
         
-        configuration.setAllowedOriginPatterns(originsList);
+        configuration.setAllowedOriginPatterns(List.of("*"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setExposedHeaders(List.of("Set-Cookie", "Authorization"));

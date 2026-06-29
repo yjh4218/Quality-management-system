@@ -67,23 +67,23 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                 "LEFT JOIN p.manufacturerInfo m " +
                 "LEFT JOIN p.brand b " +
                 "WHERE p.active = true AND " +
-                "(:companyFilter IS NULL OR m.name = :companyFilter) AND " +
-                "(:itemCode IS NULL OR LOWER(CAST(p.itemCode AS String)) LIKE :itemCode) AND " +
-                "(:productName IS NULL OR LOWER(CAST(p.productName AS String)) LIKE :productName) AND " +
-                "(:englishProductName IS NULL OR LOWER(CAST(p.englishProductName AS String)) LIKE :englishProductName) AND " +
-                "(:brand IS NULL OR (b IS NOT NULL AND LOWER(CAST(b.name AS String)) LIKE :brand)) AND " +
-                "(:manufacturer IS NULL OR (m IS NOT NULL AND LOWER(CAST(m.name AS String)) LIKE :manufacturer)) AND " +
-                "(:ingredients IS NULL OR LOWER(CAST(p.ingredients AS String)) LIKE :ingredients) " +
+                "(COALESCE(:companyFilter, '') = '' OR m.name = :companyFilter) AND " +
+                "(COALESCE(:itemCode, '') = '' OR LOWER(p.itemCode) LIKE :itemCode) AND " +
+                "(COALESCE(:productName, '') = '' OR LOWER(p.productName) LIKE :productName) AND " +
+                "(COALESCE(:englishProductName, '') = '' OR LOWER(p.englishProductName) LIKE :englishProductName) AND " +
+                "(COALESCE(:brand, '') = '' OR (b IS NOT NULL AND LOWER(b.name) LIKE :brand)) AND " +
+                "(COALESCE(:manufacturer, '') = '' OR (m IS NOT NULL AND LOWER(m.name) LIKE :manufacturer)) AND " +
+                "(COALESCE(:ingredients, '') = '' OR LOWER(p.ingredients) LIKE :ingredients) " +
                 "ORDER BY p.createdAt DESC",
         countQuery = "SELECT count(p) FROM Product p LEFT JOIN p.manufacturerInfo m LEFT JOIN p.brand b WHERE "
                     + "p.active = true AND "
-                    + "(:companyFilter IS NULL OR m.name = :companyFilter) AND "
-                    + "(:itemCode IS NULL OR LOWER(CAST(p.itemCode AS String)) LIKE :itemCode) AND "
-                    + "(:productName IS NULL OR LOWER(CAST(p.productName AS String)) LIKE :productName) AND "
-                    + "(:englishProductName IS NULL OR LOWER(CAST(p.englishProductName AS String)) LIKE :englishProductName) AND "
-                    + "(:brand IS NULL OR (b IS NOT NULL AND LOWER(CAST(b.name AS String)) LIKE :brand)) AND "
-                    + "(:manufacturer IS NULL OR (m IS NOT NULL AND LOWER(CAST(m.name AS String)) LIKE :manufacturer)) AND "
-                    + "(:ingredients IS NULL OR LOWER(CAST(p.ingredients AS String)) LIKE :ingredients)"
+                    + "(COALESCE(:companyFilter, '') = '' OR m.name = :companyFilter) AND "
+                    + "(COALESCE(:itemCode, '') = '' OR LOWER(p.itemCode) LIKE :itemCode) AND "
+                    + "(COALESCE(:productName, '') = '' OR LOWER(p.productName) LIKE :productName) AND "
+                    + "(COALESCE(:englishProductName, '') = '' OR LOWER(p.englishProductName) LIKE :englishProductName) AND "
+                    + "(COALESCE(:brand, '') = '' OR (b IS NOT NULL AND LOWER(b.name) LIKE :brand)) AND "
+                    + "(COALESCE(:manufacturer, '') = '' OR (m IS NOT NULL AND LOWER(m.name) LIKE :manufacturer)) AND "
+                    + "(COALESCE(:ingredients, '') = '' OR LOWER(p.ingredients) LIKE :ingredients)"
     )
     Page<ProductSummaryRecord> searchProductsSummary(
                     @Param("companyFilter") String companyFilter,

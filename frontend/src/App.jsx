@@ -587,11 +587,13 @@ const App = () => {
         }
 
         // 2. 페이지 열람 로깅
-        import('./api').then(({ logPageView }) => {
-            logPageView({ pageKey, pageTitle }).catch(err => console.error("Page log failed", err));
-        });
+        if (isLoggedIn && user) {
+            import('./api').then(({ logPageView }) => {
+                logPageView({ pageKey, pageTitle }).catch(err => console.error("Page log failed", err));
+            });
+        }
 
-    }, [activeTabId, isLoggedIn, tabs]);
+    }, [activeTabId, isLoggedIn, user, tabs]);
 
     const fetchUser = async () => {
         try {
