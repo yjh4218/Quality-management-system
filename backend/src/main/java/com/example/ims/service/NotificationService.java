@@ -56,8 +56,22 @@ public class NotificationService {
         sseConnections.add(connection);
 
         emitter.onCompletion(() -> sseConnections.remove(connection));
-        emitter.onTimeout(() -> sseConnections.remove(connection));
-        emitter.onError((ex) -> sseConnections.remove(connection));
+        emitter.onTimeout(() -> {
+            sseConnections.remove(connection);
+            try {
+                emitter.complete();
+            } catch (Exception e) {
+                // Ignore
+            }
+        });
+        emitter.onError((ex) -> {
+            sseConnections.remove(connection);
+            try {
+                emitter.completeWithError(ex);
+            } catch (Exception e) {
+                // Ignore
+            }
+        });
 
         try {
             // Send initial ping event to establish connection successfully

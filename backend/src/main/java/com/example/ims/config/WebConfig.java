@@ -10,31 +10,7 @@ public class WebConfig implements WebMvcConfigurer {
     @org.springframework.beans.factory.annotation.Value("${cors.allowed-origins:}")
     private String allowedOrigins;
 
-    @Override
-    public void addCorsMappings(CorsRegistry registry) {
-        java.util.List<String> originsList = java.util.Arrays.stream(allowedOrigins.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .collect(java.util.stream.Collectors.toList());
-                
-        if (originsList.isEmpty()) {
-            originsList = java.util.List.of(
-                "http://localhost:5173",
-                "http://127.0.0.1:5173",
-                "https://qualitymange.pages.dev",
-                "https://*.pages.dev",
-                "https://*.hf.space"
-            );
-        }
 
-        registry.addMapping("/**")
-                .allowedOriginPatterns(originsList.toArray(new String[0]))
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH")
-                .allowedHeaders("*")
-                .exposedHeaders("Set-Cookie", "Authorization")
-                .allowCredentials(true)
-                .maxAge(3600L);
-    }
 
     @Override
     public void addResourceHandlers(

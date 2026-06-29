@@ -24,6 +24,15 @@ import java.util.UUID;
 public class GlobalExceptionHandler {
 
     /**
+     * SSE Emitter 등 비동기 요청 타임아웃 발생 시 대응 (서블릿 무시 처리).
+     */
+    @ExceptionHandler(org.springframework.web.context.request.async.AsyncRequestTimeoutException.class)
+    public ResponseEntity<Void> handleAsyncRequestTimeoutException(org.springframework.web.context.request.async.AsyncRequestTimeoutException ex) {
+        log.debug("Async request timeout (intended for SSE connection refreshes)");
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
      * [Task 11] Bean Validation(@Valid) 실패 시 발생하는 예외 처리.
      * 필드별 상세 오류 메시지를 400 Bad Request와 함께 반환합니다.
      */

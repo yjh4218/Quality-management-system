@@ -138,69 +138,104 @@ api.interceptors.response.use(
             } else if (error.message) {
                 errorMsg = error.message;
             }
-            const isSystemBug = !error.response || (error.response.status >= 500) || error.code === 'ECONNABORTED';
+
+            const isNetworkError = !error.response;
+            const isSystemBug = isNetworkError || (error.response.status >= 500) || error.code === 'ECONNABORTED';
 
             if (isSystemBug) {
-                // [자동 전송 로직] 시스템 치명적 에러(500+, 네트워크 장애, 타임아웃) 발생 시 즉시 자동으로 버그 리포트를 등록합니다.
-                (async () => {
-                    let serverErrorData = error.response?.data;
-                    if (serverErrorData instanceof Blob) {
-                        try {
-                            const blobText = await serverErrorData.text();
-                            serverErrorData = JSON.parse(blobText);
-                        } catch (parseError) {
-                            serverErrorData = "Blob data (not JSON)";
-                        }
-                    }
-
+                // 네트워크 에러는 서버에 전송이 원천 불가능하므로, 바로 큐로만 적재하고 불필요한 전송 시도는 건너뜁니다.
+                if (isNetworkError) {
+                    console.warn("[QMS] Network Error detected. Skipping API auto-report and queueing offline.");
                     const bugReportPayload = {
-                        description: `[시스템 자동 감지] API 에러 발생: ${errorMsg}`,
+                        description: `[시스템 자동 감지 - 오프라인] 네트워크 장애 감지: ${errorMsg}`,
                         steps: [
-                            error.stack || 'API 요청 중 에러 발생',
-                            '',
-                            `[요청 정보]`,
-                            `Method: ${error.config?.method?.toUpperCase() || 'N/A'}`,
-                            `URL: ${error.config?.url || 'N/A'}`,
-                            `Status: ${error.response?.status || 'N/A'} ${error.response?.statusText || ''}`,
-                            '',
-                            `[요청 데이터]`,
-                            error.config?.data ? (typeof error.config.data === 'string' ? error.config.data.substring(0, 2000) : 'FormData/Binary') : 'N/A'
+                            error.stack || '네트워크 장애가 발생했습니다.',
+                            `[요청 정보] URL: ${error.config?.url || 'N/A'}`
                         ].join('\n'),
                         screenName: window.__QMS_ACTIVE_PAGE__ || window.location.pathname,
                         url: window.location.href,
                         severity: 'CRITICAL',
-                        serverError: serverErrorData ? JSON.stringify(serverErrorData, null, 2) : 'N/A'
+                        serverError: 'Network Error / CORS Issue'
                     };
-
                     try {
-                        await axios.post(`${getBaseURL()}/api/bug-reports`, bugReportPayload, { withCredentials: true });
-                        
-                        toast.error(
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <span style={{ fontSize: '20px' }}>🚨</span>
-                                    <span style={{ fontWeight: 600 }}>{errorMsg}</span>
-                                </div>
-                                <div style={{ fontSize: '13px', color: '#666' }}>
-                                    시스템 치명적 오류가 자동 감지되어 버그 리포트가 관리자에게 즉시 자동 전송되었습니다.
-                                </div>
-                            </div>,
-                            { autoClose: 5000 }
-                        );
-                    } catch (reportErr) {
-                        console.error("Failed to automatically report bug, saving to offline queue:", reportErr);
-                        try {
-                            const queue = JSON.parse(localStorage.getItem('qms_pending_bug_reports') || '[]');
-                            if (queue.length >= 20) queue.shift();
-                            queue.push({ ...bugReportPayload, queuedAt: new Date().toISOString() });
-                            localStorage.setItem('qms_pending_bug_reports', JSON.stringify(queue));
-                        } catch (lsErr) {
-                            console.error("Failed to write to localStorage:", lsErr);
-                        }
+                        const queue = JSON.parse(localStorage.getItem('qms_pending_bug_reports') || '[]');
+                        if (queue.length >= 20) queue.shift();
+                        queue.push({ ...bugReportPayload, queuedAt: new Date().toISOString() });
+                        localStorage.setItem('qms_pending_bug_reports', JSON.stringify(queue));
+                    } catch (lsErr) {
+                        console.error("Failed to write to localStorage:", lsErr);
                     }
-                })();
-            } else {
-                // 4xx 비즈니스 규칙 위반 또는 단순 유효성 검증 실패인 경우 toast 경고만 보여주고 버그 리포트는 생략합니다.
+                    toast.error(
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '20px' }}>⚠️</span>
+                                <span style={{ fontWeight: 600 }}>통신 장애 감지</span>
+                            </div>
+                            <div style={{ fontSize: '13px', color: '#666' }}>
+                                서버와의 통신이 원활하지 않습니다. 요청이 로컬 큐에 안전하게 저장되었습니다.
+                            </div>
+                        </div>,
+                        { autoClose: 4000 }
+                    );
+                } else {
+                    // 서버 에러(500+)의 경우에만 실제 API 전송 시도
+                    (async () => {
+                        let serverErrorData = error.response?.data;
+                        if (serverErrorData instanceof Blob) {
+                            try {
+                                const blobText = await serverErrorData.text();
+                                serverErrorData = JSON.parse(blobText);
+                            } catch (parseError) {
+                                serverErrorData = "Blob data (not JSON)";
+                            }
+                        }
+
+                        const bugReportPayload = {
+                            description: `[시스템 자동 감지] API 에러 발생: ${errorMsg}`,
+                            steps: [
+                                error.stack || 'API 요청 중 에러 발생',
+                                '',
+                                `[요청 정보]`,
+                                `Method: ${error.config?.method?.toUpperCase() || 'N/A'}`,
+                                `URL: ${error.config?.url || 'N/A'}`,
+                                `Status: ${error.response?.status || 'N/A'} ${error.response?.statusText || ''}`,
+                                '',
+                                `[요청 데이터]`,
+                                error.config?.data ? (typeof error.config.data === 'string' ? error.config.data.substring(0, 2000) : 'FormData/Binary') : 'N/A'
+                            ].join('\n'),
+                            screenName: window.__QMS_ACTIVE_PAGE__ || window.location.pathname,
+                            url: window.location.href,
+                            severity: 'CRITICAL',
+                            serverError: serverErrorData ? JSON.stringify(serverErrorData, null, 2) : 'N/A'
+                        };
+
+                        try {
+                            await axios.post(`${getBaseURL()}/api/bug-reports`, bugReportPayload, { withCredentials: true });
+                            toast.error(
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span style={{ fontSize: '20px' }}>🚨</span>
+                                        <span style={{ fontWeight: 600 }}>{errorMsg}</span>
+                                    </div>
+                                    <div style={{ fontSize: '13px', color: '#666' }}>
+                                        시스템 오류가 감지되어 에러 리포트가 관리자에게 자동 전송되었습니다.
+                                    </div>
+                                </div>,
+                                { autoClose: 5000 }
+                            );
+                        } catch (reportErr) {
+                            console.error("Failed to automatically report bug, saving to offline queue:", reportErr);
+                            try {
+                                const queue = JSON.parse(localStorage.getItem('qms_pending_bug_reports') || '[]');
+                                if (queue.length >= 20) queue.shift();
+                                queue.push({ ...bugReportPayload, queuedAt: new Date().toISOString() });
+                                localStorage.setItem('qms_pending_bug_reports', JSON.stringify(queue));
+                            } catch (lsErr) {
+                                console.error("Failed to write to localStorage:", lsErr);
+                            }
+                        }
+                    })();
+                }
                 toast.error(
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -687,38 +722,72 @@ export const deleteProductTestReport = (reportId) => api.delete(`/api/products/t
 // [오프라인 큐 전송 기능] 저장된 미전송 버그리포트를 서버가 정상화되었을 때 전송합니다.
 let isFlushing = false;
 let lastFlushTime = 0;
+let consecutiveFailures = 0;
+let flushDisabledUntil = 0;
 
 export const flushPendingBugReports = async () => {
-    // 동시 실행 방지 및 최소 10초 쿨다운을 적용해 무한 루프 요동을 원천적으로 막습니다.
     const now = Date.now();
-    if (isFlushing || (now - lastFlushTime < 10000)) return;
+    
+    // 연속 실패 시 일정 시간(예: 3분) 동안 큐 전송 시도 자체를 비활성화하여 리소스 무한 소모 방지
+    if (now < flushDisabledUntil) {
+        return;
+    }
+
+    // 쿨다운을 60초로 늘려 빈번한 API 콜을 억제합니다.
+    if (isFlushing || (now - lastFlushTime < 60000)) return;
     
     try {
         const queue = JSON.parse(localStorage.getItem('qms_pending_bug_reports') || '[]');
         if (queue.length === 0) return;
         
+        // 큐 항목별 24시간 TTL 필터링 (너무 오래된 정보는 자동 유실 처리)
+        const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+        const validQueue = queue.filter(report => {
+            if (!report.queuedAt) return true;
+            return (now - new Date(report.queuedAt).getTime()) < ONE_DAY_MS;
+        });
+
+        if (validQueue.length === 0) {
+            localStorage.removeItem('qms_pending_bug_reports');
+            return;
+        }
+
         isFlushing = true;
         lastFlushTime = now;
         
-        console.log(`[QMS] Flushing ${queue.length} pending offline bug reports...`);
+        console.log(`[QMS] Flushing ${validQueue.length} pending offline bug reports...`);
         const remaining = [];
+        let hasErrorThisRun = false;
         
-        for (const report of queue) {
+        for (const report of validQueue) {
+            // 한 주기에서 전송 실패 시 후속 요청은 더 이상 시도하지 않고 즉시 쿨다운에 돌입
+            if (hasErrorThisRun) {
+                remaining.push(report);
+                continue;
+            }
+
             try {
-                // withCredentials를 활용하여 현재 로그인 상태의 세션을 태워 보냅니다.
-                // 큐 flush 도중 발생하는 오류에 대해서는 다시 interceptor가 가로채서 큐를 무한 증식시키지 않도록 일반 axios를 그대로 사용하며 전송합니다.
                 await axios.post(`${getBaseURL()}/api/bug-reports`, report, { 
                     withCredentials: true,
                     headers: { 'Content-Type': 'application/json' }
                 });
+                consecutiveFailures = 0; // 성공 시 실패 카운트 초기화
             } catch (err) {
                 console.error("Failed to flush single offline report, retaining in queue:", err);
                 remaining.push(report);
+                hasErrorThisRun = true;
+                consecutiveFailures++;
             }
         }
         
         if (remaining.length > 0) {
             localStorage.setItem('qms_pending_bug_reports', JSON.stringify(remaining));
+            
+            // 3회 이상 연속 실패 시 3분 쿨다운 지정
+            if (consecutiveFailures >= 3) {
+                console.warn("[QMS] Bug reports keep failing. Disabling queue flush for 3 minutes.");
+                flushDisabledUntil = now + (3 * 60 * 1000);
+            }
         } else {
             localStorage.removeItem('qms_pending_bug_reports');
             console.log("[QMS] All pending bug reports flushed successfully.");
@@ -734,4 +803,9 @@ export const flushPendingBugReports = async () => {
 setTimeout(() => {
     flushPendingBugReports();
 }, 5000);
+
+// 2분 간격으로 백그라운드 재시도
+setInterval(() => {
+    flushPendingBugReports();
+}, 120000);
 
