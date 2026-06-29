@@ -79,7 +79,13 @@ api.interceptors.request.use(
         if (!config.skipLoading) {
             setGlobalLoading(true); // 스피너 시작
         }
-        // withCredentials: true가 자동으로 세션 쿠키(QMS_SESSION)를 전송하므로 별도 토큰 주입 불필요
+        
+        // [CORS PREFLIGHT BYPASS] OPTIONS preflight 요청을 원천 회피하기 위해 JSON 요청을 text/plain으로 우회 전송
+        if (config.data && !(config.data instanceof FormData) && typeof config.data === 'object') {
+            config.headers['Content-Type'] = 'text/plain;charset=UTF-8';
+            config.data = JSON.stringify(config.data);
+        }
+        
         return config;
     },
     (error) => {
