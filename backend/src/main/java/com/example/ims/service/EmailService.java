@@ -10,12 +10,69 @@ import com.example.ims.entity.Announcement;
 
 import java.util.Properties;
 
+import com.example.ims.repository.BugReportRepository;
+import java.util.Properties;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class EmailService {
 
     private final SystemSettingService systemSettingService;
+    private final BugReportRepository bugReportRepository;
+    private final NotificationService notificationService;
+
+    @org.springframework.scheduling.annotation.Async("mailExecutor")
+    public void sendEmailAsync(JavaMailSenderImpl mailSender, MimeMessage message, String toEmail, String subject) {
+        try {
+            mailSender.send(message);
+            log.info("Asynchronous email sent successfully to: {}", toEmail);
+        } catch (Exception e) {
+            handleMailFailure(toEmail, subject, e);
+        }
+    }
+
+    private void handleMailFailure(String toEmail, String mailSubject, Exception e) {
+        log.error("[MAIL ERROR] Failed to send email to: {}, Subject: {}", toEmail, mailSubject, e);
+
+        // 1. 버그 리포트 등록 (DB 직접 입력으로 CORS 우회)
+        try {
+            com.example.ims.entity.BugReport bug = com.example.ims.entity.BugReport.builder()
+                    .description("[시스템 자동 감지 - 메일 전송 실패]")
+                    .steps(String.format("메일 발송에 실패했습니다. (이메일: %s)\n제목: %s\n\n[예외 내용]\n%s", 
+                            toEmail, mailSubject, e.toString()))
+                    .screenName("QMS 메일 발송기 (EmailService)")
+                    .url("EmailService.java")
+                    .severity("CRITICAL")
+                    .serverError(e.getMessage() != null ? e.getMessage() : e.toString())
+                    .build();
+            bugReportRepository.save(bug);
+            log.info("BugReport generated directly for mail failure: to={}", toEmail);
+        } catch (Exception bugErr) {
+            log.error("Failed to create BugReport for mail failure", bugErr);
+        }
+
+        // 2. 실시간 알림 등록
+        try {
+            org.springframework.security.core.Authentication auth = 
+                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+            String currentUsername = (auth != null && auth.isAuthenticated()) ? auth.getName() : null;
+
+            if (currentUsername != null && !"anonymousUser".equals(currentUsername)) {
+                notificationService.createNotification(
+                        "이메일 발송 실패 알림",
+                        String.format("수신자 %s 대상 메일('%s') 발송에 실패했습니다. 잠시 후 다시 시도해 주십시오.", toEmail, mailSubject),
+                        "EMAIL_FAILURE",
+                        currentUsername,
+                        null,
+                        null,
+                        null
+                );
+            }
+        } catch (Exception notifErr) {
+            log.error("Failed to create User Notification for mail failure", notifErr);
+        }
+    }
 
     public JavaMailSenderImpl getMailSender() {
         JavaMailSenderImpl mailSender = new JavaMailSenderImpl();
@@ -90,11 +147,11 @@ public class EmailService {
             log.info("Verification email sent to: {}", toEmail);
             
         } catch (Exception e) {
-            log.error("Failed to send verification email to: {}", toEmail, e);
-            throw new RuntimeException("이메일 발송에 실패했습니다. 관리자에게 설정 확인을 요청하세요.", e);
+            handleMailFailure(toEmail, "[QMS 시스템] 계정 인증을 완료해주세요.", e);
         }
     }
 
+    @org.springframework.scheduling.annotation.Async("mailExecutor")
     public void sendClaimNotificationEmail(String toEmail, com.example.ims.entity.Claim claim) {
         if (!isSmtpConfigured()) {
             log.info("==== [MOCK CLAIM NOTIFICATION SEND] ====");
@@ -103,6 +160,8 @@ public class EmailService {
             log.info("=========================================");
             return;
         }
+        String prodName = claim.getProductName() != null ? claim.getProductName() : "제품";
+        String subject = "[QMS 시스템] 클레임 접수 안내 (" + prodName + ")";
         try {
             JavaMailSenderImpl mailSender = getMailSender();
             String fromEmail = systemSettingService.getSettingValue(SystemSettingService.SMTP_USERNAME);
@@ -116,7 +175,6 @@ public class EmailService {
             java.time.LocalDate deadline = java.time.LocalDate.now().plusDays(7);
             java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy.MM.dd");
             String replyDeadline = deadline.format(formatter);
-            String prodName = claim.getProductName() != null ? claim.getProductName() : "제품";
             helper.setSubject("[QMS 시스템] 클레임 접수 안내 (" + prodName + ") - " + replyDeadline + "까지 회신");
 
             String content = "<html>\n<body style=\"font-family: 'Malgun Gothic', sans-serif; line-height: 1.6; color: #333;\">\n" +
@@ -145,15 +203,14 @@ public class EmailService {
 
             helper.setText(content, true);
 
-            mailSender.send(message);
-            log.info("Claim notification email sent to: {}", toEmail);
+            sendEmailAsync(mailSender, message, toEmail, subject);
 
         } catch (Exception e) {
-            log.error("Failed to send claim notification email to: {}", toEmail, e);
-            throw new RuntimeException("이메일 발송에 실패했습니다.", e);
+            handleMailFailure(toEmail, subject, e);
         }
     }
 
+    @org.springframework.scheduling.annotation.Async("mailExecutor")
     public void sendProductionAuditNotificationEmail(String toEmail, com.example.ims.entity.Product product) {
         if (!isSmtpConfigured()) {
             log.info("==== [MOCK AUDIT NOTIFICATION SEND] ====");
@@ -162,6 +219,7 @@ public class EmailService {
             log.info("=========================================");
             return;
         }
+        String subject = "[QMS 시스템] 신제품 생산감리 사진 등록 요청 (" + product.getProductName() + ")";
         try {
             JavaMailSenderImpl mailSender = getMailSender();
             String fromEmail = systemSettingService.getSettingValue(SystemSettingService.SMTP_USERNAME);
@@ -171,7 +229,7 @@ public class EmailService {
 
             helper.setFrom(fromEmail, "QMS 품질관리팀");
             helper.setTo(toEmail);
-            helper.setSubject("[QMS 시스템] 신제품 생산감리 사진 등록 요청 (" + product.getProductName() + ")");
+            helper.setSubject(subject);
 
             String content = "<html>\n<body style=\"font-family: 'Malgun Gothic', sans-serif; line-height: 1.6; color: #333;\">\n" +
                     "  <div style=\"max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);\">\n" +
@@ -195,12 +253,10 @@ public class EmailService {
 
             helper.setText(content, true);
 
-            mailSender.send(message);
-            log.info("Production Audit notification email sent to: {}", toEmail);
+            sendEmailAsync(mailSender, message, toEmail, subject);
 
         } catch (Exception e) {
-            log.error("Failed to send Production Audit notification email to: {}", toEmail, e);
-            throw new RuntimeException("이메일 발송에 실패했습니다.", e);
+            handleMailFailure(toEmail, subject, e);
         }
     }
 
@@ -251,15 +307,14 @@ public class EmailService {
 
             helper.setText(content, true);
 
-            mailSender.send(message);
-            log.info("Announcement notification email sent to: {}", toEmail);
+            sendEmailAsync(mailSender, message, toEmail, "[QMS 시스템] 전체공지 - " + announcement.getTitle());
 
         } catch (Exception e) {
-            log.error("Failed to send announcement notification email to: {}", toEmail, e);
-            throw new RuntimeException("이메일 발송에 실패했습니다.", e);
+            handleMailFailure(toEmail, "[QMS 시스템] 전체공지 - " + announcement.getTitle(), e);
         }
     }
 
+    @org.springframework.scheduling.annotation.Async("mailExecutor")
     public void sendDynamicEmail(String toEmail, com.example.ims.entity.MailTemplate template, com.example.ims.entity.Claim claim) {
         String content = processClaimTemplate(template.getBody(), claim);
         String subject = processClaimTemplate(template.getSubject(), claim);
@@ -298,12 +353,10 @@ public class EmailService {
             helper.setSubject(subject);
             helper.setText(content, true);
 
-            mailSender.send(message);
-            log.info("Dynamic email sent to: {}", toEmail);
+            sendEmailAsync(mailSender, message, toEmail, subject);
             
         } catch (Exception e) {
-            log.error("Failed to prepare dynamic email to: {}", toEmail, e);
-            throw new RuntimeException(e.getMessage() != null ? e.getMessage() : "이메일 준비 중 오류가 발생했습니다.", e);
+            handleMailFailure(toEmail, subject, e);
         }
     }
 
@@ -364,12 +417,11 @@ public class EmailService {
             helper.setSubject(subject);
             helper.setText(htmlBody, true);
 
-            mailSender.send(message);
-            log.info("Custom email sent to: {}", toEmail);
+            sendEmailAsync(mailSender, message, toEmail, subject);
             return false;
         } catch (Exception e) {
-            log.error("Failed to prepare custom email to: {}", toEmail, e);
-            throw new RuntimeException(e.getMessage() != null ? e.getMessage() : "이메일 준비 중 오류가 발생했습니다.", e);
+            handleMailFailure(toEmail, subject, e);
+            return false;
         }
     }
     public String processClaimTemplate(String content, com.example.ims.entity.Claim claim) {

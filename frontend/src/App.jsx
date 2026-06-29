@@ -413,6 +413,16 @@ const App = () => {
                     
                     fetchNotifications();
                     fetchUnreadCount();
+
+                    // [추가] 이메일 발송 실패 실시간 토스트 피드백
+                    if (newNotif.type === 'EMAIL_FAILURE') {
+                        import('react-toastify').then(({ toast }) => {
+                            toast.error("메일 발송에 실패했습니다. 잠시 후 다시 시도해 주십시오.", {
+                                autoClose: 5000,
+                                position: "top-right"
+                            });
+                        });
+                    }
                     
                     // Trigger bell animation
                     setBellAnimated(true);
