@@ -21,15 +21,17 @@ public class EmailService {
     private final SystemSettingService systemSettingService;
     private final BugReportRepository bugReportRepository;
     private final NotificationService notificationService;
+    private final org.springframework.core.task.AsyncTaskExecutor mailExecutor;
 
-    @org.springframework.scheduling.annotation.Async("mailExecutor")
     public void sendEmailAsync(JavaMailSenderImpl mailSender, MimeMessage message, String toEmail, String subject) {
-        try {
-            mailSender.send(message);
-            log.info("Asynchronous email sent successfully to: {}", toEmail);
-        } catch (Exception e) {
-            handleMailFailure(toEmail, subject, e);
-        }
+        mailExecutor.execute(() -> {
+            try {
+                mailSender.send(message);
+                log.info("Asynchronous email sent successfully to: {}", toEmail);
+            } catch (Exception e) {
+                handleMailFailure(toEmail, subject, e);
+            }
+        });
     }
 
     private void handleMailFailure(String toEmail, String mailSubject, Exception e) {
