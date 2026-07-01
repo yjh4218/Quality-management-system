@@ -367,7 +367,8 @@ export const importInboundExcel = (file) => {
     });
 };
 export const downloadInboundTemplate = () => api.get('/api/quality/import-template', { responseType: 'blob' });
-export const requestCoaEmails = (startDate, endDate) => api.post(`/api/quality/inbound/request-coa?startDate=${startDate}&endDate=${endDate}`);
+export const requestCoaEmails = (startDate, endDate) => api.post(`/api/quality/request-coa?startDate=${startDate}&endDate=${endDate}`);
+export const getCoaRequestPreview = (startDate, endDate) => api.get(`/api/quality/request-coa/preview?startDate=${startDate}&endDate=${endDate}`);
 
 // Manufacturer APIs
 export const getManufacturers = () => api.get('/api/manufacturers');

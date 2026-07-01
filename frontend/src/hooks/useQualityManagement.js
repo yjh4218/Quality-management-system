@@ -10,7 +10,8 @@ import api, {
     getManufacturers,
     importInboundExcel,
     downloadInboundTemplate,
-    requestCoaEmails
+    requestCoaEmails,
+    getCoaRequestPreview
 } from '../api';
 
 export const useQualityManagement = (user, navigationData, onNavigated) => {
@@ -22,6 +23,8 @@ export const useQualityManagement = (user, navigationData, onNavigated) => {
     const [isUploading, setIsUploading] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [activeTab, setActiveTab] = useState('info');
+    const [isCoaPreviewOpen, setIsCoaPreviewOpen] = useState(false);
+    const [coaPreviewData, setCoaPreviewData] = useState([]);
     
     const { canEdit: canEditPerm, isAdmin: isPermAdmin } = usePermissions(user);
     const canEdit = canEditPerm('inboundInspection');
@@ -269,11 +272,28 @@ export const useQualityManagement = (user, navigationData, onNavigated) => {
             return;
         }
 
-        const confirmMsg = `${searchParams.startDate} ~ ${searchParams.endDate} 기간 중 검사성적서(COA)가 등록되지 않은 제조사 담당자에게 메일 요청을 발송하시겠습니까?`;
-        if (!window.confirm(confirmMsg)) return;
-
         setIsLoading(true);
-        const toastId = toast.loading("성적서 미제출 제조사를 취합하여 이메일을 발송 중입니다...");
+        const toastId = toast.loading("성적서 미제출 건 미리보기를 수집 중입니다...");
+        try {
+            const res = await getCoaRequestPreview(searchParams.startDate, searchParams.endDate);
+            if (!res.data || res.data.length === 0) {
+                toast.update(toastId, { render: "해당 기간 내 성적서 미제출 건이 없습니다.", type: "info", isLoading: false, autoClose: 4000 });
+                return;
+            }
+            setCoaPreviewData(res.data);
+            setIsCoaPreviewOpen(true);
+            toast.dismiss(toastId);
+        } catch (error) {
+            toast.update(toastId, { render: "미리보기 조회 실패: " + (error.response?.data?.message || error.message), type: "error", isLoading: false, autoClose: 5000 });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleCoaSend = async () => {
+        setIsCoaPreviewOpen(false);
+        setIsLoading(true);
+        const toastId = toast.loading("이메일을 순차 발송 중입니다...");
         try {
             const res = await requestCoaEmails(searchParams.startDate, searchParams.endDate);
             const { successCount, failureCount, noEmailManufacturers } = res.data;
@@ -282,18 +302,13 @@ export const useQualityManagement = (user, navigationData, onNavigated) => {
             if (failureCount > 0) {
                 msg += `, 실패 ${failureCount}건`;
             }
-
-            if (successCount === 0 && failureCount === 0) {
-                toast.update(toastId, { render: "해당 기간 내 성적서 미제출 건이 없습니다.", type: "info", isLoading: false, autoClose: 4000 });
-            } else {
-                toast.update(toastId, { render: msg, type: "success", isLoading: false, autoClose: 4000 });
-            }
+            toast.update(toastId, { render: msg, type: "success", isLoading: false, autoClose: 4000 });
 
             if (noEmailManufacturers && noEmailManufacturers.length > 0) {
-                toast.warning(`이메일 주소가 등록되지 않아 발송을 제외한 제조사: ${noEmailManufacturers.join(", ")}`, { autoClose: 8000 });
+                toast.warning(`이메일 주소 미등록 제조사: ${noEmailManufacturers.join(", ")}`, { autoClose: 8000 });
             }
         } catch (error) {
-            toast.update(toastId, { render: "이메일 요청 발송 실패: " + (error.response?.data?.message || error.message), type: "error", isLoading: false, autoClose: 5000 });
+            toast.update(toastId, { render: "이메일 발송 실패: " + (error.response?.data?.message || error.message), type: "error", isLoading: false, autoClose: 5000 });
         } finally {
             setIsLoading(false);
         }
@@ -333,6 +348,10 @@ export const useQualityManagement = (user, navigationData, onNavigated) => {
         handleFileUpload,
         handleExcelImport,
         handleDownloadTemplate,
-        handleRequestCoa
+        handleRequestCoa,
+        handleCoaSend,
+        isCoaPreviewOpen,
+        setIsCoaPreviewOpen,
+        coaPreviewData
     };
 };

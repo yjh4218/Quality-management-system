@@ -3,6 +3,7 @@ import { AgGridReact } from 'ag-grid-react';
 import { Backdrop, CircularProgress } from '@mui/material';
 import QualitySearchFilter from './components/QualitySearchFilter';
 import QualityDetailDrawer from './components/QualityDetailDrawer';
+import CoaRequestPreviewModal from './components/CoaRequestPreviewModal';
 import api, {
     getInboundData,
     updateInboundData,
@@ -45,6 +46,10 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
         handleExcelImport,
         handleDownloadTemplate,
         handleRequestCoa,
+        handleCoaSend,
+        isCoaPreviewOpen,
+        setIsCoaPreviewOpen,
+        coaPreviewData,
         isLoading
     } = useQualityManagement(user, navigationData, onNavigated);
 
@@ -459,6 +464,14 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
                 }}
                 getFullUrl={getFullUrl}
                 getCleanFileName={getCleanFileName}
+            />
+            <CoaRequestPreviewModal
+                isOpen={isCoaPreviewOpen}
+                onClose={() => setIsCoaPreviewOpen(false)}
+                previewData={coaPreviewData}
+                onSend={handleCoaSend}
+                startDate={searchParams.startDate}
+                endDate={searchParams.endDate}
             />
             {/* Loading Overlay */}
             <Backdrop

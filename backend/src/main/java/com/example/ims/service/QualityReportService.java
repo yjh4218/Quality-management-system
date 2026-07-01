@@ -637,4 +637,70 @@ public class QualityReportService {
         result.put("noEmailManufacturers", noEmailManufacturers);
         return result;
     }
+
+    @Transactional(readOnly = true)
+    public List<java.util.Map<String, Object>> getCoaRequestPreview(java.time.LocalDate startDate, java.time.LocalDate endDate) {
+        java.time.LocalDateTime start = startDate.atStartOfDay();
+        java.time.LocalDateTime end = endDate.atTime(23, 59, 59);
+
+        List<WmsInbound> missingInbounds = inboundRepository.findMissingCoaInDateRange(start, end);
+        List<java.util.Map<String, Object>> result = new java.util.ArrayList<>();
+        if (missingInbounds.isEmpty()) {
+            return result;
+        }
+
+        // Group by manufacturer
+        java.util.Map<String, List<WmsInbound>> grouped = missingInbounds.stream()
+                .filter(w -> w.getManufacturer() != null && !w.getManufacturer().trim().isEmpty())
+                .collect(java.util.stream.Collectors.groupingBy(WmsInbound::getManufacturer));
+
+        for (java.util.Map.Entry<String, List<WmsInbound>> entry : grouped.entrySet()) {
+            String mfrName = entry.getKey();
+            List<WmsInbound> items = entry.getValue();
+
+            // 이메일 주소 찾기 및 소스 분류
+            String targetEmail = null;
+            String emailSource = "미등록";
+            
+            java.util.Optional<com.example.ims.entity.Manufacturer> mfrOpt = manufacturerRepository.findByName(mfrName);
+            if (mfrOpt.isPresent() && mfrOpt.get().getEmail() != null && !mfrOpt.get().getEmail().trim().isEmpty()) {
+                targetEmail = mfrOpt.get().getEmail();
+                emailSource = "제조사 등록 이메일";
+            }
+
+            if (targetEmail == null || targetEmail.trim().isEmpty()) {
+                List<User> users = userRepository.findByCompanyName(mfrName);
+                targetEmail = users.stream()
+                        .filter(u -> u.getRole() != null && u.getRole().contains("MANUFACTURER"))
+                        .map(User::getEmail)
+                        .filter(e -> e != null && !e.trim().isEmpty())
+                        .findFirst()
+                        .orElse(null);
+                if (targetEmail != null) {
+                    emailSource = "사용자 계정 이메일";
+                }
+            }
+
+            java.util.Map<String, Object> mfrPreview = new java.util.HashMap<>();
+            mfrPreview.put("manufacturerName", mfrName);
+            mfrPreview.put("email", targetEmail != null ? targetEmail : "");
+            mfrPreview.put("emailSource", emailSource);
+            
+            // 품목 간소화 리스트 작성
+            List<java.util.Map<String, Object>> itemDetails = new java.util.ArrayList<>();
+            for (WmsInbound item : items) {
+                java.util.Map<String, Object> itemMap = new java.util.HashMap<>();
+                itemMap.put("inboundDate", item.getInboundDate() != null ? item.getInboundDate().toLocalDate().toString() : "");
+                itemMap.put("grnNumber", item.getGrnNumber() != null ? item.getGrnNumber() : "");
+                itemMap.put("itemCode", item.getItemCode());
+                itemMap.put("productName", item.getProductName());
+                itemMap.put("lotNumber", item.getLotNumber() != null ? item.getLotNumber() : "");
+                itemMap.put("quantity", item.getQuantity() != null ? item.getQuantity() : 0);
+                itemDetails.add(itemMap);
+            }
+            mfrPreview.put("items", itemDetails);
+            result.add(mfrPreview);
+        }
+        return result;
+    }
 }

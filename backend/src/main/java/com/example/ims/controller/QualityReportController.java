@@ -197,7 +197,7 @@ public class QualityReportController {
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
-    @PostMapping("/inbound/request-coa")
+    @PostMapping("/request-coa")
     public ResponseEntity<java.util.Map<String, Object>> requestCoaEmails(
             @RequestParam String startDate,
             @RequestParam String endDate) {
@@ -205,6 +205,18 @@ public class QualityReportController {
         java.time.LocalDate start = java.time.LocalDate.parse(startDate);
         java.time.LocalDate end = java.time.LocalDate.parse(endDate);
         java.util.Map<String, Object> response = qualityReportService.sendCoaRequestEmails(start, end);
+        return ResponseEntity.ok(response);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
+    @GetMapping("/request-coa/preview")
+    public ResponseEntity<List<java.util.Map<String, Object>>> getCoaRequestPreview(
+            @RequestParam String startDate,
+            @RequestParam String endDate) {
+        log.info(">>>> [COA REQUEST PREVIEW] Generating email previews from {} to {}", startDate, endDate);
+        java.time.LocalDate start = java.time.LocalDate.parse(startDate);
+        java.time.LocalDate end = java.time.LocalDate.parse(endDate);
+        List<java.util.Map<String, Object>> response = qualityReportService.getCoaRequestPreview(start, end);
         return ResponseEntity.ok(response);
     }
 
