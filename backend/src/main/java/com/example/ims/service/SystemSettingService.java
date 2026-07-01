@@ -37,7 +37,12 @@ public class SystemSettingService {
         if (encrypted == null || encrypted.isEmpty()) {
             return "";
         }
-        return encryptionUtil.decrypt(encrypted);
+        try {
+            return encryptionUtil.decrypt(encrypted);
+        } catch (Exception e) {
+            log.error("[SETTINGS] SMTP Password decryption failed (key mismatch/change). Returning empty password.", e);
+            return "";
+        }
     }
 
     @Transactional
