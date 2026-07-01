@@ -226,4 +226,114 @@ public class DBCheckTest {
             System.err.println(">>>> [DB CHECK] Failed to write db_check.log: " + e.getMessage());
         }
     }
+
+    @Autowired
+    private com.example.ims.service.SystemSettingService systemSettingService;
+
+    @Test
+    public void printSmtpSettings() {
+        System.out.println("==================================================");
+        System.out.println(">>>> [SMTP SETTINGS AUDIT]");
+        try {
+            String host = systemSettingService.getSettingValue("SMTP_HOST");
+            String port = systemSettingService.getSettingValue("SMTP_PORT");
+            String username = systemSettingService.getSettingValue("SMTP_USERNAME");
+            String decryptedPassword = systemSettingService.getSmtpPassword();
+            String rawPasswordInDb = jdbcTemplate.queryForObject("SELECT setting_value FROM system_settings WHERE setting_key = 'SMTP_PASSWORD'", String.class);
+
+            System.out.println("SMTP_HOST: " + host);
+            System.out.println("SMTP_PORT: " + port);
+            System.out.println("SMTP_USERNAME: " + username);
+            System.out.println("SMTP_PASSWORD (Decrypted): " + decryptedPassword);
+            System.out.println("SMTP_PASSWORD (Raw encrypted in DB): " + rawPasswordInDb);
+        } catch (Exception e) {
+            System.err.println(">>>> Failed to query system_settings!");
+            e.printStackTrace();
+        }
+        System.out.println("==================================================");
+    }
+
+    @Test
+    public void generateRandomWmsInboundRecords() {
+        System.out.println("==================================================");
+        System.out.println(">>>> [WMS INBOUND SEED] Generating random mock inbound histories...");
+        try {
+            // 1. Get all registered products to use registered itemCode and productName
+            List<Map<String, Object>> products = jdbcTemplate.queryForList(
+                "SELECT item_code, product_name FROM products"
+            );
+            
+            if (products.isEmpty()) {
+                System.out.println(">>>> [WMS INBOUND SEED] No products registered! Skipping.");
+                return;
+            }
+
+            // 2. Define manufacturers
+            String[] manufacturers = {"한국콜마", "코스맥스", "코스메카코리아", "씨엔에프", "아우딘퓨쳐스"};
+
+            // 3. Overall status values
+            String[] statuses = {"STEP1_WAITING", "STEP2_INBOUND_COMPLETE", "STEP3_CONTROL_CHECKING", "STEP4_CONTROL_COMPLETE", "STEP5_FINAL_COMPLETE"};
+
+            java.util.Random rand = new java.util.Random();
+            java.time.LocalDate today = java.time.LocalDate.now();
+
+            int insertCount = 0;
+            // Generate 35 mock records
+            for (int i = 0; i < 35; i++) {
+                Map<String, Object> product = products.get(rand.nextInt(products.size()));
+                String itemCode = (String) product.get("item_code");
+                String productName = (String) product.get("product_name");
+                String manufacturer = manufacturers[rand.nextInt(manufacturers.length)];
+
+                // Date within last 30 days
+                java.time.LocalDate inboundDate = today.minusDays(rand.nextInt(30));
+                java.time.LocalDateTime inboundDateTime = inboundDate.atTime(rand.nextInt(12) + 9, rand.nextInt(60));
+                
+                String grnNumber = "GRN-" + inboundDate.toString().replace("-", "") + "-" + String.format("%03d", rand.nextInt(100));
+                int quantity = (rand.nextInt(49) + 2) * 100; // 200 ~ 5000 in multiples of 100
+                String lotNumber = "LOT-" + inboundDate.toString().replace("-", "") + "-" + String.format("%03d", rand.nextInt(100));
+
+                String status = statuses[rand.nextInt(statuses.length)];
+                String inboundStatus = "검사 완료";
+                String inboundResult = "적합";
+                if ("STEP1_WAITING".equals(status)) {
+                    inboundStatus = "검사 대기";
+                    inboundResult = "판정 중";
+                } else if ("STEP3_CONTROL_CHECKING".equals(status)) {
+                    inboundStatus = "검사 중";
+                    inboundResult = "판정 중";
+                }
+
+                // 성적서 파일 있을 확률 50%
+                boolean hasCoa = rand.nextBoolean();
+                String coaUrl = hasCoa ? "/uploads/coa_" + lotNumber + "_kor.pdf" : null;
+                String coaUrlEng = (hasCoa && rand.nextBoolean()) ? "/uploads/coa_" + lotNumber + "_eng.pdf" : null;
+                String coaDecisionDate = hasCoa ? inboundDate.plusDays(rand.nextInt(3) + 1).toString() : null;
+
+                jdbcTemplate.update(
+                    "INSERT INTO wms_inbound (grn_number, item_code, product_name, quantity, manufacturer, inbound_date, lot_number, expiration_date, overall_status, inbound_inspection_status, inbound_inspection_result, coa_file_url, coa_file_url_eng, coa_decision_date, is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false)",
+                    grnNumber,
+                    itemCode,
+                    productName,
+                    quantity,
+                    manufacturer,
+                    inboundDateTime,
+                    lotNumber,
+                    inboundDate.plusYears(3).toString(), // 3 years expiration
+                    status,
+                    inboundStatus,
+                    inboundResult,
+                    coaUrl,
+                    coaUrlEng,
+                    coaDecisionDate
+                );
+                insertCount++;
+            }
+            System.out.println(">>>> [WMS INBOUND SEED] Successfully inserted " + insertCount + " random inbound histories.");
+        } catch (Exception e) {
+            System.err.println(">>>> [WMS INBOUND SEED] Failed to generate seed data!");
+            e.printStackTrace();
+        }
+        System.out.println("==================================================");
+    }
 }
