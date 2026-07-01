@@ -26,6 +26,7 @@ const QualitySearchFilter = ({
     onBatchSave,
     onExcelImport,
     onDownloadTemplate,
+    onRequestCoa,
     isInternalQuality,
     manufacturers,
     canViewInbound,
@@ -144,6 +145,15 @@ const QualitySearchFilter = ({
                                 style={{ fontSize: '14px', padding: '10px 20px', backgroundColor: '#fff', color: '#107c41', borderColor: '#107c41' }}
                             >
                                 📊 다운로드
+                            </button>
+                        )}
+                        {isInternalQuality && (
+                            <button 
+                                className="outline" 
+                                onClick={onRequestCoa}
+                                style={{ fontSize: '14px', padding: '10px 20px', backgroundColor: '#fff', color: '#2563eb', borderColor: '#3b82f6' }}
+                            >
+                                📧 성적서 요청
                             </button>
                         )}
                         <button 

@@ -196,6 +196,18 @@ public class QualityReportController {
                 .body(template);
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
+    @PostMapping("/inbound/request-coa")
+    public ResponseEntity<java.util.Map<String, Object>> requestCoaEmails(
+            @RequestParam String startDate,
+            @RequestParam String endDate) {
+        log.info(">>>> [COA REQUEST] Sending batch email requests from {} to {}", startDate, endDate);
+        java.time.LocalDate start = java.time.LocalDate.parse(startDate);
+        java.time.LocalDate end = java.time.LocalDate.parse(endDate);
+        java.util.Map<String, Object> response = qualityReportService.sendCoaRequestEmails(start, end);
+        return ResponseEntity.ok(response);
+    }
+
     private void checkQualityAuthority(UserDetails userDetails) {
         User user = userRepository.findByUsername(userDetails.getUsername())
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));

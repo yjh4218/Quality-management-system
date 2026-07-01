@@ -9,7 +9,8 @@ import api, {
     triggerWmsFetch,
     getManufacturers,
     importInboundExcel,
-    downloadInboundTemplate
+    downloadInboundTemplate,
+    requestCoaEmails
 } from '../api';
 
 export const useQualityManagement = (user, navigationData, onNavigated) => {
@@ -262,6 +263,42 @@ export const useQualityManagement = (user, navigationData, onNavigated) => {
         }
     };
 
+    const handleRequestCoa = async () => {
+        if (!searchParams.startDate || !searchParams.endDate) {
+            toast.error("조회 기간(시작일, 종료일)이 입력되어야 합니다.");
+            return;
+        }
+
+        const confirmMsg = `${searchParams.startDate} ~ ${searchParams.endDate} 기간 중 검사성적서(COA)가 등록되지 않은 제조사 담당자에게 메일 요청을 발송하시겠습니까?`;
+        if (!window.confirm(confirmMsg)) return;
+
+        setIsLoading(true);
+        const toastId = toast.loading("성적서 미제출 제조사를 취합하여 이메일을 발송 중입니다...");
+        try {
+            const res = await requestCoaEmails(searchParams.startDate, searchParams.endDate);
+            const { successCount, failureCount, noEmailManufacturers } = res.data;
+
+            let msg = `메일 발송 완료: 성공 ${successCount}건`;
+            if (failureCount > 0) {
+                msg += `, 실패 ${failureCount}건`;
+            }
+
+            if (successCount === 0 && failureCount === 0) {
+                toast.update(toastId, { render: "해당 기간 내 성적서 미제출 건이 없습니다.", type: "info", isLoading: false, autoClose: 4000 });
+            } else {
+                toast.update(toastId, { render: msg, type: "success", isLoading: false, autoClose: 4000 });
+            }
+
+            if (noEmailManufacturers && noEmailManufacturers.length > 0) {
+                toast.warning(`이메일 주소가 등록되지 않아 발송을 제외한 제조사: ${noEmailManufacturers.join(", ")}`, { autoClose: 8000 });
+            }
+        } catch (error) {
+            toast.update(toastId, { render: "이메일 요청 발송 실패: " + (error.response?.data?.message || error.message), type: "error", isLoading: false, autoClose: 5000 });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     return {
         gridRef,
         rowData,
@@ -295,6 +332,7 @@ export const useQualityManagement = (user, navigationData, onNavigated) => {
         handleRowAction,
         handleFileUpload,
         handleExcelImport,
-        handleDownloadTemplate
+        handleDownloadTemplate,
+        handleRequestCoa
     };
 };

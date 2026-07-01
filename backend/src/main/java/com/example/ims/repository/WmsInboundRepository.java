@@ -28,4 +28,11 @@ public interface WmsInboundRepository extends JpaRepository<WmsInbound, Long>, J
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.data.jpa.repository.Query(value = "UPDATE wms_inbound SET is_deleted = false WHERE id = :id", nativeQuery = true)
     void restoreInbound(Long id);
+
+    @org.springframework.data.jpa.repository.Query("SELECT w FROM WmsInbound w WHERE w.inboundDate BETWEEN :start AND :end " +
+            "AND (w.coaFileUrl IS NULL OR w.coaFileUrl = '') " +
+            "AND (w.coaFileUrlEng IS NULL OR w.coaFileUrlEng = '')")
+    List<WmsInbound> findMissingCoaInDateRange(
+            @org.springframework.data.repository.query.Param("start") LocalDateTime start, 
+            @org.springframework.data.repository.query.Param("end") LocalDateTime end);
 }

@@ -44,6 +44,7 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
         handleFileUpload,
         handleExcelImport,
         handleDownloadTemplate,
+        handleRequestCoa,
         isLoading
     } = useQualityManagement(user, navigationData, onNavigated);
 
@@ -394,6 +395,7 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
                 searchParams={searchParams}
                 setSearchParams={setSearchParams}
                 onSearch={fetchInboundData}
+                onRequestCoa={handleRequestCoa}
                 onReset={() => {
                     const initD = getInitialDates();
                     setSearchParams({ startDate: initD.start, endDate: initD.end, itemCode: '', productName: '', lotNumber: '', manufacturer: '', excludeStatus: 'STEP5_FINAL_COMPLETE', grnNumber: '' });

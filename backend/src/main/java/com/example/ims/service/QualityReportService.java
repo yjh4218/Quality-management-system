@@ -27,6 +27,8 @@ public class QualityReportService {
     private final UserRepository userRepository;
     private final com.example.ims.repository.ProductRepository productRepository;
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
+    private final com.example.ims.repository.ManufacturerRepository manufacturerRepository;
+    private final com.example.ims.service.EmailService emailService;
 
     @Transactional
     public QualityReport submitReport(QualityReport report) {
@@ -535,5 +537,104 @@ public class QualityReportService {
             workbook.write(out);
             return out.toByteArray();
         }
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Object> sendCoaRequestEmails(java.time.LocalDate startDate, java.time.LocalDate endDate) {
+        java.time.LocalDateTime start = startDate.atStartOfDay();
+        java.time.LocalDateTime end = endDate.atTime(23, 59, 59);
+
+        List<WmsInbound> missingInbounds = inboundRepository.findMissingCoaInDateRange(start, end);
+        java.util.Map<String, Object> result = new java.util.HashMap<>();
+        if (missingInbounds.isEmpty()) {
+            result.put("successCount", 0);
+            result.put("failureCount", 0);
+            result.put("noEmailManufacturers", java.util.Collections.emptyList());
+            return result;
+        }
+
+        // Group by manufacturer
+        java.util.Map<String, List<WmsInbound>> grouped = missingInbounds.stream()
+                .filter(w -> w.getManufacturer() != null && !w.getManufacturer().trim().isEmpty())
+                .collect(java.util.stream.Collectors.groupingBy(WmsInbound::getManufacturer));
+
+        int success = 0;
+        int failure = 0;
+        List<String> noEmailManufacturers = new java.util.ArrayList<>();
+
+        for (java.util.Map.Entry<String, List<WmsInbound>> entry : grouped.entrySet()) {
+            String mfrName = entry.getKey();
+            List<WmsInbound> items = entry.getValue();
+
+            // 1순위: Manufacturer.email
+            String targetEmail = null;
+            java.util.Optional<com.example.ims.entity.Manufacturer> mfrOpt = manufacturerRepository.findByName(mfrName);
+            if (mfrOpt.isPresent()) {
+                targetEmail = mfrOpt.get().getEmail();
+            }
+
+            // 2순위 (폴백): User.companyName + role
+            if (targetEmail == null || targetEmail.trim().isEmpty()) {
+                List<User> users = userRepository.findByCompanyName(mfrName);
+                targetEmail = users.stream()
+                        .filter(u -> u.getRole() != null && u.getRole().contains("MANUFACTURER"))
+                        .map(User::getEmail)
+                        .filter(e -> e != null && !e.trim().isEmpty())
+                        .findFirst()
+                        .orElse(null);
+            }
+
+            if (targetEmail == null || targetEmail.trim().isEmpty()) {
+                noEmailManufacturers.add(mfrName);
+                continue;
+            }
+
+            // HTML 테이블 메일 템플릿 작성
+            StringBuilder html = new StringBuilder();
+            html.append("<html><body style=\"font-family: 'Malgun Gothic', sans-serif; line-height: 1.6; color: #333;\">");
+            html.append("<div style=\"max-width: 700px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;\">");
+            html.append("<h2 style=\"color: #0f172a; border-bottom: 2px solid #cbd5e1; padding-bottom: 10px;\">시험성적서(COA) 제출 요청 공문</h2>");
+            html.append("<p>안녕하세요, <b>").append(mfrName).append("</b> 품질관리 담당자님.</p>");
+            html.append("<p>통합 품질 관리 시스템(QMS) 확인 결과, 아래 입고 제품들의 <b>시험성적서(COA)가 등록되지 않았습니다.</b></p>");
+            html.append("<p>확인 후 QMS 시스템에 접속하시어 빠른 시일 내에 성적서 PDF 파일을 업로드해 주시기 바랍니다.</p>");
+            
+            html.append("<table style=\"width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px;\">");
+            html.append("<thead><tr style=\"background-color: #f8fafc; border-bottom: 2px solid #cbd5e1;\">");
+            html.append("<th style=\"padding: 10px; border: 1px solid #cbd5e1; text-align: left;\">입고일자</th>");
+            html.append("<th style=\"padding: 10px; border: 1px solid #cbd5e1; text-align: left;\">입고번호</th>");
+            html.append("<th style=\"padding: 10px; border: 1px solid #cbd5e1; text-align: left;\">품목코드</th>");
+            html.append("<th style=\"padding: 10px; border: 1px solid #cbd5e1; text-align: left;\">제품명</th>");
+            html.append("<th style=\"padding: 10px; border: 1px solid #cbd5e1; text-align: left;\">LOT 번호</th>");
+            html.append("<th style=\"padding: 10px; border: 1px solid #cbd5e1; text-align: right;\">입고수량</th>");
+            html.append("</tr></thead><tbody>");
+
+            for (WmsInbound item : items) {
+                String dateStr = item.getInboundDate() != null ? item.getInboundDate().toLocalDate().toString() : "-";
+                html.append("<tr>");
+                html.append("<td style=\"padding: 8px; border: 1px solid #cbd5e1;\">").append(dateStr).append("</td>");
+                html.append("<td style=\"padding: 8px; border: 1px solid #cbd5e1;\">").append(item.getGrnNumber() != null ? item.getGrnNumber() : "").append("</td>");
+                html.append("<td style=\"padding: 8px; border: 1px solid #cbd5e1;\">").append(item.getItemCode()).append("</td>");
+                html.append("<td style=\"padding: 8px; border: 1px solid #cbd5e1;\">").append(item.getProductName()).append("</td>");
+                html.append("<td style=\"padding: 8px; border: 1px solid #cbd5e1;\">").append(item.getLotNumber() != null ? item.getLotNumber() : "-").append("</td>");
+                html.append("<td style=\"padding: 8px; border: 1px solid #cbd5e1; text-align: right;\">")
+                        .append(item.getQuantity() != null ? String.format("%,d", item.getQuantity()) : "0").append("</td>");
+                html.append("</tr>");
+            }
+            html.append("</tbody></table>");
+            html.append("<p>※ 본 안내는 QMS 시스템에서 자동 추출되어 발송되었습니다.</p>");
+            html.append("</div></body></html>");
+
+            try {
+                emailService.sendCustomEmail(targetEmail, "[QMS] 시험성적서(COA) 등록 요청의 건 (" + startDate.toString() + " ~ " + endDate.toString() + ")", html.toString());
+                success++;
+            } catch (Exception e) {
+                failure++;
+            }
+        }
+
+        result.put("successCount", success);
+        result.put("failureCount", failure);
+        result.put("noEmailManufacturers", noEmailManufacturers);
+        return result;
     }
 }
