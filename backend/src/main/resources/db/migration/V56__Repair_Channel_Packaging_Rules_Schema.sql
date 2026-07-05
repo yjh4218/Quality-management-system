@@ -10,6 +10,7 @@ ALTER TABLE sales_channels ADD COLUMN IF NOT EXISTS max_stack_height_mm INT DEFA
 ALTER TABLE sales_channels ADD COLUMN IF NOT EXISTS pad_and_frame_required BOOLEAN DEFAULT FALSE;
 ALTER TABLE sales_channels ADD COLUMN IF NOT EXISTS exp_date_format VARCHAR(50);
 ALTER TABLE sales_channels ADD COLUMN IF NOT EXISTS special_notes TEXT;
+ALTER TABLE sales_channels ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
 
 -- 2. Add columns to channel_packaging_rules if they do not exist
 ALTER TABLE channel_packaging_rules ADD COLUMN IF NOT EXISTS channel_id BIGINT;
