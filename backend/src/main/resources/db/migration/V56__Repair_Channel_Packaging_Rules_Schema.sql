@@ -88,14 +88,7 @@ UPDATE sales_channels SET channel_code = 'OTC', pallet_type = '수출용 검은�
 UPDATE sales_channels SET channel_code = 'HALAL', pallet_type = '수출용 검은색 일회용 팔레트', pallet_spec = '1,100 x 1,100 mm', channel_sticker_required = true, max_stack_height_mm = 1500, pad_and_frame_required = true, special_notes = '신설 예정 — 규칙 미확정, 사양서 작성 시 수동 확인 필요' WHERE name = '할랄(HALAL)';
 
 
--- 5. Update existing channel_packaging_rules to set channel_id based on channel name strings if matching
-UPDATE channel_packaging_rules r
-SET channel_id = (SELECT c.id FROM sales_channels c WHERE r.channel = c.name OR c.name LIKE '%' || r.channel || '%')
-WHERE r.channel_id IS NULL;
-
-UPDATE channel_packaging_rules
-SET rule_type = rule_key, rule_value = rule_content
-WHERE rule_type IS NULL AND rule_key IS NOT NULL;
+-- 5. Legacy migrations removed (not needed since column names are aligned)
 
 
 -- 6. Delete old default rules to prevent conflicts before seeding standard rules
