@@ -78,18 +78,25 @@ public class PackagingSpecExportService {
             String englishProductNameWithSpecs = (product.getEnglishProductName() != null ? product.getEnglishProductName() : "") + capacityInfo;
 
             // [채널 규칙 동적 연동]
-            boolean isJpOff = false;
+            boolean isForbiddenExpiry = false;
             boolean stickerRequired = false;
-            String jpOffRuleMessage = "";
+            boolean padAndFrameRequired = false;
             java.util.List<String> channelWarnings = new java.util.ArrayList<>();
+            java.util.List<String> specialNotesList = new java.util.ArrayList<>();
             String customPalletSpec = null;
             Double maxPalletHeightLimit = null;
 
             if (product.getChannels() != null) {
                 for (com.example.ims.entity.SalesChannel ch : product.getChannels()) {
-                    if ("JP/OFF".equalsIgnoreCase(ch.getName())) {
-                        isJpOff = true;
-                        jpOffRuleMessage = "1. 전 품목 사용기한 착인 또는 압인 금지, 제조번호만 착인 또는 압인\n2. 일문 패키지\n3. 인박스, 아웃박스, 팔레트 현품표에 사용기한 기재 금지\n4. 인박스(+현품표) 필수\n5. 기획세트의 경우, 모든 구성품의 로트 착인하며, 인박스, 아웃박스, 팔레트 현품표에도 모든 구성품의 로트 착인";
+                    if ("표기금지".equals(ch.getExpDateFormat())) {
+                        isForbiddenExpiry = true;
+                    }
+                    if (Boolean.TRUE.equals(ch.getPadAndFrameRequired())) {
+                        padAndFrameRequired = true;
+                    }
+                    if (Boolean.TRUE.equals(ch.getChannelStickerRequired())) {
+                        stickerRequired = true;
+                        channelWarnings.add("[" + ch.getName() + "] ★ 채널 스티커 부착 필수");
                     }
                     
                     // DB에 설정된 채널별 규칙들을 조회하여 연동
@@ -102,7 +109,10 @@ public class PackagingSpecExportService {
                             channelWarnings.add("[" + ch.getName() + "] " + msg);
                         }
                         if ("STICKER_REQUIRED".equalsIgnoreCase(type)) {
-                            stickerRequired = true;
+                            if ("부착".equals(val)) {
+                                stickerRequired = true;
+                                channelWarnings.add("[" + ch.getName() + "] ★ 채널 스티커 부착 필수");
+                            }
                         }
                         if ("PALLET_SPEC".equalsIgnoreCase(type) && val != null && !val.isEmpty()) {
                             customPalletSpec = val;
@@ -111,6 +121,15 @@ public class PackagingSpecExportService {
                             try {
                                 maxPalletHeightLimit = Double.parseDouble(val);
                             } catch (Exception ignored) {}
+                        }
+                        if ("PAD_FRAME_REQUIRED".equalsIgnoreCase(type) && "필요".equals(val)) {
+                            padAndFrameRequired = true;
+                        }
+                        if ("SPECIAL_NOTE".equalsIgnoreCase(type) && val != null && !val.trim().isEmpty()) {
+                            specialNotesList.add(val);
+                        }
+                        if ("LABELING".equalsIgnoreCase(type) && "표기금지".equals(val)) {
+                            isForbiddenExpiry = true;
                         }
                     }
                 }
@@ -123,7 +142,7 @@ public class PackagingSpecExportService {
             setCellValue(sheet, 8, 4, product.getItemCode());
             setCellValue(sheet, 9, 4, product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "");
 
-            if (isJpOff) {
+            if (isForbiddenExpiry) {
                 setCellValue(sheet, 10, 4, "사용기한 표시 안함 (제조번호만 표시)");
                 setCellValue(sheet, 10, 12, "사용기한 표시 안함");
             } else {
@@ -142,7 +161,7 @@ public class PackagingSpecExportService {
                         String v = c.getStringCellValue();
                         if (v != null) {
                             if (v.contains("개봉 후") && v.contains("개월") && product.getOpenedShelfLifeMonths() != null) {
-                                if (isJpOff) {
+                                if (isForbiddenExpiry) {
                                     c.setCellValue("사용기한 표시 안함");
                                 } else {
                                     c.setCellValue("개봉 후 " + product.getOpenedShelfLifeMonths() + "개월");
@@ -180,18 +199,18 @@ public class PackagingSpecExportService {
                 setCellValue(sheet1, 5, 2, englishProductNameWithSpecs); // C6 (row 6, col 2)
                 setCellValue(sheet1, 8, 5, product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : ""); // F9 (row 9, col 5)
 
-                if (isJpOff) {
-                    setCellValue(sheet1, 6, 5, "사용기한 표시 안함"); // F7: JP/OFF의 경우 사용기한 기재 금지 (row 7, col 5)
+                if (isForbiddenExpiry) {
+                    setCellValue(sheet1, 6, 5, "사용기한 표시 안함"); // F7: 사용기한 기재 금지 (row 7, col 5)
                 }
 
-                // 오른쪽 아웃박스 현품표 (JP/OFF 등 용도)
+                // 오른쪽 아웃박스 현품표
                 setCellValue(sheet1, 3, 11, product.getItemCode()); // L4 (row 4, col 11)
                 setCellValue(sheet1, 4, 11, finalProductChannelName); // L5 (row 5, col 11)
                 setCellValue(sheet1, 5, 11, englishProductNameWithSpecs); // L6 (row 6, col 11)
                 setCellValue(sheet1, 8, 11, product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : ""); // L9 (row 9, col 11)
                 
-                if (isJpOff) {
-                    setCellValue(sheet1, 6, 14, "사용기한 표시 안함"); // O7: JP/OFF의 경우 사용기한 기재 금지 (row 7, col 14)
+                if (isForbiddenExpiry) {
+                    setCellValue(sheet1, 6, 14, "사용기한 표시 안함"); // O7: 사용기한 기재 금지 (row 7, col 14)
                 }
             }
 
@@ -204,7 +223,7 @@ public class PackagingSpecExportService {
                 setCellValue(sheet2, 5, 2, englishProductNameWithSpecs); // C6
                 setCellValue(sheet2, 8, 5, product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : ""); // F9
 
-                if (isJpOff) {
+                if (isForbiddenExpiry) {
                     setCellValue(sheet2, 6, 5, "사용기한 표시 안함"); // F7 (row 7, col 5)
                 }
 
@@ -214,8 +233,41 @@ public class PackagingSpecExportService {
                 setCellValue(sheet2, 5, 9, "*" + product.getItemCode() + "*"); // J6 (row 6, col 9)
             }
 
-            if (!specs.isEmpty()) {
-                PackagingSpecification spec = specs.get(0);
+            PackagingSpecification spec;
+            if (specs.isEmpty()) {
+                // 임시 가상 스펙 생성 (Fallback)
+                String palletHeightStr = null;
+                if (product.getPalletInfo() != null && product.getPalletInfo().getPalletHeight() != null) {
+                    palletHeightStr = String.valueOf(product.getPalletInfo().getPalletHeight());
+                }
+
+                spec = PackagingSpecification.builder()
+                        .product(product)
+                        .inboxQty(product.getInboxInfo() != null ? product.getInboxInfo().getInboxQuantity() : null)
+                        .inboxSize((product.getInboxInfo() != null && product.getInboxInfo().getInboxLength() != null && product.getInboxInfo().getInboxWidth() != null && product.getInboxInfo().getInboxHeight() != null)
+                            ? product.getInboxInfo().getInboxLength() + "x" + product.getInboxInfo().getInboxWidth() + "x" + product.getInboxInfo().getInboxHeight() : null)
+                        .outboxQty(product.getOutboxInfo() != null ? product.getOutboxInfo().getOutboxQuantity() : null)
+                        .outboxSize((product.getOutboxInfo() != null && product.getOutboxInfo().getOutboxLength() != null && product.getOutboxInfo().getOutboxWidth() != null && product.getOutboxInfo().getOutboxHeight() != null)
+                            ? product.getOutboxInfo().getOutboxLength() + "x" + product.getOutboxInfo().getOutboxWidth() + "x" + product.getOutboxInfo().getOutboxHeight() : null)
+                        .oneOutboxWeight(product.getOutboxInfo() != null ? product.getOutboxInfo().getOutboxWeight() : null)
+                        .palletSize((product.getPalletInfo() != null && product.getPalletInfo().getPalletLength() != null && product.getPalletInfo().getPalletWidth() != null)
+                            ? product.getPalletInfo().getPalletLength() + "x" + product.getPalletInfo().getPalletWidth() : null)
+                        .onePalletHeight(product.getPalletInfo() != null ? product.getPalletInfo().getPalletHeight() : null)
+                        .palletHeightLimit(palletHeightStr)
+                        .build();
+
+                // 1팔레트 중량 계산
+                if (product.getOutboxInfo() != null && product.getOutboxInfo().getOutboxWeight() != null
+                    && product.getPalletInfo() != null && product.getPalletInfo().getPalletQuantity() != null) {
+                    double w = product.getOutboxInfo().getOutboxWeight();
+                    int q = product.getPalletInfo().getPalletQuantity();
+                    spec.setOnePalletWeight(Math.round(w * q * 10.0) / 10.0);
+                }
+            } else {
+                spec = specs.get(0);
+            }
+
+            { // ALWAYS RUN USING FALLBACK SPEC
 
                 // 기본 정보 추가 필드
                 setCellValue(sheet, 8, 12, spec.getBarcode() != null ? spec.getBarcode() : ""); // J9: 바코드 -> M9
@@ -301,7 +353,7 @@ public class PackagingSpecExportService {
                 setCellValue(sheet, 26, 4, spec.getMarkingMethod() != null ? spec.getMarkingMethod() : ""); // E27
                 
                 String markingStd = spec.getMarkingStandard() != null ? spec.getMarkingStandard() : "";
-                if (isJpOff) {
+                if (isForbiddenExpiry) {
                     markingStd = "제조일자/사용기한 표기 금지 (제조번호만 표기)";
                 } else if (spec.getLotAndExpiryFormat() != null && !spec.getLotAndExpiryFormat().isEmpty()) {
                     markingStd = spec.getLotAndExpiryFormat();
@@ -337,10 +389,13 @@ public class PackagingSpecExportService {
                 setCellValue(sheet, 75, 8, spec.getPalletPrecautions() != null ? spec.getPalletPrecautions() : ""); // I76
 
                 // 채널 포장 규칙 동적 반영 (팔레트 사양 교체 등)
-                if (isJpOff) {
-                    setCellValue(sheet, 71, 8, "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)"); // I72
-                    setCellValue(sheet, 75, 8, (spec.getPalletPrecautions() != null ? spec.getPalletPrecautions() + "\n" : "") + "★ JP/OFF 규격에 따라 패드 & 각대 필수 적용"); // I76
-                } else if (customPalletSpec != null) {
+                if (padAndFrameRequired) {
+                    if (spec.getPalletTypeStr() == null || spec.getPalletTypeStr().isEmpty()) {
+                        setCellValue(sheet, 71, 8, "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)"); // I72 default for export
+                    }
+                    setCellValue(sheet, 75, 8, (spec.getPalletPrecautions() != null && !spec.getPalletPrecautions().isEmpty() ? spec.getPalletPrecautions() + "\n" : "") + "★ 규격에 따라 패드 & 각대 필수 적용"); // I76
+                }
+                if (customPalletSpec != null) {
                     setCellValue(sheet, 71, 8, customPalletSpec);
                 }
 
@@ -353,10 +408,14 @@ public class PackagingSpecExportService {
                 setCellValue(sheet, 92, 10, spec.getOnePalletWeight() != null ? String.valueOf(spec.getOnePalletWeight()) + " kg" : ""); // K93
                 setCellValue(sheet, 92, 19, spec.getOnePalletHeight() != null ? String.valueOf(spec.getOnePalletHeight()) + " mm" : ""); // T93
 
-                // 특이사항 (Row 95 is index 94) (JP/OFF 및 동적 채널 경고 문구 추가)
+                // 특이사항 (Row 95 is index 94) (동적 채널 경고 및 특이사항 문구 추가)
                 StringBuilder remarksBuilder = new StringBuilder();
-                if (isJpOff) {
-                    remarksBuilder.append("★ [JP/OFF 채널 필수 규칙]\n").append(jpOffRuleMessage).append("\n\n");
+                if (!specialNotesList.isEmpty()) {
+                    remarksBuilder.append("★ [채널 포장 특이사항]\n");
+                    for (String note : specialNotesList) {
+                        remarksBuilder.append("- ").append(note).append("\n");
+                    }
+                    remarksBuilder.append("\n");
                 }
                 
                 if (!channelWarnings.isEmpty()) {
@@ -375,11 +434,11 @@ public class PackagingSpecExportService {
                 // Sheet 1: 아웃박스 현품표 수량 및 바코드 보완
                 if (workbook.getNumberOfSheets() > 1) {
                     Sheet sheet1 = workbook.getSheetAt(1);
-                    setCellValue(sheet1, 7, 2, spec.getInboxQty() != null ? String.valueOf(spec.getInboxQty()) + " EA" : "EA"); // C8
+                    setCellValue(sheet1, 7, 2, spec.getOutboxQty() != null ? String.valueOf(spec.getOutboxQty()) + " 입" : "EA"); // C8
                     setCellValue(sheet1, 7, 5, spec.getOneOutboxWeight() != null ? String.valueOf(spec.getOneOutboxWeight()) + " Kg" : "Kg"); // F8
                     setCellValue(sheet1, 9, 2, spec.getBarcode() != null ? spec.getBarcode() : ""); // C10
                     
-                    setCellValue(sheet1, 7, 11, spec.getInboxQty() != null ? String.valueOf(spec.getInboxQty()) + " EA" : "EA"); // L8
+                    setCellValue(sheet1, 7, 11, spec.getOutboxQty() != null ? String.valueOf(spec.getOutboxQty()) + " 입" : "EA"); // L8
                     setCellValue(sheet1, 7, 14, spec.getOneOutboxWeight() != null ? String.valueOf(spec.getOneOutboxWeight()) + " Kg" : "Kg"); // O8
                     setCellValue(sheet1, 9, 11, spec.getBarcode() != null ? spec.getBarcode() : ""); // L10
                 }
@@ -411,6 +470,18 @@ public class PackagingSpecExportService {
             cell = row.createCell(colIndex);
         }
         cell.setCellValue(value);
+    }
+
+    private Integer parseIntSafe(String s) {
+        if (s == null || s.isBlank()) return null;
+        try { return Integer.parseInt(s.trim()); }
+        catch (NumberFormatException e) { return null; }
+    }
+
+    private Double parseDoubleSafe(String s) {
+        if (s == null || s.isBlank()) return null;
+        try { return Double.parseDouble(s.trim()); }
+        catch (NumberFormatException e) { return null; }
     }
 
     /**

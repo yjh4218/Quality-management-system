@@ -161,7 +161,8 @@ const ProductDrawer = ({ product, onClose, user }) => {
                 fetchPackagingSpecs(product.id);
             }
         } catch (error) {
-            toast.error("포장사양서 저장에 실패했습니다.");
+            const errMsg = error.response?.data?.message || error.message || "오류가 발생했습니다.";
+            toast.error(`포장사양서 저장 실패: ${errMsg}`);
             console.error(error);
         }
     };
@@ -399,22 +400,29 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
     const loadData = async () => {
         try {
-            const [brandRes, manufacturerRes, materialRes, templateRes, ruleRes, channelRes] = await Promise.all([
-                getBrands(),
-                getManufacturers(),
-                api.getMasterMaterials(),
-                api.getMasterTemplates(),
-                api.getMasterRules(),
-                api.getSalesChannels()
-            ]);
-            setBrands(brandRes.data);
-            setManufacturers(manufacturerRes.data);
-            setMasterMaterials(materialRes.data);
-            setMasterTemplates(templateRes.data);
-            setMasterRules(ruleRes.data);
-            setSalesChannels(channelRes.data.filter(c => c.active));
+            const brandsData = await getBrands().then(r => r.data).catch(() => []);
+            const manufacturersData = await getManufacturers().then(r => r.data).catch(() => []);
+            const materialsData = await api.getMasterMaterials().then(r => r.data).catch(() => []);
+            const templatesData = await api.getMasterTemplates().then(r => r.data).catch(() => []);
+            const rulesData = await api.getMasterRules().then(r => r.data).catch(() => []);
+            const channelsData = await api.getSalesChannels()
+                .then(r => {
+                    console.log("Loaded sales channels API response:", r.data);
+                    return r.data;
+                })
+                .catch(err => {
+                    console.error("Failed to load sales channels API:", err);
+                    return [];
+                });
+
+            setBrands(brandsData);
+            setManufacturers(manufacturersData);
+            setMasterMaterials(materialsData);
+            setMasterTemplates(templatesData);
+            setMasterRules(rulesData);
+            setSalesChannels(channelsData.filter(c => c.active));
         } catch (error) {
-            // Load meta fail
+            console.error("General master data load error:", error);
         }
     };
 
@@ -481,34 +489,34 @@ const ProductDrawer = ({ product, onClose, user }) => {
                     if (prod) {
                         const updatedSpec = { ...spec };
                         
-                        if (!updatedSpec.inboxQty && prod.inboxInfo?.inboxQuantity) {
+                        if (prod.inboxInfo?.inboxQuantity) {
                             updatedSpec.inboxQty = prod.inboxInfo.inboxQuantity;
                         }
-                        if (!updatedSpec.inboxSize && prod.inboxInfo?.inboxLength && prod.inboxInfo?.inboxWidth && prod.inboxInfo?.inboxHeight) {
+                        if (prod.inboxInfo?.inboxLength && prod.inboxInfo?.inboxWidth && prod.inboxInfo?.inboxHeight) {
                             updatedSpec.inboxSize = `${prod.inboxInfo.inboxLength}x${prod.inboxInfo.inboxWidth}x${prod.inboxInfo.inboxHeight}`;
                         }
-                        if (!updatedSpec.outboxQty && prod.outboxInfo?.outboxQuantity) {
+                        if (prod.outboxInfo?.outboxQuantity) {
                             updatedSpec.outboxQty = prod.outboxInfo.outboxQuantity;
                         }
-                        if (!updatedSpec.outboxSize && prod.outboxInfo?.outboxLength && prod.outboxInfo?.outboxWidth && prod.outboxInfo?.outboxHeight) {
+                        if (prod.outboxInfo?.outboxLength && prod.outboxInfo?.outboxWidth && prod.outboxInfo?.outboxHeight) {
                             updatedSpec.outboxSize = `${prod.outboxInfo.outboxLength}x${prod.outboxInfo.outboxWidth}x${prod.outboxInfo.outboxHeight}`;
                         }
-                        if (!updatedSpec.oneOutboxWeight && prod.outboxInfo?.outboxWeight) {
+                        if (prod.outboxInfo?.outboxWeight) {
                             updatedSpec.oneOutboxWeight = prod.outboxInfo.outboxWeight;
                         }
-                        if (!updatedSpec.palletSize && prod.palletInfo?.palletLength && prod.palletInfo?.palletWidth) {
+                        if (prod.palletInfo?.palletLength && prod.palletInfo?.palletWidth) {
                             updatedSpec.palletSize = `${prod.palletInfo.palletLength}x${prod.palletInfo.palletWidth}`;
                         }
-                        if (!updatedSpec.onePalletHeight && prod.palletInfo?.palletHeight) {
+                        if (prod.palletInfo?.palletHeight) {
                             updatedSpec.onePalletHeight = prod.palletInfo.palletHeight;
                         }
-                        if (!updatedSpec.palletHeightLimit && prod.palletInfo?.palletHeight) {
+                        if (prod.palletInfo?.palletHeight) {
                             updatedSpec.palletHeightLimit = prod.palletInfo.palletHeight;
                         }
-                        if (!updatedSpec.onePalletWeight && prod.palletInfo?.palletQuantity && prod.outboxInfo?.outboxWeight) {
+                        if (prod.palletInfo?.palletQuantity && prod.outboxInfo?.outboxWeight) {
                             updatedSpec.onePalletWeight = (parseFloat(prod.outboxInfo.outboxWeight) * parseInt(prod.palletInfo.palletQuantity)).toFixed(1);
                         }
-                        if (!updatedSpec.markingStandard && (prod.shelfLifeMonths || prod.openedShelfLifeMonths)) {
+                        if (prod.shelfLifeMonths || prod.openedShelfLifeMonths) {
                             const shelfLifeStr = prod.shelfLifeMonths ? `제조일로부터 ${prod.shelfLifeMonths}개월` : '';
                             const openedStr = prod.openedShelfLifeMonths ? `개봉 후 ${prod.openedShelfLifeMonths}개월` : '';
                             updatedSpec.markingStandard = [shelfLifeStr, openedStr].filter(Boolean).join(' / ');

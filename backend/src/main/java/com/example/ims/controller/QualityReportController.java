@@ -196,17 +196,30 @@ public class QualityReportController {
                 .body(template);
     }
 
+    public static class CoaRequestDto {
+        private String startDate;
+        private String endDate;
+        private java.util.Map<String, String> customEmails;
+
+        public String getStartDate() { return startDate; }
+        public void setStartDate(String startDate) { this.startDate = startDate; }
+        public String getEndDate() { return endDate; }
+        public void setEndDate(String endDate) { this.endDate = endDate; }
+        public java.util.Map<String, String> getCustomEmails() { return customEmails; }
+        public void setCustomEmails(java.util.Map<String, String> customEmails) { this.customEmails = customEmails; }
+    }
+
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
     @PostMapping("/request-coa")
     public ResponseEntity<java.util.Map<String, Object>> requestCoaEmails(
-            @RequestParam String startDate,
-            @RequestParam String endDate) {
-        log.info(">>>> [COA REQUEST] Sending batch email requests from {} to {}", startDate, endDate);
-        java.time.LocalDate start = java.time.LocalDate.parse(startDate);
-        java.time.LocalDate end = java.time.LocalDate.parse(endDate);
-        java.util.Map<String, Object> response = qualityReportService.sendCoaRequestEmails(start, end);
+            @RequestBody CoaRequestDto dto) {
+        log.info(">>>> [COA REQUEST] Sending batch email requests from {} to {}", dto.getStartDate(), dto.getEndDate());
+        java.time.LocalDate start = java.time.LocalDate.parse(dto.getStartDate());
+        java.time.LocalDate end = java.time.LocalDate.parse(dto.getEndDate());
+        java.util.Map<String, Object> response = qualityReportService.sendCoaRequestEmails(start, end, dto.getCustomEmails());
         return ResponseEntity.ok(response);
     }
+
 
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
     @GetMapping("/request-coa/preview")

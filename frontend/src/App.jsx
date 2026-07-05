@@ -577,8 +577,8 @@ const App = () => {
         let targetSection = null;
         if (['dashboard', 'announcements', 'notifications'].includes(pageKey)) targetSection = 'monitoring';
         else if (['users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin', 'accessLogs', 'bugReports', 'mailTemplates', 'notificationSettings'].includes(pageKey)) targetSection = 'system';
-        else if (['products', 'brands', 'ingredientCompliance', 'bomMaster', 'bomCategories'].includes(pageKey)) targetSection = 'products';
-        else if (['manufacturers', 'manufacturerCategories', 'salesChannels'].includes(pageKey)) targetSection = 'partner';
+        else if (['products', 'brands', 'ingredientCompliance', 'bomMaster', 'bomCategories', 'salesChannels'].includes(pageKey)) targetSection = 'products';
+        else if (['manufacturers', 'manufacturerCategories'].includes(pageKey)) targetSection = 'partner';
         else if (['manufacturerAudits', 'manufacturerAuditDashboard', 'manufacturerAuditItems'].includes(pageKey)) targetSection = 'audit';
         else if (['qualityPhotoAudit', 'packagingTemplates', 'packagingRules', 'quality', 'releaseRecord'].includes(pageKey)) targetSection = 'quality';
         else if (['claims', 'claimDashboard'].includes(pageKey)) targetSection = 'claim';
@@ -749,8 +749,8 @@ const App = () => {
 
     const hasMonitoringAccess = canAccess('dashboard') || canAccess('announcements') || canAccess('notifications');
     const hasSystemAccess = canAccess('users') || canAccess('logs') || canAccess('roles') || canAccess('guideManagement') || canAccess('dashboardMgmt') || canAccess('trashBin') || canAccess('accessLogs') || canAccess('bugReports') || canAccess('mailTemplates') || canAccess('notificationSettings');
-    const hasProductsAccess = canAccess('products') || canAccess('brands') || canAccess('ingredientCompliance') || canAccess('bomMaster') || canAccess('bomCategories');
-    const hasPartnerAccess = canAccess('manufacturers') || canAccess('manufacturerCategories') || canAccess('salesChannels') || canAccess('manufacturerGuide');
+    const hasProductsAccess = canAccess('products') || canAccess('brands') || canAccess('ingredientCompliance') || canAccess('bomMaster') || canAccess('bomCategories') || canAccess('salesChannels');
+    const hasPartnerAccess = canAccess('manufacturers') || canAccess('manufacturerCategories') || canAccess('manufacturerGuide');
     const hasAuditAccess = canAccess('manufacturerAudits') || canAccess('manufacturerAuditDashboard') || canAccess('manufacturerAuditItems');
     const hasQualityAccess = canAccess('qualityPhotoAudit') || canAccess('packagingTemplates') || canAccess('packagingRules') || canAccess('quality') || canAccess('releaseRecord');
     const hasClaimAccess = canAccess('claims') || canAccess('claimDashboard');
@@ -761,8 +761,8 @@ const App = () => {
         switch(section) {
             case 'monitoring': return ['dashboard', 'announcements', 'notifications'].includes(activePage);
             case 'system': return ['users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin', 'accessLogs', 'bugReports', 'mailTemplates', 'notificationSettings'].includes(activePage);
-            case 'products': return ['products', 'brands', 'ingredientCompliance', 'bomMaster', 'bomCategories'].includes(activePage);
-            case 'partner': return ['manufacturers', 'manufacturerCategories', 'salesChannels', 'manufacturerGuide'].includes(activePage);
+            case 'products': return ['products', 'brands', 'ingredientCompliance', 'bomMaster', 'bomCategories', 'salesChannels'].includes(activePage);
+            case 'partner': return ['manufacturers', 'manufacturerCategories', 'manufacturerGuide'].includes(activePage);
             case 'audit': return ['manufacturerAudits', 'manufacturerAuditDashboard', 'manufacturerAuditItems'].includes(activePage);
             case 'quality': return ['qualityPhotoAudit', 'packagingTemplates', 'packagingRules', 'quality', 'releaseRecord'].includes(activePage);
             case 'claim': return ['claims', 'claimDashboard'].includes(activePage);
@@ -932,7 +932,7 @@ const App = () => {
                         </button>
                         {openSections.products && (
                             <div className="sidebar-group-content">
-                                {(canAccess('products') || canAccess('brands') || canAccess('ingredientCompliance')) && (
+                                {(canAccess('products') || canAccess('brands') || canAccess('ingredientCompliance') || canAccess('salesChannels')) && (
                                     <>
                                         <div className="sidebar-sub-header">기본 마스터</div>
                                         {canAccess('products') && (
@@ -943,6 +943,11 @@ const App = () => {
                                         {canAccess('brands') && (
                                             <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'brands' ? 'active' : ''}`} onClick={() => handleNavigate('brands')}>
                                                 🏷️ 브랜드 마스터 관리
+                                            </button>
+                                        )}
+                                        {canAccess('salesChannels') && (
+                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'salesChannels' ? 'active' : ''}`} onClick={() => handleNavigate('salesChannels')}>
+                                                🌐 유통 채널 관리
                                             </button>
                                         )}
                                         {canAccess('ingredientCompliance') && (
@@ -993,11 +998,6 @@ const App = () => {
                                 {canAccess('manufacturerCategories') && (
                                     <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'manufacturerCategories' ? 'active' : ''}`} onClick={() => handleNavigate('manufacturerCategories')}>
                                         📂 제조사 구분 관리
-                                    </button>
-                                )}
-                                {canAccess('salesChannels') && (
-                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'salesChannels' ? 'active' : ''}`} onClick={() => handleNavigate('salesChannels')}>
-                                        🌐 유통 채널 관리
                                     </button>
                                 )}
                                 {canAccess('manufacturerGuide') && (

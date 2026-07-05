@@ -541,6 +541,11 @@ public class QualityReportService {
 
     @Transactional(readOnly = true)
     public java.util.Map<String, Object> sendCoaRequestEmails(java.time.LocalDate startDate, java.time.LocalDate endDate) {
+        return sendCoaRequestEmails(startDate, endDate, null);
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Object> sendCoaRequestEmails(java.time.LocalDate startDate, java.time.LocalDate endDate, java.util.Map<String, String> customEmails) {
         java.time.LocalDateTime start = startDate.atStartOfDay();
         java.time.LocalDateTime end = endDate.atTime(23, 59, 59);
 
@@ -566,11 +571,18 @@ public class QualityReportService {
             String mfrName = entry.getKey();
             List<WmsInbound> items = entry.getValue();
 
-            // 1순위: Manufacturer.email
+            // 0순위: 수동 입력된 이메일 (프론트엔드 모달에서 편집한 메일 주소)
             String targetEmail = null;
-            java.util.Optional<com.example.ims.entity.Manufacturer> mfrOpt = manufacturerRepository.findByName(mfrName);
-            if (mfrOpt.isPresent()) {
-                targetEmail = mfrOpt.get().getEmail();
+            if (customEmails != null && customEmails.containsKey(mfrName)) {
+                targetEmail = customEmails.get(mfrName);
+            }
+
+            // 1순위: Manufacturer.email (수동 이메일이 없는 경우에만)
+            if (targetEmail == null || targetEmail.trim().isEmpty()) {
+                java.util.Optional<com.example.ims.entity.Manufacturer> mfrOpt = manufacturerRepository.findByName(mfrName);
+                if (mfrOpt.isPresent()) {
+                    targetEmail = mfrOpt.get().getEmail();
+                }
             }
 
             // 2순위 (폴백): User.companyName + role
@@ -588,6 +600,7 @@ public class QualityReportService {
                 noEmailManufacturers.add(mfrName);
                 continue;
             }
+
 
             // HTML 테이블 메일 템플릿 작성
             StringBuilder html = new StringBuilder();

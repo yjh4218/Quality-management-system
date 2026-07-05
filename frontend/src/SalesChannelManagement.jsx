@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import * as api from './api';
 import { toast } from 'react-toastify';
@@ -17,7 +17,18 @@ const SalesChannelManagement = ({ user }) => {
     const [channels, setChannels] = useState([]);
     const [showDrawer, setShowDrawer] = useState(false);
     const [editingChannel, setEditingChannel] = useState(null);
-    const [formData, setFormData] = useState({ name: '', description: '' });
+    const [formData, setFormData] = useState({
+        name: '',
+        description: '',
+        channelCode: '',
+        palletType: '',
+        palletSpec: '',
+        channelStickerRequired: false,
+        maxStackHeightMm: 1500,
+        padAndFrameRequired: false,
+        expDateFormat: '',
+        specialNotes: ''
+    });
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
     const [quickFilterText, setQuickFilterText] = useState('');
 
@@ -37,10 +48,32 @@ const SalesChannelManagement = ({ user }) => {
     const handleOpenDrawer = (channel = null) => {
         if (channel) {
             setEditingChannel(channel);
-            setFormData({ name: channel.name, description: channel.description || '' });
+            setFormData({
+                name: channel.name || '',
+                description: channel.description || '',
+                channelCode: channel.channelCode || '',
+                palletType: channel.palletType || '',
+                palletSpec: channel.palletSpec || '',
+                channelStickerRequired: !!channel.channelStickerRequired,
+                maxStackHeightMm: channel.maxStackHeightMm !== undefined ? channel.maxStackHeightMm : 1500,
+                padAndFrameRequired: !!channel.padAndFrameRequired,
+                expDateFormat: channel.expDateFormat || '',
+                specialNotes: channel.specialNotes || ''
+            });
         } else {
             setEditingChannel(null);
-            setFormData({ name: '', description: '' });
+            setFormData({
+                name: '',
+                description: '',
+                channelCode: '',
+                palletType: '',
+                palletSpec: '',
+                channelStickerRequired: false,
+                maxStackHeightMm: 1500,
+                padAndFrameRequired: false,
+                expDateFormat: '',
+                specialNotes: ''
+            });
         }
         setShowDrawer(true);
     };
@@ -55,7 +88,7 @@ const SalesChannelManagement = ({ user }) => {
         try {
             const channelData = editingChannel ? { ...editingChannel, ...formData } : formData;
             await api.saveSalesChannel(channelData);
-            toast.success(editingChannel ? "채널이 수정되었습니다." : "새 채널이 등록되었습니다.");
+            toast.success(editingChannel ? "채널 포장 규칙이 수정되었습니다." : "새 채널이 등록되었습니다.");
             setShowDrawer(false);
             fetchChannels();
         } catch (error) {
@@ -87,42 +120,44 @@ const SalesChannelManagement = ({ user }) => {
 
     const columnDefs = useMemo(() => [
         { field: "id", headerName: "ID", width: 80, pinned: 'left' },
-        { field: "name", headerName: "채널 명칭", flex: 1, filter: true, cellStyle: { fontWeight: '800', color: '#1a202c' } },
-        { field: "description", headerName: "상세 설명", flex: 2, filter: true },
-        { field: "active", headerName: "상태", width: 120, filter: true,
+        { field: "channelCode", headerName: "채널 코드", width: 110, filter: true },
+        { field: "name", headerName: "채널 명칭", flex: 1.5, filter: true, cellStyle: { fontWeight: '800', color: '#1e293b' } },
+        { field: "palletType", headerName: "팔레트 종류", flex: 1.2, filter: true },
+        { field: "maxStackHeightMm", headerName: "적재 높이(mm)", width: 120, filter: true, valueFormatter: params => params.value ? `${params.value} mm` : '-' },
+        { field: "channelStickerRequired", headerName: "스티커 필수", width: 110, filter: true, cellRenderer: params => params.value ? '🔴 필수' : '❌ 미부착' },
+        { field: "padAndFrameRequired", headerName: "패드/각대", width: 100, filter: true, cellRenderer: params => params.value ? '🟢 필요' : '❌ 불필요' },
+        { field: "expDateFormat", headerName: "사용기한 형식", width: 130, filter: true },
+        { field: "active", headerName: "상태", width: 100, filter: true,
           cellRenderer: (params) => (
             <span 
                 className={`badge ${params.value ? 'success' : 'warning'}`} 
-                style={{ cursor: canEdit ? 'pointer' : 'default' }} 
+                style={{ cursor: canEdit ? 'pointer' : 'default', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }} 
                 onClick={() => canEdit && handleToggle(params.data.id)}
             >
               {params.value ? 'ACTIVE' : 'INACTIVE'}
             </span>
           )
         },
-        { field: "updatedBy", headerName: "최종 수정자", width: 130 },
-        { field: "updatedAt", headerName: "최종 수정일", width: 150, 
-          valueFormatter: (params) => params.value ? new Date(params.value).toLocaleDateString() : '-' 
-        },
+        { field: "updatedBy", headerName: "수정자", width: 110 },
         {
             headerName: "관리",
-            width: 140,
+            width: 130,
             sortable: false,
             filter: false,
             pinned: 'right',
             cellRenderer: (params) => (
-                <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', height: '100%', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', height: '100%', alignItems: 'center' }}>
                     <button 
                         className="secondary" 
                         onClick={() => handleOpenDrawer(params.data)}
-                        style={{ padding: '4px 12px', fontSize: '12px', fontWeight: '800' }}
+                        style={{ padding: '2px 8px', fontSize: '11px', fontWeight: 'bold' }}
                     >
                         수정
                     </button>
                     <button 
                         className="secondary" 
                         onClick={() => handleDelete(params.data.id)}
-                        style={{ padding: '4px 12px', fontSize: '12px', fontWeight: '800', color: '#e53e3e', background: '#fff5f5' }}
+                        style={{ padding: '2px 8px', fontSize: '11px', fontWeight: 'bold', color: '#ef4444', background: '#fef2f2' }}
                         disabled={!canDelete}
                     >
                         삭제
@@ -147,11 +182,10 @@ const SalesChannelManagement = ({ user }) => {
                 boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
                 border: '1px solid #f1f5f9'
             }}>
-                {/* 1단계: 생성 및 연동 (최상단) */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
                     <div className="header-title">
                         <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0, fontSize: '22px', fontWeight: '800', color: '#1e293b' }}>
-                            🌐 유통 채널 관리
+                            🌐 유통 채널별 포장 규격 관리
                         </h2>
                     </div>
 
@@ -163,7 +197,7 @@ const SalesChannelManagement = ({ user }) => {
                                 padding: '10px 24px', 
                                 borderRadius: '10px', 
                                 fontWeight: '800', 
-                                backgroundColor: '#2563eb',
+                                backgroundColor: '#0f172a',
                                 color: '#fff',
                                 border: 'none',
                                 cursor: canEdit ? 'pointer' : 'not-allowed',
@@ -176,7 +210,6 @@ const SalesChannelManagement = ({ user }) => {
                     </div>
                 </div>
 
-                {/* 2단계: 핵심 제어 (중단) */}
                 <div style={{ 
                     display: 'flex', 
                     justifyContent: 'space-between', 
@@ -187,27 +220,20 @@ const SalesChannelManagement = ({ user }) => {
                     borderBottom: '1px solid #f1f5f9'
                 }}>
                     <div style={{ color: '#64748b', fontSize: '13px' }}>
-                        제품 마스터 및 포장 규칙에서 사용할 글로벌 유통 채널을 통합 관리합니다.
+                        제품 마스터와 포장 사양 검증 시 자동으로 적용될 채널별 팔레트, 적재높이, 사용기한 규격 기준 데이터를 마스터링합니다.
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
                         <button 
-                            className="outline" 
-                            onClick={() => alert("채널 목록 엑셀 다운로드 기능 준비 중입니다.")}
-                            style={{ fontSize: '14px', padding: '10px 20px', backgroundColor: '#fff', color: '#107c41', borderColor: '#107c41' }}
-                        >
-                            📊 결과 다운로드
-                        </button>
-                        <button 
                             className="primary" 
                             onClick={fetchChannels} 
-                            style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px' }}
+                            style={{ backgroundColor: '#0f172a', color: '#fff', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px', border: 'none', borderRadius: '8px' }}
                         >
                             🔍 조회
                         </button>
                         <button 
                             className="outline" 
                             onClick={() => setQuickFilterText('')} 
-                            style={{ padding: '10px 16px', fontSize: '14px' }}
+                            style={{ padding: '10px 16px', fontSize: '14px', backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px' }}
                         >
                             ♻️ 초기화
                         </button>
@@ -216,14 +242,14 @@ const SalesChannelManagement = ({ user }) => {
             </div>
 
             {/* 검색 필터 그리드 */}
-            <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+            <div className="card" style={{ marginBottom: '20px', padding: '16px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
                     <div>
-                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🔍 채널 검색</label>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🔍 채널 통합 검색</label>
                         <div style={{ position: 'relative' }}>
                             <input
                                 type="text"
-                                placeholder="채널명으로 빠른 검색..."
+                                placeholder="채널 코드 또는 채널명으로 검색..."
                                 value={quickFilterText}
                                 onChange={(e) => setQuickFilterText(e.target.value)}
                                 style={{ width: '100%', padding: '10px 40px 10px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', fontWeight: '600' }}
@@ -237,7 +263,7 @@ const SalesChannelManagement = ({ user }) => {
             {/* 데이터 카드 */}
             <div className="card" style={{ padding: '24px', borderRadius: '16px', flex: 1, display: 'flex', flexDirection: 'column', background: 'white', border: '1px solid #e2e8f0' }}>
                 <div style={{ marginBottom: '15px', fontWeight: '800', fontSize: '14px', color: '#64748b' }}>
-                    등록된 채널 수: <span style={{ color: '#2563eb' }}>{channels.length}</span> 건
+                    등록된 채널 수: <span style={{ color: '#0f172a' }}>{channels.length}</span> 건
                 </div>
                 <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
                     <AgGridReact
@@ -255,41 +281,151 @@ const SalesChannelManagement = ({ user }) => {
             </div>
 
             {showDrawer && (
-                <div className="drawer-overlay" style={{ zIndex: 1000 }}>
-                    <div className="drawer" onClick={e => e.stopPropagation()} style={{ width: '480px', padding: '40px', borderRadius: '24px 0 0 24px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '35px', borderBottom: '1px solid #f1f5f9', paddingBottom: '20px' }}>
-                            <h3 style={{ fontSize: '22px', fontWeight: '800' }}>{editingChannel ? '📝 유통 채널 정보 수정' : '✨ 신규 유통 채널 등록'}</h3>
-                            <button className="secondary" onClick={() => setShowDrawer(false)} style={{ borderRadius: '50%', width: '36px', height: '36px', padding: 0, border: 'none', background: '#f1f5f9' }}>✕</button>
+                <div className="modal-overlay" style={{ zIndex: 1000, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                    <div className="modal-content" onClick={e => e.stopPropagation()} style={{ width: '640px', maxHeight: '85vh', padding: '35px', borderRadius: '20px', backgroundColor: 'white', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', border: '1px solid #e2e8f0', overflowY: 'auto' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px', borderBottom: '1px solid #f1f5f9', paddingBottom: '15px' }}>
+                            <h3 style={{ fontSize: '20px', fontWeight: '800', margin: 0, color: '#0f172a' }}>{editingChannel ? '📝 유통 채널 포장 규격 수정' : '✨ 신규 유통 채널 등록'}</h3>
+                            <button className="secondary" onClick={() => setShowDrawer(false)} style={{ borderRadius: '50%', width: '32px', height: '32px', padding: 0, border: 'none', background: '#f1f5f9', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>✕</button>
                         </div>
-                        <form onSubmit={handleSave}>
-                            <div className="form-group" style={{ marginBottom: '25px' }}>
-                                <label style={{ fontWeight: '700', fontSize: '14px', marginBottom: '10px', display: 'block' }}>채널명 (Channel Name) *</label>
-                                <input
-                                    type="text"
-                                    value={formData.name}
-                                    onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                    placeholder="예: 올리브영(OY), 아마존(AMZ)"
-                                    required
+                        <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                            
+                            <div style={{ display: 'flex', gap: '15px' }}>
+                                <div className="form-group" style={{ flex: 1 }}>
+                                    <label style={{ fontWeight: '700', fontSize: '13px', marginBottom: '8px', display: 'block', color: '#475569' }}>채널 코드 *</label>
+                                    <input
+                                        type="text"
+                                        value={formData.channelCode}
+                                        onChange={e => setFormData({ ...formData, channelCode: e.target.value })}
+                                        placeholder="예: OY, JP-ON"
+                                        required
+                                        disabled={!canEdit}
+                                        style={{ width: '100%', borderRadius: '8px', padding: '10px', border: '1px solid #cbd5e1', fontWeight: '600' }}
+                                    />
+                                </div>
+                                <div className="form-group" style={{ flex: 1.5 }}>
+                                    <label style={{ fontWeight: '700', fontSize: '13px', marginBottom: '8px', display: 'block', color: '#475569' }}>채널 명칭 *</label>
+                                    <input
+                                        type="text"
+                                        value={formData.name}
+                                        onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                        placeholder="예: 올리브영(OY)"
+                                        required
+                                        disabled={!canEdit}
+                                        style={{ width: '100%', borderRadius: '8px', padding: '10px', border: '1px solid #cbd5e1', fontWeight: '600' }}
+                                    />
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '15px' }}>
+                                <div className="form-group" style={{ flex: 1 }}>
+                                    <label style={{ fontWeight: '700', fontSize: '13px', marginBottom: '8px', display: 'block', color: '#475569' }}>팔레트 종류</label>
+                                    <select
+                                        value={formData.palletType}
+                                        onChange={e => setFormData({ ...formData, palletType: e.target.value })}
+                                        disabled={!canEdit}
+                                        style={{ width: '100%', borderRadius: '8px', padding: '10px', border: '1px solid #cbd5e1', fontWeight: '600', backgroundColor: '#fff' }}
+                                    >
+                                        <option value="">선택 안 함</option>
+                                        <option value="아주팔레트">아주팔레트</option>
+                                        <option value="수출용 검은색 일회용 팔레트">수출용 검은색 일회용 팔레트</option>
+                                        <option value="수출용 목재 팔렛트">수출용 목재 팔렛트</option>
+                                    </select>
+                                </div>
+                                <div className="form-group" style={{ flex: 1.5 }}>
+                                    <label style={{ fontWeight: '700', fontSize: '13px', marginBottom: '8px', display: 'block', color: '#475569' }}>팔레트 치수/훈증 스펙</label>
+                                    <input
+                                        type="text"
+                                        value={formData.palletSpec}
+                                        onChange={e => setFormData({ ...formData, palletSpec: e.target.value })}
+                                        placeholder="예: 1,100 x 1,100 mm / GMA훈증 필수"
+                                        disabled={!canEdit}
+                                        style={{ width: '100%', borderRadius: '8px', padding: '10px', border: '1px solid #cbd5e1', fontWeight: '600' }}
+                                    />
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '15px' }}>
+                                <div className="form-group" style={{ flex: 1 }}>
+                                    <label style={{ fontWeight: '700', fontSize: '13px', marginBottom: '8px', display: 'block', color: '#475569' }}>적재 한도 높이 (mm)</label>
+                                    <input
+                                        type="number"
+                                        value={formData.maxStackHeightMm}
+                                        onChange={e => setFormData({ ...formData, maxStackHeightMm: parseInt(e.target.value) || 0 })}
+                                        disabled={!canEdit}
+                                        style={{ width: '100%', borderRadius: '8px', padding: '10px', border: '1px solid #cbd5e1', fontWeight: '600' }}
+                                    />
+                                </div>
+                                <div className="form-group" style={{ flex: 1 }}>
+                                    <label style={{ fontWeight: '700', fontSize: '13px', marginBottom: '8px', display: 'block', color: '#475569' }}>사용기한 규격 형식</label>
+                                    <select
+                                        value={formData.expDateFormat}
+                                        onChange={e => setFormData({ ...formData, expDateFormat: e.target.value })}
+                                        disabled={!canEdit}
+                                        style={{ width: '100%', borderRadius: '8px', padding: '10px', border: '1px solid #cbd5e1', fontWeight: '600', backgroundColor: '#fff' }}
+                                    >
+                                        <option value="">선택 안 함</option>
+                                        <option value="YYYYMMDD까지">YYYYMMDD까지</option>
+                                        <option value="MM-DD-YYYY">MM-DD-YYYY</option>
+                                        <option value="DDMMYYYY">DDMMYYYY</option>
+                                        <option value="YYYY-MM">YYYY-MM</option>
+                                        <option value="표기금지">표기금지 (제조번호만 허용)</option>
+                                        <option value="(미정)">(미정)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '30px', alignItems: 'center', backgroundColor: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '13px', color: '#334155' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.channelStickerRequired}
+                                        onChange={e => setFormData({ ...formData, channelStickerRequired: e.target.checked })}
+                                        disabled={!canEdit}
+                                        style={{ width: '16px', height: '16px' }}
+                                    />
+                                    🏷️ 물류 스티커 부착 필수
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '13px', color: '#334155' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.padAndFrameRequired}
+                                        onChange={e => setFormData({ ...formData, padAndFrameRequired: e.target.checked })}
+                                        disabled={!canEdit}
+                                        style={{ width: '16px', height: '16px' }}
+                                    />
+                                    📦 패드 및 각대 부착 필수
+                                </label>
+                            </div>
+
+                            <div className="form-group">
+                                <label style={{ fontWeight: '700', fontSize: '13px', marginBottom: '8px', display: 'block', color: '#475569' }}>채널별 핵심 특이사항 원문 (Special Notes)</label>
+                                <textarea
+                                    value={formData.specialNotes}
+                                    onChange={e => setFormData({ ...formData, specialNotes: e.target.value })}
+                                    placeholder="유통 가이드라인의 원문 규정을 개행하여 그대로 입력하십시오."
+                                    rows={4}
                                     disabled={!canEdit}
-                                    style={{ borderRadius: '12px', padding: '12px', fontWeight: '600' }}
+                                    style={{ width: '100%', borderRadius: '8px', padding: '10px', border: '1px solid #cbd5e1', resize: 'none', fontSize: '13px', fontWeight: '500', lineHeight: 1.5 }}
                                 />
                             </div>
-                            <div className="form-group" style={{ marginBottom: '30px' }}>
-                                <label style={{ fontWeight: '700', fontSize: '14px', marginBottom: '10px', display: 'block' }}>채널 상세 설명 (Description)</label>
+
+                            <div className="form-group">
+                                <label style={{ fontWeight: '700', fontSize: '13px', marginBottom: '8px', display: 'block', color: '#475569' }}>채널 설명 (Description)</label>
                                 <textarea
                                     value={formData.description}
                                     onChange={e => setFormData({ ...formData, description: e.target.value })}
-                                    placeholder="해당 유통 채널의 특이사항이나 관리 규칙을 입력하세요."
-                                    rows={6}
+                                    placeholder="기타 참고사항을 기술하십시오."
+                                    rows={2}
                                     disabled={!canEdit}
-                                    style={{ borderRadius: '12px', padding: '15px', resize: 'none', fontWeight: '500' }}
+                                    style={{ width: '100%', borderRadius: '8px', padding: '10px', border: '1px solid #cbd5e1', resize: 'none', fontSize: '13px', fontWeight: '500' }}
                                 />
                             </div>
-                            <div style={{ marginTop: '40px', display: 'flex', gap: '15px' }}>
-                                <button type="submit" className="primary" style={{ flex: 2, padding: '14px', borderRadius: '12px', fontWeight: '800', opacity: canEdit ? 1 : 0.5 }} disabled={!canEdit}>
+
+                            <div style={{ display: 'flex', gap: '15px', paddingTop: '10px' }}>
+                                <button type="submit" className="primary" style={{ flex: 2, padding: '12px', borderRadius: '10px', fontWeight: '800', backgroundColor: '#0f172a', color: 'white', border: 'none', cursor: 'pointer', opacity: canEdit ? 1 : 0.5 }} disabled={!canEdit}>
                                     {canEdit ? (editingChannel ? '채널 정보 수정' : '채널 등록 완료') : '조회 전용'}
                                 </button>
-                                <button type="button" className="secondary" onClick={() => setShowDrawer(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px' }}>취소</button>
+                                <button type="button" className="secondary" onClick={() => setShowDrawer(false)} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid #cbd5e1', backgroundColor: '#fff', cursor: 'pointer' }}>취소</button>
                             </div>
                         </form>
                     </div>

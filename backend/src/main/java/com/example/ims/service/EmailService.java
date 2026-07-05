@@ -2,6 +2,7 @@ package com.example.ims.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.scheduling.annotation.Async;
 import com.example.ims.entity.Announcement;
@@ -19,6 +20,12 @@ public class EmailService {
     private final NotificationService notificationService;
     private final EmailSender emailSender;
     private final org.springframework.core.task.AsyncTaskExecutor mailExecutor;
+
+    @Value("${app.frontend.url:http://localhost:5173}")
+    private String frontendUrl;
+
+    @Value("${app.backend.url:http://localhost:8080}")
+    private String backendUrl;
 
     private void handleMailFailure(String toEmail, String mailSubject, Exception e) {
         log.error("[MAIL ERROR] Failed to send email to: {}, Subject: {}", toEmail, mailSubject, e);
@@ -105,7 +112,7 @@ public class EmailService {
                 "    </div>\n" +
                 "    <p>자세한 사항은 QMS 시스템에 접속하여 해당 클레임에 대한 원인 분석 및 재발 방지 대책을 작성하여 제출해 주시기 바랍니다.</p>\n" +
                 "    <div style=\"text-align: center; margin: 30px 0;\">\n" +
-                "      <a href=\"http://localhost:5173/?claimId=" + claim.getId() + "&amp;fromEmail=true\" style=\"display: inline-block; padding: 12px 24px; color: #ffffff; background-color: #4f46e5; text-decoration: none; border-radius: 6px; font-weight: bold;\">상세 클레임 확인하기</a>\n" +
+                "      <a href=\"" + frontendUrl + "/?claimId=" + claim.getId() + "&amp;fromEmail=true\" style=\"display: inline-block; padding: 12px 24px; color: #ffffff; background-color: #4f46e5; text-decoration: none; border-radius: 6px; font-weight: bold;\">상세 클레임 확인하기</a>\n" +
                 "    </div>\n" +
                 "    <hr style=\"border: none; border-top: 1px solid #cbd5e1; margin: 20px 0;\" />\n" +
                 "    <p style=\"font-size: 12px; color: #94a3b8; text-align: center;\">본 메일은 QMS 시스템에서 자동으로 발송된 메일입니다.</p>\n" +
@@ -133,7 +140,7 @@ public class EmailService {
                     "    </div>\n" +
                     "    <p>QMS 시스템에 접속하여 해당 제품에 대한 용기, 단상자, 적재 사진을 업로드해 주시기 바랍니다.</p>\n" +
                     "    <div style=\"text-align: center; margin: 30px 0;\">\n" +
-                    "      <a href=\"http://localhost:5173/?itemCode=" + (product.getItemCode() != null ? java.net.URLEncoder.encode(product.getItemCode(), "UTF-8") : "") + "\" style=\"display: inline-block; padding: 12px 24px; color: #ffffff; background-color: #003366; text-decoration: none; border-radius: 6px; font-weight: bold;\">📸 생산감리 사진 등록하러 가기</a>\n" +
+                    "      <a href=\"" + frontendUrl + "/?itemCode=" + (product.getItemCode() != null ? java.net.URLEncoder.encode(product.getItemCode(), "UTF-8") : "") + "\" style=\"display: inline-block; padding: 12px 24px; color: #ffffff; background-color: #003366; text-decoration: none; border-radius: 6px; font-weight: bold;\">📸 생산감리 사진 등록하러 가기</a>\n" +
                     "    </div>\n" +
                     "    <hr style=\"border: none; border-top: 1px solid #cbd5e1; margin: 20px 0;\" />\n" +
                     "    <p style=\"font-size: 12px; color: #94a3b8; text-align: center;\">본 메일은 QMS 시스템에서 자동으로 발송된 메일입니다.</p>\n" +
@@ -152,7 +159,7 @@ public class EmailService {
         String categoryName = announcement.getCategory() != null ? announcement.getCategory().getName() : "일반";
         String subject = "전체공지 (" + categoryName + ") - " + announcement.getTitle();
         
-        String systemUrl = baseUrl != null ? baseUrl : "http://localhost:5173";
+        String systemUrl = baseUrl != null ? baseUrl : frontendUrl;
         String content = "<html>\n<body style=\"font-family: 'Malgun Gothic', sans-serif; line-height: 1.6; color: #333;\">\n" +
                 "  <div style=\"max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);\">\n" +
                 "    <h2 style=\"color: #0f172a; border-bottom: 2px solid #cbd5e1; padding-bottom: 10px;\">통합 품질 관리 시스템 (QMS) 전체공지</h2>\n" +
@@ -252,7 +259,7 @@ public class EmailService {
             for (String photoUrl : claim.getClaimPhotos()) {
                 String fullUrl = photoUrl;
                 if (photoUrl.startsWith("/")) {
-                    fullUrl = "http://localhost:8080" + photoUrl;
+                    fullUrl = backendUrl + photoUrl;
                 }
                 photosHtml.append("<div><img src=\"").append(fullUrl).append("\" style=\"max-width:400px; margin:8px 0; border:1px solid #e2e8f0; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.1);\" /></div>");
             }
@@ -260,7 +267,7 @@ public class EmailService {
             photosHtml.append("<p style=\"color: #94a3b8; font-style: italic;\">첨부된 사진이 없습니다.</p>");
         }
 
-        String claimLinkUrl = "http://localhost:5173/?claimId=" + claim.getId() + "&fromEmail=true";
+        String claimLinkUrl = frontendUrl + "/?claimId=" + claim.getId() + "&fromEmail=true";
         String linkHtml = "<a href=\"" + claimLinkUrl + "\" style=\"display: inline-block; padding: 12px 24px; color: #ffffff; background-color: #4f46e5; text-decoration: none; border-radius: 6px; font-weight: bold; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2); margin: 15px 0;\">🔍 클레임 상세 내용 확인하기</a>";
 
         java.time.LocalDate deadline = java.time.LocalDate.now().plusDays(7);
@@ -283,12 +290,12 @@ public class EmailService {
 
         String auditLinkUrl;
         if (audit.getId() != null) {
-            auditLinkUrl = "http://localhost:5173/?auditId=" + audit.getId();
+            auditLinkUrl = frontendUrl + "/?auditId=" + audit.getId();
         } else {
             try {
-                auditLinkUrl = "http://localhost:5173/?itemCode=" + java.net.URLEncoder.encode(audit.getItemCode() != null ? audit.getItemCode() : "", "UTF-8");
+                auditLinkUrl = frontendUrl + "/?itemCode=" + java.net.URLEncoder.encode(audit.getItemCode() != null ? audit.getItemCode() : "", "UTF-8");
             } catch (Exception e) {
-                auditLinkUrl = "http://localhost:5173/?itemCode=" + audit.getItemCode();
+                auditLinkUrl = frontendUrl + "/?itemCode=" + audit.getItemCode();
             }
         }
         String linkHtml = "<a href=\"" + auditLinkUrl + "\" style=\"display: inline-block; padding: 12px 24px; color: #ffffff; background-color: #003366; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 15px 0;\">📸 생산감리 사진 등록하러 가기</a>";

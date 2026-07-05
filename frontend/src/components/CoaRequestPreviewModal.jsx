@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Dialog,
     DialogTitle,
@@ -16,11 +16,25 @@ import {
     TableHead,
     TableRow,
     Paper,
-    Alert
+    Alert,
+    TextField
 } from '@mui/material';
 
 const CoaRequestPreviewModal = ({ isOpen, onClose, previewData, onSend, startDate, endDate }) => {
     const [activeTab, setActiveTab] = useState(0);
+    const [editedEmails, setEditedEmails] = useState({});
+
+    // Initialize or reset edited emails when modal opens or previewData changes
+    useEffect(() => {
+        if (isOpen && previewData) {
+            const initial = {};
+            previewData.forEach(mfr => {
+                initial[mfr.manufacturerName] = mfr.email || '';
+            });
+            setEditedEmails(initial);
+            setActiveTab(0);
+        }
+    }, [previewData, isOpen]);
 
     if (!isOpen || !previewData) return null;
 
@@ -29,6 +43,18 @@ const CoaRequestPreviewModal = ({ isOpen, onClose, previewData, onSend, startDat
     };
 
     const currentMfr = previewData[activeTab];
+    const currentEmailValue = currentMfr ? (editedEmails[currentMfr.manufacturerName] || '') : '';
+
+    const handleEmailChange = (e) => {
+        if (currentMfr) {
+            setEditedEmails(prev => ({
+                ...prev,
+                [currentMfr.manufacturerName]: e.target.value
+            }));
+        }
+    };
+
+    const hasAnyEmail = Object.values(editedEmails).some(email => email && email.trim() !== '');
 
     return (
         <Dialog open={isOpen} onClose={onClose} maxWidth="md" fullWidth>
@@ -50,14 +76,31 @@ const CoaRequestPreviewModal = ({ isOpen, onClose, previewData, onSend, startDat
                                 onChange={handleTabChange} 
                                 variant="scrollable"
                                 scrollButtons="auto"
+                                sx={{
+                                    '& .MuiTabs-indicator': {
+                                        display: 'none',
+                                    }
+                                }}
                             >
                                 {previewData.map((mfr, index) => {
-                                    const hasEmail = mfr.email && mfr.email.trim() !== '';
+                                    const emailVal = editedEmails[mfr.manufacturerName] || '';
+                                    const hasEmail = emailVal.trim() !== '';
                                     return (
                                         <Tab 
                                             key={index} 
+                                            sx={{
+                                                fontWeight: 'medium',
+                                                textTransform: 'none',
+                                                transition: 'all 0.2s',
+                                                mr: 1,
+                                                '&.Mui-selected': {
+                                                    bgcolor: '#0f172a',
+                                                    color: '#ffffff !important',
+                                                    borderRadius: '6px 6px 0 0',
+                                                }
+                                            }}
                                             label={
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                     <span>{mfr.manufacturerName}</span>
                                                     {!hasEmail && <span style={{ color: '#ef4444' }}>⚠️</span>}
                                                 </Box>
@@ -71,21 +114,35 @@ const CoaRequestPreviewModal = ({ isOpen, onClose, previewData, onSend, startDat
                         {currentMfr && (
                             <Box sx={{ mt: 1 }}>
                                 <Paper sx={{ p: 2, mb: 2, bgcolor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
-                                        <Typography variant="body2">
-                                            <b>수신자:</b> {currentMfr.email ? (
-                                                <span style={{ color: '#2563eb', fontWeight: 'bold' }}>{currentMfr.email}</span>
-                                            ) : (
-                                                <span style={{ color: '#ef4444', fontWeight: 'bold' }}>이메일 정보 없음</span>
-                                            )}
-                                        </Typography>
-                                        <Typography variant="body2" color="text.secondary">
-                                            <b>출처:</b> {currentMfr.emailSource}
-                                        </Typography>
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                                            <Typography variant="body2" sx={{ fontWeight: 'bold', minWidth: '80px' }}>
+                                                수신 이메일:
+                                            </Typography>
+                                            <TextField
+                                                size="small"
+                                                variant="outlined"
+                                                value={currentEmailValue}
+                                                onChange={handleEmailChange}
+                                                placeholder="이메일을 입력하세요 (콤마로 구분하여 다중 입력 가능)"
+                                                sx={{ 
+                                                    flexGrow: 1, 
+                                                    bgcolor: '#ffffff',
+                                                    '& .MuiOutlinedInput-root': {
+                                                        borderRadius: '6px'
+                                                    }
+                                                }}
+                                            />
+                                        </Box>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, mt: 0.5 }}>
+                                            <Typography variant="body2" color="text.secondary">
+                                                <b>기본 이메일 출처:</b> {currentMfr.emailSource}
+                                            </Typography>
+                                        </Box>
                                     </Box>
-                                    {!currentMfr.email && (
+                                    {!currentEmailValue.trim() && (
                                         <Alert severity="error" sx={{ mt: 1.5, py: 0.5 }}>
-                                            제조사 이메일 및 시스템 사용자 정보에 이메일이 등록되어 있지 않습니다. 이 제조사에는 메일이 발송되지 않습니다.
+                                            이메일 주소가 비어있습니다. 이 상태로는 해당 제조사로 메일이 전송되지 않습니다.
                                         </Alert>
                                     )}
                                 </Paper>
@@ -131,10 +188,16 @@ const CoaRequestPreviewModal = ({ isOpen, onClose, previewData, onSend, startDat
                 </Button>
                 {previewData.length > 0 && (
                     <Button 
-                        onClick={onSend} 
+                        onClick={() => onSend(editedEmails)} 
                         variant="contained" 
                         color="primary"
-                        disabled={!previewData.some(m => m.email && m.email.trim() !== '')}
+                        disabled={!hasAnyEmail}
+                        sx={{
+                            bgcolor: '#0f172a',
+                            '&:hover': {
+                                bgcolor: '#1e293b'
+                            }
+                        }}
                     >
                         요청 메일 일괄 발송
                     </Button>

@@ -14,9 +14,14 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @org.springframework.scheduling.annotation.EnableAsync
 public class ImsApplication {
 
+	@jakarta.annotation.PostConstruct
+	public void init() {
+		java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("Asia/Seoul"));
+	}
+
 	public static void main(String[] args) {
 		SpringApplication.run(ImsApplication.class, args);
 	}
 
 }
-// Deployment Trigger v7 - Force Rebuild for Audit System Fix
+// Deployment Trigger v8 - Force Rebuild for TimeZone Alignment

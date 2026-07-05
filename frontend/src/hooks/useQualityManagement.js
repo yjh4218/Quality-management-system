@@ -22,6 +22,7 @@ export const useQualityManagement = (user, navigationData, onNavigated) => {
     const [history, setHistory] = useState([]);
     const [isUploading, setIsUploading] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [isMailLoading, setIsMailLoading] = useState(false);
     const [activeTab, setActiveTab] = useState('info');
     const [isCoaPreviewOpen, setIsCoaPreviewOpen] = useState(false);
     const [coaPreviewData, setCoaPreviewData] = useState([]);
@@ -272,7 +273,7 @@ export const useQualityManagement = (user, navigationData, onNavigated) => {
             return;
         }
 
-        setIsLoading(true);
+        setIsMailLoading(true);
         const toastId = toast.loading("성적서 미제출 건 미리보기를 수집 중입니다...");
         try {
             const res = await getCoaRequestPreview(searchParams.startDate, searchParams.endDate);
@@ -286,16 +287,16 @@ export const useQualityManagement = (user, navigationData, onNavigated) => {
         } catch (error) {
             toast.update(toastId, { render: "미리보기 조회 실패: " + (error.response?.data?.message || error.message), type: "error", isLoading: false, autoClose: 5000 });
         } finally {
-            setIsLoading(false);
+            setIsMailLoading(false);
         }
     };
 
-    const handleCoaSend = async () => {
+    const handleCoaSend = async (customEmails = {}) => {
         setIsCoaPreviewOpen(false);
-        setIsLoading(true);
+        setIsMailLoading(true);
         const toastId = toast.loading("이메일을 순차 발송 중입니다...");
         try {
-            const res = await requestCoaEmails(searchParams.startDate, searchParams.endDate);
+            const res = await requestCoaEmails(searchParams.startDate, searchParams.endDate, customEmails);
             const { successCount, failureCount, noEmailManufacturers } = res.data;
 
             let msg = `메일 발송 완료: 성공 ${successCount}건`;
@@ -310,7 +311,7 @@ export const useQualityManagement = (user, navigationData, onNavigated) => {
         } catch (error) {
             toast.update(toastId, { render: "이메일 발송 실패: " + (error.response?.data?.message || error.message), type: "error", isLoading: false, autoClose: 5000 });
         } finally {
-            setIsLoading(false);
+            setIsMailLoading(false);
         }
     };
 
@@ -326,6 +327,7 @@ export const useQualityManagement = (user, navigationData, onNavigated) => {
         setHistory,
         isUploading,
         isLoading,
+        isMailLoading,
         activeTab,
         setActiveTab,
         searchParams,

@@ -34,7 +34,10 @@ public class SalesChannelService {
 
     @Transactional
     public void deleteChannel(Long id) {
-        repository.deleteById(id);
+        repository.findById(id).ifPresent(ch -> {
+            ch.setIsDeleted(true);
+            repository.save(ch);
+        });
     }
 
     @Transactional

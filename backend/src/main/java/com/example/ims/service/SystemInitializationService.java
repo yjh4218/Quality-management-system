@@ -731,6 +731,89 @@ public class SystemInitializationService {
                 log.warn(">>>> [SYSTEM INIT] Could not fill empty product fields: {}", e.getMessage());
             }
 
+            // [추가] 마스터 품목 및 채널별 품목 데이터 시딩 (제조사: 한국콜마, 세부 정보 일괄 적용)
+            try {
+                Integer kolmarMasterExists = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM products WHERE item_code = 'KOLMAR-MASTER-001'", Integer.class);
+                if (kolmarMasterExists == null || kolmarMasterExists == 0) {
+                    Long brandId = jdbcTemplate.queryForObject("SELECT id FROM brands LIMIT 1", Long.class);
+                    mfrId = jdbcTemplate.queryForObject("SELECT id FROM manufacturers WHERE name = '한국콜마' LIMIT 1", Long.class);
+                    
+                    // 1. 마스터 품목 생성 (모든 규격/물류/재활용 정보 입력)
+                    jdbcTemplate.update(
+                        "INSERT INTO products (item_code, product_name, english_product_name, brand_id, manufacturer_id, " +
+                        "capacity, weight, status, active, is_deleted, created_at, updated_at, is_master, is_parent, " +
+                        "is_planning_set, photo_audit_disclosed, version, opened_shelf_life_months, shelf_life_months, " +
+                        "recycle_grade, recycle_eval_no, recycle_material, has_inbox, " +
+                        "inbox_quantity, inbox_width, inbox_length, inbox_height, inbox_weight, " +
+                        "outbox_quantity, outbox_width, outbox_length, outbox_height, outbox_weight, " +
+                        "pallet_quantity, pallet_width, pallet_length, pallet_height) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, true, true, " +
+                        "false, true, 1, 12, 36, '우수', '2026-RE-101', 'PET-G/PP', true, " +
+                        "10, 200, 300, 120, 1.5, " +
+                        "40, 420, 320, 260, 6.8, " +
+                        "1200, 1100, 1100, 1200)",
+                        "KOLMAR-MASTER-001", "[마스터] 한국콜마 에센스", "[Master] Kolmar Essence", brandId, mfrId, "100ml", "120g", "양산", true, false
+                    );
+                    log.info(">>>> [SYSTEM INIT] Seeded 'KOLMAR-MASTER-001' master parent product with full details.");
+                    
+                    // 2. 13개 채널별 자식 품목 생성 (부모와 동일한 규격 정보 세팅)
+                    String[][] channelsData = {
+                        {"일반(GENERAL)", "KOLMAR-CH-GENERAL", "[일반] 한국콜마 에센스"},
+                        {"올리브영(OY)", "KOLMAR-CH-OY", "[올리브영] 한국콜마 에센스"},
+                        {"군마트(PX)", "KOLMAR-CH-PX", "[군마트] 한국콜마 에센스"},
+                        {"일본/온라인(JP/ON)", "KOLMAR-CH-JP-ON", "[일본/온라인] 한국콜마 에센스"},
+                        {"일본/오프라인(JP/OFF)", "KOLMAR-CH-JP-OFF", "[일본/오프라인] 한국콜마 에센스"},
+                        {"일본/아마존(JP/AMZ)", "KOLMAR-CH-JP-AMZ", "[일본/아마존] 한국콜마 에센스"},
+                        {"글로벌(GLB)", "KOLMAR-CH-GLB", "[글로벌] 한국콜마 에센스"},
+                        {"미국/아마존(US/AMZ)", "KOLMAR-CH-US-AMZ", "[미국/아마존] 한국콜마 에센스"},
+                        {"유럽(EU)", "KOLMAR-CH-EU", "[유럽] 한국콜마 에센스"},
+                        {"올리브영/역직구(OY/US)", "KOLMAR-CH-OY-US", "[올리브영/역직구] 한국콜마 에센스"},
+                        {"유럽/아마존(EU/AMZ)", "KOLMAR-CH-EU-AMZ", "[유럽/아마존] 한국콜마 에센스"},
+                        {"미국/OTC(OTC)", "KOLMAR-CH-OTC", "[미국/OTC] 한국콜마 에센스"},
+                        {"할랄(HALAL)", "KOLMAR-CH-HALAL", "[할랄] 한국콜마 에센스"}
+                    };
+                    
+                    for (String[] cd : channelsData) {
+                        String chanName = cd[0];
+                        String itemCode = cd[1];
+                        String prodName = cd[2];
+                        
+                        // 제품 인서트
+                        jdbcTemplate.update(
+                            "INSERT INTO products (item_code, product_name, english_product_name, brand_id, manufacturer_id, " +
+                            "capacity, weight, status, active, is_deleted, created_at, updated_at, is_master, is_parent, " +
+                            "is_planning_set, photo_audit_disclosed, parent_item_code, version, " +
+                            "opened_shelf_life_months, shelf_life_months, recycle_grade, recycle_eval_no, recycle_material, has_inbox, " +
+                            "inbox_quantity, inbox_width, inbox_length, inbox_height, inbox_weight, " +
+                            "outbox_quantity, outbox_width, outbox_length, outbox_height, outbox_weight, " +
+                            "pallet_quantity, pallet_width, pallet_length, pallet_height) " +
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, false, false, " +
+                            "false, true, 'KOLMAR-MASTER-001', 1, " +
+                            "12, 36, '우수', '2026-RE-101', 'PET-G/PP', true, " +
+                            "10, 200, 300, 120, 1.5, " +
+                            "40, 420, 320, 260, 6.8, " +
+                            "1200, 1100, 1100, 1200)",
+                            itemCode, prodName, prodName + " (Eng)", brandId, mfrId, "100ml", "120g", "양산", true, false
+                        );
+                        
+                        // 신규 인서트한 제품 ID 조회
+                        Long prodId = jdbcTemplate.queryForObject("SELECT id FROM products WHERE item_code = ? LIMIT 1", Long.class, itemCode);
+                        // 채널 ID 조회
+                        Long chanId = jdbcTemplate.queryForObject("SELECT id FROM sales_channels WHERE name = ? LIMIT 1", Long.class, chanName);
+                        
+                        if (prodId != null && chanId != null) {
+                            jdbcTemplate.update(
+                                "INSERT INTO product_sales_channels (product_id, channel_id) VALUES (?, ?)",
+                                prodId, chanId
+                            );
+                        }
+                    }
+                    log.info(">>>> [SYSTEM INIT] Seeded 13 channel-specific Kolmar products with full details.");
+                }
+            } catch (Exception e) {
+                log.error(">>>> [SYSTEM INIT] [ERROR] Failed to seed Kolmar test products: {}", e.getMessage(), e);
+            }
+
             // Seed 3 test claims for 한국콜마 (제조사 확인 중 & 답변 완료 상태)
             try {
                 Integer claimCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM claims WHERE claim_number = 'CLM-20260627-901'", Integer.class);
@@ -795,46 +878,73 @@ public class SystemInitializationService {
     }
 
     private void seedSalesChannels() {
-        log.info(">>>> [SYSTEM INIT] Seeding Sales Channels...");
-        String[][] channels = {
-            {"일반(공용)", "국내 일반 공용 채널"},
-            {"올리브영(OY)", "CJ 올리브영 유통"},
-            {"군마트용(PX)", "군부대 PX/마트 유통"},
-            {"JP/ON", "일본 온라인 유통"},
-            {"JP/OFF", "일본 오프라인 유통"},
-            {"JP/ON(AMZ)", "일본 아마존 온라인"},
-            {"GLB", "글로벌 유통"},
-            {"AU/ON(AMZ)", "호주 아마존 온라인"},
-            {"US/ON(AMZ)", "미국 아마존 온라인"},
-            {"GLB/EU", "유럽 글로벌 유통"},
-            {"OY/US", "올리브영 미국"},
-            {"EU/ON(AMZ)", "유럽 아마존 온라인"},
-            {"OTC", "OTC 약국/드러그스토어"},
-            {"HALAL", "할랄 인증 유통"}
+        log.info(">>>> [SYSTEM INIT] Checking & Seeding Sales Channels with full packaging rules...");
+        try {
+            jdbcTemplate.execute("ALTER TABLE sales_channels ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE");
+            jdbcTemplate.execute("UPDATE sales_channels SET is_deleted = FALSE WHERE is_deleted IS NULL");
+        } catch (Exception e) {
+            log.warn(">>>> [SYSTEM INIT] is_deleted column check/add/update failed: {}", e.getMessage());
+        }
+        Object[][] channels = {
+            {"일반(GENERAL)", "GENERAL", "국내 일반 공용 채널", "아주팔레트", "아주팔레트 (1,100 x 1,100 mm)", false, 1500, false, "YYYYMMDD까지", "1. 사용기한 착인 또는 압인 시 'EXP YYYYMMDD까지' 기재"},
+            {"올리브영(OY)", "OY", "CJ 올리브영 유통", "아주팔레트", "아주팔레트 (1,100 x 1,100 mm)", false, 1050, false, "YYYYMMDD까지", "1. 인박스 사용 시 B형 인박스 사용, 인박스에 박스 테이프 부착 금지\n2. 아웃박스 포장 중 단상자 POP 등으로 빈공간 발생 시 비닐 에어캡으로 공간 완충 필요 (부직포, 발포지, 폐지, 신문지 등 사용 금지)\n3. 사용기한 착인 또는 압인 시 'EXP YYYYMMDD까지' 기재\n4. 인박스 현품표 사용 시 '바코드' 미기재 필수"},
+            {"군마트(PX)", "PX", "군부대 PX/마트 유통", "아주팔레트", "아주팔레트 (1,100 x 1,100 mm)", false, 1050, false, "YYYYMMDD까지", "1. 용기 및 단상자에 군마트용 문구 기재 확인 필수\n2. 아웃박스 바코드 별도 운영 -> 반드시 확인 후 아웃박스 현품표에 아웃박스 바코드 기재 필요\n3. 사용기한 착인 또는 압인 시 'EXP YYYYMMDD까지' 기재"},
+            {"일본/온라인(JP/ON)", "JP-ON", "일본 온라인 유통", "아주팔레트", "아주팔레트 (1,100 x 1,100 mm)", false, 1500, false, "YYYYMMDD까지", "1. 7매 마스크 품목에 한해 제조번호만 압인하며, 사용기한 압인 금지\n2. 사용기한 착인 또는 압인 시 'EXP YYYYMMDD까지' 기재"},
+            {"일본/오프라인(JP/OFF)", "JP-OFF", "일본 오프라인 유통", "수출용 검은색 일회용 팔레트", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", false, 1500, true, "표기금지", "1. 전 품목 사용기한 착인 또는 압인 금지, 제조번호만 착인 또는 압인\n2. 일문 패키지\n3. 인박스, 아웃박스, 팔레트 현품표에 사용기한 기재 금지\n4. 인박스(+현품표) 필수\n5. 기획세트의 경우, 모든 구성품의 로트 착인하며, 인박스, 아웃박스, 팔레트 현품표에도 모든 구성품의 로트 착인"},
+            {"일본/아마존(JP/AMZ)", "JP-AMZ", "일본 아마존 온라인", "수출용 검은색 일회용 팔레트", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", false, 1500, true, "MM-DD-YYYY", "1. 일문 패키지 + AMZ바코드(X바코드)\n2. 7매 마스크 품목의 경우, 지퍼백 포장 시 주의사항 문구 '※ご注意ください※\nこのビニール袋には、7枚入りマスクパック가 [7袋]入っています。\n出荷時は[1袋ずつ] 取り出して出荷してください。' 표시 하고, 7매[7袋]와 1매입[1袋ずつ] 글자 굵게(bold) 필수 기재\n3. 사용기한 착인 또는 압인 시 'EXP MM-DD-YYYY' 기재"},
+            {"글로벌(GLB)", "GLB", "글로벌 유통", "수출용 검은색 일회용 팔레트", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", false, 1500, true, "MM-DD-YYYY", "1. 사용기한 착인 또는 압인 시 'EXP MM-DD-YYYY' 기재"},
+            {"미국/아마존(US/AMZ)", "US-AMZ", "미국 아마존 온라인", "수출용 검은색 일회용 팔레트", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", true, 1500, true, "MM-DD-YYYY", "1. AMZ바코드(X바코드) 확인 필수\n2. 사용기한 착인 또는 압인 시 'EXP MM-DD-YYYY' 기재"},
+            {"유럽(EU)", "EU", "유럽 글로벌 유통", "수출용 검은색 일회용 팔레트", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", true, 1500, true, "DDMMYYYY", "1. 사용기한 착인 또는 압인 시 'EXP DDMMYYYY' 기재"},
+            {"올리브영/역직구(OY/US)", "OY-US", "올리브영 미국", "수출용 검은색 일회용 팔레트", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", false, 1500, true, "YYYYMMDD까지", "1. 인박스 사용 시 B형 인박스 사용, 인박스에 박스 테이프 부착 금지\n2. 아웃박스 포장 중 단상자 POP 등으로 빈공간 발생 시 비닐 에어캡으로 공간 완충 필요 (부직포, 발포지, 폐지, 신문지 등 사용 금지)\n3. 사용기한 착인 또는 압인 시 'EXP YYYYMMDD까지' 기재\n4. 인박스 현품표 사용 시 '바코드' 미기재 필수"},
+            {"유럽/아마존(EU/AMZ)", "EU-AMZ", "유럽 아마존 온라인", "수출용 목재 팔렛트", "수출용 목재 팔렛트(1219*1016*120) - 바닥보드 5개 / 훈증처리(GMA) 필수", true, 1500, true, "DDMMYYYY", "1. AMZ바코드(X바코드) 확인 필수\n2. 사용기한 착인 또는 압인 시 'EXP DDMMYYYY' 기재"},
+            {"미국/OTC(OTC)", "OTC", "OTC 약국/드러그스토어", "수출용 목재 팔렛트", "국내 생산 : 수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm) / 미국 생산 : 수출용 목재 팔렛트(1219*1016*120) - 바닥보드 5개 / 훈증처리(GMA) 필수", false, 1500, true, "YYYY-MM", "1. 사용기한 착인 또는 압인 시 'EXP  YYYY-MM' 기재"},
+            {"할랄(HALAL)", "HALAL", "할랄 인증 유통", "수출용 검은색 일회용 팔레트", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", true, 1500, true, "(미정)", "신설 예정"}
         };
 
-        for (String[] ch : channels) {
-            String name = ch[0];
-            String desc = ch[1];
-            if (!salesChannelRepository.existsByName(name)) {
-                salesChannelRepository.save(SalesChannel.builder()
+        for (Object[] ch : channels) {
+            String name = (String) ch[0];
+            String code = (String) ch[1];
+            String desc = (String) ch[2];
+            String pType = (String) ch[3];
+            String pSpec = (String) ch[4];
+            Boolean stickerReq = (Boolean) ch[5];
+            Integer heightLimit = (Integer) ch[6];
+            Boolean padReq = (Boolean) ch[7];
+            String expFormat = (String) ch[8];
+            String notes = (String) ch[9];
+
+            SalesChannel channel = salesChannelRepository.findByName(name).orElse(null);
+            if (channel == null) {
+                channel = SalesChannel.builder()
                     .name(name)
-                    .description(desc)
-                    .active(true)
-                    .updatedBy("system")
-                    .build());
-                log.info(">>>> [SYSTEM INIT] Seeded Sales Channel: {}", name);
+                    .build();
             }
+            
+            // 모든 컬럼 필드 동기화 덮어쓰기
+            channel.setChannelCode(code);
+            channel.setDescription(desc);
+            channel.setPalletType(pType);
+            channel.setPalletSpec(pSpec);
+            channel.setChannelStickerRequired(stickerReq);
+            channel.setMaxStackHeightMm(heightLimit);
+            channel.setPadAndFrameRequired(padReq);
+            channel.setExpDateFormat(expFormat);
+            channel.setSpecialNotes(notes);
+            channel.setActive(true);
+            channel.setUpdatedBy("system");
+
+            salesChannelRepository.save(channel);
+            log.info(">>>> [SYSTEM INIT] Synced & Seeded Sales Channel: {}", name);
         }
     }
 
     private void seedChannelPackagingRules() {
         log.info(">>>> [SYSTEM INIT] Seeding Channel Packaging Rules...");
         
-        seedRule("일반(공용)", "PALLET_SPEC", "아주팔레트 (1,100 x 1,100 mm)", null);
-        seedRule("일반(공용)", "STICKER_REQUIRED", "미부착", null);
-        seedRule("일반(공용)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하", null);
-        seedRule("일반(공용)", "LABELING", "EXP YYYYMMDD까지", "1. 사용기한 착인 또는 압인 시 'EXP YYYYMMDD까지' 기재");
+        seedRule("일반(GENERAL)", "PALLET_SPEC", "아주팔레트 (1,100 x 1,100 mm)", null);
+        seedRule("일반(GENERAL)", "STICKER_REQUIRED", "미부착", null);
+        seedRule("일반(GENERAL)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하", null);
+        seedRule("일반(GENERAL)", "LABELING", "EXP YYYYMMDD까지", "1. 사용기한 착인 또는 압인 시 'EXP YYYYMMDD까지' 기재");
 
         seedRule("올리브영(OY)", "PALLET_SPEC", "아주팔레트 (1,100 x 1,100 mm)", null);
         seedRule("올리브영(OY)", "STICKER_REQUIRED", "미부착", null);
@@ -845,90 +955,83 @@ public class SystemInitializationService {
                  "3. 사용기한 착인 또는 압인 시 'EXP YYYYMMDD까지' 기재\n" +
                  "4. 인박스 현품표 사용 시 '바코드' 미기재 필수");
 
-        seedRule("군마트용(PX)", "PALLET_SPEC", "아주팔레트 (1,100 x 1,100 mm)", null);
-        seedRule("군마트용(PX)", "STICKER_REQUIRED", "미부착", null);
-        seedRule("군마트용(PX)", "LOAD_HEIGHT", "PLT 제외, 1050mm 이하", null);
-        seedRule("군마트용(PX)", "LABELING", "EXP YYYYMMDD까지",
+        seedRule("군마트(PX)", "PALLET_SPEC", "아주팔레트 (1,100 x 1,100 mm)", null);
+        seedRule("군마트(PX)", "STICKER_REQUIRED", "미부착", null);
+        seedRule("군마트(PX)", "LOAD_HEIGHT", "PLT 제외, 1050mm 이하", null);
+        seedRule("군마트(PX)", "LABELING", "EXP YYYYMMDD까지",
                  "1. 용기 및 단상자에 군마트용 문구 기재 확인 필수\n" +
                  "2. 아웃박스 바코드 별도 운영 -> 반드시 확인 후 아웃박스 현품표에 아웃박스 바코드 기재 필요\n" +
                  "3. 사용기한 착인 또는 압인 시 'EXP YYYYMMDD까지' 기재");
 
-        seedRule("JP/ON", "PALLET_SPEC", "아주팔레트 (1,100 x 1,100 mm)", null);
-        seedRule("JP/ON", "STICKER_REQUIRED", "미부착", null);
-        seedRule("JP/ON", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하", null);
-        seedRule("JP/ON", "LABELING", "EXP YYYYMMDD까지",
+        seedRule("일본/온라인(JP/ON)", "PALLET_SPEC", "아주팔레트 (1,100 x 1,100 mm)", null);
+        seedRule("일본/온라인(JP/ON)", "STICKER_REQUIRED", "미부착", null);
+        seedRule("일본/온라인(JP/ON)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하", null);
+        seedRule("일본/온라인(JP/ON)", "LABELING", "EXP YYYYMMDD까지",
                  "1. 7매 마스크 품목에 한해 제조번호만 압인하며, 사용기한 압인 금지\n" +
                  "2. 사용기한 착인 또는 압인 시 'EXP YYYYMMDD까지' 기재");
 
-        seedRule("JP/OFF", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
-        seedRule("JP/OFF", "STICKER_REQUIRED", "미부착", null);
-        seedRule("JP/OFF", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
-        seedRule("JP/OFF", "LABELING", "사용기한 착인 금지",
+        seedRule("일본/오프라인(JP/OFF)", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
+        seedRule("일본/오프라인(JP/OFF)", "STICKER_REQUIRED", "미부착", null);
+        seedRule("일본/오프라인(JP/OFF)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
+        seedRule("일본/오프라인(JP/OFF)", "LABELING", "사용기한 착인 금지",
                  "1. 전 품목 사용기한 착인 또는 압인 금지, 제조번호만 착인 또는 압인\n" +
                  "2. 일문 패키지\n" +
                  "3. 인박스, 아웃박스, 팔레트 현품표에 사용기한 기재 금지\n" +
                  "4. 인박스(+현품표) 필수\n" +
                  "5. 기획세트의 경우, 모든 구성품의 로트 착인하며, 인박스, 아웃박스, 팔레트 현품표에도 모든 구성품의 로트 착인");
 
-        seedRule("JP/ON(AMZ)", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
-        seedRule("JP/ON(AMZ)", "STICKER_REQUIRED", "미부착", null);
-        seedRule("JP/ON(AMZ)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
-        seedRule("JP/ON(AMZ)", "LABELING", "EXP MM-DD-YYYY",
+        seedRule("일본/아마존(JP/AMZ)", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
+        seedRule("일본/아마존(JP/AMZ)", "STICKER_REQUIRED", "미부착", null);
+        seedRule("일본/아마존(JP/AMZ)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
+        seedRule("일본/아마존(JP/AMZ)", "LABELING", "EXP MM-DD-YYYY",
                  "1. 일문 패키지 + AMZ바코드(X바코드)\n" +
                  "2. 7매 마스크 품목의 경우, 지퍼백 포장 시 주의사항 문구 '※ご注意ください※\n" +
                  "このビニール袋には、7枚入りマスクパック가 [7袋]入っています。\n" +
                  "出荷時は[1袋ずつ] 取り出して出荷してください。' 표시 하고, 7매[7袋]와 1매입[1袋ずつ] 글자 굵게(bold) 필수 기재\n" +
                  "3. 사용기한 착인 또는 압인 시 'EXP MM-DD-YYYY' 기재");
 
-        seedRule("GLB", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
-        seedRule("GLB", "STICKER_REQUIRED", "미부착", null);
-        seedRule("GLB", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
-        seedRule("GLB", "LABELING", "EXP MM-DD-YYYY", "1. 사용기한 착인 또는 압인 시 'EXP MM-DD-YYYY' 기재");
+        seedRule("글로벌(GLB)", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
+        seedRule("글로벌(GLB)", "STICKER_REQUIRED", "미부착", null);
+        seedRule("글로벌(GLB)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
+        seedRule("글로벌(GLB)", "LABELING", "EXP MM-DD-YYYY", "1. 사용기한 착인 또는 압인 시 'EXP MM-DD-YYYY' 기재");
 
-        seedRule("AU/ON(AMZ)", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
-        seedRule("AU/ON(AMZ)", "STICKER_REQUIRED", "미부착", null);
-        seedRule("AU/ON(AMZ)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
-        seedRule("AU/ON(AMZ)", "LABELING", "EXP MM-DD-YYYY",
+        seedRule("미국/아마존(US/AMZ)", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
+        seedRule("미국/아마존(US/AMZ)", "STICKER_REQUIRED", "부착", null);
+        seedRule("미국/아마존(US/AMZ)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
+        seedRule("미국/아마존(US/AMZ)", "LABELING", "EXP MM-DD-YYYY",
                  "1. AMZ바코드(X바코드) 확인 필수\n" +
                  "2. 사용기한 착인 또는 압인 시 'EXP MM-DD-YYYY' 기재");
 
-        seedRule("US/ON(AMZ)", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
-        seedRule("US/ON(AMZ)", "STICKER_REQUIRED", "부착", null);
-        seedRule("US/ON(AMZ)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
-        seedRule("US/ON(AMZ)", "LABELING", "EXP MM-DD-YYYY",
-                 "1. AMZ바코드(X바코드) 확인 필수\n" +
-                 "2. 사용기한 착인 또는 압인 시 'EXP MM-DD-YYYY' 기재");
+        seedRule("유럽(EU)", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
+        seedRule("유럽(EU)", "STICKER_REQUIRED", "부착", null);
+        seedRule("유럽(EU)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
+        seedRule("유럽(EU)", "LABELING", "EXP DDMMYYYY", "1. 사용기한 착인 또는 압인 시 'EXP DDMMYYYY' 기재");
 
-        seedRule("GLB/EU", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
-        seedRule("GLB/EU", "STICKER_REQUIRED", "부착", null);
-        seedRule("GLB/EU", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
-        seedRule("GLB/EU", "LABELING", "EXP DDMMYYYY", "1. 사용기한 착인 또는 압인 시 'EXP DDMMYYYY' 기재");
-
-        seedRule("OY/US", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
-        seedRule("OY/US", "STICKER_REQUIRED", "미부착", null);
-        seedRule("OY/US", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
-        seedRule("OY/US", "LABELING", "EXP YYYYMMDD까지",
+        seedRule("올리브영/역직구(OY/US)", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
+        seedRule("올리브영/역직구(OY/US)", "STICKER_REQUIRED", "미부착", null);
+        seedRule("올리브영/역직구(OY/US)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
+        seedRule("올리브영/역직구(OY/US)", "LABELING", "EXP YYYYMMDD까지",
                  "1. 인박스 사용 시 B형 인박스 사용, 인박스에 박스 테이프 부착 금지\n" +
                  "2. 아웃박스 포장 중 단상자 POP 등으로 빈공간 발생 시 비닐 에어캡으로 공간 완충 필요 (부직포, 발포지, 폐지, 신문지 등 사용 금지)\n" +
                  "3. 사용기한 착인 또는 압인 시 'EXP YYYYMMDD까지' 기재\n" +
                  "4. 인박스 현품표 사용 시 '바코드' 미기재 필수");
 
-        seedRule("EU/ON(AMZ)", "PALLET_SPEC", "수출용 목재 팔렛트(1219*1016*120) - 바닥보드 5개 / 훈증처리(GMA) 필수", null);
-        seedRule("EU/ON(AMZ)", "STICKER_REQUIRED", "부착", null);
-        seedRule("EU/ON(AMZ)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
-        seedRule("EU/ON(AMZ)", "LABELING", "EXP DDMMYYYY",
+        seedRule("유럽/아마존(EU/AMZ)", "PALLET_SPEC", "수출용 목재 팔렛트(1219*1016*120) - 바닥보드 5개 / 훈증처리(GMA) 필수", null);
+        seedRule("유럽/아마존(EU/AMZ)", "STICKER_REQUIRED", "부착", null);
+        seedRule("유럽/아마존(EU/AMZ)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
+        seedRule("유럽/아마존(EU/AMZ)", "LABELING", "EXP DDMMYYYY",
                  "1. AMZ바코드(X바코드) 확인 필수\n" +
                  "2. 사용기한 착인 또는 압인 시 'EXP DDMMYYYY' 기재");
 
-        seedRule("OTC", "PALLET_SPEC", "국내 생산 : 수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm) / 미국 생산 : 수출용 목재 팔렛트(1219*1016*120) - 바닥보드 5개 / 훈증처리(GMA) 필수", null);
-        seedRule("OTC", "STICKER_REQUIRED", "미부착", null);
-        seedRule("OTC", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
-        seedRule("OTC", "LABELING", "EXP YYYY-MM", "1. 사용기한 착인 또는 압인 시 'EXP  YYYY-MM' 기재");
+        seedRule("미국/OTC(OTC)", "PALLET_SPEC", "국내 생산 : 수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm) / 미국 생산 : 수출용 목재 팔렛트(1219*1016*120) - 바닥보드 5개 / 훈증처리(GMA) 필수", null);
+        seedRule("미국/OTC(OTC)", "STICKER_REQUIRED", "미부착", null);
+        seedRule("미국/OTC(OTC)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
+        seedRule("미국/OTC(OTC)", "LABELING", "EXP YYYY-MM", "1. 사용기한 착인 또는 압인 시 'EXP  YYYY-MM' 기재");
 
-        seedRule("HALAL", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
-        seedRule("HALAL", "STICKER_REQUIRED", "부착", null);
-        seedRule("HALAL", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
-        seedRule("HALAL", "LABELING", "신설 예정", "신설 예정");
+        seedRule("할랄(HALAL)", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
+        seedRule("할랄(HALAL)", "STICKER_REQUIRED", "부착", null);
+        seedRule("할랄(HALAL)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
+        seedRule("할랄(HALAL)", "LABELING", "신설 예정", "신설 예정");
     }
 
     private void seedRule(String channelName, String ruleType, String value, String warning) {
