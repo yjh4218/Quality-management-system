@@ -35,16 +35,30 @@ const DataGrid = React.forwardRef(({
         const newSize = Number(e.target.value);
         setPageSize(newSize);
         if (gridRef.current && gridRef.current.api) {
-            gridRef.current.api.paginationSetPageSize(newSize);
+            const api = gridRef.current.api;
+            if (typeof api.setGridOption === 'function') {
+                api.setGridOption('paginationPageSize', newSize);
+            } else if (typeof api.paginationSetPageSize === 'function') {
+                api.paginationSetPageSize(newSize);
+            }
         }
     };
 
     // rowData 또는 pageSize 변경 시 페이징 상태 강제 업데이트
     useEffect(() => {
         if (gridRef.current && gridRef.current.api) {
-            gridRef.current.api.paginationSetPageSize(pageSize);
-            setCurrentPage(gridRef.current.api.paginationGetCurrentPage());
-            setTotalPages(gridRef.current.api.paginationGetTotalPages() || 1);
+            const api = gridRef.current.api;
+            if (typeof api.setGridOption === 'function') {
+                api.setGridOption('paginationPageSize', pageSize);
+            } else if (typeof api.paginationSetPageSize === 'function') {
+                api.paginationSetPageSize(pageSize);
+            }
+            if (typeof api.paginationGetCurrentPage === 'function') {
+                setCurrentPage(api.paginationGetCurrentPage());
+            }
+            if (typeof api.paginationGetTotalPages === 'function') {
+                setTotalPages(api.paginationGetTotalPages() || 1);
+            }
         }
     }, [rowData, pageSize, gridRef]);
 
