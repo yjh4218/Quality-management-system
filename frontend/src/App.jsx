@@ -9,6 +9,9 @@ import LogManagementPage from './LogManagementPage';
 import DashboardPage from './DashboardPage';
 import ClaimManagementPage from './ClaimManagementPage';
 import ClaimDashboardPage from './ClaimDashboardPage.jsx';
+import QualityDashboardPage from './QualityDashboardPage.jsx';
+import ProductDashboardPage from './ProductDashboardPage.jsx';
+import ProductionAuditDashboardPage from './ProductionAuditDashboardPage.jsx';
 import MarketReleaseRecordPage from './MarketReleaseRecordPage.jsx';
 import BomMasterPage from './BomMasterPage.jsx';
 import BomCategoryManagementPage from './BomCategoryManagementPage.jsx';
@@ -56,8 +59,11 @@ const PAGE_INFO = {
     quality: { title: '📦 입고 품질 관리' },
     releaseRecord: { title: '📄 시장출하 기록' },
     qualityPhotoAudit: { title: '📸 신제품 생산감리' },
+    productionAuditDashboard: { title: '📊 생산감리 대시보드' },
     claims: { title: '🔍 클레임 조회/입력' },
     claimDashboard: { title: '📈 클레임 대시보드' },
+    qualityDashboard: { title: '📊 입고 품질 검사 대시보드' },
+    productDashboard: { title: '📊 제품코드 마스터 대시보드' },
     manufacturerAuditItems: { title: '📋 제조사 점검항목 관리' },
     manufacturerAudits: { title: '📝 제조사 Audit 관리' },
     manufacturerAuditDashboard: { title: '📊 제조사 Audit 대시보드' },
@@ -280,8 +286,11 @@ const App = () => {
             if (isOpening) {
                 // Close all other sections
                 return {
+                    monitoring: false,
                     system: false,
-                    master: false,
+                    products: false,
+                    partner: false,
+                    audit: false,
                     quality: false,
                     claim: false,
                     [section]: true
@@ -749,10 +758,10 @@ const App = () => {
 
     const hasMonitoringAccess = canAccess('dashboard') || canAccess('announcements') || canAccess('notifications');
     const hasSystemAccess = canAccess('users') || canAccess('logs') || canAccess('roles') || canAccess('guideManagement') || canAccess('dashboardMgmt') || canAccess('trashBin') || canAccess('accessLogs') || canAccess('bugReports') || canAccess('mailTemplates') || canAccess('notificationSettings');
-    const hasProductsAccess = canAccess('products') || canAccess('brands') || canAccess('ingredientCompliance') || canAccess('bomMaster') || canAccess('bomCategories') || canAccess('salesChannels');
+    const hasProductsAccess = canAccess('products') || canAccess('brands') || canAccess('ingredientCompliance') || canAccess('bomMaster') || canAccess('bomCategories') || canAccess('salesChannels') || canAccess('productDashboard');
     const hasPartnerAccess = canAccess('manufacturers') || canAccess('manufacturerCategories') || canAccess('manufacturerGuide');
     const hasAuditAccess = canAccess('manufacturerAudits') || canAccess('manufacturerAuditDashboard') || canAccess('manufacturerAuditItems');
-    const hasQualityAccess = canAccess('qualityPhotoAudit') || canAccess('packagingTemplates') || canAccess('packagingRules') || canAccess('quality') || canAccess('releaseRecord');
+    const hasQualityAccess = canAccess('qualityPhotoAudit') || canAccess('packagingTemplates') || canAccess('packagingRules') || canAccess('quality') || canAccess('releaseRecord') || canAccess('qualityDashboard') || canAccess('productionAuditDashboard');
     const hasClaimAccess = canAccess('claims') || canAccess('claimDashboard');
 
     // [고도화 5] 현재 활성화된 섹션 판단 로직
@@ -761,10 +770,10 @@ const App = () => {
         switch(section) {
             case 'monitoring': return ['dashboard', 'announcements', 'notifications'].includes(activePage);
             case 'system': return ['users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin', 'accessLogs', 'bugReports', 'mailTemplates', 'notificationSettings'].includes(activePage);
-            case 'products': return ['products', 'brands', 'ingredientCompliance', 'bomMaster', 'bomCategories', 'salesChannels'].includes(activePage);
+            case 'products': return ['products', 'brands', 'ingredientCompliance', 'bomMaster', 'bomCategories', 'salesChannels', 'productDashboard'].includes(activePage);
             case 'partner': return ['manufacturers', 'manufacturerCategories', 'manufacturerGuide'].includes(activePage);
             case 'audit': return ['manufacturerAudits', 'manufacturerAuditDashboard', 'manufacturerAuditItems'].includes(activePage);
-            case 'quality': return ['qualityPhotoAudit', 'packagingTemplates', 'packagingRules', 'quality', 'releaseRecord'].includes(activePage);
+            case 'quality': return ['qualityPhotoAudit', 'packagingTemplates', 'packagingRules', 'quality', 'releaseRecord', 'qualityDashboard', 'productionAuditDashboard'].includes(activePage);
             case 'claim': return ['claims', 'claimDashboard'].includes(activePage);
             default: return false;
         }
@@ -815,7 +824,7 @@ const App = () => {
                             <span className={`arrow ${openSections.monitoring ? 'open' : ''}`}>▼</span>
                         </button>
                         {openSections.monitoring && (
-                            <div className="sidebar-group-content">
+                            <div className="sidebar-group-content open">
                                 {canAccess('dashboard') && (
                                     <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'dashboard' ? 'active' : ''}`} onClick={() => handleNavigate('dashboard')}>
                                         📊 시스템 대시보드
@@ -847,7 +856,7 @@ const App = () => {
                             <span className={`arrow ${openSections.system ? 'open' : ''}`}>▼</span>
                         </button>
                         {openSections.system && (
-                            <div className="sidebar-group-content">
+                            <div className="sidebar-group-content open">
                                 {(canAccess('users') || canAccess('roles') || canAccess('accessLogs')) && (
                                     <>
                                         <div className="sidebar-sub-header">사용자 및 보안</div>
@@ -931,7 +940,7 @@ const App = () => {
                             <span className={`arrow ${openSections.products ? 'open' : ''}`}>▼</span>
                         </button>
                         {openSections.products && (
-                            <div className="sidebar-group-content">
+                            <div className="sidebar-group-content open">
                                 {(canAccess('products') || canAccess('brands') || canAccess('ingredientCompliance') || canAccess('salesChannels')) && (
                                     <>
                                         <div className="sidebar-sub-header">기본 마스터</div>
@@ -940,6 +949,9 @@ const App = () => {
                                                 📦 제품코드 마스터
                                             </button>
                                         )}
+                                        <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'productDashboard' ? 'active' : ''}`} onClick={() => handleNavigate('productDashboard')}>
+                                            📊 제품코드 대시보드
+                                        </button>
                                         {canAccess('brands') && (
                                             <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'brands' ? 'active' : ''}`} onClick={() => handleNavigate('brands')}>
                                                 🏷️ 브랜드 마스터 관리
@@ -989,7 +1001,7 @@ const App = () => {
                             <span className={`arrow ${openSections.partner ? 'open' : ''}`}>▼</span>
                         </button>
                         {openSections.partner && (
-                            <div className="sidebar-group-content">
+                            <div className="sidebar-group-content open">
                                 {canAccess('manufacturers') && (
                                     <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'manufacturers' ? 'active' : ''}`} onClick={() => handleNavigate('manufacturers')}>
                                         🏭 제조사 정보 관리
@@ -1021,7 +1033,7 @@ const App = () => {
                             <span className={`arrow ${openSections.audit ? 'open' : ''}`}>▼</span>
                         </button>
                         {openSections.audit && (
-                            <div className="sidebar-group-content">
+                            <div className="sidebar-group-content open">
                                 {canAccess('manufacturerAudits') && (
                                     <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'manufacturerAudits' ? 'active' : ''}`} onClick={() => handleNavigate('manufacturerAudits')}>
                                         📝 제조사 Audit 관리
@@ -1053,12 +1065,15 @@ const App = () => {
                             <span className={`arrow ${openSections.quality ? 'open' : ''}`}>▼</span>
                         </button>
                         {openSections.quality && (
-                            <div className="sidebar-group-content">
+                            <div className="sidebar-group-content open">
                                 {canAccess('qualityPhotoAudit') && (
                                     <>
                                         <div className="sidebar-sub-header">생산감리</div>
                                         <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'qualityPhotoAudit' ? 'active' : ''}`} onClick={() => handleNavigate('qualityPhotoAudit')}>
                                             📸 신제품 생산감리 (사진감리)
+                                        </button>
+                                        <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'productionAuditDashboard' ? 'active' : ''}`} onClick={() => handleNavigate('productionAuditDashboard')}>
+                                            📊 생산감리 대시보드
                                         </button>
                                     </>
                                 )}
@@ -1079,9 +1094,14 @@ const App = () => {
                                     </>
                                 )}
 
-                                {(canAccess('quality') || canAccess('releaseRecord')) && (
+                                {(canAccess('quality') || canAccess('releaseRecord') || canAccess('qualityDashboard')) && (
                                     <>
                                         <div className="sidebar-sub-header">입고 관리</div>
+                                        {canAccess('qualityDashboard') && (
+                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'qualityDashboard' ? 'active' : ''}`} onClick={() => handleNavigate('qualityDashboard')}>
+                                                🚚 입고 품질 검사 대시보드
+                                            </button>
+                                        )}
                                         {canAccess('quality') && (
                                             <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'quality' ? 'active' : ''}`} onClick={() => handleNavigate('quality')}>
                                                 📦 입고 품질 관리
@@ -1110,7 +1130,7 @@ const App = () => {
                             <span className={`arrow ${openSections.claim ? 'open' : ''}`}>▼</span>
                         </button>
                         {openSections.claim && (
-                            <div className="sidebar-group-content">
+                            <div className="sidebar-group-content open">
                                 <div className="sidebar-sub-header">클레임 운영</div>
                                 {canAccess('claims') && (
                                     <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'claims' ? 'active' : ''}`} onClick={() => handleNavigate('claims')}>
@@ -1311,6 +1331,18 @@ const App = () => {
                                         user={user}
                                         onNavigate={handleNavigate}
                                     />
+                                )}
+                                {tab.page === 'qualityDashboard' && (
+                                    <QualityDashboardPage 
+                                        user={user}
+                                        onNavigate={handleNavigate}
+                                    />
+                                )}
+                                {tab.page === 'productDashboard' && (
+                                    <ProductDashboardPage user={user} onNavigate={handleNavigate} />
+                                )}
+                                {tab.page === 'productionAuditDashboard' && (
+                                    <ProductionAuditDashboardPage user={user} onNavigate={handleNavigate} />
                                 )}
                                 {tab.page === 'bomMaster' && <BomMasterPage user={user} />}
                                 {tab.page === 'bomCategories' && <BomCategoryManagementPage user={user} />}

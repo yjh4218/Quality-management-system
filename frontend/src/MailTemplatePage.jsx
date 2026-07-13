@@ -501,7 +501,7 @@ const MailTemplatePage = ({ user }) => {
                             defaultColDef={{ resizable: true, sortable: true, filter: true }}
                             pagination={true}
                             paginationPageSize={20}
-                            rowHeight={52}
+                            rowHeight={54}
                             overlayLoadingTemplate={loading ? '<span class="ag-overlay-loading-center">데이터를 불러오는 중입니다...</span>' : undefined}
                         />
                     </div>
@@ -514,7 +514,7 @@ const MailTemplatePage = ({ user }) => {
                         defaultColDef={{ resizable: true, sortable: true, filter: true }}
                         pagination={true}
                         paginationPageSize={20}
-                        rowHeight={52}
+                        rowHeight={54}
                     />
                 </div>
             )}

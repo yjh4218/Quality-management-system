@@ -278,6 +278,9 @@ api.interceptors.response.use(
 export const getDashboard = () => 
   api.get('/api/dashboard').then(res => res.data);
 
+export const getDashboardStats = () => 
+  api.get('/api/dashboard/stats').then(res => res.data);
+
 // Auth
 export const logout = () => api.post('/api/auth/logout');
 export const login = (username, password) => {
@@ -424,6 +427,9 @@ export const searchProducts = (params) => {
     if (params.brand) queryParams.append('brand', params.brand);
     if (params.manufacturer) queryParams.append('manufacturer', params.manufacturer);
     if (params.ingredients) queryParams.append('ingredients', params.ingredients);
+    if (params.channelNames && params.channelNames.length > 0) {
+        params.channelNames.forEach(ch => queryParams.append('channelNames', ch));
+    }
     if (params.page !== undefined) queryParams.append('page', params.page);
     if (params.size !== undefined) queryParams.append('size', params.size);
     return api.get(`/api/products/search?${queryParams.toString()}`);

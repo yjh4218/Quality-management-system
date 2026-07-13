@@ -2,17 +2,20 @@ package com.example.ims.service;
 
 import com.example.ims.dto.DashboardDTO;
 import com.example.ims.dto.DashboardItemDTO;
+import com.example.ims.dto.DashboardStatsDTO;
 import com.example.ims.entity.AuditLog;
 import com.example.ims.entity.Claim;
 import com.example.ims.entity.Product;
 import com.example.ims.entity.User;
 import com.example.ims.entity.WmsInbound;
+import com.example.ims.entity.ManufacturerAudit;
 import com.example.ims.repository.AuditLogRepository;
 import com.example.ims.repository.ClaimRepository;
 import com.example.ims.repository.ProductRepository;
 import com.example.ims.repository.UserRepository;
 import com.example.ims.repository.WmsInboundRepository;
 import com.example.ims.repository.ProductionAuditRepository;
+import com.example.ims.repository.ManufacturerAuditRepository;
 import com.example.ims.repository.DashboardLayoutRepository;
 import com.example.ims.repository.RoleRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -41,6 +44,7 @@ public class DashboardService {
     private final ClaimRepository claimRepository;
     private final RoleService roleService;
     private final ProductionAuditRepository productionAuditRepository;
+    private final ManufacturerAuditRepository manufacturerAuditRepository;
     private final DashboardLayoutRepository dashboardLayoutRepository;
     private final RoleRepository roleRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -210,6 +214,7 @@ public class DashboardService {
         if ("ROLE_ADMIN".equals(role)) {
             return List.of(
                     "WIDGET_ANNOUNCEMENTS",
+                    "WIDGET_QUALITY_STATS", "WIDGET_CLAIM_TREND", "WIDGET_AUDIT_GRADE",
                     "WIDGET_NEW_PRODUCTS", "WIDGET_PENDING_USERS", "WIDGET_AUDIT_LOGS",
                     "WIDGET_QUALITY_INBOUNDS", "WIDGET_PENDING_DIMENSIONS", "WIDGET_CONFIRMED_DIMENSIONS",
                     "WIDGET_RECENT_CLAIMS", "WIDGET_MFR_COMPLETED_CLAIMS", "WIDGET_AUDIT_REVIEW",
@@ -217,17 +222,18 @@ public class DashboardService {
         } else if ("ROLE_QUALITY".equals(role)) {
             return List.of(
                     "WIDGET_ANNOUNCEMENTS",
+                    "WIDGET_QUALITY_STATS", "WIDGET_CLAIM_TREND", "WIDGET_AUDIT_GRADE",
                     "WIDGET_NEW_PRODUCTS", "WIDGET_QUALITY_INBOUNDS", "WIDGET_PENDING_DIMENSIONS",
                     "WIDGET_CONFIRMED_DIMENSIONS", "WIDGET_RECENT_CLAIMS", "WIDGET_MFR_COMPLETED_CLAIMS",
                     "WIDGET_AUDIT_REVIEW", "WIDGET_AUDIT_PROGRESS");
         } else if ("ROLE_MANUFACTURER".equals(role)) {
-            return List.of("WIDGET_ANNOUNCEMENTS", "WIDGET_QUALITY_INBOUNDS", "WIDGET_RECENT_CLAIMS", "WIDGET_AUDIT_PROGRESS");
+            return List.of("WIDGET_ANNOUNCEMENTS", "WIDGET_QUALITY_STATS", "WIDGET_CLAIM_TREND", "WIDGET_QUALITY_INBOUNDS", "WIDGET_RECENT_CLAIMS", "WIDGET_AUDIT_PROGRESS");
         } else if ("ROLE_SALES".equals(role)) {
-            return List.of("WIDGET_ANNOUNCEMENTS", "WIDGET_NEW_PRODUCTS", "WIDGET_CONFIRMED_DIMENSIONS", "WIDGET_RECENT_CLAIMS",
+            return List.of("WIDGET_ANNOUNCEMENTS", "WIDGET_CLAIM_TREND", "WIDGET_NEW_PRODUCTS", "WIDGET_CONFIRMED_DIMENSIONS", "WIDGET_RECENT_CLAIMS",
                     "WIDGET_MFR_COMPLETED_CLAIMS");
         } else {
             // Default for any other role
-            return List.of("WIDGET_ANNOUNCEMENTS", "WIDGET_NEW_PRODUCTS", "WIDGET_RECENT_CLAIMS");
+            return List.of("WIDGET_ANNOUNCEMENTS", "WIDGET_QUALITY_STATS", "WIDGET_CLAIM_TREND", "WIDGET_NEW_PRODUCTS", "WIDGET_RECENT_CLAIMS");
         }
     }
 
@@ -332,5 +338,82 @@ public class DashboardService {
             }
         }
         return map;
+    }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public DashboardStatsDTO getDashboardStats(User user) {
+        String company = user.getCompanyName();
+        String role = user.getRole();
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime oneMonthAgo = now.minusMonths(1);
+
+        // 1. WMS 입고 통계 (합격율)
+        List<WmsInbound> inbounds;
+        if ("ROLE_MANUFACTURER".equals(role)) {
+            inbounds = wmsInboundRepository.findTop50ByManufacturerAndInboundDateAfterOrderByInboundDateDesc(company, oneMonthAgo);
+        } else {
+            inbounds = wmsInboundRepository.findTop50ByInboundDateAfterOrderByInboundDateDesc(oneMonthAgo);
+        }
+        
+        long totalInbounds = inbounds.size();
+        long passInbounds = inbounds.stream()
+                .filter(w -> w.getOverallStatus() != null && "합격".equals(w.getOverallStatus().getLabel()))
+                .count();
+        double qualityPassRate = totalInbounds > 0 ? ((double) passInbounds / totalInbounds) * 100.0 : 100.0;
+
+        // 2. CX 클레임 건수 (당월)
+        List<Claim> claims;
+        if ("ROLE_MANUFACTURER".equals(role)) {
+            claims = claimRepository.findTop50ByManufacturerAndReceiptDateAfterOrderByReceiptDateDesc(company, oneMonthAgo.toLocalDate());
+        } else {
+            claims = claimRepository.findTop50ByReceiptDateAfterOrderByReceiptDateDesc(oneMonthAgo.toLocalDate());
+        }
+
+        long claimCountThisMonth = claims.size();
+        java.util.Map<String, Long> claimByCategory = claims.stream()
+                .filter(c -> c.getPrimaryCategory() != null && !c.getPrimaryCategory().isEmpty())
+                .collect(Collectors.groupingBy(Claim::getPrimaryCategory, Collectors.counting()));
+
+        // 3. 제조사 등급 및 Audit 현황
+        List<ManufacturerAudit> mfrAudits;
+        if ("ROLE_MANUFACTURER".equals(role)) {
+            mfrAudits = manufacturerAuditRepository.searchAudits(null, null, company, null, null);
+        } else {
+            mfrAudits = manufacturerAuditRepository.searchAudits(null, null, null, null, null);
+        }
+
+        java.util.Map<String, Long> auditGradeDistribution = mfrAudits.stream()
+                .filter(a -> a.getGrade() != null && !a.getGrade().isEmpty())
+                .collect(Collectors.groupingBy(ManufacturerAudit::getGrade, Collectors.counting()));
+
+        // Production Audit Status
+        List<com.example.ims.entity.ProductionAudit> approvedAudits;
+        if ("ROLE_MANUFACTURER".equals(role)) {
+            approvedAudits = productionAuditRepository.findTop50ByManufacturerNameAndStatusAndIsDisclosedTrueAndIsDeletedFalseOrderByUploadDateDesc(company, "APPROVED");
+        } else {
+            approvedAudits = productionAuditRepository.findTop50ByStatusAndIsDeletedFalseOrderByUploadDateDesc("APPROVED");
+        }
+
+        java.util.Map<String, Long> productionAuditStatus = new java.util.HashMap<>();
+        if ("ROLE_MANUFACTURER".equals(role)) {
+            long pending = productionAuditRepository.findPendingProductsByManufacturerAndIsDisclosedTrue(company).size();
+            productionAuditStatus.put("PENDING", pending);
+            productionAuditStatus.put("APPROVED", (long) approvedAudits.size());
+        } else {
+            long pending = productionAuditRepository.findPendingProducts().size();
+            long submitted = productionAuditRepository.findTop50ByStatusAndIsDeletedFalseOrderByUploadDateDesc("SUBMITTED").size();
+            productionAuditStatus.put("PENDING", pending);
+            productionAuditStatus.put("SUBMITTED", submitted);
+            productionAuditStatus.put("APPROVED", (long) approvedAudits.size());
+        }
+
+        return DashboardStatsDTO.builder()
+                .qualityPassRate(Math.round(qualityPassRate * 10.0) / 10.0)
+                .qualityTotal(totalInbounds)
+                .claimCountThisMonth(claimCountThisMonth)
+                .claimByCategory(claimByCategory)
+                .auditGradeDistribution(auditGradeDistribution)
+                .productionAuditStatus(productionAuditStatus)
+                .build();
     }
 }

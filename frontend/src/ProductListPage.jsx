@@ -24,6 +24,12 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
     const [loading, setLoading] = useState(false);
     const [exporting, setExporting] = useState(false);
 
+    // 채널 선택 필터
+    const [availableChannels, setAvailableChannels] = useState([]);
+    const [selectedChannels, setSelectedChannels] = useState([]);
+    const [showChannelDropdown, setShowChannelDropdown] = useState(false);
+    const channelDropdownRef = useRef(null);
+
     const canEdit = canEditProduct('products');
     const canViewPackaging = hasPerm('PRODUCT_PACKAGING_VIEW');
 
@@ -35,6 +41,21 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
         if (hasFetchedOnMount.current) return;
         hasFetchedOnMount.current = true;
         fetchProducts(0);
+        // 활성 채널 목록 로드
+        api.getActiveSalesChannels()
+            .then(res => setAvailableChannels(res.data || []))
+            .catch(() => {}); // 채널 로드 실패해도 무시
+    }, []);
+
+    // 채널 드롭다운 외부 클릭 닫기
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (channelDropdownRef.current && !channelDropdownRef.current.contains(e.target)) {
+                setShowChannelDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
     const lastNavData = useRef(undefined);
@@ -77,7 +98,7 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
     const fetchProducts = async (pageNum = 0) => {
         setLoading(true);
         try {
-            const response = await api.searchProducts({ ...searchFields, page: pageNum, size: defaultPageSize });
+            const response = await api.searchProducts({ ...searchFields, channelNames: selectedChannels, page: pageNum, size: defaultPageSize });
             setRowData(response.data.content || []);
             setTotalPages(response.data.totalPages || 1);
             setPage(pageNum);
@@ -368,7 +389,7 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
                         </button>
                         <button
                             className="outline"
-                            onClick={() => setSearchFields({ itemCode: '', productName: '', brand: '', manufacturer: '', ingredients: '' })}
+                            onClick={() => { setSearchFields({ itemCode: '', productName: '', brand: '', manufacturer: '', ingredients: '' }); setSelectedChannels([]); }}
                             style={{ padding: '10px 16px', fontSize: '14px' }}
                         >
                             ♻️ 초기화
@@ -448,12 +469,123 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
                             style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                         />
                     </div>
+
+                    {/* 6. 채널 선택 (체크박스 드롭다운) */}
+                    {availableChannels.length > 0 && (
+                        <div ref={channelDropdownRef} style={{ position: 'relative' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>📡 채널 선택</label>
+                            <button
+                                type="button"
+                                onClick={() => setShowChannelDropdown(prev => !prev)}
+                                style={{
+                                    width: '100%',
+                                    padding: '8px 12px',
+                                    border: `1px solid ${selectedChannels.length > 0 ? '#4f46e5' : '#d1d5db'}`,
+                                    borderRadius: '6px',
+                                    fontSize: '13px',
+                                    backgroundColor: selectedChannels.length > 0 ? '#ede9fe' : '#fff',
+                                    color: selectedChannels.length > 0 ? '#4f46e5' : '#6b7280',
+                                    cursor: 'pointer',
+                                    textAlign: 'left',
+                                    fontWeight: selectedChannels.length > 0 ? '700' : '400',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center'
+                                }}
+                            >
+                                <span>
+                                    {selectedChannels.length === 0
+                                        ? '전체 채널'
+                                        : selectedChannels.length === availableChannels.length
+                                        ? '전체 채널 선택됨'
+                                        : `${selectedChannels.length}개 채널 선택`}
+                                </span>
+                                <span style={{ fontSize: '10px' }}>{showChannelDropdown ? '▲' : '▼'}</span>
+                            </button>
+                            {showChannelDropdown && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: 'calc(100% + 4px)',
+                                    left: 0,
+                                    right: 0,
+                                    zIndex: 100,
+                                    backgroundColor: '#fff',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: '8px',
+                                    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                                    padding: '8px 0',
+                                    maxHeight: '220px',
+                                    overflowY: 'auto'
+                                }}>
+                                    {/* 전체 선택 / 해제 */}
+                                    <div
+                                        onClick={() => setSelectedChannels(
+                                            selectedChannels.length === availableChannels.length
+                                                ? []
+                                                : availableChannels.map(ch => ch.name)
+                                        )}
+                                        style={{
+                                            padding: '7px 14px',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            borderBottom: '1px solid #f1f5f9',
+                                            fontWeight: '700',
+                                            fontSize: '12px',
+                                            color: '#475569'
+                                        }}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            readOnly
+                                            checked={selectedChannels.length === availableChannels.length}
+                                            style={{ accentColor: '#4f46e5', cursor: 'pointer' }}
+                                        />
+                                        전체 선택 / 해제
+                                    </div>
+                                    {availableChannels.map(ch => (
+                                        <div
+                                            key={ch.id}
+                                            onClick={() => setSelectedChannels(prev =>
+                                                prev.includes(ch.name)
+                                                    ? prev.filter(c => c !== ch.name)
+                                                    : [...prev, ch.name]
+                                            )}
+                                            style={{
+                                                padding: '7px 14px',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px',
+                                                fontSize: '13px',
+                                                color: selectedChannels.includes(ch.name) ? '#4f46e5' : '#374151',
+                                                backgroundColor: selectedChannels.includes(ch.name) ? '#f5f3ff' : 'transparent',
+                                                transition: 'background 0.15s'
+                                            }}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                readOnly
+                                                checked={selectedChannels.includes(ch.name)}
+                                                style={{ accentColor: '#4f46e5', cursor: 'pointer' }}
+                                            />
+                                            <span style={{ fontWeight: '600' }}>{ch.name}</span>
+                                            {ch.channelCode && (
+                                                <span style={{ fontSize: '11px', color: '#94a3b8', marginLeft: 'auto' }}>{ch.channelCode}</span>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
 
             <div className="ag-theme-alpine" style={{ flex: 1, width: '100%', minHeight: 0 }}>
                 <AgGridReact theme="legacy"
-                    rowHeight={50}
+                    rowHeight={54}
                     ref={gridRef}
                     rowData={filteredRowData}
                     columnDefs={colDefs}

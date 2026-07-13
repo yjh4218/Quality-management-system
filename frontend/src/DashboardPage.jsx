@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getDashboard, getActiveAnnouncements } from './api';
+import { getDashboard, getActiveAnnouncements, getDashboardStats } from './api';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import './DashboardPage.css';
 import { usePermissions } from './usePermissions';
+import EmptyState from './components/EmptyState';
 
 /**
  * 전역 대시보드 화면 컴포넌트입니다.
@@ -14,6 +16,7 @@ import { usePermissions } from './usePermissions';
 const DashboardPage = ({ user, onNavigate }) => {
     const { isAdmin, hasPerm } = usePermissions(user);
     const [data, setData] = useState(null);
+    const [stats, setStats] = useState(null);
     const [announcements, setAnnouncements] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -26,12 +29,14 @@ const DashboardPage = ({ user, onNavigate }) => {
         const fetchDashboardData = async () => {
             try {
                 setLoading(true);
-                const [result, annList] = await Promise.all([
+                const [result, annList, statsResult] = await Promise.all([
                     getDashboard(),
-                    getActiveAnnouncements()
+                    getActiveAnnouncements(),
+                    getDashboardStats()
                 ]);
                 setData(result);
                 setAnnouncements(annList.data || []);
+                setStats(statsResult);
             } catch (err) {
                 setError("데이터를 불러오는 중 오류가 발생했습니다.");
             } finally {
@@ -55,63 +60,155 @@ const DashboardPage = ({ user, onNavigate }) => {
      * 새로운 위젯 종류가 추가될 경우 이곳에 렌더러를 정의하면 대시보드 빌더에서 즉시 사용 가능합니다.
      */
     const renderers = {
+        WIDGET_QUALITY_STATS: () => {
+            const passRate = stats?.qualityPassRate || 100;
+            const failRate = Math.max(0, 100 - passRate);
+            const total = stats?.qualityTotal || 0;
+            const dataPie = [
+                { name: '합격', value: passRate },
+                { name: '불합격', value: failRate }
+            ];
+            const COLORS = ['#10b981', '#ef4444'];
+            return (
+                <section className="dashboard-section card" style={{ cursor: 'pointer' }} onClick={() => onNavigate('quality')} key="quality-stats"
+                    onMouseEnter={e => e.currentTarget.style.boxShadow = '0 6px 20px rgba(16,185,129,0.15)'}
+                    onMouseLeave={e => e.currentTarget.style.boxShadow = ''}>
+                    <div className="section-header">
+                        <span className="icon">🚚</span>
+                        <h2>입고 품질 합격률 (최근 1개월)</h2>
+                        <span className="count">{total}건</span>
+                    </div>
+                    <div style={{ height: '240px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                        <ResponsiveContainer width="100%" height="80%">
+                            <PieChart>
+                                <Pie data={dataPie} cx="50%" cy="50%" innerRadius={58} outerRadius={78} paddingAngle={5} dataKey="value">
+                                    {dataPie.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip formatter={(value) => `${value}%`} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                        <div style={{ position: 'absolute', top: '40%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
+                            <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#1e293b' }}>{passRate}%</span>
+                            <div style={{ fontSize: '12px', color: '#64748b' }}>합격률</div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '18px', fontSize: '13px', marginTop: '8px' }}>
+                            <span style={{ color: '#10b981', fontWeight: 'bold' }}>● 합격 ({passRate}%)</span>
+                            <span style={{ color: '#ef4444', fontWeight: 'bold' }}>● 불합격 ({failRate}%)</span>
+                        </div>
+                    </div>
+                </section>
+            );
+        },
+        WIDGET_CLAIM_TREND: () => {
+            const chartData = Object.entries(stats?.claimByCategory || {}).map(([key, val]) => ({
+                name: key,
+                건수: val
+            }));
+            const total = stats?.claimCountThisMonth || 0;
+            return (
+                <section className="dashboard-section card" style={{ cursor: 'pointer' }} onClick={() => onNavigate('claimDashboard')} key="claim-trend"
+                    onMouseEnter={e => e.currentTarget.style.boxShadow = '0 6px 20px rgba(2,132,199,0.15)'}
+                    onMouseLeave={e => e.currentTarget.style.boxShadow = ''}>
+                    <div className="section-header">
+                        <span className="icon">🚨</span>
+                        <h2>당월 CX 클레임 유형 분포</h2>
+                        <span className="count">{total}건</span>
+                    </div>
+                    <div style={{ height: '240px', padding: '10px 0' }}>
+                        {chartData.length === 0 ? (
+                            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '13px' }}>접수된 클레임이 없습니다.</div>
+                        ) : (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                    <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                                    <Tooltip />
+                                    <Bar dataKey="건수" fill="#0284c7" radius={[4, 4, 0, 0]} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        )}
+                    </div>
+                </section>
+            );
+        },
+        WIDGET_AUDIT_GRADE: () => {
+            const chartData = Object.entries(stats?.auditGradeDistribution || {}).map(([key, val]) => ({
+                name: `${key}등급`,
+                제조사수: val
+            })).sort((a, b) => a.name.localeCompare(b.name));
+            return (
+                <section className="dashboard-section card" style={{ cursor: 'pointer' }} onClick={() => onNavigate('manufacturerAuditDashboard')} key="audit-grade"
+                    onMouseEnter={e => e.currentTarget.style.boxShadow = '0 6px 20px rgba(16,185,129,0.15)'}
+                    onMouseLeave={e => e.currentTarget.style.boxShadow = ''}>
+                    <div className="section-header">
+                        <span className="icon">📂</span>
+                        <h2>제조사 현장 Audit 등급 분포</h2>
+                    </div>
+                    <div style={{ height: '240px', padding: '10px 0' }}>
+                        {chartData.length === 0 ? (
+                            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '13px' }}>평가 등급 이력이 없습니다.</div>
+                        ) : (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                    <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                                    <Tooltip />
+                                    <Bar dataKey="제조사수" fill="#10b981" radius={[4, 4, 0, 0]} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        )}
+                    </div>
+                </section>
+            );
+        },
         WIDGET_ANNOUNCEMENTS: () => {
             const hasAnnouncements = announcements && announcements.length > 0;
+            const MAX_SHOW = 5;
             return (
-                <section className="dashboard-section card" style={{ gridColumn: '1 / -1', marginBottom: '12px' }} key="announcements">
-                    <div className="section-header">
-                        <span className="icon">📢</span>
-                        <h2>전사 전체공지 및 배너</h2>
-                        <span className="count">{announcements?.length || 0}</span>
+                <section className="dashboard-section card db-ann-compact" style={{ height: '280px', display: 'flex', flexDirection: 'column' }} key="announcements">
+                    <div className="section-header" style={{ marginBottom: '8px', flexShrink: 0 }}>
+                        <span className="icon" style={{ fontSize: '18px' }}>📢</span>
+                        <h2 style={{ fontSize: '14px' }}>전사 전체공지</h2>
+                        <span className="count" style={{ fontSize: '12px', padding: '2px 8px' }}>{announcements?.length || 0}</span>
+                        <button onClick={() => onNavigate('announcements')} style={{ marginLeft: '8px', fontSize: '11px', color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', fontWeight: '600' }}>전체보기 →</button>
                     </div>
                     {hasAnnouncements ? (
-                        <div className="dashboard-announcements-list" style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '10px 0' }}>
-                            {announcements.map(ann => (
-                                <div key={ann.id} className="announcement-banner" style={{
-                                    background: ann.category ? `linear-gradient(135deg, ${ann.category.color}0d 0%, #fff 100%)` : 'linear-gradient(135deg, #4755690d 0%, #fff 100%)',
-                                    border: `1px solid ${ann.category ? ann.category.color + '40' : '#cbd5e1'}`,
-                                    borderLeft: `6px solid ${ann.category ? ann.category.color : '#475569'}`,
-                                    borderRadius: '12px',
-                                    padding: '16px 20px',
-                                    boxShadow: `0 4px 6px -1px ${ann.category ? ann.category.color + '0d' : 'rgba(0,0,0,0.03)'}`,
-                                    position: 'relative'
-                                }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                                        <span style={{ 
-                                            backgroundColor: ann.category ? ann.category.color : '#475569', 
-                                            color: '#fff', 
-                                            fontSize: '11px', 
-                                            fontWeight: ann.category && ann.category.bold ? '900' : '500', 
-                                            padding: '2px 8px', 
-                                            borderRadius: '12px' 
-                                        }}>
-                                            {ann.category ? ann.category.name : '일반'}
-                                        </span>
-                                        <span style={{ color: '#718096', fontSize: '11px', fontWeight: 'bold' }}>
-                                            {ann.announcementNumber}
-                                        </span>
-                                        <span style={{ color: '#a0aec0', fontSize: '11px', marginLeft: 'auto' }}>
-                                            작성일: {new Date(ann.createdAt).toLocaleDateString()} (작성자: {ann.createdByName || ann.createdByUsername})
-                                        </span>
-                                    </div>
-                                    <h3 style={{ margin: '0 0 6px 0', fontSize: '15px', fontWeight: '800', color: '#1e293b' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, overflowY: 'auto', paddingRight: '4px' }}>
+                            {announcements.slice(0, MAX_SHOW).map(ann => (
+                                <div key={ann.id}
+                                    onClick={() => onNavigate('announcements', { id: ann.id })}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: '8px',
+                                        padding: '7px 10px',
+                                        borderRadius: '8px',
+                                        cursor: 'pointer',
+                                        borderLeft: `3px solid ${ann.category ? ann.category.color : '#cbd5e1'}`,
+                                        background: '#f8fafc',
+                                        transition: 'background 0.15s'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.background = '#f0f4ff'}
+                                    onMouseLeave={e => e.currentTarget.style.background = '#f8fafc'}
+                                >
+                                    <span style={{
+                                        backgroundColor: ann.category ? ann.category.color : '#475569',
+                                        color: '#fff', fontSize: '10px', fontWeight: '700',
+                                        padding: '1px 7px', borderRadius: '10px', whiteSpace: 'nowrap'
+                                    }}>{ann.category ? ann.category.name : '일반'}</span>
+                                    <span style={{ flex: 1, fontSize: '13px', fontWeight: '600', color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                         {ann.title}
-                                    </h3>
-                                    <p style={{ 
-                                        margin: 0, 
-                                        fontSize: '13px', 
-                                        color: '#475569', 
-                                        lineHeight: '1.5', 
-                                        whiteSpace: 'pre-wrap',
-                                        wordBreak: 'break-all'
-                                    }}>
-                                        {ann.content}
-                                    </p>
+                                    </span>
+                                    <span style={{ fontSize: '11px', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                                        {new Date(ann.createdAt).toLocaleDateString()}
+                                    </span>
                                 </div>
                             ))}
                         </div>
                     ) : (
-                        <div className="empty-section-msg" style={{ padding: '24px 0' }}>등록된 활성 전체공지가 없습니다.</div>
+                        <EmptyState message="등록된 활성 전체공지가 없습니다." icon="📢" />
                     )}
                 </section>
             );
@@ -130,35 +227,35 @@ const DashboardPage = ({ user, onNavigate }) => {
                                 <span className="code"><span className="item-label">코드</span>{item.code}</span>
                                 <span className="name">
                                     <span className="item-label">제품명</span>
-                                    {item.extraInfo?.isMaster && <span className="badge master">[마스터]</span>}
-                                    {item.extraInfo?.isPlanningSet && <span className="badge planning">[기획세트]</span>}
+                                    {item.extraInfo?.isMaster && <span className="badge-category">마스터</span>}
+                                    {item.extraInfo?.isPlanningSet && <span className="badge-status-pending">기획세트</span>}
                                     {item.name}
                                 </span>
                                 <span className="date"><span className="item-label">등록일</span>{item.date}</span>
                             </li>
                         ))}
                     </ul>
-                ) : <div className="empty-section-msg">최근 등록된 품목이 없습니다.</div>}
+                ) : <EmptyState message="최근 등록된 품목이 없습니다." icon="📦" />}
             </section>
         ),
         WIDGET_PENDING_USERS: () => (
-            <section className="dashboard-section card highlight" key="pending_users">
-                <div className="section-header">
+            <section className="dashboard-section card highlight urgent-card" style={{ height: '280px', display: 'flex', flexDirection: 'column' }} key="pending_users">
+                <div className="section-header" style={{ flexShrink: 0 }}>
                     <span className="icon">👥</span>
                     <h2>사용자 승인 대기</h2>
                     <span className="count urgent">{data.pendingUsers?.length || 0}</span>
                 </div>
                 {data.pendingUsers?.length > 0 ? (
-                    <ul className="dashboard-list scrollable-small">
+                    <ul className="dashboard-list" style={{ flex: 1, overflowY: 'auto', paddingRight: '4px' }}>
                         {data.pendingUsers.map(item => (
                             <li key={item.id} onClick={() => onNavigate('users', { username: item.code })} className="clickable">
                                 <span className="name">{item.name} ({item.code})</span>
-                                <span className="company">{item.category}</span>
+                                <span className="company"><span className="badge-category">{item.category}</span></span>
                                 <button className="goto-btn">승인하기</button>
                             </li>
                         ))}
                     </ul>
-                ) : <div className="empty-section-msg">승인 대기 중인 사용자가 없습니다.</div>}
+                ) : <EmptyState message="승인 대기 중인 사용자가 없습니다." icon="👥" />}
             </section>
         ),
         WIDGET_AUDIT_LOGS: () => (
@@ -177,7 +274,7 @@ const DashboardPage = ({ user, onNavigate }) => {
                             </li>
                         ))}
                     </ul>
-                ) : <div className="empty-section-msg">최근 변경 이력이 없습니다.</div>}
+                ) : <EmptyState message="최근 변경 이력이 없습니다." icon="📜" />}
             </section>
         ),
         WIDGET_QUALITY_INBOUNDS: () => (
@@ -207,7 +304,7 @@ const DashboardPage = ({ user, onNavigate }) => {
                             </li>
                         ))}
                     </ul>
-                ) : <div className="empty-section-msg">최근 입고된 품목이 없습니다.</div>}
+                ) : <EmptyState message="최근 입고된 품목이 없습니다." icon="⚖️" />}
             </section>
         ),
         WIDGET_PENDING_DIMENSIONS: () => (
@@ -228,7 +325,7 @@ const DashboardPage = ({ user, onNavigate }) => {
                             </li>
                         ))}
                     </ul>
-                ) : <div className="empty-section-msg">체적 확정 대기 중인 품목이 없습니다.</div>}
+                ) : <EmptyState message="체적 확정 대기 중인 품목이 없습니다." icon="📐" />}
             </section>
         ),
         WIDGET_CONFIRMED_DIMENSIONS: () => (
@@ -252,7 +349,7 @@ const DashboardPage = ({ user, onNavigate }) => {
                             </li>
                         ))}
                     </ul>
-                ) : <div className="empty-section-msg">최근 확정된 체적 정보가 없습니다.</div>}
+                ) : <EmptyState message="최근 확정된 체적 정보가 없습니다." icon="✅" />}
             </section>
         ),
         WIDGET_RECENT_CLAIMS: () => (
@@ -269,7 +366,7 @@ const DashboardPage = ({ user, onNavigate }) => {
                                 <div className="item-header">
                                     <span className="code"><span className="item-label">코드</span>{item.code}</span>
                                     <span className="name"><span className="item-label">제품명</span>{item.name}</span>
-                                    <span className="status-tag" style={{ backgroundColor: item.status === '4. 클레임 종결' ? '#28a745' : '#dc3545', color: '#fff' }}>
+                                    <span className={item.status === '4. 클레임 종결' ? 'badge-status-done' : 'badge-status-urgent'}>
                                         {item.status || '대기'}
                                     </span>
                                     <span className="date"><span className="item-label">접수일</span>{item.date}</span>
@@ -283,9 +380,7 @@ const DashboardPage = ({ user, onNavigate }) => {
                             </li>
                         ))}
                     </ul>
-                ) : (
-                    <div className="empty-section-msg">최근 1개월 간 인입된 클레임 내역이 없습니다.</div>
-                )}
+                ) : <EmptyState message="최근 1개월 간 인입된 클레임 내역이 없습니다." icon="⚠️" />}
             </section>
         ),
         WIDGET_MFR_COMPLETED_CLAIMS: () => (
@@ -311,26 +406,24 @@ const DashboardPage = ({ user, onNavigate }) => {
                             </li>
                         ))}
                     </ul>
-                ) : (
-                    <div className="empty-section-msg">최근 1개월 간 제조사 답변 완료 건이 없습니다.</div>
-                )}
+                ) : <EmptyState message="최근 1개월 간 제조사 답변 완료 건이 없습니다." icon="✅" />}
             </section>
         ),
         WIDGET_AUDIT_REVIEW: () => (
-            <section className="dashboard-section card warning highlight" key="audit_review">
-                <div className="section-header">
+            <section className="dashboard-section card warning highlight urgent-card" style={{ height: '280px', display: 'flex', flexDirection: 'column' }} key="audit_review">
+                <div className="section-header" style={{ flexShrink: 0 }}>
                     <span className="icon">🔍</span>
                     <h2 style={{ color: '#d9480f' }}>📸 생산감리 검토 필요 (제출됨)</h2>
                     <span className="count" style={{ backgroundColor: '#d9480f' }}>{data.needsAuditReview?.length || 0}</span>
                 </div>
                 {data.needsAuditReview?.length > 0 ? (
-                    <ul className="dashboard-list scrollable">
+                    <ul className="dashboard-list" style={{ flex: 1, overflowY: 'auto', paddingRight: '4px' }}>
                         {data.needsAuditReview.map(item => (
-                            <li key={item.id} onClick={() => onNavigate('qualityPhotoAudit', { id: item.id })} className="clickable detailed-item">
+                            <li key={item.id} onClick={() => onNavigate('qualityPhotoAudit', { auditId: item.id })} className="clickable detailed-item">
                                 <div className="item-header">
                                     <span className="code"><span className="item-label">코드</span>{item.code}</span>
                                     <span className="name" style={{ fontWeight: 600 }}>{item.name}</span>
-                                    <span className="status-tag" style={{ backgroundColor: '#fff4e6', color: '#d9480f', border: '1px solid #ffd8a8' }}>제출됨</span>
+                                    <span className="badge-status-pending">제출됨</span>
                                 </div>
                                 <div className="item-details">
                                     <span className="detail-tag">제조사: {item.category}</span>
@@ -339,7 +432,7 @@ const DashboardPage = ({ user, onNavigate }) => {
                             </li>
                         ))}
                     </ul>
-                ) : <div className="empty-section-msg">검토 대기 중인 생산감리가 없습니다.</div>}
+                ) : <EmptyState message="검토 대기 중인 생산감리가 없습니다." icon="🔍" />}
             </section>
         ),
         WIDGET_AUDIT_PROGRESS: () => (
@@ -352,15 +445,13 @@ const DashboardPage = ({ user, onNavigate }) => {
                 {data.needsAuditProgress?.length > 0 ? (
                     <ul className="dashboard-list scrollable">
                         {data.needsAuditProgress.map((item, idx) => (
-                            <li key={item.id || `pending-${idx}`} onClick={() => onNavigate('qualityPhotoAudit', item.extraInfo?.isAudit ? { id: item.id } : { itemCode: item.code })} className="clickable detailed-item">
+                            <li key={item.id || `pending-${idx}`} onClick={() => onNavigate('qualityPhotoAudit', item.extraInfo?.isAudit ? { auditId: item.id } : { itemCode: item.code })} className="clickable detailed-item">
                                 <div className="item-header">
                                     <span className="code"><span className="item-label">코드</span>{item.code}</span>
                                     <span className="name">{item.name}</span>
-                                    <span className="status-tag" style={{ 
-                                        backgroundColor: item.status === 'REJECTED' ? '#fff5f5' : '#f8fafc', 
-                                        color: item.status === 'REJECTED' ? '#c53030' : '#495057',
-                                        border: item.status === 'REJECTED' ? '1px solid #feb2b2' : '1px solid #dee2e6'
-                                    }}>{item.status === 'REJECTED' ? '🚨 반려됨' : '⏳ 미진행'}</span>
+                                    <span className={item.status === 'REJECTED' ? 'badge-status-urgent' : 'badge-status-pending'}>
+                                        {item.status === 'REJECTED' ? '반려됨' : '미진행'}
+                                    </span>
                                 </div>
                                 <div className="item-details">
                                     <span className="detail-tag">제조사: {item.category || item.extraInfo?.manufacturer}</span>
@@ -368,43 +459,116 @@ const DashboardPage = ({ user, onNavigate }) => {
                             </li>
                         ))}
                     </ul>
-                ) : <div className="empty-section-msg">진행 대상이 없습니다.</div>}
+                ) : <EmptyState message="진행 대상이 없습니다." icon="📸" />}
             </section>
         ),
     };
 
-    return (
-        <div className="dashboard-container">
-            <header className="dashboard-header">
-                <h1>👋 안녕하세요, {user?.name || user?.username}님!</h1>
-                <p>오늘의 시스템 현황과 확인이 필요한 작업들입니다.</p>
-            </header>
-            <div className="dashboard-grid">
-                {data.widgetConfig && data.widgetConfig.length > 0 ? (() => {
-                    const sortedConfigs = [...data.widgetConfig];
-                    const annIndex = sortedConfigs.indexOf("WIDGET_ANNOUNCEMENTS");
-                    if (annIndex > 0) {
-                        sortedConfigs.splice(annIndex, 1);
-                        sortedConfigs.unshift("WIDGET_ANNOUNCEMENTS");
-                    }
-                    return sortedConfigs.map(widgetKey => {
-                        const renderer = renderers[widgetKey];
-                        return renderer ? renderer() : null;
-                    });
-                })() : (
-                    <div className="empty-dashboard">
-                        <h3>대시보드가 설정되지 않았습니다.</h3>
-                        <p>관리자에게 대시보드 구성을 요청하시거나, 잠시만 기다려주세요.</p>
-                    </div>
-                )}
-            </div>
+    // ─── 위젯 분류 ────────────────────────────────────────────────
+    const STATS_WIDGETS    = ['WIDGET_QUALITY_STATS', 'WIDGET_CLAIM_TREND', 'WIDGET_AUDIT_GRADE'];
+    const ANN_WIDGETS      = ['WIDGET_ANNOUNCEMENTS'];
+    const URGENT_WIDGETS   = ['WIDGET_PENDING_USERS', 'WIDGET_AUDIT_REVIEW'];
+    const SUMMARY_WIDGETS  = ['WIDGET_NEW_PRODUCTS', 'WIDGET_RECENT_CLAIMS', 'WIDGET_MFR_COMPLETED_CLAIMS',
+                              'WIDGET_AUDIT_PROGRESS', 'WIDGET_VOLUME_CONFIRMED'];
+    const REFERENCE_WIDGETS = ['WIDGET_AUDIT_LOGS', 'WIDGET_QUALITY_STATS', 'WIDGET_CLAIM_TREND', 'WIDGET_AUDIT_GRADE'];
 
-            {(data.widgetConfig?.length > 0 && 
-              (!data.newProducts || data.newProducts.length === 0) && 
-              (!data.pendingUsers || data.pendingUsers.length === 0)) && (
-                <div className="empty-dashboard" style={{ marginTop: '40px' }}>
-                    <h3>현재 새로운 특이사항이 없습니다.</h3>
-                    <p>모든 업무가 원활하게 진행되고 있습니다!</p>
+    const allWidgetKeys = data.widgetConfig ? [...data.widgetConfig] : [];
+    // 통계 위젯이 DB 설정에 없으면 자동으로 추가
+    const statsToAdd = isManufacturer
+        ? ['WIDGET_QUALITY_STATS', 'WIDGET_CLAIM_TREND']
+        : ['WIDGET_QUALITY_STATS', 'WIDGET_CLAIM_TREND', 'WIDGET_AUDIT_GRADE'];
+    statsToAdd.forEach(k => { if (!allWidgetKeys.includes(k)) allWidgetKeys.push(k); });
+
+    const renderSector = (keys) =>
+        keys.filter(k => allWidgetKeys.includes(k) && renderers[k])
+            .map(k => renderers[k]());
+
+    const urgentWidgets   = renderSector(URGENT_WIDGETS);
+    const summaryWidgets  = renderSector(SUMMARY_WIDGETS);
+    const annWidgets      = renderSector(ANN_WIDGETS);
+    const refWidgets      = renderSector(REFERENCE_WIDGETS);
+
+    const SectorLabel = ({ icon, label, color = '#6366f1', rightElement = null }) => (
+        <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '6px 0 8px 2px', marginBottom: '4px',
+            borderBottom: `2px solid ${color}20`
+        }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '16px' }}>{icon}</span>
+                <span style={{ fontSize: '12px', fontWeight: '800', color, letterSpacing: '0.5px', textTransform: 'uppercase' }}>{label}</span>
+            </div>
+            {rightElement}
+        </div>
+    );
+
+    return (
+        <div className="dashboard-container" style={{ padding: '18px 24px', background: '#f1f5f9', minHeight: '100vh' }}>
+            {/* ── 헤더 ── */}
+            <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                <div>
+                    <h1 style={{ fontSize: '20px', fontWeight: '800', color: '#1e293b', margin: 0 }}>
+                        👋 안녕하세요, {user?.name || user?.username}님!
+                    </h1>
+                    <p style={{ fontSize: '12px', color: '#64748b', margin: '3px 0 0 0' }}>오늘의 시스템 현황과 확인이 필요한 작업들입니다.</p>
+                </div>
+                <span style={{ fontSize: '12px', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                    {new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })}
+                </span>
+            </header>
+
+            {data.widgetConfig && data.widgetConfig.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
+                    {/* ── 섹터 1: 공지사항 + 긴급 처리 (가로 분할) ── */}
+                    <div style={{ display: 'grid', gridTemplateColumns: annWidgets.length > 0 && urgentWidgets.length > 0 ? '1fr 1fr' : '1fr', gap: '14px' }}>
+                        {annWidgets.length > 0 && (
+                            <div>
+                                <SectorLabel icon="📢" label="공지사항" color="#6366f1" />
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                    {annWidgets}
+                                </div>
+                            </div>
+                        )}
+                        {urgentWidgets.length > 0 && (
+                            <div>
+                                <SectorLabel icon="⚡" label="긴급 처리 필요" color="#ef4444" />
+                                <div className="dashboard-grid--urgent">
+                                    {urgentWidgets}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* ── 섹터 2: 현황 요약 ── */}
+                    {summaryWidgets.length > 0 && (
+                        <div>
+                            <SectorLabel icon="📋" label="현황 요약" color="#0ea5e9" />
+                            <div className="dashboard-grid--summary">
+                                {summaryWidgets}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── 섹터 3: 통계 분석 및 변경 이력 (하단 고정) ── */}
+                    {refWidgets.length > 0 && (
+                        <div>
+                            <SectorLabel 
+                                icon="📈" 
+                                label="통계 및 변경 이력" 
+                                color="#10b981" 
+                            />
+                            <div className="dashboard-grid--reference">
+                                {refWidgets}
+                            </div>
+                        </div>
+                    )}
+
+                </div>
+            ) : (
+                <div className="empty-dashboard">
+                    <h3>대시보드가 설정되지 않았습니다.</h3>
+                    <p>관리자에게 대시보드 구성을 요청하시거나, 잠시만 기다려주세요.</p>
                 </div>
             )}
         </div>

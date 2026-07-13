@@ -193,7 +193,7 @@ const PackagingTemplatePage = ({ user }) => {
                     <AgGridReact theme="legacy"
                         rowData={templates} 
                         columnDefs={colDefs} 
-                        rowHeight={60}
+                        rowHeight={54}
                         animateRows={true}
                     />
                 </div>

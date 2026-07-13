@@ -44,7 +44,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     Page<Product> findByActiveTrue(Pageable pageable);
 
     @Query(
-        value = "SELECT new com.example.ims.dto.ProductSummaryRecord(" +
+        value = "SELECT DISTINCT new com.example.ims.dto.ProductSummaryRecord(" +
                 "p.id, p.itemCode, p.productName, p.englishProductName, p.productType, " +
                 "b.name, m.name, p.shelfLifeMonths, p.ingredients, p.isMaster, p.active, p.isPlanningSet, p.createdAt, " +
                 "COALESCE(p.dimensions.status, '가안'), p.dimensions.width, p.dimensions.length, p.dimensions.height, p.weight, " +
@@ -66,6 +66,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                 "FROM Product p " +
                 "LEFT JOIN p.manufacturerInfo m " +
                 "LEFT JOIN p.brand b " +
+                "LEFT JOIN p.channels ch " +
                 "WHERE p.active = true AND " +
                 "(COALESCE(:companyFilter, '') = '' OR m.name = :companyFilter) AND " +
                 "(COALESCE(:itemCode, '') = '' OR LOWER(p.itemCode) LIKE :itemCode) AND " +
@@ -73,9 +74,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                 "(COALESCE(:englishProductName, '') = '' OR LOWER(p.englishProductName) LIKE :englishProductName) AND " +
                 "(COALESCE(:brand, '') = '' OR (b IS NOT NULL AND LOWER(b.name) LIKE :brand)) AND " +
                 "(COALESCE(:manufacturer, '') = '' OR (m IS NOT NULL AND LOWER(m.name) LIKE :manufacturer)) AND " +
-                "(COALESCE(:ingredients, '') = '' OR LOWER(p.ingredients) LIKE :ingredients) " +
+                "(COALESCE(:ingredients, '') = '' OR LOWER(p.ingredients) LIKE :ingredients) AND " +
+                "(:channelNames IS NULL OR ch.name IN :channelNames) " +
                 "ORDER BY p.createdAt DESC",
-        countQuery = "SELECT count(p) FROM Product p LEFT JOIN p.manufacturerInfo m LEFT JOIN p.brand b WHERE "
+        countQuery = "SELECT count(DISTINCT p) FROM Product p LEFT JOIN p.manufacturerInfo m LEFT JOIN p.brand b LEFT JOIN p.channels ch WHERE "
                     + "p.active = true AND "
                     + "(COALESCE(:companyFilter, '') = '' OR m.name = :companyFilter) AND "
                     + "(COALESCE(:itemCode, '') = '' OR LOWER(p.itemCode) LIKE :itemCode) AND "
@@ -83,7 +85,8 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                     + "(COALESCE(:englishProductName, '') = '' OR LOWER(p.englishProductName) LIKE :englishProductName) AND "
                     + "(COALESCE(:brand, '') = '' OR (b IS NOT NULL AND LOWER(b.name) LIKE :brand)) AND "
                     + "(COALESCE(:manufacturer, '') = '' OR (m IS NOT NULL AND LOWER(m.name) LIKE :manufacturer)) AND "
-                    + "(COALESCE(:ingredients, '') = '' OR LOWER(p.ingredients) LIKE :ingredients)"
+                    + "(COALESCE(:ingredients, '') = '' OR LOWER(p.ingredients) LIKE :ingredients) AND "
+                    + "(:channelNames IS NULL OR ch.name IN :channelNames)"
     )
     Page<ProductSummaryRecord> searchProductsSummary(
                     @Param("companyFilter") String companyFilter,
@@ -93,5 +96,6 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                     @Param("brand") String brand,
                     @Param("manufacturer") String manufacturer,
                     @Param("ingredients") String ingredients,
+                    @Param("channelNames") List<String> channelNames,
                     Pageable pageable);
 }

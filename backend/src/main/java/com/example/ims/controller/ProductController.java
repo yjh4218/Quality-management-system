@@ -168,9 +168,10 @@ public class ProductController {
             @RequestParam(required = false) String brand,
             @RequestParam(required = false) String manufacturer,
             @RequestParam(required = false) String ingredients,
+            @RequestParam(required = false) java.util.List<String> channelNames,
             org.springframework.data.domain.Pageable pageable) {
         return ResponseEntity
-                .ok(productService.searchProducts(userDetails.getUsername(), itemCode, productName, englishProductName, brand, manufacturer, ingredients, pageable));
+                .ok(productService.searchProducts(userDetails.getUsername(), itemCode, productName, englishProductName, brand, manufacturer, ingredients, channelNames, pageable));
     }
 
     @GetMapping("/export")

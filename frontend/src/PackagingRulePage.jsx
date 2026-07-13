@@ -211,7 +211,7 @@ const PackagingRulePage = ({ user }) => {
                 <div className="ag-theme-alpine" style={{ flex: 1, width: '100%', minHeight: '500px' }}>
                     <AgGridReact
                         theme="legacy"
-                        rowHeight={65}
+                        rowHeight={54}
                         rowData={channels}
                         columnDefs={columnDefs}
                         pagination={true}

@@ -208,7 +208,7 @@ ${selectedReport.serverError || '없음'}
                 <div className="ag-theme-alpine" style={{ flex: 1, height: '100%' }}>
                     <AgGridReact
                         theme="legacy"
-                        rowHeight={45}
+                        rowHeight={54}
                         rowData={rowData}
                         columnDefs={columnDefs}
                         pagination={true}

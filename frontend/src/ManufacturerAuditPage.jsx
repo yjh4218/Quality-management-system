@@ -171,10 +171,11 @@ const ManufacturerAuditPage = ({ user }) => {
             setManufacturerCode(mCode);
             let matchedTemplate = null;
             if (m.category) {
-                matchedTemplate = templates.find(t => t.targetCategory === m.category);
+                const safeTemplates = templates || [];
+                matchedTemplate = safeTemplates.find(t => t.targetCategory === m.category);
                 if (!matchedTemplate) {
-                    matchedTemplate = templates.find(t => t.classificationName === `${m.category} 제조사 Audit`) ||
-                        templates.find(t => t.classificationName?.includes(m.category));
+                    matchedTemplate = safeTemplates.find(t => t.classificationName === `${m.category} 제조사 Audit`) ||
+                        safeTemplates.find(t => t.classificationName?.includes(m.category));
                 }
             }
 

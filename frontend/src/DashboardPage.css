@@ -1,92 +1,137 @@
+/* ─── 대시보드 기본 레이아웃 ───────────────────────────────── */
 .dashboard-container {
-    padding: 30px;
-    background-color: #f8f9fa;
+    padding: 24px 32px;
+    background-color: #f8fafc;
     min-height: 100vh;
 }
 
 .dashboard-header {
-    margin-bottom: 30px;
+    margin-bottom: 20px;
 }
 
 .dashboard-header h1 {
-    font-size: 28px;
-    font-weight: 700;
-    color: #212529;
+    font-size: 24px;
+    font-weight: 800;
+    color: #0f172a;
     margin: 0;
 }
 
 .dashboard-header p {
-    color: #6c757d;
-    margin-top: 8px;
+    color: #64748b;
+    font-size: 13px;
+    margin-top: 4px;
 }
 
-.dashboard-grid {
+/* ─── 그리드 레이아웃 체계 ──────────────────────────────────── */
+
+/* 1. 긴급 처리 그리드 (최대 2열, 긴급을 강조) */
+.dashboard-grid--urgent {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(700px, 1fr));
-    gap: 24px;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
 }
 
+/* 2. 현황 요약 그리드 (Vite 호환 4열 균등 그리드) */
+.dashboard-grid--summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+/* 3. 통계 및 이력 그리드 (3열/4열 하단 배치) */
+.dashboard-grid--reference {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
+}
+
+/* ─── 대시보드 섹션 카드 ──────────────────────────────────── */
 .dashboard-section {
-    padding: 24px;
+    padding: 20px 24px;
     border-radius: 16px;
-    background: #fff;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    background: #ffffff;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    border: 1px solid #e2e8f0;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
-    border: 1px solid #eee;
 }
 
 .dashboard-section:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+}
+
+/* Urgent 카드 특별 강조 (연한 붉은 틴트 & 테두리선 두껍게) */
+.dashboard-section.urgent-card {
+    background-color: #fffafb;
+    border: 2px solid #fecaca;
+    border-left: 6px solid #ef4444;
+}
+
+.dashboard-section.urgent-card:hover {
+    box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.1), 0 4px 6px -2px rgba(239, 68, 68, 0.05);
 }
 
 .dashboard-section.highlight {
-    border-left: 5px solid #0d6efd;
+    border-left: 5px solid #3b82f6;
 }
 
 .dashboard-section.warning {
-    border-left: 5px solid #ffc107;
+    border-left: 5px solid #f59e0b;
 }
 
 .dashboard-section.success {
-    border-left: 5px solid #198754;
+    border-left: 5px solid #10b981;
 }
 
+.dashboard-section.error {
+    border-left: 5px solid #ef4444;
+}
+
+/* ─── 공지사항 컴팩트 ─────────────────────────────────────── */
+.db-ann-compact {
+    padding: 20px 24px !important;
+}
+
+/* ─── 섹션 헤더 ──────────────────────────────────────────── */
 .section-header {
     display: flex;
     align-items: center;
-    margin-bottom: 20px;
-    border-bottom: 1px solid #f1f1f1;
+    gap: 10px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid #f1f5f9;
     padding-bottom: 12px;
 }
 
 .section-header .icon {
-    font-size: 24px;
-    margin-right: 12px;
+    font-size: 20px;
+    flex-shrink: 0;
 }
 
 .section-header h2 {
-    font-size: 18px;
-    font-weight: 600;
+    font-size: 15px;
+    font-weight: 700;
     margin: 0;
     flex: 1;
-    color: #343a40;
+    color: #1e293b;
 }
 
 .section-header .count {
-    background: #e9ecef;
-    padding: 4px 10px;
-    border-radius: 20px;
-    font-size: 14px;
+    background: #f1f5f9;
+    padding: 3px 9px;
+    border-radius: 12px;
+    font-size: 12px;
     font-weight: 700;
-    color: #495057;
+    color: #475569;
 }
 
 .section-header .count.urgent {
-    background: #f8d7da;
-    color: #842029;
+    background: #fee2e2;
+    color: #991b1b;
 }
 
+/* ─── 대시보드 리스트 ─────────────────────────────────────── */
 .dashboard-list {
     list-style: none;
     padding: 0;
@@ -94,32 +139,22 @@
 }
 
 .dashboard-list.scrollable {
-    max-height: 400px;
+    max-height: 280px;
     overflow-y: auto;
-    padding-right: 5px;
+    padding-right: 6px;
 }
 
 .dashboard-list.scrollable-small {
-    max-height: 250px;
+    max-height: 220px;
     overflow-y: auto;
-    padding-right: 5px;
+    padding-right: 6px;
 }
 
-/* Custom Scrollbar for dashboard lists */
-.dashboard-list::-webkit-scrollbar {
-    width: 6px;
-}
-.dashboard-list::-webkit-scrollbar-track {
-    background: #f1f1f1; 
-    border-radius: 4px;
-}
-.dashboard-list::-webkit-scrollbar-thumb {
-    background: #c1c1c1; 
-    border-radius: 4px;
-}
-.dashboard-list::-webkit-scrollbar-thumb:hover {
-    background: #a8a8a8; 
-}
+/* Custom Scrollbar */
+.dashboard-list::-webkit-scrollbar { width: 5px; }
+.dashboard-list::-webkit-scrollbar-track { background: #f8fafc; border-radius: 4px; }
+.dashboard-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.dashboard-list::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
 .dashboard-list li.clickable {
     cursor: pointer;
@@ -127,18 +162,18 @@
 }
 
 .dashboard-list li.clickable:hover {
-    background-color: #f0f7ff;
-    transform: translateX(5px);
-    border-color: #007bff;
+    background-color: #f0fdf4;
+    transform: translateX(4px);
+    border-color: #10b981;
 }
 
 .dashboard-list li {
     display: flex;
-    flex-wrap: wrap; /* Added for mobile wrapping */
+    flex-wrap: wrap;
     align-items: center;
-    padding: 12px 0;
-    border-bottom: 1px solid #f8f9fa;
-    font-size: 14px;
+    padding: 12px 6px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 13.5px;
 }
 
 .dashboard-list li:last-child {
@@ -146,20 +181,21 @@
 }
 
 .dashboard-list li .code {
-    font-weight: 600;
-    color: #0d6efd;
+    font-weight: 700;
+    color: #2563eb;
     width: 130px;
     display: flex;
     align-items: center;
+    font-size: 12.5px;
 }
 
 .item-label {
-    color: #8aa1b1;
+    color: #94a3b8;
     font-weight: 500;
-    font-size: 11px;
+    font-size: 10px;
     margin-right: 6px;
     text-transform: uppercase;
-    letter-spacing: -0.5px;
+    letter-spacing: -0.2px;
 }
 
 .dashboard-list li .name {
@@ -167,187 +203,155 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    padding-right: 10px;
+    padding-right: 12px;
+    font-size: 13.5px;
+    font-weight: 550;
+    color: #334155;
 }
 
 .dashboard-list li .date {
     font-size: 12px;
-    color: #adb5bd;
+    color: #64748b;
 }
 
 .dashboard-list.compact li {
-    padding: 8px 0;
+    padding: 10px 4px;
 }
 
 .dashboard-list li .action {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: bold;
-    color: #6c757d;
+    color: #475569;
     margin-right: 8px;
 }
 
 .dashboard-list li .desc {
     flex: 1;
     font-size: 13px;
-    color: #495057;
+    color: #334155;
 }
 
-.status-tag {
-    background: #e7f5ff;
-    color: #1971c2;
-    padding: 2px 8px;
-    border-radius: 4px;
+/* ─── 표준화된 배지 시스템 (Standard Badges) ────────────────────────── */
+.badge-status-urgent {
+    background-color: #fee2e2 !important;
+    color: #ef4444 !important;
+    border: 1px solid #fca5a5 !important;
+    padding: 2px 7px;
+    border-radius: 6px;
     font-size: 11px;
-    font-weight: bold;
-    margin-right: 10px;
+    font-weight: 700;
+    vertical-align: middle;
+}
+
+.badge-status-pending {
+    background-color: #ffedd5 !important;
+    color: #ea580c !important;
+    border: 1px solid #fdba74 !important;
+    padding: 2px 7px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    vertical-align: middle;
+}
+
+.badge-status-done {
+    background-color: #d1fae5 !important;
+    color: #10b981 !important;
+    border: 1px solid #6ee7b7 !important;
+    padding: 2px 7px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    vertical-align: middle;
+}
+
+.badge-category {
+    background-color: #f1f5f9 !important;
+    color: #475569 !important;
+    border: 1px solid #cbd5e1 !important;
+    padding: 2px 7px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    vertical-align: middle;
 }
 
 .goto-btn {
-    background: #0d6efd;
+    background: #2563eb;
     color: white;
     border: none;
     padding: 4px 12px;
     border-radius: 6px;
     font-size: 12px;
     cursor: pointer;
+    font-weight: 600;
+    transition: background 0.15s;
 }
 
+.goto-btn:hover {
+    background: #1d4ed8;
+}
+
+/* ─── 빈 화면 메시지 ─────────────────────────────────────── */
 .dashboard-loading, .dashboard-error, .empty-dashboard {
-    padding: 100px;
+    padding: 80px;
     text-align: center;
-    color: #6c757d;
+    color: #64748b;
+    font-size: 14px;
 }
 
 .empty-dashboard h3 {
-    color: #343a40;
+    color: #1e293b;
+    font-weight: 700;
+    margin-bottom: 8px;
 }
 
-/* Custom Badges */
-.badge {
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: bold;
-    margin-right: 6px;
-    vertical-align: middle;
-}
-.badge.master {
-    background-color: #e6fcf5;
-    color: #0ca678;
-    border: 1px solid #c3fae8;
-}
-.badge.planning {
-    background-color: #fff4e6;
-    color: #f76707;
-    border: 1px solid #ffe8cc;
+.empty-section-msg {
+    color: #94a3b8;
+    font-size: 13px;
+    padding: 24px 8px;
+    text-align: center;
 }
 
-/* Detailed List Items */
+/* ─── 상세 리스트 아이템 ─────────────────────────────────── */
 .dashboard-list li.detailed-item {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    padding: 12px 0;
+    padding: 12px 6px;
 }
 .detailed-item .item-header {
     display: flex;
     width: 100%;
     align-items: center;
     margin-bottom: 6px;
+    gap: 6px;
 }
 .detailed-item .item-details {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px;
     width: 100%;
-    padding-left: 100px; /* align with code width */
+    padding-left: 6px;
 }
 .detail-tag {
-    background: #f1f3f5;
-    color: #495057;
+    background: #f8fafc;
+    color: #475569;
     padding: 3px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    font-size: 11.5px;
+    border: 1px solid #e2e8f0;
 }
 
-/* Responsive Dashboard Queries */
-@media (max-width: 1024px) {
-    .dashboard-container {
-        padding: 15px !important;
-        width: 100% !important;
-        min-width: 100% !important;
-        box-sizing: border-box !important;
+/* ─── 반응형 미디어 쿼리 ──────────────────────────────────── */
+@media (max-width: 1366px) {
+    .dashboard-grid--summary {
+        grid-template-columns: repeat(2, 1fr); /* 1366px 이하에서 카드 붕괴를 막고 2열로 자동 배치 */
     }
+}
 
-    .dashboard-header h1 {
-        font-size: 22px !important;
-        line-height: 1.3;
-    }
-
-    .dashboard-header p {
-        font-size: 13px !important;
-        margin-top: 5px;
-    }
-
-    .dashboard-grid {
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 16px;
-    }
-
-    .detailed-item {
-        padding: 12px !important;
-        width: 100%;
-        box-sizing: border-box;
-    }
-
-    .detailed-item .item-header {
-        display: flex !important;
-        flex-wrap: wrap !important;
-        align-items: center !important;
-        gap: 6px !important;
-        margin-bottom: 8px !important;
-        width: 100% !important;
-    }
-
-    .detailed-item .item-header .code,
-    .dashboard-list li .code {
-        width: auto !important;
-        min-width: 80px !important;
-        margin-right: 15px;
-        font-size: 13px !important;
-    }
-
-    .detailed-item .item-header .name,
-    .dashboard-list li .name {
-        flex: 1 1 auto !important;
-        width: auto !important;
-        min-width: 150px;
-        font-size: 14px !important;
-        white-space: normal !important;
-        padding-right: 0 !important;
-        margin-bottom: 4px;
-        line-height: 1.4;
-    }
-
-    .detailed-item .item-header .status-tag,
-    .dashboard-list li .status-tag,
-    .detailed-item .item-header .date,
-    .dashboard-list li .date {
-        font-size: 11px !important;
-        margin-bottom: 4px;
-    }
-
-    .detailed-item .item-details {
-        padding-left: 0 !important;
-        margin-top: 8px !important;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 4px;
-    }
-
-    .detail-tag {
-        font-size: 10px !important;
+@media (max-width: 768px) {
+    .dashboard-grid--summary, .dashboard-grid--urgent, .dashboard-grid--reference {
+        grid-template-columns: 1fr; /* 모바일에서 1열 고정 */
     }
 }

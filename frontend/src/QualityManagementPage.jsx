@@ -417,7 +417,7 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
 
             <div className="ag-theme-alpine" style={{ flex: 1, width: '100%', minHeight: 0, fontSize: '12px' }}>
                 <AgGridReact theme="legacy"
-                    rowHeight={50}
+                    rowHeight={54}
                     ref={gridRef}
                     rowData={rowData}
                     getRowId={p => String(p.data.id)}

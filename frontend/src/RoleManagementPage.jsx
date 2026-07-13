@@ -451,7 +451,7 @@ const RoleManagementPage = ({ user }) => {
                 <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
                     <AgGridReact
                         theme="legacy"
-                        rowHeight={60}
+                        rowHeight={54}
                         rowData={rowData}
                         columnDefs={columnDefs}
                         pagination={true}

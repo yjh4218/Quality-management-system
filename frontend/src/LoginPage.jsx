@@ -48,11 +48,19 @@ const LoginPage = ({ onLoginSuccess }) => {
     };
 
     const containerStyle = {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        height: '125vh',
-        backgroundColor: '#f0f2f5'
+        backgroundColor: '#f1f5f9', // Matte modern slate gray
+        margin: 0,
+        padding: 0,
+        boxSizing: 'border-box',
+        zIndex: 9999
     };
 
     const loginBoxStyle = {
@@ -90,8 +98,8 @@ const LoginPage = ({ onLoginSuccess }) => {
         <div style={containerStyle}>
             <div style={loginBoxStyle}>
                 <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-                    <h1 style={{ color: '#0056b3', margin: '0', fontSize: '28px' }}>QMS</h1>
-                    <p style={{ color: '#666', marginTop: '5px' }}>Quality Management System</p>
+                    <h1 style={{ color: '#0284c7', margin: '0', fontSize: '28px', fontWeight: '800', letterSpacing: '-0.5px' }}>QMS</h1>
+                    <p style={{ color: '#64748b', marginTop: '5px', fontSize: '13px', fontWeight: '500' }}>Quality Management System</p>
                 </div>
 
                 <form onSubmit={handleSubmit}>
@@ -105,7 +113,7 @@ const LoginPage = ({ onLoginSuccess }) => {
                             required
                         />
                     </div>
-                    <div className="form-group" style={{ marginBottom: '30px' }}>
+                    <div className="form-group" style={{ marginBottom: '24px' }}>
                         <label>비밀번호 입력</label>
                         <input
                             type="password"
@@ -113,27 +121,43 @@ const LoginPage = ({ onLoginSuccess }) => {
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             required
-                            autoComplete="current-password"
                         />
                     </div>
 
-                    <button type="submit" style={{ width: '100%', padding: '12px', fontSize: '16px' }}>
+                    <button
+                        type="submit"
+                        style={{
+                            width: '100%',
+                            padding: '10px 16px',
+                            backgroundColor: '#0284c7',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '14px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            transition: 'background 0.2s',
+                            boxShadow: '0 2px 4px rgba(2, 132, 199, 0.15)'
+                        }}
+                        onMouseEnter={(e) => e.target.style.backgroundColor = '#0369a1'}
+                        onMouseLeave={(e) => e.target.style.backgroundColor = '#0284c7'}
+                    >
                         로그인
                     </button>
 
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginTop: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', marginTop: '20px' }}>
                         <button
                             type="button"
                             onClick={() => setIsSignUpOpen(true)}
-                            style={{ background: 'none', border: 'none', color: '#0056b3', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}
+                            style={{ background: 'none', border: 'none', color: '#0284c7', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}
                         >
                             회원가입하기
                         </button>
-                        <span style={{ color: '#ddd' }}>|</span>
+                        <span style={{ color: '#e2e8f0' }}>|</span>
                         <button
                             type="button"
                             onClick={() => setIsFindPwOpen(true)}
-                            style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: '14px' }}
+                            style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '13px', fontWeight: '500' }}
                         >
                             아이디/비밀번호 조회
                         </button>

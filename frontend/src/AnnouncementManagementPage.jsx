@@ -21,7 +21,7 @@ import SaveConfirmModal from './components/SaveConfirmModal';
  * [디자인 표준] 3단계 표준 헤더 레이아웃, Ag-Grid 목록, 제품 마스터 수정 스타일 표준 Drawer 팝업 적용.
  * [권한 제어] announcements 및 announcementCategories VIEW/EDIT/DELETE 권한 준수.
  */
-const AnnouncementManagementPage = ({ user, onNavigate }) => {
+const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
     const gridRef = useRef(null);
     const { canEdit: canEditPermission, canDelete: canDeletePermission } = usePermissions(user);
     const canEdit = canEditPermission('announcements');
@@ -84,6 +84,18 @@ const AnnouncementManagementPage = ({ user, onNavigate }) => {
         fetchMfrCategories();
         fetchManufacturersList();
     }, []);
+
+    // 대시보드 연동: navigationData.id 가 있는 경우 해당 공지 자동 보기
+    const hasAutoOpened = useRef(false);
+    useEffect(() => {
+        if (rowData.length > 0 && navigationData?.id && !hasAutoOpened.current) {
+            const matched = rowData.find(ann => ann.id === Number(navigationData.id) || ann.id === navigationData.id);
+            if (matched) {
+                hasAutoOpened.current = true;
+                handleOpenDetail(matched);
+            }
+        }
+    }, [rowData, navigationData]);
 
     const fetchAnnouncements = async () => {
         try {
@@ -866,7 +878,7 @@ const AnnouncementManagementPage = ({ user, onNavigate }) => {
                             <AgGridReact
                                 ref={gridRef}
                                 theme="legacy"
-                                rowHeight={65}
+                                rowHeight={54}
                                 rowSelection="multiple"
                                 rowData={rowData}
                                 columnDefs={columnDefs}
@@ -910,7 +922,7 @@ const AnnouncementManagementPage = ({ user, onNavigate }) => {
                         <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
                             <AgGridReact
                                 theme="legacy"
-                                rowHeight={55}
+                                rowHeight={54}
                                 rowData={categoriesList}
                                 columnDefs={categoryColumnDefs}
                                 pagination={true}

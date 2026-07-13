@@ -521,7 +521,7 @@ const ProductionAuditPage = ({ user, navigationData, onNavigated }) => {
                 <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
                     <AgGridReact
                         theme="legacy"
-                        rowHeight={50}
+                        rowHeight={54}
                         ref={gridRef}
                         rowData={rowData}
                         columnDefs={colDefs}

@@ -461,7 +461,7 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
 
                     <div className="ag-theme-alpine" style={{ flex: 1, width: '100%', marginTop: '10px' }}>
                         <AgGridReact theme="legacy"
-                            rowHeight={50}
+                            rowHeight={54}
                             rowData={rowData}
                             columnDefs={colDefs}
                             pagination={true}

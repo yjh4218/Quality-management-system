@@ -32,7 +32,24 @@ public class DashboardController {
             return ResponseEntity.ok(dashboardService.getDashboardData(user));
         } catch (Exception e) {
             e.printStackTrace();
-            return ResponseEntity.status(500).body("시스템 대시보드 데이터를 수집하는 중 오류가 발생했습니다. 지속 발생 시 관리자에게 문의해 주세요.");
+            return ResponseEntity.status(500).body("시스템 대시보드 데이터를 수집하는 중 오류가 발생했습니다.");
+        }
+    }
+
+    @GetMapping("/stats")
+    public ResponseEntity<?> getDashboardStats() {
+        try {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth == null || !auth.isAuthenticated()) {
+                return ResponseEntity.status(401).body("Not authenticated");
+            }
+            User user = userRepository.findByUsername(auth.getName())
+                    .orElseThrow(() -> new RuntimeException("User not found: " + auth.getName()));
+            
+            return ResponseEntity.ok(dashboardService.getDashboardStats(user));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).body("통계 데이터를 조회하는 중 오류가 발생했습니다.");
         }
     }
 }

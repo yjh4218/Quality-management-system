@@ -333,7 +333,7 @@ const GuideManagementPage = ({ user }) => {
                         <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
                             <AgGridReact
                                 theme="legacy"
-                                rowHeight={55}
+                                rowHeight={54}
                                 rowData={guides}
                                 columnDefs={columnDefs}
                                 pagination={true}

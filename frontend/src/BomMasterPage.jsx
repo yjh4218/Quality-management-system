@@ -266,7 +266,7 @@ const BomMasterPage = ({ user }) => {
                         theme="legacy"
                         rowData={materials}
                         columnDefs={colDefs}
-                        rowHeight={50}
+                        rowHeight={54}
                         animateRows={true}
                         domLayout="normal"
                     />

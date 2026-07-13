@@ -737,7 +737,7 @@ const IngredientCompliancePage = ({ user }) => {
                                         noRowsOverlayComponent={() => <div>검색 결과가 없습니다.</div>}
                                         pagination={false}
                                         animateRows={true}
-                                        rowHeight={60}
+                                        rowHeight={54}
                                         headerHeight={50}
                                         suppressCellFocus={true}
                                     />

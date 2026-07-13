@@ -207,7 +207,7 @@ const BomCategoryManagementPage = ({ user }) => {
                         <AgGridReact theme="legacy"
                             rowData={categories} 
                             columnDefs={colDefs} 
-                            rowHeight={50}
+                            rowHeight={54}
                             animateRows={true}
                         />
                     </div>

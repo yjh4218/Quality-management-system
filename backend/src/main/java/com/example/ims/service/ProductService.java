@@ -86,7 +86,7 @@ public class ProductService {
 
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size, org.springframework.data.domain.Sort.by("createdAt").descending());
         
-        return productRepository.searchProductsSummary(companyFilter, null, null, null, null, null, null, pageable);
+        return productRepository.searchProductsSummary(companyFilter, null, null, null, null, null, null, null, pageable);
     }
     
     @Transactional(readOnly = true)
@@ -711,7 +711,7 @@ public class ProductService {
     }
 
     public org.springframework.data.domain.Page<com.example.ims.dto.ProductSummaryRecord> searchProducts(String username, String itemCode, String productName, String englishProductName, String brand, String manufacturer,
-            String ingredients, org.springframework.data.domain.Pageable pageable) {
+            String ingredients, java.util.List<String> channelNames, org.springframework.data.domain.Pageable pageable) {
         
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
@@ -729,12 +729,14 @@ public class ProductService {
         String pBrand = (brand == null || brand.trim().isEmpty()) ? null : "%" + brand.trim().toLowerCase() + "%";
         String pMfr = (manufacturer == null || manufacturer.trim().isEmpty()) ? null : "%" + manufacturer.trim().toLowerCase() + "%";
         String pIngredients = (ingredients == null || ingredients.trim().isEmpty()) ? null : "%" + ingredients.trim().toLowerCase() + "%";
+        // 채널 필터: 빈 리스트이면 null로 처리하여 전체 조회
+        java.util.List<String> pChannelNames = (channelNames == null || channelNames.isEmpty()) ? null : channelNames;
 
-        log.info(">>>> [DEBUG] Searching products - user={}, role={}, companyFilter={}, itemCode={}, productName={}, brand={}, manufacturer={}, ingredients={}",
-                username, user.getRole(), companyFilter, pItemCode, pProductName, pBrand, pMfr, pIngredients);
+        log.info(">>>> [DEBUG] Searching products - user={}, role={}, companyFilter={}, itemCode={}, productName={}, brand={}, manufacturer={}, ingredients={}, channels={}",
+                username, user.getRole(), companyFilter, pItemCode, pProductName, pBrand, pMfr, pIngredients, pChannelNames);
         
         try {
-            var result = productRepository.searchProductsSummary(companyFilter, pItemCode, pProductName, pEngName, pBrand, pMfr, pIngredients, pageable);
+            var result = productRepository.searchProductsSummary(companyFilter, pItemCode, pProductName, pEngName, pBrand, pMfr, pIngredients, pChannelNames, pageable);
             log.info(">>>> [DEBUG] Search result: {} items found (totalElements={})", result.getContent().size(), result.getTotalElements());
             return result;
         } catch (Exception e) {
@@ -796,6 +798,7 @@ public class ProductService {
         // 검색 필터 적용 (페이지네이션 없이 전체 조회를 위해 큰 사이즈 지정)
         org.springframework.data.domain.Page<com.example.ims.dto.ProductSummaryRecord> pageResult = searchProducts(
                 username, itemCode, productName, englishProductName, brand, manufacturer, ingredients,
+                null,
                 org.springframework.data.domain.PageRequest.of(0, 100000));
 
         java.util.List<com.example.ims.dto.ProductSummaryRecord> data = pageResult.getContent();
