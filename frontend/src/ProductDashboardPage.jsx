@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { searchProducts, getBrands, getManufacturers } from './api';
-import { AgGridReact } from 'ag-grid-react';
 import AnalyticsDashboardShell from './components/dashboard/AnalyticsDashboardShell';
 import DashboardFilterBar from './components/dashboard/DashboardFilterBar';
 import SummaryCardRow from './components/dashboard/SummaryCardRow';
 import ChartCard from './components/dashboard/ChartCard';
+import DataGrid from './components/common/DataGrid';
 
 const ProductDashboardPage = ({ user, onNavigate }) => {
     const gridRef = useRef();
@@ -126,20 +126,42 @@ const ProductDashboardPage = ({ user, onNavigate }) => {
     };
 
     const columnDefs = useMemo(() => [
-        { field: 'itemCode', headerName: '품목코드', width: 140, filter: true },
-        { field: 'productName', headerName: '품목명(국문)', flex: 1.5, filter: true },
-        { field: 'brand.name', headerName: '브랜드', width: 130, filter: true },
-        { field: 'manufacturer.name', headerName: '제조사', width: 140, filter: true },
+        { field: 'itemCode', headerName: '품목코드', width: 140, cellClass: 'text-center' },
+        { 
+            field: 'productName', 
+            headerName: '품목명(국문)', 
+            flex: 1.5, 
+            cellClass: 'text-left',
+            cellRenderer: (params) => {
+                const createdAt = params.data.createdAt;
+                // 최근 7일 내 등록 체크
+                const isNew = createdAt && (new Date() - new Date(createdAt)) < 7 * 24 * 60 * 60 * 1000;
+                return (
+                    <span className="flex items-center gap-1.5 font-medium">
+                        {params.value}
+                        {isNew && (
+                            <span className="px-1.5 py-0.5 rounded-full bg-red-100 text-red-800 text-[10px] font-bold">
+                                N
+                            </span>
+                        )}
+                    </span>
+                );
+            }
+        },
+        { field: 'brand.name', headerName: '브랜드', width: 130, cellClass: 'text-left' },
+        { field: 'manufacturer.name', headerName: '제조사', width: 140, cellClass: 'text-left' },
         { 
             field: 'specialPack', 
             headerName: '구분', 
             width: 100,
+            cellClass: 'text-center',
             valueGetter: (params) => params.data.specialPack ? '기획세트' : '단품'
         },
         { 
             field: 'channelNames', 
             headerName: '유통 채널', 
             width: 180,
+            cellClass: 'text-left',
             valueGetter: (params) => params.data.channelNames?.join(', ') || '-'
         }
     ], []);
@@ -171,10 +193,53 @@ const ProductDashboardPage = ({ user, onNavigate }) => {
         }] : [])
     ];
 
+    // 미분류 브랜드 개수 및 필터 연동 함수
+    const unclassifiedBrandCount = useMemo(() => {
+        return products.filter(p => !p.brand || !p.brand.name || p.brand.name === '기타').length;
+    }, [products]);
+
+    const unclassifiedChannelCount = useMemo(() => {
+        return products.filter(p => !p.channelNames || p.channelNames.length === 0 || p.channelNames.includes('미정')).length;
+    }, [products]);
+
+    // 최근 7일 이내 등록 품목
+    const recentProducts = useMemo(() => {
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        return products.filter(p => {
+            if (!p.createdAt) return false;
+            return new Date(p.createdAt) >= sevenDaysAgo;
+        }).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 5);
+    }, [products]);
+
+    const handleFilterClick = (type) => {
+        if (!gridRef.current || !gridRef.current.api) return;
+        
+        // AG Grid 필터 적용
+        if (type === 'brand') {
+            gridRef.current.api.setFilterModel({
+                'brand.name': {
+                    filterType: 'text',
+                    type: 'equals',
+                    filter: '기타'
+                }
+            });
+        } else if (type === 'channel') {
+            gridRef.current.api.setFilterModel({
+                'channelNames': {
+                    filterType: 'text',
+                    type: 'contains',
+                    filter: '미정'
+                }
+            });
+        }
+        gridRef.current.api.onFilterChanged();
+    };
+
     const summaryCards = [
         { icon: '📦', label: '전체 등록 품목', value: `${stats.total}개` },
-        { icon: '🟢', label: '단품 마스터 수', value: `${stats.normalCount}개` },
-        { icon: '🎁', label: '기획세트(SP) 수', value: `${stats.specialPackCount}개`, valueColor: '#8b5cf6' },
+        { icon: '🟡', label: '미분류 브랜드 (클릭)', value: `${unclassifiedBrandCount}개`, valueColor: '#d97706', onClick: () => handleFilterClick('brand'), style: { cursor: 'pointer' } },
+        { icon: '🟠', label: '미분류 채널 (클릭)', value: `${unclassifiedChannelCount}개`, valueColor: '#e11d48', onClick: () => handleFilterClick('channel'), style: { cursor: 'pointer' } },
         { icon: '✔️', label: '활성 품목 수', value: `${stats.activeCount}개`, valueColor: '#10b981' }
     ];
 
@@ -218,6 +283,35 @@ const ProductDashboardPage = ({ user, onNavigate }) => {
                 />
             </div>
 
+            {/* 최근 등록 품목 리스트 위젯 */}
+            <div style={{
+                padding: '20px 24px',
+                backgroundColor: '#ffffff',
+                borderRadius: '16px',
+                border: '1px solid #e2e8f0',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                boxSizing: 'border-box',
+                marginBottom: '16px'
+            }}>
+                <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
+                    🆕 최근 7일 내 등록된 품목 마스터 (최대 5건)
+                </h3>
+                {recentProducts.length === 0 ? (
+                    <div style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', padding: '20px' }}>
+                        최근 7일 내 등록된 신규 품목이 없습니다.
+                    </div>
+                ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                        {recentProducts.map((p, index) => (
+                            <div key={index} style={{ display: 'flex', flexDirection: 'column', padding: '10px 14px', borderRadius: '8px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+                                <span style={{ fontSize: '12.5px', fontWeight: '700', color: '#166534' }}>{p.productName}</span>
+                                <span style={{ fontSize: '11px', color: '#15803d' }}>{p.itemCode} | {p.brand?.name || '기타'}</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
             {/* 품목 리스트 그리드 */}
             <div style={{
                 padding: '20px 24px',
@@ -231,23 +325,14 @@ const ProductDashboardPage = ({ user, onNavigate }) => {
                 minHeight: '450px'
             }}>
                 <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
-                    📋 품목 마스터 상세 내역 (검색결과: {products.length}건)
+                    📋 품목 마스터 상세 내역
                 </h3>
-                <div className="ag-theme-alpine" style={{ height: '400px', width: '100%', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
-                    <AgGridReact 
-                        rowData={products}
-                        columnDefs={columnDefs}
-                        pagination={true}
-                        paginationPageSize={15}
-                        defaultColDef={{
-                            sortable: true,
-                            resizable: true,
-                            filter: true,
-                            floatingFilter: true,
-                            flex: 1
-                        }}
-                    />
-                </div>
+                <DataGrid
+                    ref={gridRef}
+                    rowData={products}
+                    columnDefs={columnDefs}
+                    paginationPageSize={50}
+                />
             </div>
         </AnalyticsDashboardShell>
     );
