@@ -225,6 +225,9 @@ const STATUS_BADGE = {
   '보류':   'bg-yellow-100 text-yellow-800',
   '취소':   'bg-red-100 text-red-800',
   '대기':   'bg-gray-100 text-gray-800',
+  // QMS 확장 상태 배지 규격
+  '3단계 (대책 적용)': 'bg-indigo-100 text-indigo-800 border border-indigo-200',
+  '4단계 (효과 검증)': 'bg-purple-100 text-purple-800 border border-purple-200',
 };
 
 <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_BADGE[status]}`}>

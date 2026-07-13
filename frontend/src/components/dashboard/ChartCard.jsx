@@ -81,32 +81,59 @@ const ChartCard = ({
             case 'pie':
             case 'donut': {
                 const isDonut = type === 'donut';
-                // Value 기준 내림차순 정렬하여 조각과 범례 순서 일치
-                const sortedData = [...data].sort((a, b) => (b[dataKey] || 0) - (a[dataKey] || 0));
+                // 0값 조각들은 차트 드로잉에서 완벽히 필터링 처리 (원형 찌그러짐 방지)
+                const activeData = data.filter(d => (d[dataKey] || 0) > 0);
+                const sortedActiveData = [...activeData].sort((a, b) => (b[dataKey] || 0) - (a[dataKey] || 0));
+                
+                // 범례 표시용 전체 데이터 정렬 (0건 항목 포함)
+                const sortedAllData = [...data].sort((a, b) => (b[dataKey] || 0) - (a[dataKey] || 0));
+
+                const renderCustomLegend = (props) => {
+                    return (
+                        <ul style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '12px', listStyle: 'none', margin: '8px 0 0 0', padding: 0, fontSize: '11px' }}>
+                            {sortedAllData.map((entry, index) => {
+                                const val = entry[dataKey] || 0;
+                                const isZero = val === 0;
+                                const color = isZero ? '#94a3b8' : colors[index % colors.length];
+                                return (
+                                    <li key={`item-${index}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', color: isZero ? '#94a3b8' : '#334155' }}>
+                                        <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: color }}></span>
+                                        {entry[nameKey]}: {val}건
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    );
+                };
+
                 return (
-                    <div style={{ height: '240px' }}>
-                        <ResponsiveContainer width="100%" height="100%">
+                    <div style={{ height: '260px' }}>
+                        <ResponsiveContainer width="100%" height={220}>
                             <PieChart>
                                 <Pie
-                                    data={sortedData}
+                                    data={sortedActiveData.length > 0 ? sortedActiveData : [{ [nameKey]: '데이터 없음', [dataKey]: 1 }]}
                                     cx="50%"
                                     cy="50%"
-                                    labelLine={true}
-                                    label={renderCustomizedPieLabel}
+                                    labelLine={sortedActiveData.length > 0}
+                                    label={sortedActiveData.length > 0 ? renderCustomizedPieLabel : false}
                                     outerRadius={75}
                                     innerRadius={isDonut ? 45 : 0}
-                                    fill="#8884d8"
+                                    fill={sortedActiveData.length > 0 ? '#8884d8' : '#e2e8f0'}
                                     dataKey={dataKey}
                                     nameKey={nameKey}
                                 >
-                                    {sortedData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
-                                    ))}
+                                    {sortedActiveData.length > 0 ? (
+                                        sortedActiveData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                                        ))
+                                    ) : (
+                                        <Cell fill="#e2e8f0" />
+                                    )}
                                 </Pie>
-                                <Tooltip formatter={(value) => `${value}건`} />
-                                <Legend layout="horizontal" verticalAlign="bottom" align="center" iconSize={10} wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+                                <Tooltip formatter={(value, name) => name === '데이터 없음' ? ['0건', '현황'] : [`${value}건`, name]} />
                             </PieChart>
                         </ResponsiveContainer>
+                        {renderCustomLegend()}
                     </div>
                 );
             }

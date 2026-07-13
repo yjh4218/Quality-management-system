@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getInboundData, getManufacturers } from './api';
-import { AgGridReact } from 'ag-grid-react';
 import AnalyticsDashboardShell from './components/dashboard/AnalyticsDashboardShell';
 import DashboardFilterBar from './components/dashboard/DashboardFilterBar';
 import SummaryCardRow from './components/dashboard/SummaryCardRow';
 import ChartCard from './components/dashboard/ChartCard';
+import DataGrid from './components/common/DataGrid';
+import { getStatusBadgeClass } from './constants/statusBadge';
 
 const QualityDashboardPage = ({ user, onNavigate }) => {
     const gridRef = useRef();
@@ -124,44 +125,29 @@ const QualityDashboardPage = ({ user, onNavigate }) => {
     };
 
     const columnDefs = useMemo(() => [
-        { field: 'grnNumber', headerName: '입고번호', width: 140, filter: true },
-        { field: 'itemCode', headerName: '품목코드', width: 120, filter: true },
-        { field: 'productName', headerName: '품목명', flex: 1.5, filter: true },
-        { field: 'lotNumber', headerName: 'Lot 번호', width: 130 },
-        { field: 'manufacturer', headerName: '제조사', width: 130, filter: true },
+        { field: 'grnNumber', headerName: '입고번호', width: 140, cellClass: 'text-center' },
+        { field: 'itemCode', headerName: '품목코드', width: 120, cellClass: 'text-center' },
+        { field: 'productName', headerName: '품목명', flex: 1.5, cellClass: 'text-left' },
+        { field: 'lotNumber', headerName: 'Lot 번호', width: 130, cellClass: 'text-center' },
+        { field: 'manufacturer', headerName: '제조사', width: 130, cellClass: 'text-left' },
         { 
             field: 'inboundQuantity', 
             headerName: '입고수량', 
             width: 100,
+            cellClass: 'text-right',
             valueFormatter: (params) => params.value ? params.value.toLocaleString() : '-'
         },
-        { field: 'inboundDate', headerName: '입고일자', width: 120, filter: true },
+        { field: 'inboundDate', headerName: '입고일자', width: 120, cellClass: 'text-center' },
         { 
             field: 'inspectionResult', 
             headerName: '검사결과', 
             width: 100,
+            cellClass: 'text-center',
             cellRenderer: (params) => {
-                const val = params.value;
-                let color = '#475569';
-                let bg = '#f1f5f9';
-                if (val === '적합' || val === 'PASS') {
-                    color = '#15803d'; bg = '#dcfce7';
-                } else if (val === '부적합' || val === 'FAIL') {
-                    color = '#b91c1c'; bg = '#fee2e2';
-                } else {
-                    color = '#b45309'; bg = '#fef3c7';
-                }
+                const val = params.value || '대기';
                 return (
-                    <span style={{
-                        display: 'inline-block',
-                        padding: '4px 10px',
-                        borderRadius: '12px',
-                        fontSize: '12px',
-                        fontWeight: 'bold',
-                        color,
-                        backgroundColor: bg
-                    }}>
-                        {val || '대기'}
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${getStatusBadgeClass(val)}`}>
+                        {val}
                     </span>
                 );
             }
@@ -186,10 +172,36 @@ const QualityDashboardPage = ({ user, onNavigate }) => {
         }] : [])
     ];
 
+    // 전체 대비 대기 비중 계산 및 50% 초과 여부
+    const isPendingOverHalf = stats.total > 0 && (stats.pendingCount / stats.total) > 0.5;
+
+    // 입고 불합격/부적합 사유 집계 (remark, finalInspectionRemarks 분석)
+    const unfitReasons = useMemo(() => {
+        const reasons = {};
+        inbounds.forEach(item => {
+            if (item.inboundInspectionResult === '부적합' || item.finalInspectionResult === '부적합') {
+                const text = item.remark || item.finalInspectionRemarks || '기타 규격 미달';
+                const reasonKey = text.length > 20 ? text.substring(0, 17) + '...' : text;
+                reasons[reasonKey] = (reasons[reasonKey] || 0) + 1;
+            }
+        });
+        return Object.entries(reasons)
+            .map(([reason, count]) => ({ reason, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 5);
+    }, [inbounds]);
+
     const summaryCards = [
         { icon: '🚚', label: '총 입고 검사 건수', value: `${stats.total}건` },
         { icon: '🟢', label: '적합 판정 건수', value: `${stats.completedCount}건`, valueColor: '#10b981' },
-        { icon: '⏳', label: '검사 대기 건수', value: `${stats.pendingCount}건`, valueColor: '#f59e0b' },
+        { 
+            icon: '⏳', 
+            label: '검사 대기 건수', 
+            value: `${stats.pendingCount}건`, 
+            valueColor: '#f59e0b',
+            border: isPendingOverHalf ? '2px solid #f59e0b' : undefined,
+            style: isPendingOverHalf ? { boxShadow: '0 0 8px rgba(245, 158, 11, 0.4)', animation: 'pulse 2s infinite' } : undefined
+        },
         { icon: '🔴', label: '부적합 판정 건수', value: `${stats.unfitCount}건`, valueColor: '#ef4444' }
     ];
 
@@ -234,6 +246,35 @@ const QualityDashboardPage = ({ user, onNavigate }) => {
                 />
             </div>
 
+            {/* 부적합 사유 위젯 추가 */}
+            <div style={{
+                padding: '20px 24px',
+                backgroundColor: '#ffffff',
+                borderRadius: '16px',
+                border: '1px solid #e2e8f0',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                boxSizing: 'border-box',
+                marginBottom: '16px'
+            }}>
+                <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
+                    🚨 부적합 판정 주요 사유 (Top 5)
+                </h3>
+                {unfitReasons.length === 0 ? (
+                    <div style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', padding: '20px' }}>
+                        최근 발생한 부적합 내역이 없습니다.
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {unfitReasons.map((item, index) => (
+                            <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderRadius: '8px', backgroundColor: '#fff5f5', border: '1px solid #fed7d7' }}>
+                                <span style={{ fontSize: '13.5px', color: '#c53030', fontWeight: '600' }}>{index + 1}. {item.reason}</span>
+                                <span style={{ fontSize: '13.5px', fontWeight: '800', color: '#9b2c2c' }}>{item.count}건</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
             {/* 입고 검사 그리드 */}
             <div style={{
                 padding: '20px 24px',
@@ -247,23 +288,14 @@ const QualityDashboardPage = ({ user, onNavigate }) => {
                 minHeight: '450px'
             }}>
                 <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
-                    📋 입고 검수 및 판정 내역 (검색결과: {inbounds.length}건)
+                    📋 입고 검수 및 판정 내역
                 </h3>
-                <div className="ag-theme-alpine" style={{ height: '400px', width: '100%', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
-                    <AgGridReact 
-                        rowData={inbounds}
-                        columnDefs={columnDefs}
-                        pagination={true}
-                        paginationPageSize={15}
-                        defaultColDef={{
-                            sortable: true,
-                            resizable: true,
-                            filter: true,
-                            floatingFilter: true,
-                            flex: 1
-                        }}
-                    />
-                </div>
+                <DataGrid
+                    ref={gridRef}
+                    rowData={inbounds}
+                    columnDefs={columnDefs}
+                    paginationPageSize={50}
+                />
             </div>
         </AnalyticsDashboardShell>
     );

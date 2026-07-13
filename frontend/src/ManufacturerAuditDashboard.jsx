@@ -1,20 +1,21 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { searchManufacturerAudits } from './api';
-import { AgGridReact } from 'ag-grid-react';
 import { toast } from 'react-toastify';
 import ManufacturerSearchModal from './ManufacturerSearchModal';
 import AnalyticsDashboardShell from './components/dashboard/AnalyticsDashboardShell';
 import DashboardFilterBar from './components/dashboard/DashboardFilterBar';
 import SummaryCardRow from './components/dashboard/SummaryCardRow';
 import ChartCard from './components/dashboard/ChartCard';
+import DataGrid from './components/common/DataGrid';
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#A28CF8', '#FF6666'];
+const COLORS = ['#389e0d', '#096dd9', '#faad14', '#cf1322', '#a28cf8', '#ff6666'];
 
 const ManufacturerAuditDashboard = ({ user, onNavigate }) => {
+    const gridRef = useRef();
     const [audits, setAudits] = useState([]);
     const [loading, setLoading] = useState(false);
     const [showSearchModal, setShowSearchModal] = useState(false);
-    const [manufacturerCode, setManufacturerCode] = useState(''); // 추가
+    const [manufacturerCode, setManufacturerCode] = useState('');
     
     // Filter State
     const [startDate, setStartDate] = useState(() => {
@@ -54,6 +55,70 @@ const ManufacturerAuditDashboard = ({ user, onNavigate }) => {
     useEffect(() => {
         loadData();
     }, [loadData]);
+
+    // 예정일 도래 D-7 제조사 목록 산출 (최근 점검일 기준 1년 뒤가 7일 이내 도래)
+    const upcomingAudits = useMemo(() => {
+        const today = new Date();
+        const nextWeek = new Date();
+        nextWeek.setDate(today.getDate() + 7);
+
+        // 제조사별 가장 마지막 점검내역 추출
+        const lastAudits = {};
+        audits.forEach(a => {
+            const mName = a.manufacturer?.name;
+            if (!mName) return;
+            if (!lastAudits[mName] || new Date(a.auditDate) > new Date(lastAudits[mName].auditDate)) {
+                lastAudits[mName] = a;
+            }
+        });
+
+        return Object.values(lastAudits).map(a => {
+            const lastDate = new Date(a.auditDate);
+            const nextDate = new Date(lastDate);
+            nextDate.setFullYear(lastDate.getFullYear() + 1); // 1년 후
+            
+            const diffTime = nextDate - today;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            return {
+                mfrName: a.manufacturer?.name,
+                nextDateStr: nextDate.toISOString().split('T')[0],
+                dDay: diffDays
+            };
+        }).filter(item => item.dDay >= 0 && item.dDay <= 7);
+    }, [audits]);
+
+    // 등급 변동 이력 (등급 하락 제조사 감지)
+    const downgradedMfrs = useMemo(() => {
+        const mfrAudits = {};
+        // 날짜순 오름차순 정렬하여 순차 비교
+        const sorted = [...audits].sort((a,b) => new Date(a.auditDate) - new Date(b.auditDate));
+        
+        const downgrades = [];
+        const gradeMap = { A: 4, B: 3, C: 2, D: 1 };
+
+        sorted.forEach(a => {
+            const mName = a.manufacturer?.name;
+            if (!mName) return;
+            
+            const prev = mfrAudits[mName];
+            if (prev) {
+                const prevLevel = gradeMap[prev.grade] || 0;
+                const currLevel = gradeMap[a.grade] || 0;
+                if (currLevel < prevLevel) {
+                    // 강등 발생
+                    downgrades.push({
+                        mfrName: mName,
+                        prevGrade: prev.grade,
+                        currGrade: a.grade,
+                        date: a.auditDate
+                    });
+                }
+            }
+            mfrAudits[mName] = a;
+        });
+        return downgrades.reverse(); // 최신순 정렬
+    }, [audits]);
 
     const calculateStats = (data) => {
         let total = data.length;
@@ -97,7 +162,6 @@ const ManufacturerAuditDashboard = ({ user, onNavigate }) => {
     };
 
     const handleSearch = () => {
-        // Apply default sorting if needed, but usually handled by backend
         loadData();
     };
 
@@ -116,21 +180,33 @@ const ManufacturerAuditDashboard = ({ user, onNavigate }) => {
     };
 
     const colDefs = useMemo(() => [
-        { field: 'manufacturer.name', headerName: '제조사', flex: 1, filter: true },
-        { field: 'auditDate', headerName: '점검일자', width: 130, filter: true },
-        { field: 'modifierInfo', headerName: '점검자', width: 110 },
-        { field: 'totalScore', headerName: '총점(%)', width: 100 },
+        { field: 'manufacturer.name', headerName: '제조사', flex: 1, cellClass: 'text-left' },
+        { field: 'auditDate', headerName: '점검일자', width: 130, cellClass: 'text-center' },
+        { field: 'modifierInfo', headerName: '점검자', width: 110, cellClass: 'text-center' },
+        { 
+            field: 'totalScore', 
+            headerName: '총점(%)', 
+            width: 100, 
+            cellClass: 'text-right',
+            valueFormatter: (params) => params.value !== undefined ? `${params.value}%` : '-'
+        },
         { 
             field: 'grade', 
             headerName: '등급', 
             width: 90,
+            cellClass: 'text-center',
             cellRenderer: (params) => {
                 const val = params.value;
-                let color = '#c53030';
-                if (val === 'A') color = '#2c7a7b';
-                else if (val === 'B') color = '#2b6cb0';
-                else if (val === 'C') color = '#d69e2e';
-                return <b style={{ color }}>{val}</b>;
+                let bg = 'bg-gray-100 text-gray-800 border-gray-200';
+                if (val === 'A') bg = 'bg-green-100 text-green-800 border-green-200';
+                else if (val === 'B') bg = 'bg-blue-100 text-blue-800 border-blue-200';
+                else if (val === 'C') bg = 'bg-yellow-100 text-yellow-800 border-yellow-200';
+                else if (val === 'D') bg = 'bg-red-100 text-red-800 border-red-200';
+                return (
+                    <span className={`px-2 py-0.5 rounded text-xs font-bold border ${bg}`}>
+                        {val}
+                    </span>
+                );
             }
         }
     ], []);
@@ -195,6 +271,51 @@ const ManufacturerAuditDashboard = ({ user, onNavigate }) => {
                 />
             </div>
 
+            {/* D-7 이내 점검예정 제조사 및 등급하락 위젯 */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+                <div style={{ padding: '20px 24px', backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', boxSizing: 'border-box' }}>
+                    <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
+                        📅 점검 기한 7일 이내 임박 제조사 (D-7)
+                    </h3>
+                    {upcomingAudits.length === 0 ? (
+                        <div style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', padding: '20px' }}>
+                            7일 이내 만료 예정인 제조사가 없습니다.
+                        </div>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {upcomingAudits.map((item, index) => (
+                                <div key={index} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: '8px', backgroundColor: '#fffbeb', border: '1px solid #fef3c7' }}>
+                                    <span style={{ fontSize: '13px', fontWeight: '600' }}>{item.mfrName}</span>
+                                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#d97706' }}>{item.nextDateStr} (D-{item.dDay})</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div style={{ padding: '20px 24px', backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', boxSizing: 'border-box' }}>
+                    <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
+                        📉 직전 검사 대비 등급 강등 제조사
+                    </h3>
+                    {downgradedMfrs.length === 0 ? (
+                        <div style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', padding: '20px' }}>
+                            최근 등급이 강등된 제조사가 없습니다.
+                        </div>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {downgradedMfrs.map((item, index) => (
+                                <div key={index} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: '8px', backgroundColor: '#fff5f5', border: '1px solid #fed7d7' }}>
+                                    <span style={{ fontSize: '13px', fontWeight: '600', color: '#c53030' }}>{item.mfrName}</span>
+                                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#9b2c2c' }}>
+                                        {item.prevGrade}등급 → {item.currGrade}등급 ({item.date})
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+
             {/* 데이터 테이블 영역 */}
             <div style={{
                 padding: '20px 24px',
@@ -208,23 +329,14 @@ const ManufacturerAuditDashboard = ({ user, onNavigate }) => {
                 minHeight: '400px'
             }}>
                 <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
-                    📋 상세 점검 내역 (총 {audits.length}건)
+                    📋 상세 점검 내역
                 </h3>
-                <div className="ag-theme-alpine" style={{ height: '400px', width: '100%', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
-                    <AgGridReact 
-                        rowData={audits}
-                        columnDefs={colDefs}
-                        pagination={true}
-                        paginationPageSize={20}
-                        defaultColDef={{
-                            sortable: true,
-                            resizable: true,
-                            filter: true,
-                            floatingFilter: true,
-                            flex: 1
-                        }}
-                    />
-                </div>
+                <DataGrid
+                    ref={gridRef}
+                    rowData={audits}
+                    columnDefs={colDefs}
+                    paginationPageSize={50}
+                />
             </div>
 
             {showSearchModal && (

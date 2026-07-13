@@ -1,12 +1,14 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getProductionAudits } from './api';
-import { AgGridReact } from 'ag-grid-react';
 import AnalyticsDashboardShell from './components/dashboard/AnalyticsDashboardShell';
 import DashboardFilterBar from './components/dashboard/DashboardFilterBar';
 import SummaryCardRow from './components/dashboard/SummaryCardRow';
 import ChartCard from './components/dashboard/ChartCard';
+import DataGrid from './components/common/DataGrid';
+import { getStatusBadgeClass } from './constants/statusBadge';
 
 const ProductionAuditDashboardPage = ({ user, onNavigate }) => {
+    const gridRef = useRef();
     const [audits, setAudits] = useState([]);
     const [loading, setLoading] = useState(false);
 
@@ -125,42 +127,30 @@ const ProductionAuditDashboardPage = ({ user, onNavigate }) => {
     };
 
     const columnDefs = useMemo(() => [
-        { field: 'itemCode', headerName: '품목코드', width: 130, filter: true },
-        { field: 'productName', headerName: '품목명', flex: 1.2, filter: true },
-        { field: 'manufacturerName', headerName: '제조사', width: 140, filter: true },
-        { field: 'auditDate', headerName: '감리일자', width: 120, filter: true },
+        { field: 'itemCode', headerName: '품목코드', width: 130, cellClass: 'text-center' },
+        { field: 'productName', headerName: '품목명', flex: 1.2, cellClass: 'text-left' },
+        { field: 'manufacturerName', headerName: '제조사', width: 140, cellClass: 'text-left' },
+        { field: 'auditDate', headerName: '감리일자', width: 120, cellClass: 'text-center' },
         { 
             field: 'totalScore', 
             headerName: '평가점수', 
             width: 100,
+            cellClass: 'text-right',
             valueFormatter: (params) => params.value !== null && params.value !== undefined ? `${params.value}점` : '-'
         },
         { 
             field: 'auditStatus', 
             headerName: '진행상태', 
             width: 110,
+            cellClass: 'text-center',
             cellRenderer: (params) => {
-                const val = params.value;
-                let color = '#475569';
-                let bg = '#f1f5f9';
-                if (val === '승인' || val === 'APPROVED') {
-                    color = '#15803d'; bg = '#dcfce7';
-                } else if (val === '반려' || val === 'REJECTED') {
-                    color = '#b91c1c'; bg = '#fee2e2';
-                } else if (val === '대기' || val === 'PENDING' || val === '제출됨') {
-                    color = '#b45309'; bg = '#fef3c7';
-                }
+                let val = params.value;
+                if (val === 'APPROVED') val = '승인';
+                else if (val === 'REJECTED') val = '반려';
+                else if (val === 'PENDING') val = '대기';
                 return (
-                    <span style={{
-                        display: 'inline-block',
-                        padding: '4px 10px',
-                        borderRadius: '12px',
-                        fontSize: '12px',
-                        fontWeight: 'bold',
-                        color,
-                        backgroundColor: bg
-                    }}>
-                        {val === 'APPROVED' ? '승인' : val === 'REJECTED' ? '반려' : val === 'PENDING' ? '대기' : val}
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${getStatusBadgeClass(val)}`}>
+                        {val || '대기'}
                     </span>
                 );
             }
@@ -180,10 +170,31 @@ const ProductionAuditDashboardPage = ({ user, onNavigate }) => {
         { label: '품목명', type: 'text', value: productNameFilter, onChange: e => setProductNameFilter(e.target.value), icon: '📦', placeholder: '품목명 검색' }
     ];
 
+    // 사진 감사 미제출 건수 (용기, 아웃박스, 적재 이미지 중 비어 있는 항목 집계)
+    const missingPhotoCount = useMemo(() => {
+        return audits.filter(a => {
+            return !a.containerImages || !a.boxImages || !a.loadImages;
+        }).length;
+    }, [audits]);
+
+    // 반려 사유 유형 집계 및 분포 데이터 추출
+    const rejectionReasons = useMemo(() => {
+        const distribution = {};
+        audits.forEach(a => {
+            const status = a.auditStatus || '대기';
+            if (status === '반려' || status === 'REJECTED') {
+                const reason = a.rejectionReason || '사유 미입력';
+                const label = reason.length > 20 ? reason.substring(0, 17) + '...' : reason;
+                distribution[label] = (distribution[label] || 0) + 1;
+            }
+        });
+        return Object.entries(distribution).map(([name, value]) => ({ name, value }));
+    }, [audits]);
+
     const summaryCards = [
         { icon: '📸', label: '감리 신청 총수', value: `${stats.total}건` },
+        { icon: '🖼️', label: '사진 미제출 건수', value: `${missingPhotoCount}건`, valueColor: missingPhotoCount > 0 ? '#ef4444' : '#10b981' },
         { icon: '⏳', label: '승인 대기 건수', value: `${stats.pendingCount}건`, valueColor: '#b45309' },
-        { icon: '🟢', label: '최종 승인 건수', value: `${stats.approvedCount}건`, valueColor: '#10b981' },
         { icon: '🔴', label: '검토 반려 건수', value: `${stats.rejectedCount}건`, valueColor: '#ef4444' }
     ];
 
@@ -228,6 +239,18 @@ const ProductionAuditDashboardPage = ({ user, onNavigate }) => {
                 />
             </div>
 
+            {/* 반려 사유 및 미제출 통계 위젯 영역 */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+                <ChartCard 
+                    title="감리 반려 사유 유형 분포"
+                    type="donut"
+                    data={rejectionReasons}
+                    dataKey="value"
+                    nameKey="name"
+                    emptyThreshold={1}
+                />
+            </div>
+
             {/* 생산감리 내역 그리드 */}
             <div style={{
                 padding: '20px 24px',
@@ -241,23 +264,14 @@ const ProductionAuditDashboardPage = ({ user, onNavigate }) => {
                 minHeight: '400px'
             }}>
                 <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
-                    📋 생산감리 상세 점검 결과 (검색결과: {audits.length}건)
+                    📋 생산감리 상세 점검 결과
                 </h3>
-                <div className="ag-theme-alpine" style={{ height: '400px', width: '100%', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
-                    <AgGridReact 
-                        rowData={audits}
-                        columnDefs={columnDefs}
-                        pagination={true}
-                        paginationPageSize={15}
-                        defaultColDef={{
-                            sortable: true,
-                            resizable: true,
-                            filter: true,
-                            floatingFilter: true,
-                            flex: 1
-                        }}
-                    />
-                </div>
+                <DataGrid
+                    ref={gridRef}
+                    rowData={audits}
+                    columnDefs={columnDefs}
+                    paginationPageSize={50}
+                />
             </div>
         </AnalyticsDashboardShell>
     );

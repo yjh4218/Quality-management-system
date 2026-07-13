@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { getClaimDashboard } from './api';
-import { AgGridReact } from 'ag-grid-react';
 import ClaimDrawer from './ClaimDrawer';
 import AnalyticsDashboardShell from './components/dashboard/AnalyticsDashboardShell';
 import DashboardFilterBar from './components/dashboard/DashboardFilterBar';
 import SummaryCardRow from './components/dashboard/SummaryCardRow';
 import ChartCard from './components/dashboard/ChartCard';
+import DataGrid from './components/common/DataGrid';
+import { getStatusBadgeClass } from './constants/statusBadge';
 
 // ==========================================
 // PRODUCTION READY - PERFORMANCE OPTIMIZED
 // ==========================================
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#A28CF8', '#FF6666'];
+const COLORS = ['#3b82f6', '#60a5fa', '#93c5fd', '#34d399', '#fbbf24', '#f87171'];
 
 // MOUNT LOOP KILLER - GLOBAL DATA STORE
 let globalDashboardData = { stats: null, claims: [], key: '' };
@@ -38,22 +39,6 @@ function ClaimDashboardPage({ user, onNavigate }) {
     const [modalData, setModalData] = useState([]);
     const [detailRow, setDetailRow] = useState(null);
 
-    const [gridPage, setGridPage] = useState(0);
-    const [gridTotalPages, setGridTotalPages] = useState(1);
-    const [gridPageSize, setGridPageSize] = useState(10);
-
-    const onPaginationChanged = useCallback(() => {
-        if (gridRef.current && gridRef.current.api) {
-            setGridPage(gridRef.current.api.paginationGetCurrentPage());
-            setGridTotalPages(gridRef.current.api.paginationGetTotalPages());
-        }
-    }, []);
-
-    const handlePageSizeChange = (e) => {
-        const newSize = Number(e.target.value);
-        setGridPageSize(newSize);
-    };
-
     const load = useCallback(async (force = false) => {
         const currentKey = `${startDate}-${endDate}-${itemCode}-${productName}-${manufacturer}`;
         
@@ -74,7 +59,7 @@ function ClaimDashboardPage({ user, onNavigate }) {
 
         const fetchFunc = async () => {
             const params = { startDate, endDate, itemCode, productName, manufacturer };
-            const response = await getClaimDashboard(params); // Remove skipLoading
+            const response = await getClaimDashboard(params);
             return response.data;
         };
 
@@ -95,11 +80,8 @@ function ClaimDashboardPage({ user, onNavigate }) {
     }, [startDate, endDate, itemCode, productName, manufacturer]);
 
     useEffect(() => {
-        // [v1.0.7] STAGE 1: Prevent double-run in same component instance lifecycle
         if (hasEffectRun.current) return;
-        
         load(false);
-        
         hasEffectRun.current = true;
     }, [load]);
 
@@ -160,28 +142,73 @@ function ClaimDashboardPage({ user, onNavigate }) {
     };
 
     const columnDefs = useMemo(() => [
-        { field: 'receiptDate', headerName: '접수일자', width: 120 },
-        { field: 'itemCode', headerName: '품목코드', width: 120 },
-        { field: 'productName', headerName: '품목명', flex: 1 },
-        { field: 'lotNumber', headerName: 'LOT Number', width: 130 },
-        { field: 'country', headerName: '국가', width: 100 },
-        { field: 'primaryCategory', headerName: '대분류', width: 140 },
-        { field: 'qualityStatus', headerName: '처리 상태', width: 180, 
-          cellStyle: params => {
-              const status = params.value;
-              let color = '#6c757d'; 
-              if (status?.includes('1단계')) color = '#0d6efd';
-              if (status?.includes('2단계')) color = '#fd7e14';
-              if (status?.includes('3단계')) color = '#17a2b8';
-              if (status?.includes('4단계')) color = '#6610f2';
-              if (status?.includes('5단계')) color = '#198754';
-              return { color: color, fontWeight: 'bold' };
-          }
+        { field: 'receiptDate', headerName: '접수일자', width: 120, cellClass: 'text-center' },
+        { field: 'itemCode', headerName: '품목코드', width: 120, cellClass: 'text-center' },
+        { field: 'productName', headerName: '품목명', flex: 1, cellClass: 'text-left' },
+        { field: 'lotNumber', headerName: 'LOT Number', width: 130, cellClass: 'text-center' },
+        { field: 'country', headerName: '국가', width: 100, cellClass: 'text-center' },
+        { field: 'primaryCategory', headerName: '대분류', width: 140, cellClass: 'text-center' },
+        { 
+            field: 'qualityStatus', 
+            headerName: '처리 상태', 
+            width: 180,
+            cellClass: 'text-center',
+            cellRenderer: (params) => {
+                const status = params.value || '대기';
+                return (
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${getStatusBadgeClass(status)}`}>
+                        {status}
+                    </span>
+                );
+            }
         },
-        { field: 'claimContent', headerName: '클레임 내용', flex: 2 }
+        { 
+            field: 'claimContent', 
+            headerName: '클레임 내용', 
+            flex: 2,
+            cellClass: 'text-left',
+            cellRenderer: (params) => {
+                const val = params.value || '-';
+                return <span title={val} className="truncate block w-full">{val}</span>;
+            }
+        }
     ], []);
 
     const isManufacturer = user?.roles?.some(r => r.authority?.includes('MANUFACTURER'));
+
+    // SLA 임박 건수 산출 (품질/제조사 완료되지 않았으면서 접수일로부터 4일 이상 경과한 건)
+    const slaUrgentCount = React.useMemo(() => {
+        const today = new Date();
+        return claims.filter(c => {
+            if (!c.receiptDate) return false;
+            // 5단계(종결) 또는 4단계(종결) 이외의 건 대상
+            const isCompleted = c.qualityStatus?.includes('4단계') || c.mfrStatus?.includes('5단계') || c.mfrStatus?.includes('4단계');
+            if (isCompleted) return false;
+            const diffTime = Math.abs(today - new Date(c.receiptDate));
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            return diffDays >= 4; // 접수 후 4일 이상 지남 -> SLA 3일 이내 임박
+        }).length;
+    }, [claims]);
+
+    // 제조사별 평균 답변 소요시간 집계
+    const mfrRankings = React.useMemo(() => {
+        const mfrData = {};
+        claims.forEach(c => {
+            if (c.receiptDate && c.mfrTerminationDate) {
+                const diffTime = Math.abs(new Date(c.mfrTerminationDate) - new Date(c.receiptDate));
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                if (!mfrData[c.manufacturer]) {
+                    mfrData[c.manufacturer] = { totalDays: 0, count: 0 };
+                }
+                mfrData[c.manufacturer].totalDays += diffDays;
+                mfrData[c.manufacturer].count++;
+            }
+        });
+        return Object.entries(mfrData).map(([name, data]) => ({
+            name,
+            avgDays: (data.totalDays / data.count).toFixed(1)
+        })).sort((a, b) => parseFloat(a.avgDays) - parseFloat(b.avgDays));
+    }, [claims]);
 
     if (!stats && loading) return null;
 
@@ -214,7 +241,7 @@ function ClaimDashboardPage({ user, onNavigate }) {
 
     const summaryCards = [
         { icon: '📅', label: '이번달 발생', value: `${stats.thisMonthCount || 0}건` },
-        { icon: '⏳', label: '전달 발생', value: `${stats.lastMonthCount || 0}건` },
+        { icon: '🚨', label: 'SLA 임박 (3일 이내)', value: `${slaUrgentCount}건`, valueColor: slaUrgentCount > 0 ? '#ef4444' : '#64748b' },
         { icon: '📊', label: '전분기 발생', value: `${stats.lastQuarterCount || 0}건` },
         { icon: '💯', label: '최근 1년 발생', value: `${stats.oneYearCount || 0}건`, valueColor: '#ef4444' }
     ];
@@ -308,6 +335,7 @@ function ClaimDashboardPage({ user, onNavigate }) {
                     dataKey="클레임발생건수"
                     nameKey="name"
                     emptyThreshold={2}
+                    colors={COLORS}
                 />
                 <ChartCard 
                     title="국가별 비중"
@@ -316,7 +344,37 @@ function ClaimDashboardPage({ user, onNavigate }) {
                     dataKey="value"
                     nameKey="name"
                     emptyThreshold={2}
+                    colors={COLORS}
                 />
+            </div>
+
+            {/* 제조사 답변 소요일 랭킹 위젯 추가 */}
+            <div style={{
+                padding: '20px 24px',
+                backgroundColor: '#ffffff',
+                borderRadius: '16px',
+                border: '1px solid #e2e8f0',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                boxSizing: 'border-box',
+                marginBottom: '16px'
+            }}>
+                <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
+                    🏭 제조사별 평균 클레임 답변 소요 기간 (랭킹)
+                </h3>
+                {mfrRankings.length === 0 ? (
+                    <div style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', padding: '20px' }}>
+                        충분한 답변 데이터가 축적되지 않았습니다.
+                    </div>
+                ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                        {mfrRankings.slice(0, 5).map((rank, i) => (
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '8px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                                <span style={{ fontSize: '13px', fontWeight: '600' }}>{i+1}위. {rank.name}</span>
+                                <span style={{ fontSize: '13px', fontWeight: '700', color: '#3b82f6' }}>{rank.avgDays}일</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* 데이터 테이블 목록 */}
@@ -332,77 +390,31 @@ function ClaimDashboardPage({ user, onNavigate }) {
                 minHeight: '520px'
             }}>
                 <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
-                    📋 클레임 조회 결과 목록 (총 {claims?.length || 0}건)
+                    📋 클레임 조회 결과 목록
                 </h3>
-                <div className="ag-theme-alpine" style={{ height: '400px', width: '100%', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
-                    <AgGridReact
-                        ref={gridRef}
-                        rowData={claims || []}
-                        columnDefs={columnDefs}
-                        pagination={true}
-                        paginationPageSize={gridPageSize}
-                        suppressPaginationPanel={true}
-                        onPaginationChanged={onPaginationChanged}
-                        onRowDoubleClicked={handleRowDoubleClick}
-                        defaultColDef={{ sortable: true, resizable: true }}
-                    />
-                </div>
-                
-                {/* 페이징 제어 */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px', padding: '10px 5px', borderTop: '1px solid #e2e8f0' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontSize: '13px', color: '#64748b' }}>페이지 표시 개수:</span>
-                        <select 
-                            value={gridPageSize} 
-                            onChange={handlePageSizeChange}
-                            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', backgroundColor: '#fff', cursor: 'pointer', outline: 'none' }}
-                        >
-                            <option value={10}>10개씩 보기</option>
-                            <option value={20}>20개씩 보기</option>
-                            <option value={50}>50개씩 보기</option>
-                            <option value={100}>100개씩 보기</option>
-                        </select>
-                    </div>
-                    
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                        <button
-                            disabled={gridPage === 0}
-                            onClick={() => gridRef.current?.api?.paginationGoToPreviousPage()}
-                            style={{ padding: '6px 16px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', cursor: gridPage === 0 ? 'default' : 'pointer', opacity: gridPage === 0 ? 0.5 : 1 }}
-                        >
-                            ◀ 이전
-                        </button>
-                        <span style={{ fontSize: '13px', color: '#475569', fontWeight: 'bold' }}>
-                            {gridPage + 1} / {gridTotalPages || 1} 페이지
-                        </span>
-                        <button
-                            disabled={gridPage >= gridTotalPages - 1}
-                            onClick={() => gridRef.current?.api?.paginationGoToNextPage()}
-                            style={{ padding: '6px 16px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff', cursor: gridPage >= gridTotalPages - 1 ? 'default' : 'pointer', opacity: gridPage >= gridTotalPages - 1 ? 0.5 : 1 }}
-                        >
-                            다음 ▶
-                        </button>
-                    </div>
-                </div>
+                <DataGrid
+                    ref={gridRef}
+                    rowData={claims || []}
+                    columnDefs={columnDefs}
+                    onRowDoubleClicked={handleRowDoubleClick}
+                    paginationPageSize={50}
+                />
             </div>
 
             {/* Drill-down Modal */}
             {modalOpen && (
                 <div className="drawer-overlay" onClick={(e) => e.target === e.currentTarget && setModalOpen(false)}>
                     <div style={{ background: 'white', width: '85%', height: '85%', margin: 'auto', borderRadius: '12px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
+                        <div style={{ display: 'flex', justifyBetween: 'space-between', marginBottom: '15px' }}>
                             <h3 style={{ margin: 0 }}>{modalTitle}</h3>
                             <button onClick={() => setModalOpen(false)} style={{ fontSize: '24px', border: 'none', background: 'none', cursor: 'pointer' }}>&times;</button>
                         </div>
-                        <div className="ag-theme-alpine" style={{ height: 'calc(100% - 60px)', width: '100%' }}>
-                            <AgGridReact
+                        <div style={{ flex: 1, minHeight: 0 }}>
+                            <DataGrid
                                 rowData={modalData}
                                 columnDefs={columnDefs}
-                                pagination={true}
-                                paginationPageSize={10}
-                                suppressPaginationPanel={false}
                                 onRowDoubleClicked={handleRowDoubleClick}
-                                popupParent={document.body}
+                                paginationPageSize={10}
                             />
                         </div>
                     </div>
