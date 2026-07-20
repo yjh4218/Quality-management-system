@@ -79,7 +79,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                 "(COALESCE(:brand, '') = '' OR (b IS NOT NULL AND LOWER(b.name) LIKE :brand)) AND " +
                 "(COALESCE(:manufacturer, '') = '' OR (m IS NOT NULL AND LOWER(m.name) LIKE :manufacturer)) AND " +
                 "(COALESCE(:ingredients, '') = '' OR LOWER(p.ingredients) LIKE :ingredients) AND " +
-                "(:channelNames IS NULL OR ch.name IN :channelNames) " +
+                "(:#{#channelNames == null} = true OR ch.name IN :channelNames) " +
                 "ORDER BY p.createdAt DESC",
         countQuery = "SELECT count(DISTINCT p) FROM Product p LEFT JOIN p.manufacturerInfo m LEFT JOIN p.brand b LEFT JOIN p.channels ch WHERE "
                     + "p.active = true AND "
@@ -90,7 +90,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                     + "(COALESCE(:brand, '') = '' OR (b IS NOT NULL AND LOWER(b.name) LIKE :brand)) AND "
                     + "(COALESCE(:manufacturer, '') = '' OR (m IS NOT NULL AND LOWER(m.name) LIKE :manufacturer)) AND "
                     + "(COALESCE(:ingredients, '') = '' OR LOWER(p.ingredients) LIKE :ingredients) AND "
-                    + "(:channelNames IS NULL OR ch.name IN :channelNames)"
+                    + "(:#{#channelNames == null} = true OR ch.name IN :channelNames)"
     )
     Page<ProductSummaryRecord> searchProductsSummary(
                     @Param("companyFilter") String companyFilter,
