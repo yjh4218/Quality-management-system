@@ -5,14 +5,14 @@ import AnalyticsDashboardShell from './components/dashboard/AnalyticsDashboardSh
 import DashboardFilterBar from './components/dashboard/DashboardFilterBar';
 import SummaryCardRow from './components/dashboard/SummaryCardRow';
 import ChartCard from './components/dashboard/ChartCard';
-import DataGrid from './components/common/DataGrid';
-import { getStatusBadgeClass } from './constants/statusBadge';
+import DashboardDataTable from './components/dashboard/DashboardDataTable';
+import StatusBadgeRenderer from './components/dashboard/StatusBadgeRenderer';
 
 // ==========================================
 // PRODUCTION READY - PERFORMANCE OPTIMIZED
 // ==========================================
 
-const COLORS = ['#3b82f6', '#60a5fa', '#93c5fd', '#34d399', '#fbbf24', '#f87171'];
+const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
 
 // MOUNT LOOP KILLER - GLOBAL DATA STORE
 let globalDashboardData = { stats: null, claims: [], key: '' };
@@ -153,14 +153,21 @@ function ClaimDashboardPage({ user, onNavigate }) {
             headerName: '처리 상태', 
             width: 180,
             cellClass: 'text-center',
-            cellRenderer: (params) => {
-                const status = params.value || '대기';
-                return (
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${getStatusBadgeClass(status)}`}>
-                        {status}
-                    </span>
-                );
-            }
+            cellRenderer: (params) => (
+                <StatusBadgeRenderer
+                    value={params.value}
+                    rules={{
+                        '0단계': '#94a3b8',
+                        '1단계': '#0d6efd',
+                        '2단계': '#f59e0b',
+                        '3단계': '#8b5cf6',
+                        '4단계': '#ec4899',
+                        '5단계': '#16a34a',
+                        '대기': '#f59e0b',
+                        '완료': '#16a34a'
+                    }}
+                />
+            )
         },
         { 
             field: 'claimContent', 
@@ -267,16 +274,16 @@ function ClaimDashboardPage({ user, onNavigate }) {
             <SummaryCardRow cards={summaryCards} />
 
             {/* 기타 커스텀 랭킹 카드 영역 */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px' }}>
                 <div style={{
-                    padding: '20px 24px',
+                    padding: '24px 28px',
                     backgroundColor: '#ffffff',
-                    borderRadius: '16px',
+                    borderRadius: '20px',
                     border: '1px solid #e2e8f0',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.03)',
                     boxSizing: 'border-box'
                 }}>
-                    <h3 style={{ fontSize: '14px', fontWeight: '700', color: '#334155', margin: '0 0 16px 0' }}>
+                    <h3 style={{ fontSize: '15px', fontWeight: '700', color: '#1e293b', margin: '0 0 16px 0' }}>
                         🏆 최근 1개월 최다 발생 품목
                     </h3>
                     <div style={{ maxHeight: '160px', overflowY: 'auto' }}>
@@ -286,11 +293,11 @@ function ClaimDashboardPage({ user, onNavigate }) {
                             </div>
                         ) : stats.topProductsByBrand && Object.keys(stats.topProductsByBrand).length > 0 ? (
                             Object.entries(stats.topProductsByBrand).map(([brand, products]) => (
-                                <div key={brand} style={{ marginBottom: '10px' }}>
-                                    <strong style={{ color: '#2563eb', fontSize: '13px' }}>{brand}</strong>
-                                    <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '12px', color: '#475569' }}>
+                                <div key={brand} style={{ marginBottom: '12px' }}>
+                                    <strong style={{ color: '#6366f1', fontSize: '13.5px' }}>{brand}</strong>
+                                    <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: '#475569' }}>
                                         {products.map((p, idx) => (
-                                            <li key={idx} style={{ cursor: 'pointer', textDecoration: 'underline', padding: '2px 0' }} onClick={() => handleTopProductClick(p.itemCode, p.productName)}>
+                                            <li key={idx} style={{ cursor: 'pointer', textDecoration: 'underline', padding: '3px 0' }} onClick={() => handleTopProductClick(p.itemCode, p.productName)}>
                                                 [{p.itemCode}] {p.productName} ({p.count}건)
                                             </li>
                                         ))}
@@ -302,19 +309,19 @@ function ClaimDashboardPage({ user, onNavigate }) {
                 </div>
 
                 <div style={{
-                    padding: '20px 24px',
+                    padding: '24px 28px',
                     backgroundColor: '#ffffff',
-                    borderRadius: '16px',
+                    borderRadius: '20px',
                     border: '1px solid #e2e8f0',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.03)',
                     boxSizing: 'border-box'
                 }}>
-                    <h3 style={{ fontSize: '14px', fontWeight: '700', color: '#334155', margin: '0 0 16px 0' }}>
+                    <h3 style={{ fontSize: '15px', fontWeight: '700', color: '#1e293b', margin: '0 0 16px 0' }}>
                         ⚠️ 최다 발생 클레임 유형
                     </h3>
                     <div style={{ maxHeight: '160px', overflowY: 'auto' }}>
                         {stats.topCategories && stats.topCategories.length > 0 ? (
-                            <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: '#475569' }}>
+                            <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13.5px', color: '#475569', lineHeight: '1.6' }}>
                                 {stats.topCategories.map((cat, idx) => (
                                     <li key={idx} style={{ marginBottom: '6px', cursor: 'pointer', textDecoration: 'underline' }} onClick={() => handleTopCategoryClick(cat.category)}>
                                         <strong>{cat.category}</strong> ({cat.count}건)
@@ -327,7 +334,7 @@ function ClaimDashboardPage({ user, onNavigate }) {
             </div>
 
             {/* 차트 영역 */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px' }}>
                 <ChartCard 
                     title="월간 접수 추이"
                     type="bar"
@@ -350,15 +357,15 @@ function ClaimDashboardPage({ user, onNavigate }) {
 
             {/* 제조사 답변 소요일 랭킹 위젯 추가 */}
             <div style={{
-                padding: '20px 24px',
+                padding: '24px 28px',
                 backgroundColor: '#ffffff',
-                borderRadius: '16px',
+                borderRadius: '20px',
                 border: '1px solid #e2e8f0',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.03)',
                 boxSizing: 'border-box',
-                marginBottom: '16px'
+                marginBottom: '20px'
             }}>
-                <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
+                <h3 style={{ margin: '0 0 16px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
                     🏭 제조사별 평균 클레임 답변 소요 기간 (랭킹)
                 </h3>
                 {mfrRankings.length === 0 ? (
@@ -368,9 +375,9 @@ function ClaimDashboardPage({ user, onNavigate }) {
                 ) : (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
                         {mfrRankings.slice(0, 5).map((rank, i) => (
-                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '8px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                                <span style={{ fontSize: '13px', fontWeight: '600' }}>{i+1}위. {rank.name}</span>
-                                <span style={{ fontSize: '13px', fontWeight: '700', color: '#3b82f6' }}>{rank.avgDays}일</span>
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderRadius: '10px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                                <span style={{ fontSize: '13.5px', fontWeight: '600', color: '#475569' }}>{i+1}위. {rank.name}</span>
+                                <span style={{ fontSize: '13.5px', fontWeight: '700', color: '#6366f1' }}>{rank.avgDays}일</span>
                             </div>
                         ))}
                     </div>
@@ -378,43 +385,28 @@ function ClaimDashboardPage({ user, onNavigate }) {
             </div>
 
             {/* 데이터 테이블 목록 */}
-            <div style={{
-                padding: '20px 24px',
-                backgroundColor: '#ffffff',
-                borderRadius: '16px',
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-                boxSizing: 'border-box',
-                display: 'flex',
-                flexDirection: 'column',
-                minHeight: '520px'
-            }}>
-                <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
-                    📋 클레임 조회 결과 목록
-                </h3>
-                <DataGrid
-                    ref={gridRef}
-                    rowData={claims || []}
-                    columnDefs={columnDefs}
-                    onRowDoubleClicked={handleRowDoubleClick}
-                    paginationPageSize={50}
-                />
-            </div>
+            <DashboardDataTable
+                title="📋 클레임 조회 결과 목록"
+                rowData={claims || []}
+                columnDefs={columnDefs}
+                onRowDoubleClick={handleRowDoubleClick}
+                defaultPageSize={50}
+            />
 
             {/* Drill-down Modal */}
             {modalOpen && (
                 <div className="drawer-overlay" onClick={(e) => e.target === e.currentTarget && setModalOpen(false)}>
                     <div style={{ background: 'white', width: '85%', height: '85%', margin: 'auto', borderRadius: '12px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
-                        <div style={{ display: 'flex', justifyBetween: 'space-between', marginBottom: '15px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
                             <h3 style={{ margin: 0 }}>{modalTitle}</h3>
                             <button onClick={() => setModalOpen(false)} style={{ fontSize: '24px', border: 'none', background: 'none', cursor: 'pointer' }}>&times;</button>
                         </div>
                         <div style={{ flex: 1, minHeight: 0 }}>
-                            <DataGrid
+                            <DashboardDataTable
                                 rowData={modalData}
                                 columnDefs={columnDefs}
-                                onRowDoubleClicked={handleRowDoubleClick}
-                                paginationPageSize={10}
+                                onRowDoubleClick={handleRowDoubleClick}
+                                defaultPageSize={10}
                             />
                         </div>
                     </div>

@@ -1,23 +1,23 @@
 import React from 'react';
 import { 
-    ResponsiveContainer, 
-    BarChart, 
-    Bar, 
-    XAxis, 
-    YAxis, 
-    CartesianGrid, 
-    Tooltip, 
-    Legend, 
-    PieChart, 
-    Pie, 
-    Cell, 
-    LineChart, 
-    Line 
+     ResponsiveContainer, 
+     BarChart, 
+     Bar, 
+     XAxis, 
+     YAxis, 
+     CartesianGrid, 
+     Tooltip, 
+     Legend, 
+     PieChart, 
+     Pie, 
+     Cell, 
+     LineChart, 
+     Line 
 } from 'recharts';
 
 /**
  * 데이터를 기반으로 둥근 모서리의 카드 틀 내부에 Recharts 그래프를 안전하게 렌더링하는 공용 컴포넌트입니다.
- * 데이터가 부족한 경우 Empty 메시지를 자동으로 렌더링합니다.
+ * 프리미엄 다크 테마와 7색 인디고 계열 다채로운 색상이 적용되었습니다.
  */
 const ChartCard = ({
     title,
@@ -26,34 +26,62 @@ const ChartCard = ({
     dataKey,
     nameKey,
     emptyThreshold = 3,
-    colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4']
+    colors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899']
 }) => {
     
     // 데이터의 건수가 임계치 미만인 경우 플레이스홀더 처리
     const hasEnoughData = data && data.length >= emptyThreshold;
 
     // Pie/Donut 커스텀 라벨 포맷터
-    const renderCustomizedPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, index, name }) => {
+    const renderCustomizedPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, index, payload }) => {
         const RADIAN = Math.PI / 180;
-        const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+        const radius = outerRadius + 20;
         const x = cx + radius * Math.cos(-midAngle * RADIAN);
         const y = cy + radius * Math.sin(-midAngle * RADIAN);
         
-        // 데이터 명칭과 비율 표시
+        // nameKey 속성값 동적 획득
+        const name = payload && payload[nameKey] ? payload[nameKey] : '';
         const labelText = `${name} ${(percent * 100).toFixed(0)}%`;
         
         return (
             <text 
                 x={x} 
                 y={y} 
-                fill="#334155" 
+                fill="#1e293b" 
                 textAnchor={x > cx ? 'start' : 'end'} 
                 dominantBaseline="central" 
-                style={{ fontSize: '11px', fontWeight: 'bold', fill: '#0f172a' }}
+                style={{ fontSize: '13px', fontWeight: '800', fill: '#1e293b' }}
             >
                 {labelText}
             </text>
         );
+    };
+
+    // Y축 정수 최적화 및 눈금 간격 계산기 (niceTicks)
+    const getNiceTicks = (dataList, key) => {
+        if (!dataList || dataList.length === 0) return [0, 10, 20, 30];
+        const maxVal = Math.max(...dataList.map(d => d[key] || 0), 10);
+        
+        // 4개의 구간을 반올림하여 둥근 단위로 생성
+        const rawStep = maxVal / 3;
+        let step = 1;
+        if (rawStep > 1) {
+            const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+            const normalized = rawStep / magnitude;
+            let cleanStep;
+            if (normalized < 1.5) cleanStep = 1;
+            else if (normalized < 3) cleanStep = 2;
+            else if (normalized < 7) cleanStep = 5;
+            else cleanStep = 10;
+            step = cleanStep * magnitude;
+        }
+        
+        const ticks = [0, step, step * 2, step * 3];
+        // 만약 최대값이 ticks 범위를 초과하는 경우 추가 구간 삽입
+        while (ticks[ticks.length - 1] < maxVal) {
+            ticks.push(ticks[ticks.length - 1] + step);
+        }
+        return ticks;
     };
 
     // 차트 컴포넌트 내용 분기 렌더링
@@ -66,7 +94,7 @@ const ChartCard = ({
                     alignItems: 'center',
                     justifyContent: 'center',
                     color: '#94a3b8',
-                    fontSize: '13px',
+                    fontSize: '13.5px',
                     fontWeight: '600',
                     backgroundColor: '#f8fafc',
                     borderRadius: '12px',
@@ -77,27 +105,32 @@ const ChartCard = ({
             );
         }
 
+        const commonTooltipStyle = {
+            contentStyle: { backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '8px' },
+            itemStyle: { color: '#1e293b', fontSize: '13px' },
+            labelStyle: { color: '#64748b', fontSize: '12px', fontWeight: 'bold' }
+        };
+
         switch (type) {
             case 'pie':
             case 'donut': {
                 const isDonut = type === 'donut';
-                // 0값 조각들은 차트 드로잉에서 완벽히 필터링 처리 (원형 찌그러짐 방지)
+                // 1. 값이 0보다 큰 데이터만 필터링하여 Pie 차트에 전달 (끊긴 도넛 방지)
                 const activeData = data.filter(d => (d[dataKey] || 0) > 0);
                 const sortedActiveData = [...activeData].sort((a, b) => (b[dataKey] || 0) - (a[dataKey] || 0));
-                
-                // 범례 표시용 전체 데이터 정렬 (0건 항목 포함)
                 const sortedAllData = [...data].sort((a, b) => (b[dataKey] || 0) - (a[dataKey] || 0));
 
-                const renderCustomLegend = (props) => {
+                const renderCustomLegend = () => {
                     return (
-                        <ul style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '12px', listStyle: 'none', margin: '8px 0 0 0', padding: 0, fontSize: '11px' }}>
+                        <ul style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '14px', listStyle: 'none', margin: '12px 0 0 0', padding: 0, fontSize: '13px' }}>
                             {sortedAllData.map((entry, index) => {
                                 const val = entry[dataKey] || 0;
                                 const isZero = val === 0;
-                                const color = isZero ? '#94a3b8' : colors[index % colors.length];
+                                // 2. 0건인 카테고리는 범례에서 회색 텍스트로 표출
+                                const color = isZero ? '#cbd5e1' : colors[index % colors.length];
                                 return (
-                                    <li key={`item-${index}`} style={{ display: 'flex', alignItems: 'center', gap: '4px', color: isZero ? '#94a3b8' : '#334155' }}>
-                                        <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: color }}></span>
+                                    <li key={`item-${index}`} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: isZero ? '#94a3b8' : '#334155' }}>
+                                        <span style={{ display: 'inline-block', width: '9px', height: '9px', borderRadius: '50%', backgroundColor: color }}></span>
                                         {entry[nameKey]}: {val}건
                                     </li>
                                 );
@@ -107,7 +140,7 @@ const ChartCard = ({
                 };
 
                 return (
-                    <div style={{ height: '260px' }}>
+                    <div style={{ height: '270px' }}>
                         <ResponsiveContainer width="100%" height={220}>
                             <PieChart>
                                 <Pie
@@ -118,7 +151,7 @@ const ChartCard = ({
                                     label={sortedActiveData.length > 0 ? renderCustomizedPieLabel : false}
                                     outerRadius={75}
                                     innerRadius={isDonut ? 45 : 0}
-                                    fill={sortedActiveData.length > 0 ? '#8884d8' : '#e2e8f0'}
+                                    fill={sortedActiveData.length > 0 ? '#8884d8' : '#cbd5e1'}
                                     dataKey={dataKey}
                                     nameKey={nameKey}
                                 >
@@ -127,64 +160,72 @@ const ChartCard = ({
                                             <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
                                         ))
                                     ) : (
-                                        <Cell fill="#e2e8f0" />
+                                        <Cell fill="#cbd5e1" />
                                     )}
                                 </Pie>
-                                <Tooltip formatter={(value, name) => name === '데이터 없음' ? ['0건', '현황'] : [`${value}건`, name]} />
+                                <Tooltip {...commonTooltipStyle} formatter={(value, name) => name === '데이터 없음' ? ['0건', '현황'] : [`${value}건`, name]} />
                             </PieChart>
                         </ResponsiveContainer>
                         {renderCustomLegend()}
                     </div>
                 );
             }
-            case 'line':
+            case 'line': {
+                const niceTicks = getNiceTicks(data, dataKey);
                 return (
                     <div style={{ height: '240px' }}>
                         <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={data} margin={{ top: 10, right: 20, left: -20, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                <XAxis dataKey={nameKey} tick={{ fontSize: 11, fill: '#64748b' }} />
-                                <YAxis tick={{ fontSize: 11, fill: '#64748b' }} allowDecimals={false} domain={[0, 'dataMax']} />
-                                <Tooltip />
-                                <Legend wrapperStyle={{ fontSize: '11px' }} />
-                                <Line type="monotone" dataKey={dataKey} stroke="#3b82f6" strokeWidth={2.5} activeDot={{ r: 6 }} />
+                            <LineChart data={data} margin={{ top: 10, right: 20, left: -10, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                <XAxis dataKey={nameKey} tick={{ fontSize: 13, fill: '#64748b' }} />
+                                <YAxis tick={{ fontSize: 13, fill: '#64748b' }} allowDecimals={false} ticks={niceTicks} domain={[0, niceTicks[niceTicks.length - 1]]} />
+                                <Tooltip {...commonTooltipStyle} />
+                                <Legend wrapperStyle={{ fontSize: '13px', paddingTop: '10px' }} />
+                                <Line type="monotone" dataKey={dataKey} stroke="#6366f1" strokeWidth={3} activeDot={{ r: 6 }} />
                             </LineChart>
                         </ResponsiveContainer>
                     </div>
                 );
+            }
             case 'bar':
-            default:
+            default: {
+                const niceTicks = getNiceTicks(data, dataKey);
                 return (
                     <div style={{ height: '240px' }}>
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={data} margin={{ top: 10, right: 20, left: -20, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                <XAxis dataKey={nameKey} tick={{ fontSize: 11, fill: '#64748b' }} />
-                                <YAxis tick={{ fontSize: 11, fill: '#64748b' }} allowDecimals={false} domain={[0, 'dataMax']} />
-                                <Tooltip />
-                                <Legend wrapperStyle={{ fontSize: '11px' }} />
-                                <Bar dataKey={dataKey} fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                            <BarChart data={data} margin={{ top: 10, right: 20, left: -10, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                <XAxis dataKey={nameKey} tick={{ fontSize: 13, fill: '#64748b' }} />
+                                <YAxis tick={{ fontSize: 13, fill: '#64748b' }} allowDecimals={false} ticks={niceTicks} domain={[0, niceTicks[niceTicks.length - 1]]} />
+                                <Tooltip {...commonTooltipStyle} />
+                                <Legend wrapperStyle={{ fontSize: '13px', paddingTop: '10px' }} />
+                                <Bar dataKey={dataKey} fill="#6366f1" radius={[4, 4, 0, 0]}>
+                                    {data.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                                    ))}
+                                </Bar>
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
                 );
+            }
         }
     };
 
     return (
         <section style={{
-            padding: '20px 24px',
+            padding: '24px 28px',
             backgroundColor: '#ffffff',
-            borderRadius: '16px',
+            borderRadius: '20px',
             border: '1px solid #e2e8f0',
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.03)',
             boxSizing: 'border-box'
         }}>
             <h3 style={{
-                fontSize: '14px',
+                fontSize: '16px',
                 fontWeight: '700',
-                color: '#334155',
-                margin: '0 0 16px 0',
+                color: '#1e293b',
+                margin: '0 0 20px 0',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px'

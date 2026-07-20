@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.util.stream.Collectors;
 import java.util.List;
 
 /**
@@ -38,6 +39,7 @@ public class PackagingSpecExportService {
     private final PackagingSpecRevisionRepository revisionRepository;
     private final PackagingSpecComponentRepository componentRepository;
     private final com.example.ims.repository.ChannelPackagingRuleRepository channelPackagingRuleRepository;
+    private final com.example.ims.repository.PackagingMethodImageRepository methodImageRepository;
 
     /**
      * Generates a simple Excel export for the given product's packaging specs.
@@ -360,8 +362,19 @@ public class PackagingSpecExportService {
                 }
                 setCellValue(sheet, 28, 4, markingStd); // E29
 
-                // 포장방법
-                setCellValue(sheet, 45, 1, spec.getPackagingMethodText() != null ? spec.getPackagingMethodText() : ""); // B46
+                // 포장방법 (캡션 순서대로 나열 출력)
+                List<com.example.ims.entity.PackagingMethodImage> methodImages = methodImageRepository.findActiveBySpecId(spec.getId());
+                String methodCombinedText = "";
+                if (methodImages != null && !methodImages.isEmpty()) {
+                    methodCombinedText = methodImages.stream()
+                            .map(img -> img.getCaptionText() != null ? img.getCaptionText() : "")
+                            .filter(t -> !t.isEmpty())
+                            .collect(Collectors.joining("\n"));
+                }
+                if (methodCombinedText.isEmpty()) {
+                    methodCombinedText = spec.getPackagingMethodText() != null ? spec.getPackagingMethodText() : "";
+                }
+                setCellValue(sheet, 45, 1, methodCombinedText); // B46
 
                 // 적재사항: 인박스 & 아웃박스
                 setCellValue(sheet, 69, 4, spec.getInboxType() != null ? spec.getInboxType() : "인박스"); // E70 (Row 70 is index 69)

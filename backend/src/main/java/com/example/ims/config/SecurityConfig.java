@@ -48,6 +48,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/debug/**").hasRole("ADMIN")
                         .requestMatchers("/", "/api/auth/login", "/api/auth/logout").permitAll()
                         .requestMatchers("/api/auth/register", "/api/auth/check-username", "/api/auth/find-password", "/api/auth/verify-email").permitAll()
+                        .requestMatchers("/api/vendor-upload/**").permitAll()
                         .requestMatchers("/api/auth/unlock/**", "/api/auth/reset-password/**").hasRole("ADMIN")
                         
                         // 로그 및 보안 관련 경로 관리자 보호 (Controller에서 @PreAuthorize로 정밀 제어)

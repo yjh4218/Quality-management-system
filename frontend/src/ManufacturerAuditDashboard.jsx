@@ -6,9 +6,10 @@ import AnalyticsDashboardShell from './components/dashboard/AnalyticsDashboardSh
 import DashboardFilterBar from './components/dashboard/DashboardFilterBar';
 import SummaryCardRow from './components/dashboard/SummaryCardRow';
 import ChartCard from './components/dashboard/ChartCard';
-import DataGrid from './components/common/DataGrid';
+import DashboardDataTable from './components/dashboard/DashboardDataTable';
+import StatusBadgeRenderer from './components/dashboard/StatusBadgeRenderer';
 
-const COLORS = ['#389e0d', '#096dd9', '#faad14', '#cf1322', '#a28cf8', '#ff6666'];
+const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
 
 const ManufacturerAuditDashboard = ({ user, onNavigate }) => {
     const gridRef = useRef();
@@ -195,19 +196,7 @@ const ManufacturerAuditDashboard = ({ user, onNavigate }) => {
             headerName: '등급', 
             width: 90,
             cellClass: 'text-center',
-            cellRenderer: (params) => {
-                const val = params.value;
-                let bg = 'bg-gray-100 text-gray-800 border-gray-200';
-                if (val === 'A') bg = 'bg-green-100 text-green-800 border-green-200';
-                else if (val === 'B') bg = 'bg-blue-100 text-blue-800 border-blue-200';
-                else if (val === 'C') bg = 'bg-yellow-100 text-yellow-800 border-yellow-200';
-                else if (val === 'D') bg = 'bg-red-100 text-red-800 border-red-200';
-                return (
-                    <span className={`px-2 py-0.5 rounded text-xs font-bold border ${bg}`}>
-                        {val}
-                    </span>
-                );
-            }
+            cellRenderer: (params) => <StatusBadgeRenderer value={params.value} />
         }
     ], []);
 
@@ -251,7 +240,7 @@ const ManufacturerAuditDashboard = ({ user, onNavigate }) => {
             <SummaryCardRow cards={summaryCards} />
 
             {/* 차트 영역 */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px' }}>
                 <ChartCard 
                     title="월별 점검 추이 및 건수"
                     type="line"
@@ -267,14 +256,14 @@ const ManufacturerAuditDashboard = ({ user, onNavigate }) => {
                     dataKey="value"
                     nameKey="name"
                     emptyThreshold={3}
-                    colors={['#389e0d', '#096dd9', '#faad14', '#cf1322']}
+                    colors={['#10b981', '#6366f1', '#f59e0b', '#ef4444']}
                 />
             </div>
 
             {/* D-7 이내 점검예정 제조사 및 등급하락 위젯 */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '16px', marginBottom: '16px' }}>
-                <div style={{ padding: '20px 24px', backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', boxSizing: 'border-box' }}>
-                    <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px', marginBottom: '20px' }}>
+                <div style={{ padding: '24px 28px', backgroundColor: '#ffffff', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.03)', boxSizing: 'border-box' }}>
+                    <h3 style={{ margin: '0 0 16px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
                         📅 점검 기한 7일 이내 임박 제조사 (D-7)
                     </h3>
                     {upcomingAudits.length === 0 ? (
@@ -282,19 +271,19 @@ const ManufacturerAuditDashboard = ({ user, onNavigate }) => {
                             7일 이내 만료 예정인 제조사가 없습니다.
                         </div>
                     ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                             {upcomingAudits.map((item, index) => (
-                                <div key={index} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: '8px', backgroundColor: '#fffbeb', border: '1px solid #fef3c7' }}>
-                                    <span style={{ fontSize: '13px', fontWeight: '600' }}>{item.mfrName}</span>
-                                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#d97706' }}>{item.nextDateStr} (D-{item.dDay})</span>
+                                <div key={index} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderRadius: '10px', backgroundColor: '#fffbeb', border: '1px solid #fef3c7' }}>
+                                    <span style={{ fontSize: '13.5px', fontWeight: '600', color: '#b45309' }}>{item.mfrName}</span>
+                                    <span style={{ fontSize: '13.5px', fontWeight: '700', color: '#d97706' }}>{item.nextDateStr} (D-{item.dDay})</span>
                                 </div>
                             ))}
                         </div>
                     )}
                 </div>
 
-                <div style={{ padding: '20px 24px', backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', boxSizing: 'border-box' }}>
-                    <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
+                <div style={{ padding: '24px 28px', backgroundColor: '#ffffff', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.03)', boxSizing: 'border-box' }}>
+                    <h3 style={{ margin: '0 0 16px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
                         📉 직전 검사 대비 등급 강등 제조사
                     </h3>
                     {downgradedMfrs.length === 0 ? (
@@ -302,11 +291,11 @@ const ManufacturerAuditDashboard = ({ user, onNavigate }) => {
                             최근 등급이 강등된 제조사가 없습니다.
                         </div>
                     ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                             {downgradedMfrs.map((item, index) => (
-                                <div key={index} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: '8px', backgroundColor: '#fff5f5', border: '1px solid #fed7d7' }}>
-                                    <span style={{ fontSize: '13px', fontWeight: '600', color: '#c53030' }}>{item.mfrName}</span>
-                                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#9b2c2c' }}>
+                                <div key={index} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderRadius: '10px', backgroundColor: '#fff5f5', border: '1px solid #fed7d7' }}>
+                                    <span style={{ fontSize: '13.5px', fontWeight: '600', color: '#c53030' }}>{item.mfrName}</span>
+                                    <span style={{ fontSize: '13.5px', fontWeight: '700', color: '#9b2c2c' }}>
                                         {item.prevGrade}등급 → {item.currGrade}등급 ({item.date})
                                     </span>
                                 </div>
@@ -317,27 +306,12 @@ const ManufacturerAuditDashboard = ({ user, onNavigate }) => {
             </div>
 
             {/* 데이터 테이블 영역 */}
-            <div style={{
-                padding: '20px 24px',
-                backgroundColor: '#ffffff',
-                borderRadius: '16px',
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-                boxSizing: 'border-box',
-                display: 'flex',
-                flexDirection: 'column',
-                minHeight: '400px'
-            }}>
-                <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
-                    📋 상세 점검 내역
-                </h3>
-                <DataGrid
-                    ref={gridRef}
-                    rowData={audits}
-                    columnDefs={colDefs}
-                    paginationPageSize={50}
-                />
-            </div>
+            <DashboardDataTable
+                title="📋 상세 점검 내역"
+                rowData={audits}
+                columnDefs={colDefs}
+                defaultPageSize={50}
+            />
 
             {showSearchModal && (
                 <ManufacturerSearchModal 

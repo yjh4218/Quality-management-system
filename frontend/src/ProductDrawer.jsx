@@ -19,6 +19,7 @@ import ProductSearchPopup from './ProductSearchPopup';
 import BomMasterSearchModal from './BomMasterSearchModal';
 import SaveConfirmModal from './components/SaveConfirmModal';
 import { usePermissions } from './usePermissions';
+import PackagingMethodTab from './components/dashboard/PackagingMethodTab';
 
 const ProductDrawer = ({ product, onClose, user }) => {
     const isMobile = window.innerWidth <= 768; // Simple check for mobile
@@ -144,6 +145,27 @@ const ProductDrawer = ({ product, onClose, user }) => {
     const [masterRules, setMasterRules] = useState([]);
 
     const [specSubTab, setSpecSubTab] = useState('sheet1');
+
+    const [spaceRatioResults, setSpaceRatioResults] = useState(null);
+    const [spaceRatioLoading, setSpaceRatioLoading] = useState(false);
+
+    // 실시간 공간비율 계산 검증 API 연계
+    useEffect(() => {
+        if (activeTab === 'spaceRatio' && product && product.id) {
+            setSpaceRatioLoading(true);
+            api.checkProductSpaceRatio(product.id)
+            .then(res => {
+                // api.jsx는 이미 응답 포장(unwrap)이 되어있으므로 res.data 또는 res를 그대로 사용
+                setSpaceRatioResults(res.data || res);
+            })
+            .catch(err => {
+                console.error("Space ratio calculation error:", err);
+            })
+            .finally(() => {
+                setSpaceRatioLoading(false);
+            });
+        }
+    }, [activeTab, product]);
 
     const handleSaveFullSpec = async () => {
         try {
@@ -1123,6 +1145,9 @@ const ProductDrawer = ({ product, onClose, user }) => {
                         {permissions.canViewPackaging && (
                             <button type="button" className={`drawer-tab-btn ${activeTab === 'packaging' ? 'active' : ''}`} onClick={() => setActiveTab('packaging')}>포장재 정보 및 사양서</button>
                         )}
+                        {formData.isMaster && (
+                            <button type="button" className={`drawer-tab-btn ${activeTab === 'spaceRatio' ? 'active' : ''}`} onClick={() => setActiveTab('spaceRatio')}>⚖️ 국가별 공간비율 검증</button>
+                        )}
                         <button type="button" className={`drawer-tab-btn ${activeTab === 'testReports' ? 'active' : ''}`} onClick={() => setActiveTab('testReports')}>공인성적서 관리</button>
                         {product && <button type="button" className={`drawer-tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>변경 이력</button>}
                     </div>
@@ -1130,6 +1155,151 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
                 <div className="drawer-body">
                     <form id="product-form" onSubmit={handleSubmit} className="drawer-body-form">
+                        {activeTab === 'spaceRatio' && (
+                            <div className="tab-pane" style={{ gap: '20px' }}>
+                                <div className="card" style={{ borderLeft: '5px solid #6366f1' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                                        <h3 style={{ margin: 0 }}>⚖️ 6개국 포장공간비율 검증 및 규격 최적화 역산</h3>
+                                        <button 
+                                            type="button" 
+                                            className="primary" 
+                                            style={{ padding: '6px 15px', fontSize: '12.5px', background: '#4f46e5', border: 'none', borderRadius: '6px', color: '#fff', cursor: 'pointer' }}
+                                            onClick={() => {
+                                                // 강제 새로고침 트리거
+                                                setActiveTab('details');
+                                                setTimeout(() => setActiveTab('spaceRatio'), 50);
+                                            }}
+                                        >
+                                            🔄 실시간 재계산
+                                        </button>
+                                    </div>
+                                    <p style={{ color: '#64748b', fontSize: '13px', margin: '0 0 20px 0', lineHeight: '1.5' }}>
+                                        품목코드 마스터에 기재된 포장 제원(내용량, 구성품 크기, 외곽박스 치수)을 기반으로 각 국가의 포장규제 법률에 대입하여 실시간 판정합니다.
+                                    </p>
+
+                                    {spaceRatioLoading ? (
+                                        <div style={{ padding: '60px 0', textAlign: 'center', color: '#94a3b8' }}>
+                                            <div className="spinner" style={{ margin: '0 auto 15px auto', width: '36px', height: '36px', border: '3px solid rgba(99,102,241,0.1)', borderLeftColor: '#6366f1', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                                            <span>국가별 전략 패턴 연산 엔진 가동 중...</span>
+                                        </div>
+                                    ) : !spaceRatioResults ? (
+                                        <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', border: '1px dashed #cbd5e1', borderRadius: '8px' }}>
+                                            실시간 공간비율 데이터가 생성되지 않았습니다. 포장 사양의 가로/세로/높이 및 내용량이 채워졌는지 확인하십시오.
+                                        </div>
+                                    ) : (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                            {/* 6개국 국가 카드 보드 */}
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '15px' }}>
+                                                {Object.entries(spaceRatioResults).map(([countryKey, res]) => {
+                                                    const isPass = res.passed;
+                                                    const isNull = res.spaceRatio === null;
+                                                    const countryName = 
+                                                        countryKey === 'KOREA' ? '대한민국 (Korea)' :
+                                                        countryKey === 'CHINA' ? '중국 (China)' :
+                                                        countryKey === 'TAIWAN' ? '대만 (Taiwan)' :
+                                                        countryKey === 'JAPAN' ? '일본 (Japan)' :
+                                                        countryKey === 'EU' ? '유럽연합 (EU)' :
+                                                        countryKey === 'USA' ? '미국 (USA)' : countryKey;
+
+                                                    let borderTop = '4px solid #10b981'; // Green
+                                                    let bgLight = '#ecfdf5';
+                                                    let statusText = '합격 (Pass)';
+                                                    let statusColor = '#10b981';
+
+                                                    if (isNull) {
+                                                        borderTop = '4px solid #94a3b8'; // Gray
+                                                        bgLight = '#f8fafc';
+                                                        statusText = '판정 보류';
+                                                        statusColor = '#64748b';
+                                                    } else if (!isPass) {
+                                                        borderTop = '4px solid #ef4444'; // Red
+                                                        bgLight = '#fef2f2';
+                                                        statusText = '불합격 (Fail)';
+                                                        statusColor = '#ef4444';
+                                                    }
+
+                                                    return (
+                                                        <div 
+                                                            key={countryKey} 
+                                                            style={{ 
+                                                                background: '#fff', 
+                                                                border: '1px solid #e2e8f0', 
+                                                                borderTop, 
+                                                                borderRadius: '10px', 
+                                                                padding: '20px',
+                                                                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
+                                                                display: 'flex',
+                                                                flexDirection: 'column',
+                                                                justifyContent: 'space-between'
+                                                            }}
+                                                        >
+                                                            <div>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                                                    <strong style={{ fontSize: '15px', color: '#1e293b' }}>{countryName}</strong>
+                                                                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: statusColor, padding: '2px 8px', borderRadius: '4px', backgroundColor: bgLight }}>
+                                                                        {statusText}
+                                                                    </span>
+                                                                </div>
+
+                                                                {/* 계산 세부 수치 */}
+                                                                <div style={{ fontSize: '13px', color: '#475569', marginBottom: '15px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                                        <span>측정 공간비율:</span>
+                                                                        <span style={{ fontWeight: '700', color: '#1e293b' }}>
+                                                                            {isNull || typeof res.spaceRatio !== 'number' ? '-' : `${res.spaceRatio.toFixed(1)}%`}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                                        <span>법적 허용한도:</span>
+                                                                        <span>{isNull ? '-' : `${res.limitRatio}% 이하`}</span>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* 피드백 상세 메시지 */}
+                                                                {res.feedbackMessage && (
+                                                                    <div style={{ fontSize: '12px', color: '#4f46e5', backgroundColor: '#f5f3ff', padding: '10px', borderRadius: '6px', marginBottom: '15px', whiteSpace: 'pre-line', lineHeight: '1.4' }}>
+                                                                        💡 {res.feedbackMessage}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
+                                                            {/* 역산 최적화 추천안 (Recommended Dimension Spec) */}
+                                                            {!isPass && res.recommendedSpec && (
+                                                                <div style={{ marginTop: 'auto', background: '#fef2f2', border: '1px solid #fee2e2', padding: '12px', borderRadius: '8px' }}>
+                                                                    <strong style={{ fontSize: '12px', color: '#b91c1c', display: 'block', marginBottom: '6px' }}>🛠️ 합격 기준 역산 권장 치수</strong>
+                                                                    <div style={{ fontSize: '12.5px', color: '#7f1d1d', fontFamily: 'monospace' }}>
+                                                                        가로 &times; 세로 &times; 높이:<br />
+                                                                        <b>
+                                                                            {Math.floor(res.recommendedSpec.recommendedWidth)} &times; {Math.floor(res.recommendedSpec.recommendedLength)} &times; {Math.floor(res.recommendedSpec.recommendedHeight)} mm 이하
+                                                                        </b>
+                                                                    </div>
+                                                                    <span style={{ fontSize: '11px', color: '#991b1b', marginTop: '4px', display: 'block' }}>
+                                                                        (외곽부피가 {Math.floor(res.recommendedSpec.targetOuterVolume / 1000).toLocaleString()} cm³ 이하가 되도록 패키지를 수정하십시오)
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+
+                                            {/* 글로벌 법률 가이드라인 정보 탭 */}
+                                            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '20px', marginTop: '10px' }}>
+                                                <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#1e293b' }}>📌 국가별 포장공간비율 주요 법적 기준 요약</h4>
+                                                <ul style={{ fontSize: '12px', color: '#475569', paddingLeft: '20px', lineHeight: '1.6', margin: 0 }}>
+                                                    <li><b>한국 환경부 예외</b>: 종합제품(세트)은 개별 단품 판정 결과와 전체 세트 판정(25%이하)을 동시 독립 검증합니다. 3겹 이상 포장 시 자동 불합격 경고합니다.</li>
+                                                    <li><b>중국 SAMR 신표준(GB 23350)</b>: 끈/손잡이 부피를 최외곽 판매포장에 포함하며, 1겹 포장은 강제 합격 대상입니다. k값(화장품 기본 6.0) 가중치를 적용합니다.</li>
+                                                    <li><b>대만 EPA 고지</b>: 세트 포장박스 내부의 불필요한 고정용 완충 패드는 순수내용량(npv) 부피에서 배제하며, 단일/복합 재질 분류 C값으로 포장용적을 나눕니다.</li>
+                                                    <li><b>일본 적정포장규칙</b>: 1차 용기 내 내용물 충전율이 40%(소형 30%) 이상이어야 하며, 세트박스 내벽과의 간격은 유리(GLASS) 용기인 경우 상하/깊이방향 예외 완화(최대 15mm/8mm)가 적용됩니다.</li>
+                                                    <li><b>유럽연합(EU) / 미국(FDA)</b>: 법적 허용한도 명세가 부재하거나 사기성 포장금지(FDA) 포괄주의 기조이므로 참고치(50%) 및 Null(판정보류) 상태를 고지합니다.</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                         {activeTab === 'details' && (
                             <div className="tab-pane">
                                 <div className="card">
@@ -1876,7 +2046,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                             <div className="tab-pane" style={{ animation: 'fadeIn 0.3s ease' }}>
                                 {/* 탭 메뉴 헤더 */}
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '2px solid #edf2f7', paddingBottom: '10px' }}>
-                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                         <button type="button" onClick={() => setSpecSubTab('sheet1')} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: specSubTab === 'sheet1' ? '#003366' : 'transparent', color: specSubTab === 'sheet1' ? '#fff' : '#4a5568', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' }}>
                                             📄 Sheet 1: 사양서 양식
                                         </button>
@@ -1886,9 +2056,12 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                         <button type="button" onClick={() => setSpecSubTab('sheet3')} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: specSubTab === 'sheet3' ? '#003366' : 'transparent', color: specSubTab === 'sheet3' ? '#fff' : '#4a5568', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' }}>
                                             🧱 Sheet 3: 현품표 팔레트
                                         </button>
+                                        <button type="button" onClick={() => setSpecSubTab('sheet4')} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: specSubTab === 'sheet4' ? '#003366' : 'transparent', color: specSubTab === 'sheet4' ? '#fff' : '#4a5568', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' }}>
+                                            📸 Sheet 4: 포장방법 사진
+                                        </button>
                                     </div>
                                     <div style={{ display: 'flex', gap: '8px' }}>
-                                        {canEdit && (
+                                        {canEdit && specSubTab !== 'sheet4' && (
                                             <button type="button" onClick={handleSaveFullSpec} className="primary" style={{ background: '#10b981', borderColor: '#10b981', color: '#fff', fontSize: '12px', padding: '6px 14px' }}>
                                                 💾 사양서 저장
                                             </button>
@@ -2358,6 +2531,10 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                             </div>
                                         </div>
                                     </div>
+                                )}
+
+                                {specSubTab === 'sheet4' && currentSpec && currentSpec.id && (
+                                    <PackagingMethodTab specId={currentSpec.id} canEdit={canEdit} />
                                 )}
                             </div>
                         )}

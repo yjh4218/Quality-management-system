@@ -16,6 +16,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.List;
 
@@ -187,5 +188,149 @@ public class PackagingSpecificationController {
         return productRepository.findByItemCode(itemCode)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    // --- PackagingMethodImage REST APIs ---
+
+    @Autowired
+    private com.example.ims.repository.PackagingMethodImageRepository methodImageRepository;
+
+    @Autowired
+    private com.example.ims.service.FileStorageService fileStorageService;
+
+    @GetMapping("/{specId}/method-images")
+    public ResponseEntity<List<com.example.ims.entity.PackagingMethodImage>> getMethodImages(@PathVariable Long specId) {
+        return ResponseEntity.ok(methodImageRepository.findActiveBySpecId(specId));
+    }
+
+    @PostMapping("/{specId}/method-images/batch-upload")
+    public ResponseEntity<List<com.example.ims.entity.PackagingMethodImage>> batchUploadMethodImages(
+            @PathVariable Long specId,
+            @RequestParam("files") org.springframework.web.multipart.MultipartFile[] files,
+            @RequestParam(value = "insertAfterId", required = false) Long insertAfterId) {
+        
+        if (files == null || files.length == 0) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        // 1회 20장 제한 및 파일형식 확인
+        if (files.length > 20) {
+            throw new RuntimeException("1회 업로드 제한(20장)을 초과했습니다.");
+        }
+
+        for (org.springframework.web.multipart.MultipartFile file : files) {
+            String orig = file.getOriginalFilename();
+            if (orig == null) continue;
+            String lower = orig.toLowerCase();
+            if (!lower.endsWith(".jpg") && !lower.endsWith(".jpeg") && !lower.endsWith(".png") && !lower.endsWith(".webp")) {
+                throw new RuntimeException("지원하지 않는 이미지 포맷입니다. (jpg, png, webp만 허용)");
+            }
+            if (file.getSize() > 10 * 1024 * 1024) {
+                throw new RuntimeException("파일 크기 제한(10MB)을 초과하는 이미지가 있습니다.");
+            }
+        }
+
+        List<com.example.ims.entity.PackagingMethodImage> activeImages = methodImageRepository.findActiveBySpecId(specId);
+        
+        double insertOrder = 1000.0;
+        if (insertAfterId != null) {
+            int targetIdx = -1;
+            for (int i = 0; i < activeImages.size(); i++) {
+                if (activeImages.get(i).getId().equals(insertAfterId)) {
+                    targetIdx = i;
+                    break;
+                }
+            }
+            if (targetIdx != -1) {
+                if (targetIdx == activeImages.size() - 1) {
+                    insertOrder = activeImages.get(targetIdx).getDisplayOrder() + 1000.0;
+                } else {
+                    double prevOrder = activeImages.get(targetIdx).getDisplayOrder();
+                    double nextOrder = activeImages.get(targetIdx + 1).getDisplayOrder();
+                    insertOrder = (prevOrder + nextOrder) / 2.0;
+                }
+            }
+        } else {
+            if (!activeImages.isEmpty()) {
+                insertOrder = activeImages.get(activeImages.size() - 1).getDisplayOrder() + 1000.0;
+            }
+        }
+
+        List<com.example.ims.entity.PackagingMethodImage> uploadedList = new java.util.ArrayList<>();
+        double step = 1000.0;
+        if (insertAfterId != null && activeImages.size() > 1) {
+            step = 1.0; // insert within existing items
+        }
+
+        double currentOrder = insertOrder;
+        for (org.springframework.web.multipart.MultipartFile file : files) {
+            try {
+                String storedFileName = fileStorageService.storeFile(file, com.example.ims.util.UploadType.GENERAL, "pkg_method");
+                String fileUrl = "/uploads/" + storedFileName;
+
+                com.example.ims.entity.PackagingMethodImage img = com.example.ims.entity.PackagingMethodImage.builder()
+                        .packagingSpecId(specId)
+                        .imageUrl(fileUrl)
+                        .displayOrder(currentOrder)
+                        .layoutWidthPx(400)
+                        .layoutHeightPx(300)
+                        .build();
+
+                uploadedList.add(methodImageRepository.save(img));
+                currentOrder += step;
+            } catch (Exception e) {
+                // 개별 업로드 진행률 지원 및 일부 실패 시에도 로깅 후 진행
+                e.printStackTrace();
+            }
+        }
+
+        return ResponseEntity.ok(uploadedList);
+    }
+
+    @PutMapping("/method-images/{id}")
+    public ResponseEntity<com.example.ims.entity.PackagingMethodImage> updateMethodImage(
+            @PathVariable Long id,
+            @RequestBody com.example.ims.entity.PackagingMethodImage updateDto) {
+        
+        com.example.ims.entity.PackagingMethodImage existing = methodImageRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Image not found"));
+
+        if (updateDto.getDisplayOrder() != null) {
+            existing.setDisplayOrder(updateDto.getDisplayOrder());
+        }
+        if (updateDto.getLayoutWidthPx() != null) {
+            existing.setLayoutWidthPx(updateDto.getLayoutWidthPx());
+        }
+        if (updateDto.getLayoutHeightPx() != null) {
+            existing.setLayoutHeightPx(updateDto.getLayoutHeightPx());
+        }
+        if (updateDto.getAnnotationsJson() != null) {
+            existing.setAnnotationsJson(updateDto.getAnnotationsJson());
+        }
+        if (updateDto.getCaptionText() != null) {
+            existing.setCaptionText(updateDto.getCaptionText());
+        }
+        if (updateDto.getThumbnailUrl() != null) {
+            existing.setThumbnailUrl(updateDto.getThumbnailUrl());
+        }
+
+        return ResponseEntity.ok(methodImageRepository.save(existing));
+    }
+
+    @DeleteMapping("/method-images/{id}")
+    public ResponseEntity<Void> deleteMethodImage(@PathVariable Long id) {
+        com.example.ims.entity.PackagingMethodImage existing = methodImageRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Image not found"));
+        existing.setDeletedAt(java.time.LocalDateTime.now());
+        methodImageRepository.save(existing);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/method-images/{id}/restore")
+    public ResponseEntity<com.example.ims.entity.PackagingMethodImage> restoreMethodImage(@PathVariable Long id) {
+        com.example.ims.entity.PackagingMethodImage existing = methodImageRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Image not found"));
+        existing.setDeletedAt(null);
+        return ResponseEntity.ok(methodImageRepository.save(existing));
     }
 }

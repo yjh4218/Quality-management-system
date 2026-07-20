@@ -75,6 +75,7 @@ const DataGrid = React.forwardRef(({
             <div className="ag-theme-alpine w-full overflow-hidden rounded-xl border border-gray-200 shadow-sm bg-white" style={{ height: '450px' }}>
                 <AgGridReact
                     ref={gridRef}
+                    theme="legacy"
                     rowData={rowData}
                     columnDefs={columnDefs}
                     rowHeight={54}

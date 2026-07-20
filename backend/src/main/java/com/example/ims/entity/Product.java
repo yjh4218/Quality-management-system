@@ -253,4 +253,15 @@ public class Product {
 
     @Deprecated
     private String certificatePath;
+
+    @Column(name = "content_volume_ml")
+    private Double contentVolumeMl;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "content_type")
+    private ContentType contentType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "packaging_material_type")
+    private PackagingMaterialType packagingMaterialType;
 }

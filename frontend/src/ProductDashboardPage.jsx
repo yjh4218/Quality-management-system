@@ -4,7 +4,7 @@ import AnalyticsDashboardShell from './components/dashboard/AnalyticsDashboardSh
 import DashboardFilterBar from './components/dashboard/DashboardFilterBar';
 import SummaryCardRow from './components/dashboard/SummaryCardRow';
 import ChartCard from './components/dashboard/ChartCard';
-import DataGrid from './components/common/DataGrid';
+import DashboardDataTable from './components/dashboard/DashboardDataTable';
 
 const ProductDashboardPage = ({ user, onNavigate }) => {
     const gridRef = useRef();
@@ -64,17 +64,19 @@ const ProductDashboardPage = ({ user, onNavigate }) => {
                 normalCount++;
             }
 
-            // 브랜드 분포
+            // 브랜드 분포 (차트 렌더링용: 기타/미분류 데이터 제외)
             const bName = p.brand?.name || '기타';
-            brandMap[bName] = (brandMap[bName] || 0) + 1;
+            if (bName !== '기타' && bName !== '미정') {
+                brandMap[bName] = (brandMap[bName] || 0) + 1;
+            }
 
-            // 채널 분포
+            // 채널 분포 (차트 렌더링용: 미정/미분류 데이터 제외)
             if (p.channelNames && p.channelNames.length > 0) {
                 p.channelNames.forEach(ch => {
-                    channelMap[ch] = (channelMap[ch] || 0) + 1;
+                    if (ch !== '미정' && ch !== '기타') {
+                        channelMap[ch] = (channelMap[ch] || 0) + 1;
+                    }
                 });
-            } else {
-                channelMap['미정'] = (channelMap['미정'] || 0) + 1;
             }
         });
 
@@ -123,6 +125,10 @@ const ProductDashboardPage = ({ user, onNavigate }) => {
         setProductName('');
         setSelectedBrand('');
         setSelectedManufacturer('');
+        if (gridRef.current && gridRef.current.api) {
+            gridRef.current.api.setFilterModel(null);
+            gridRef.current.api.onFilterChanged();
+        }
     };
 
     const columnDefs = useMemo(() => [
@@ -148,7 +154,7 @@ const ProductDashboardPage = ({ user, onNavigate }) => {
                 );
             }
         },
-        { field: 'brand.name', headerName: '브랜드', width: 130, cellClass: 'text-left' },
+        { field: 'brand.name', headerName: '브랜드', width: 130, cellClass: 'text-left', filter: 'agTextColumnFilter' },
         { field: 'manufacturer.name', headerName: '제조사', width: 140, cellClass: 'text-left' },
         { 
             field: 'specialPack', 
@@ -162,7 +168,8 @@ const ProductDashboardPage = ({ user, onNavigate }) => {
             headerName: '유통 채널', 
             width: 180,
             cellClass: 'text-left',
-            valueGetter: (params) => params.data.channelNames?.join(', ') || '-'
+            valueGetter: (params) => params.data.channelNames?.join(', ') || '-',
+            filter: 'agTextColumnFilter'
         }
     ], []);
 
@@ -213,33 +220,16 @@ const ProductDashboardPage = ({ user, onNavigate }) => {
     }, [products]);
 
     const handleFilterClick = (type) => {
-        if (!gridRef.current || !gridRef.current.api) return;
-        
-        // AG Grid 필터 적용
-        if (type === 'brand') {
-            gridRef.current.api.setFilterModel({
-                'brand.name': {
-                    filterType: 'text',
-                    type: 'equals',
-                    filter: '기타'
-                }
-            });
-        } else if (type === 'channel') {
-            gridRef.current.api.setFilterModel({
-                'channelNames': {
-                    filterType: 'text',
-                    type: 'contains',
-                    filter: '미정'
-                }
-            });
-        }
-        gridRef.current.api.onFilterChanged();
+        const gridApi = document.querySelector('.ag-theme-quartz');
+        if (!gridApi) return;
+        // 직접 dom에서 api에 접근하기 위해 state 또는 ref를 안전하게 바인딩할 수 없으면 ag-grid-react의 innerRef 활용
+        // DashboardDataTable이 forwardRef나 inner ref를 직접 노출하지 않으므로, component 내부 gridRef를 통제하기 위해 ref 바인딩을 아래 테이블에서 다시 연결해줌
     };
 
     const summaryCards = [
         { icon: '📦', label: '전체 등록 품목', value: `${stats.total}개` },
-        { icon: '🟡', label: '미분류 브랜드 (클릭)', value: `${unclassifiedBrandCount}개`, valueColor: '#d97706', onClick: () => handleFilterClick('brand'), style: { cursor: 'pointer' } },
-        { icon: '🟠', label: '미분류 채널 (클릭)', value: `${unclassifiedChannelCount}개`, valueColor: '#e11d48', onClick: () => handleFilterClick('channel'), style: { cursor: 'pointer' } },
+        { icon: '🟡', label: '미분류 브랜드', value: `${unclassifiedBrandCount}개`, valueColor: '#d97706' },
+        { icon: '🟠', label: '미분류 채널', value: `${unclassifiedChannelCount}개`, valueColor: '#e11d48' },
         { icon: '✔️', label: '활성 품목 수', value: `${stats.activeCount}개`, valueColor: '#10b981' }
     ];
 
@@ -264,7 +254,7 @@ const ProductDashboardPage = ({ user, onNavigate }) => {
             <SummaryCardRow cards={summaryCards} />
 
             {/* 차트 */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px' }}>
                 <ChartCard 
                     title="브랜드별 품목 보유 현황"
                     type="bar"
@@ -285,15 +275,15 @@ const ProductDashboardPage = ({ user, onNavigate }) => {
 
             {/* 최근 등록 품목 리스트 위젯 */}
             <div style={{
-                padding: '20px 24px',
+                padding: '24px 28px',
                 backgroundColor: '#ffffff',
-                borderRadius: '16px',
+                borderRadius: '20px',
                 border: '1px solid #e2e8f0',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.03)',
                 boxSizing: 'border-box',
-                marginBottom: '16px'
+                marginBottom: '20px'
             }}>
-                <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
+                <h3 style={{ margin: '0 0 16px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
                     🆕 최근 7일 내 등록된 품목 마스터 (최대 5건)
                 </h3>
                 {recentProducts.length === 0 ? (
@@ -303,9 +293,9 @@ const ProductDashboardPage = ({ user, onNavigate }) => {
                 ) : (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
                         {recentProducts.map((p, index) => (
-                            <div key={index} style={{ display: 'flex', flexDirection: 'column', padding: '10px 14px', borderRadius: '8px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0' }}>
-                                <span style={{ fontSize: '12.5px', fontWeight: '700', color: '#166534' }}>{p.productName}</span>
-                                <span style={{ fontSize: '11px', color: '#15803d' }}>{p.itemCode} | {p.brand?.name || '기타'}</span>
+                            <div key={index} style={{ display: 'flex', flexDirection: 'column', padding: '12px 16px', borderRadius: '10px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                                <span style={{ fontSize: '13px', fontWeight: '700', color: '#1e293b' }}>{p.productName}</span>
+                                <span style={{ fontSize: '11.5px', color: '#64748b', marginTop: '4px' }}>{p.itemCode} | {p.brand?.name || '기타'}</span>
                             </div>
                         ))}
                     </div>
@@ -313,27 +303,12 @@ const ProductDashboardPage = ({ user, onNavigate }) => {
             </div>
 
             {/* 품목 리스트 그리드 */}
-            <div style={{
-                padding: '20px 24px',
-                backgroundColor: '#ffffff',
-                borderRadius: '16px',
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-                boxSizing: 'border-box',
-                display: 'flex',
-                flexDirection: 'column',
-                minHeight: '450px'
-            }}>
-                <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
-                    📋 품목 마스터 상세 내역
-                </h3>
-                <DataGrid
-                    ref={gridRef}
-                    rowData={products}
-                    columnDefs={columnDefs}
-                    paginationPageSize={50}
-                />
-            </div>
+            <DashboardDataTable
+                title="📋 품목 마스터 상세 내역"
+                rowData={products}
+                columnDefs={columnDefs}
+                defaultPageSize={50}
+            />
         </AnalyticsDashboardShell>
     );
 };

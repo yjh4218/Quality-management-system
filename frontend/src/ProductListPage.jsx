@@ -4,6 +4,7 @@ import ProductDrawer from './ProductDrawer';
 import * as api from './api';
 import ProductSearchPopup from './ProductSearchPopup';
 import { usePermissions } from './usePermissions';
+import ProductSpaceRatioCheckModal from './components/ProductSpaceRatioCheckModal';
 
 const ProductListPage = ({ user, navigationData, onNavigated }) => {
     const defaultPageSize = 100;
@@ -23,6 +24,8 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
     const [showSearchPopup, setShowSearchPopup] = useState(false);
     const [loading, setLoading] = useState(false);
     const [exporting, setExporting] = useState(false);
+    const [checkProduct, setCheckProduct] = useState(null);
+    const [checkModalOpen, setCheckModalOpen] = useState(false);
 
     // 채널 선택 필터
     const [availableChannels, setAvailableChannels] = useState([]);
@@ -263,6 +266,23 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
                 { field: "manufacturerEtc", headerName: "기타부자재 제조사", width: 150 },
                 { field: "materialRemarks", headerName: "비고 (OTHER 상세)", width: 180 }
             ]
+        },
+        {
+            headerName: '검증',
+            pinned: 'right',
+            width: 110,
+            cellRenderer: (p) => (
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setCheckProduct(p.data);
+                        setCheckModalOpen(true);
+                    }}
+                    className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-[11px] font-semibold transition-colors shadow-sm"
+                >
+                    📐 비율 검증
+                </button>
+            )
         }
     ].filter(col => {
         if (!canViewPackaging && (col.headerName === '포장재 재질 및 무게' || col.headerName === '포장재 제조사')) {
@@ -637,6 +657,20 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
                     onSelect={(p) => {
                         setSearchFields({ ...searchFields, itemCode: p.itemCode, productName: p.productName });
                         setShowSearchPopup(false);
+                    }}
+                />
+            )}
+
+            {checkModalOpen && (
+                <ProductSpaceRatioCheckModal
+                    product={checkProduct}
+                    onClose={() => {
+                        setCheckModalOpen(false);
+                        setCheckProduct(null);
+                    }}
+                    onGoToEdit={(p) => {
+                        setSelectedProduct(p);
+                        setIsDrawerOpen(true);
                     }}
                 />
             )}

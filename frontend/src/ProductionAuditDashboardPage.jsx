@@ -4,8 +4,8 @@ import AnalyticsDashboardShell from './components/dashboard/AnalyticsDashboardSh
 import DashboardFilterBar from './components/dashboard/DashboardFilterBar';
 import SummaryCardRow from './components/dashboard/SummaryCardRow';
 import ChartCard from './components/dashboard/ChartCard';
-import DataGrid from './components/common/DataGrid';
-import { getStatusBadgeClass } from './constants/statusBadge';
+import DashboardDataTable from './components/dashboard/DashboardDataTable';
+import StatusBadgeRenderer from './components/dashboard/StatusBadgeRenderer';
 
 const ProductionAuditDashboardPage = ({ user, onNavigate }) => {
     const gridRef = useRef();
@@ -148,11 +148,7 @@ const ProductionAuditDashboardPage = ({ user, onNavigate }) => {
                 if (val === 'APPROVED') val = '승인';
                 else if (val === 'REJECTED') val = '반려';
                 else if (val === 'PENDING') val = '대기';
-                return (
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${getStatusBadgeClass(val)}`}>
-                        {val || '대기'}
-                    </span>
-                );
+                return <StatusBadgeRenderer value={val || '대기'} />;
             }
         }
     ], []);
@@ -219,7 +215,7 @@ const ProductionAuditDashboardPage = ({ user, onNavigate }) => {
             <SummaryCardRow cards={summaryCards} />
 
             {/* 차트 */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px' }}>
                 <ChartCard 
                     title="제조사별 평균 감리점수"
                     type="bar"
@@ -240,7 +236,7 @@ const ProductionAuditDashboardPage = ({ user, onNavigate }) => {
             </div>
 
             {/* 반려 사유 및 미제출 통계 위젯 영역 */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px', marginBottom: '20px' }}>
                 <ChartCard 
                     title="감리 반려 사유 유형 분포"
                     type="donut"
@@ -252,27 +248,12 @@ const ProductionAuditDashboardPage = ({ user, onNavigate }) => {
             </div>
 
             {/* 생산감리 내역 그리드 */}
-            <div style={{
-                padding: '20px 24px',
-                backgroundColor: '#ffffff',
-                borderRadius: '16px',
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-                boxSizing: 'border-box',
-                display: 'flex',
-                flexDirection: 'column',
-                minHeight: '400px'
-            }}>
-                <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
-                    📋 생산감리 상세 점검 결과
-                </h3>
-                <DataGrid
-                    ref={gridRef}
-                    rowData={audits}
-                    columnDefs={columnDefs}
-                    paginationPageSize={50}
-                />
-            </div>
+            <DashboardDataTable
+                title="📋 생산감리 상세 점검 결과"
+                rowData={audits}
+                columnDefs={columnDefs}
+                defaultPageSize={50}
+            />
         </AnalyticsDashboardShell>
     );
 };

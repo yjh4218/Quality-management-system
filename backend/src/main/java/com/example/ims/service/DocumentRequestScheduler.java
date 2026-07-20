@@ -1,0 +1,195 @@
+package com.example.ims.service;
+
+import com.example.ims.entity.*;
+import com.example.ims.repository.CustomDocumentTypeRepository;
+import com.example.ims.repository.DocumentRequirementRepository;
+import com.example.ims.repository.DocumentRequestLogRepository;
+import com.example.ims.repository.ProductRepository;
+import com.example.ims.repository.ManufacturerRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * 마스터 품목 필수 서류 자동요청 스케줄러.
+ * 매일 새벽 2시에 시스템 부하가 적은 시간에 기동됩니다.
+ */
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+@Component
+public class DocumentRequestScheduler {
+
+    private static final Logger log = LoggerFactory.getLogger(DocumentRequestScheduler.class);
+
+    private final DocumentRequestService requestService;
+    private final DocumentRequirementRepository requirementRepository;
+    private final DocumentRequestLogRepository requestLogRepository;
+    private final CustomDocumentTypeRepository customDocumentTypeRepository;
+    private final ProductRepository productRepository;
+    private final ManufacturerRepository manufacturerRepository;
+
+    public DocumentRequestScheduler(
+            DocumentRequestService requestService,
+            DocumentRequirementRepository requirementRepository,
+            DocumentRequestLogRepository requestLogRepository,
+            CustomDocumentTypeRepository customDocumentTypeRepository,
+            ProductRepository productRepository,
+            ManufacturerRepository manufacturerRepository) {
+        this.requestService = requestService;
+        this.requirementRepository = requirementRepository;
+        this.requestLogRepository = requestLogRepository;
+        this.customDocumentTypeRepository = customDocumentTypeRepository;
+        this.productRepository = productRepository;
+        this.manufacturerRepository = manufacturerRepository;
+    }
+
+    /**
+     * 매일 새벽 2시 크론 스케줄링 실행
+     */
+    @Scheduled(cron = "0 0 2 * * *")
+    @Transactional
+    public void runDocumentSchedulingTask() {
+        log.info("[SCHEDULE] Starting scheduled document request management task...");
+        
+        try {
+            // 1단계: 신규 마스터 제품/제조사 요구조건(Requirements) 자동 누락 스캔 및 동기화
+            syncDocumentRequirements();
+            
+            // 2단계: 신규/주기 도래 대상 필수서류 이메일 발송
+            processScheduledRequests();
+            
+            // 3단계: 리마인드 발송 및 기한 경과(OVERDUE) 전환 처리
+            processRemindersAndOverdues();
+            
+            log.info("[SCHEDULE] Scheduled document request management task completed successfully.");
+        } catch (Exception e) {
+            log.error("[SCHEDULE] Scheduled document request management task failed: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 마스터 품목 및 제조사에 설정된 신규 서류 요구조건을 사전 동기화하여 PENDING 레코드를 적재합니다.
+     */
+    private void syncDocumentRequirements() {
+        // 모든 마스터 품목 연동
+        List<Product> masterProducts = productRepository.findByIsMasterTrue();
+        for (Product prod : masterProducts) {
+            try {
+                requestService.initializeMasterProductRequirements(prod);
+            } catch (Exception e) {
+                log.error("Failed to sync requirement for product ID {}: {}", prod.getId(), e.getMessage());
+            }
+        }
+
+        // 모든 활성 제조사에 대해 커스텀 제조사 서류 연동
+        List<CustomDocumentType> customTypes = customDocumentTypeRepository.findByIsActiveTrue();
+        for (CustomDocumentType ct : customTypes) {
+            try {
+                requestService.initializeCustomRequirementsForAllTargets(ct);
+            } catch (Exception e) {
+                log.error("Failed to sync custom requirements for type {}: {}", ct.getName(), e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * 신규 등록(PENDING) 또는 예정기한 도래(PERIODIC)인 대상을 감지하여 이메일 발송을 처리합니다.
+     */
+    private void processScheduledRequests() {
+        List<DocumentRequirement> requirements = requirementRepository.findAll();
+        
+        for (DocumentRequirement req : requirements) {
+            // FULFILLED 이면서 아직 다음 갱신 주기가 도래하지 않은 대상은 생략
+            if (req.getStatus() == DocumentStatus.FULFILLED) {
+                continue;
+            }
+
+            boolean shouldRequest = false;
+
+            if (req.getStatus() == DocumentStatus.PENDING) {
+                shouldRequest = true; // 최초 요청 전 대기 상태
+            } else if (req.getStatus() == DocumentStatus.OVERDUE) {
+                shouldRequest = true; // 이미 연체되어 있는 상태도 재요청
+            } else if (req.getNextDueDate() != null && req.getNextDueDate().isBefore(LocalDate.now())) {
+                shouldRequest = true; // 다음 갱신 기한 초과 도래
+            }
+
+            if (shouldRequest) {
+                String recipientEmail = getRecipientEmail(req);
+                if (recipientEmail != null && !recipientEmail.trim().isEmpty()) {
+                    try {
+                        requestService.sendEmailRequest(req, recipientEmail);
+                        log.info("[SCHEDULE] Document request email sent successfully to: {}, ReqId={}", recipientEmail, req.getId());
+                    } catch (Exception e) {
+                        log.error("[SCHEDULE] Failed to send document request email to: {}, ReqId={}: {}", recipientEmail, req.getId(), e.getMessage());
+                    }
+                } else {
+                    log.warn("[SCHEDULE] Recipient email is empty for requirement ID: {}", req.getId());
+                }
+            }
+        }
+    }
+
+    /**
+     * 발송 7일 이후 미회신 건에 대한 1회성 리마인드 및 기한 초과(OVERDUE) 상태 자동 갱신을 수행합니다.
+     */
+    private void processRemindersAndOverdues() {
+        LocalDateTime sevenDaysAgo = LocalDateTime.now().minusDays(7);
+        
+        // 1. 리마인드 처리 (7일 전 요청되었으며 아직 리마인드 횟수가 0회인 것)
+        List<DocumentRequestLog> activeLogs = requestLogRepository
+                .findByRequestedAtBeforeAndReminderCount(sevenDaysAgo, 0);
+        
+        for (DocumentRequestLog logEntity : activeLogs) {
+            if (logEntity.getUploadedAt() == null) {
+                Optional<DocumentRequirement> reqOpt = requirementRepository.findById(logEntity.getRequirementId());
+                if (reqOpt.isPresent() && reqOpt.get().getStatus() == DocumentStatus.REQUESTED) {
+                    DocumentRequirement req = reqOpt.get();
+                    String recipientEmail = logEntity.getEmailSentTo();
+                    try {
+                        requestService.sendEmailRequest(req, recipientEmail);
+                        logEntity.setReminderCount(logEntity.getReminderCount() + 1);
+                        requestLogRepository.save(logEntity);
+                        log.info("[SCHEDULE-REMINDER] Reminder document request email resent to: {}, ReqId={}", recipientEmail, req.getId());
+                    } catch (Exception e) {
+                        log.error("[SCHEDULE-REMINDER] Failed to resend reminder email: {}", e.getMessage());
+                    }
+                }
+            }
+        }
+
+        // 2. 기한 경과(OVERDUE) 상태 갱신
+        List<DocumentRequirement> activeRequirements = requirementRepository.findAll();
+        for (DocumentRequirement req : activeRequirements) {
+            if (req.getStatus() == DocumentStatus.REQUESTED && req.getNextDueDate() != null 
+                    && req.getNextDueDate().isBefore(LocalDate.now())) {
+                req.setStatus(DocumentStatus.OVERDUE);
+                requirementRepository.save(req);
+                log.info("[SCHEDULE-OVERDUE] Requirement ID {} status updated to OVERDUE due to nextDueDate = {}", req.getId(), req.getNextDueDate());
+            }
+        }
+    }
+
+    private String getRecipientEmail(DocumentRequirement req) {
+        if (req.getProductId() != null) {
+            Product prod = productRepository.findById(req.getProductId()).orElse(null);
+            if (prod != null && prod.getManufacturerInfo() != null) {
+                return prod.getManufacturerInfo().getEmail();
+            }
+        } else if (req.getManufacturerId() != null) {
+            Manufacturer m = manufacturerRepository.findById(req.getManufacturerId()).orElse(null);
+            if (m != null) {
+                return m.getEmail();
+            }
+        }
+        return null;
+    }
+}

@@ -28,6 +28,7 @@ import NotificationSettingsPage from './NotificationSettingsPage.jsx';
 import IngredientCompliancePage from './IngredientCompliancePage.jsx';
 import HelpCenterModal from './components/HelpCenterModal';
 import ProfileModal from './ProfileModal';
+import PackagingSpaceRatioCalculatorPage from './PackagingSpaceRatioCalculatorPage.jsx';
 import { getCurrentUser, logout, getMyNotifications, getUnreadNotificationCount, readNotification, readAllNotifications, deleteNotification, submitBugReport, getBaseURL } from './api';
 import ManufacturerAuditItemPage from './ManufacturerAuditItemPage';
 import ManufacturerAuditPage from './ManufacturerAuditPage';
@@ -38,6 +39,9 @@ import BugReportPage from './BugReportPage.jsx';
 import AnnouncementManagementPage from './AnnouncementManagementPage.jsx';
 import NotificationListPage from './NotificationListPage.jsx';
 import ManufacturerGuidePage from './ManufacturerGuidePage.jsx';
+import VendorUploadPage from './VendorUploadPage.jsx';
+import DocumentRequestManagementPage from './DocumentRequestManagementPage.jsx';
+import DocumentTypeConfigPage from './DocumentTypeConfigPage.jsx';
 
 const PAGE_INFO = {
     dashboard: { title: '📊 시스템 대시보드' },
@@ -56,6 +60,7 @@ const PAGE_INFO = {
     bomCategories: { title: '⚙️ BOM 유형 설정' },
     packagingTemplates: { title: '📋 포장공정 템플릿' },
     packagingRules: { title: '⚖️ 채널별 포장 규칙' },
+    spaceRatioCalculator: { title: '📐 포장공간비율 계산기' },
     quality: { title: '📦 입고 품질 관리' },
     releaseRecord: { title: '📄 시장출하 기록' },
     qualityPhotoAudit: { title: '📸 신제품 생산감리' },
@@ -73,7 +78,9 @@ const PAGE_INFO = {
     ingredientCompliance: { title: '🧪 성분 안전성 검토' },
     mailTemplates: { title: '📧 제조사 전달 메일 관리' },
     announcements: { title: '📢 전체공지' },
-    manufacturerGuide: { title: '🤝 제조사 협업 가이드' }
+    manufacturerGuide: { title: '🤝 제조사 협업 가이드' },
+    documentRequests: { title: '📋 필수 품질서류 관리' },
+    documentTypeConfig: { title: '⚙️ 추가서류 설정' }
 };
 
 class ErrorBoundary extends React.Component {
@@ -160,6 +167,13 @@ class ErrorBoundary extends React.Component {
 }
 
 const App = () => {
+    // [비인증 라우트] 제조사 업로드 우회 검출
+    const path = window.location.pathname;
+    if (path.startsWith('/vendor-upload/')) {
+        const token = path.replace('/vendor-upload/', '');
+        return <VendorUploadPage token={token} />;
+    }
+
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [user, setUser] = useState(null);
 
@@ -230,6 +244,8 @@ const App = () => {
         partner: false,
         audit: false,
         quality: false,
+        packaging: false,
+        inbound: false,
         claim: false
     });
     const tabBarRef = React.useRef(null);
@@ -248,7 +264,7 @@ const App = () => {
 
         tabBar.addEventListener('wheel', handleWheel, { passive: false });
         return () => tabBar.removeEventListener('wheel', handleWheel);
-    }, [isLoggedIn]); // Re-attach when logged in state changes and UI renders
+    }, []);
 
     // [고도화] 현재 활성 화면 정보를 전역 객체에 기록 (버그 리포트 연동용)
     useEffect(() => {
@@ -292,6 +308,8 @@ const App = () => {
                     partner: false,
                     audit: false,
                     quality: false,
+                    packaging: false,
+                    inbound: false,
                     claim: false,
                     [section]: true
                 };
@@ -589,7 +607,9 @@ const App = () => {
         else if (['products', 'brands', 'ingredientCompliance', 'bomMaster', 'bomCategories', 'salesChannels'].includes(pageKey)) targetSection = 'products';
         else if (['manufacturers', 'manufacturerCategories'].includes(pageKey)) targetSection = 'partner';
         else if (['manufacturerAudits', 'manufacturerAuditDashboard', 'manufacturerAuditItems'].includes(pageKey)) targetSection = 'audit';
-        else if (['qualityPhotoAudit', 'packagingTemplates', 'packagingRules', 'quality', 'releaseRecord'].includes(pageKey)) targetSection = 'quality';
+        else if (['qualityPhotoAudit', 'productionAuditDashboard'].includes(pageKey)) targetSection = 'quality';
+        else if (['packagingTemplates', 'packagingRules', 'spaceRatioCalculator'].includes(pageKey)) targetSection = 'packaging';
+        else if (['qualityDashboard', 'quality', 'releaseRecord'].includes(pageKey)) targetSection = 'inbound';
         else if (['claims', 'claimDashboard'].includes(pageKey)) targetSection = 'claim';
 
         if (targetSection) {
@@ -600,6 +620,8 @@ const App = () => {
                 partner: false,
                 audit: false,
                 quality: false,
+                packaging: false,
+                inbound: false,
                 claim: false,
                 [targetSection]: true
             });
@@ -761,7 +783,9 @@ const App = () => {
     const hasProductsAccess = canAccess('products') || canAccess('brands') || canAccess('ingredientCompliance') || canAccess('bomMaster') || canAccess('bomCategories') || canAccess('salesChannels') || canAccess('productDashboard');
     const hasPartnerAccess = canAccess('manufacturers') || canAccess('manufacturerCategories') || canAccess('manufacturerGuide');
     const hasAuditAccess = canAccess('manufacturerAudits') || canAccess('manufacturerAuditDashboard') || canAccess('manufacturerAuditItems');
-    const hasQualityAccess = canAccess('qualityPhotoAudit') || canAccess('packagingTemplates') || canAccess('packagingRules') || canAccess('quality') || canAccess('releaseRecord') || canAccess('qualityDashboard') || canAccess('productionAuditDashboard');
+    const hasQualityAccess = canAccess('qualityPhotoAudit') || canAccess('productionAuditDashboard');
+    const hasPackagingAccess = canAccess('packagingTemplates') || canAccess('packagingRules') || canAccess('spaceRatioCalculator');
+    const hasInboundAccess = canAccess('quality') || canAccess('releaseRecord') || canAccess('qualityDashboard');
     const hasClaimAccess = canAccess('claims') || canAccess('claimDashboard');
 
     // [고도화 5] 현재 활성화된 섹션 판단 로직
@@ -773,7 +797,9 @@ const App = () => {
             case 'products': return ['products', 'brands', 'ingredientCompliance', 'bomMaster', 'bomCategories', 'salesChannels', 'productDashboard'].includes(activePage);
             case 'partner': return ['manufacturers', 'manufacturerCategories', 'manufacturerGuide'].includes(activePage);
             case 'audit': return ['manufacturerAudits', 'manufacturerAuditDashboard', 'manufacturerAuditItems'].includes(activePage);
-            case 'quality': return ['qualityPhotoAudit', 'packagingTemplates', 'packagingRules', 'quality', 'releaseRecord', 'qualityDashboard', 'productionAuditDashboard'].includes(activePage);
+            case 'quality': return ['qualityPhotoAudit', 'productionAuditDashboard'].includes(activePage);
+            case 'packaging': return ['packagingTemplates', 'packagingRules', 'spaceRatioCalculator'].includes(activePage);
+            case 'inbound': return ['qualityDashboard', 'quality', 'releaseRecord'].includes(activePage);
             case 'claim': return ['claims', 'claimDashboard'].includes(activePage);
             default: return false;
         }
@@ -1054,65 +1080,96 @@ const App = () => {
                     </div>
                     )}
 
-                    {/* [생산감리 및 품질] */}
+                    {/* [생산감리 관리] */}
                     {hasQualityAccess && (
                     <div className="sidebar-group">
                         <button 
                             className={`sidebar-group-header ${isSectionActive('quality') ? 'active' : ''}`} 
                             onClick={() => toggleSection('quality')}
                         >
-                            <span>📸 생산감리 및 품질</span>
+                            <span>📸 생산감리 관리</span>
                             <span className={`arrow ${openSections.quality ? 'open' : ''}`}>▼</span>
                         </button>
                         {openSections.quality && (
                             <div className="sidebar-group-content open">
                                 {canAccess('qualityPhotoAudit') && (
-                                    <>
-                                        <div className="sidebar-sub-header">생산감리</div>
-                                        <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'qualityPhotoAudit' ? 'active' : ''}`} onClick={() => handleNavigate('qualityPhotoAudit')}>
-                                            📸 신제품 생산감리 (사진감리)
-                                        </button>
-                                        <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'productionAuditDashboard' ? 'active' : ''}`} onClick={() => handleNavigate('productionAuditDashboard')}>
-                                            📊 생산감리 대시보드
-                                        </button>
-                                    </>
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'qualityPhotoAudit' ? 'active' : ''}`} onClick={() => handleNavigate('qualityPhotoAudit')}>
+                                        📸 신제품 생산감리 (사진감리)
+                                    </button>
                                 )}
-
-                                {(canAccess('packagingTemplates') || canAccess('packagingRules')) && (
-                                    <>
-                                        <div className="sidebar-sub-header">포장 규칙 설정</div>
-                                        {canAccess('packagingTemplates') && (
-                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'packagingTemplates' ? 'active' : ''}`} onClick={() => handleNavigate('packagingTemplates')}>
-                                                📋 포장공정 템플릿 관리
-                                            </button>
-                                        )}
-                                        {canAccess('packagingRules') && (
-                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'packagingRules' ? 'active' : ''}`} onClick={() => handleNavigate('packagingRules')}>
-                                                ⚖️ 채널별 포장 규칙 관리
-                                            </button>
-                                        )}
-                                    </>
+                                {canAccess('productionAuditDashboard') && (
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'productionAuditDashboard' ? 'active' : ''}`} onClick={() => handleNavigate('productionAuditDashboard')}>
+                                        📊 생산감리 대시보드
+                                    </button>
                                 )}
+                                {canAccess('documentRequests') && (
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'documentRequests' ? 'active' : ''}`} onClick={() => handleNavigate('documentRequests')}>
+                                        📋 필수 품질서류 관리
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                    )}
 
-                                {(canAccess('quality') || canAccess('releaseRecord') || canAccess('qualityDashboard')) && (
-                                    <>
-                                        <div className="sidebar-sub-header">입고 관리</div>
-                                        {canAccess('qualityDashboard') && (
-                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'qualityDashboard' ? 'active' : ''}`} onClick={() => handleNavigate('qualityDashboard')}>
-                                                🚚 입고 품질 검사 대시보드
-                                            </button>
-                                        )}
-                                        {canAccess('quality') && (
-                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'quality' ? 'active' : ''}`} onClick={() => handleNavigate('quality')}>
-                                                📦 입고 품질 관리
-                                            </button>
-                                        )}
-                                        {canAccess('releaseRecord') && (
-                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'releaseRecord' ? 'active' : ''}`} onClick={() => handleNavigate('releaseRecord')}>
-                                                📄 시장출하 적부판정 기록
-                                            </button>
-                                        )}
-                                    </>
+                    {/* [포장재 관리] */}
+                    {hasPackagingAccess && (
+                    <div className="sidebar-group">
+                        <button 
+                            className={`sidebar-group-header ${isSectionActive('packaging') ? 'active' : ''}`} 
+                            onClick={() => toggleSection('packaging')}
+                        >
+                            <span>📦 포장재 관리</span>
+                            <span className={`arrow ${openSections.packaging ? 'open' : ''}`}>▼</span>
+                        </button>
+                        {openSections.packaging && (
+                            <div className="sidebar-group-content open">
+                                {canAccess('packagingTemplates') && (
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'packagingTemplates' ? 'active' : ''}`} onClick={() => handleNavigate('packagingTemplates')}>
+                                        📋 포장공정 템플릿 관리
+                                    </button>
+                                )}
+                                {canAccess('packagingRules') && (
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'packagingRules' ? 'active' : ''}`} onClick={() => handleNavigate('packagingRules')}>
+                                        ⚖️ 채널별 포장 규칙 관리
+                                    </button>
+                                )}
+                                {canAccess('spaceRatioCalculator') && (
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'spaceRatioCalculator' ? 'active' : ''}`} onClick={() => handleNavigate('spaceRatioCalculator')}>
+                                        📐 포장공간비율 계산기
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                    )}
+
+                    {/* [입고검사 관리] */}
+                    {hasInboundAccess && (
+                    <div className="sidebar-group">
+                        <button 
+                            className={`sidebar-group-header ${isSectionActive('inbound') ? 'active' : ''}`} 
+                            onClick={() => toggleSection('inbound')}
+                        >
+                            <span>🚚 입고검사 관리</span>
+                            <span className={`arrow ${openSections.inbound ? 'open' : ''}`}>▼</span>
+                        </button>
+                        {openSections.inbound && (
+                            <div className="sidebar-group-content open">
+                                {canAccess('qualityDashboard') && (
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'qualityDashboard' ? 'active' : ''}`} onClick={() => handleNavigate('qualityDashboard')}>
+                                        🚚 입고 품질 검사 대시보드
+                                    </button>
+                                )}
+                                {canAccess('quality') && (
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'quality' ? 'active' : ''}`} onClick={() => handleNavigate('quality')}>
+                                        📦 입고 품질 관리
+                                    </button>
+                                )}
+                                {canAccess('releaseRecord') && (
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'releaseRecord' ? 'active' : ''}`} onClick={() => handleNavigate('releaseRecord')}>
+                                        📄 시장출하 적부판정 기록
+                                    </button>
                                 )}
                             </div>
                         )}
@@ -1283,6 +1340,19 @@ const App = () => {
                                 {canAccess('announcements') && tab.page === 'announcements' && <AnnouncementManagementPage user={user} onNavigate={handleNavigate} />}
                                 {canAccess('notifications') && tab.page === 'notifications' && <NotificationListPage user={user} onNavigate={handleNavigate} />}
 
+                                {canAccess('documentRequests') && tab.page === 'documentRequests' && (
+                                    <DocumentRequestManagementPage 
+                                        user={user} 
+                                        onNavigateToConfig={() => handleNavigate('documentTypeConfig')}
+                                    />
+                                )}
+                                {canAccess('documentRequests') && tab.page === 'documentTypeConfig' && (
+                                    <DocumentTypeConfigPage 
+                                        user={user} 
+                                        onBack={() => handleNavigate('documentRequests')}
+                                    />
+                                )}
+
                                 {tab.page === 'brands' && <BrandManagementPage user={user} onNavigate={handleNavigate} />}
                                 {tab.page === 'manufacturers' && <ManufacturerManagementPage user={user} />}
                                 {tab.page === 'salesChannels' && <SalesChannelManagement user={user} />}
@@ -1348,6 +1418,9 @@ const App = () => {
                                 {tab.page === 'bomCategories' && <BomCategoryManagementPage user={user} />}
                                 {tab.page === 'packagingTemplates' && <PackagingTemplatePage user={user} />}
                                 {tab.page === 'packagingRules' && <PackagingRulePage user={user} />}
+                                {canAccess('spaceRatioCalculator') && tab.page === 'spaceRatioCalculator' && (
+                                    <PackagingSpaceRatioCalculatorPage user={user} onNavigate={handleNavigate} />
+                                )}
                                 {tab.page === 'manufacturerAuditItems' && <ManufacturerAuditItemPage user={user} />}
                                 {tab.page === 'manufacturerAudits' && <ManufacturerAuditPage user={user} />}
                                 {tab.page === 'manufacturerAuditDashboard' && <ManufacturerAuditDashboard user={user} onNavigate={handleNavigate} />}

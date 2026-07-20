@@ -16,8 +16,12 @@ import java.time.LocalDateTime;
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Long> {
     Optional<Product> findByItemCode(String itemCode);
+    List<Product> findByIsMasterTrue();
     boolean existsByItemCode(String itemCode);
     List<Product> findByActiveTrue();
+
+    @Query("SELECT DISTINCT p.manufacturerInfo.id FROM Product p WHERE p.active = true AND p.isMaster = true AND p.manufacturerInfo IS NOT NULL")
+    List<Long> findActiveManufacturerIdsWithMasterProducts();
     
     @Query(value = "SELECT * FROM products WHERE is_deleted = true OR active = false ORDER BY updated_at DESC", nativeQuery = true)
     List<Product> findDeletedProducts();

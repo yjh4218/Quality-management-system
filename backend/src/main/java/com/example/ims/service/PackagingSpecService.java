@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.example.ims.dto.PackagingSpecFullDto;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -26,6 +27,7 @@ public class PackagingSpecService {
     private final PackagingSpecBomItemRepository bomItemRepository;
     private final PackagingSpecRevisionRepository revisionRepository;
     private final PackagingSpecComponentRepository componentRepository;
+    private final PackagingMethodImageRepository methodImageRepository;
 
     @Transactional(readOnly = true)
     public List<PackagingSpecification> getSpecsByProductId(Long productId) {
@@ -128,6 +130,24 @@ public class PackagingSpecService {
         }
 
         PackagingSpecification saved = specRepository.save(newSpec);
+
+        // [추가] 포장 이미지 및 주석 정보 전체 복제 (새로운 별개 row로 복제)
+        List<com.example.ims.entity.PackagingMethodImage> masterImages = methodImageRepository.findActiveBySpecId(masterSpec.getId());
+        if (masterImages != null) {
+            List<com.example.ims.entity.PackagingMethodImage> newImages = masterImages.stream()
+                    .map(img -> com.example.ims.entity.PackagingMethodImage.builder()
+                            .packagingSpecId(saved.getId())
+                            .imageUrl(img.getImageUrl())
+                            .displayOrder(img.getDisplayOrder())
+                            .layoutWidthPx(img.getLayoutWidthPx())
+                            .layoutHeightPx(img.getLayoutHeightPx())
+                            .annotationsJson(img.getAnnotationsJson())
+                            .captionText(img.getCaptionText())
+                            .thumbnailUrl(img.getThumbnailUrl())
+                            .build())
+                    .collect(Collectors.toList());
+            methodImageRepository.saveAll(newImages);
+        }
 
         // BOM 항목 복사
         if (masterSpec.getBomItems() != null) {
@@ -392,8 +412,27 @@ public class PackagingSpecService {
             components.forEach(c -> c.setSpecId(specId));
             componentRepository.saveAll(components);
         }
+
+        // 3. 포장 이미지/주석 정보 복원/저장
+        List<com.example.ims.entity.PackagingMethodImage> currentImages = methodImageRepository.findActiveBySpecId(specId);
+        if (currentImages != null && !currentImages.isEmpty()) {
+            currentImages.forEach(img -> {
+                img.setDeletedAt(LocalDateTime.now());
+            });
+            methodImageRepository.saveAll(currentImages);
+        }
+        List<com.example.ims.entity.PackagingMethodImage> methodImages = dto.getMethodImages();
+        if (methodImages != null) {
+            methodImages.forEach(img -> {
+                img.setPackagingSpecId(specId);
+                img.setDeletedAt(null);
+            });
+            methodImageRepository.saveAll(methodImages);
+        }
         
-        return new PackagingSpecFullDto(savedSpec, revisions, components);
+        List<com.example.ims.entity.PackagingMethodImage> activeImages = methodImageRepository.findActiveBySpecId(specId);
+        
+        return new PackagingSpecFullDto(savedSpec, revisions, components, activeImages);
     }
 
     @Transactional(readOnly = true)
@@ -440,7 +479,7 @@ public class PackagingSpecService {
                 }
             }
             
-            return new PackagingSpecFullDto(newSpec, new java.util.ArrayList<>(), new java.util.ArrayList<>());
+            return new PackagingSpecFullDto(newSpec, new java.util.ArrayList<>(), new java.util.ArrayList<>(), new java.util.ArrayList<>());
         }
         
         PackagingSpecification latestSpec = specs.stream()
@@ -454,8 +493,9 @@ public class PackagingSpecService {
         
         List<PackagingSpecRevision> revisions = revisionRepository.findBySpecId(latestSpec.getId());
         List<PackagingSpecComponent> components = componentRepository.findBySpecId(latestSpec.getId());
+        List<com.example.ims.entity.PackagingMethodImage> activeImages = methodImageRepository.findActiveBySpecId(latestSpec.getId());
         
-        return new PackagingSpecFullDto(latestSpec, revisions, components);
+        return new PackagingSpecFullDto(latestSpec, revisions, components, activeImages);
     }
 
     private Integer parseIntSafe(String s) {

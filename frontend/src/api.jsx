@@ -840,3 +840,25 @@ setInterval(() => {
     flushPendingBugReports();
 }, 120000);
 
+/**
+ * 품목 자동검증 API
+ */
+export const checkProductSpaceRatio = (productId) => {
+    return api.post(`/api/products/${productId}/space-ratio-check`);
+};
+
+/**
+ * 독립 계산기 API
+ */
+export const calculateSpaceRatio = (params) => {
+    return api.post(`/api/space-ratio/calculator`, params);
+};
+
+/**
+ * 이력 로그 조회 API
+ */
+export const getSpaceRatioLogs = (page = 0, size = 20) => {
+    return api.get(`/api/space-ratio/logs?page=${page}&size=${size}`);
+};
+
+

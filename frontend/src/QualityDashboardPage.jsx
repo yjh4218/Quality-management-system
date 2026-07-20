@@ -4,8 +4,8 @@ import AnalyticsDashboardShell from './components/dashboard/AnalyticsDashboardSh
 import DashboardFilterBar from './components/dashboard/DashboardFilterBar';
 import SummaryCardRow from './components/dashboard/SummaryCardRow';
 import ChartCard from './components/dashboard/ChartCard';
-import DataGrid from './components/common/DataGrid';
-import { getStatusBadgeClass } from './constants/statusBadge';
+import DashboardDataTable from './components/dashboard/DashboardDataTable';
+import StatusBadgeRenderer from './components/dashboard/StatusBadgeRenderer';
 
 const QualityDashboardPage = ({ user, onNavigate }) => {
     const gridRef = useRef();
@@ -143,14 +143,7 @@ const QualityDashboardPage = ({ user, onNavigate }) => {
             headerName: '검사결과', 
             width: 100,
             cellClass: 'text-center',
-            cellRenderer: (params) => {
-                const val = params.value || '대기';
-                return (
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${getStatusBadgeClass(val)}`}>
-                        {val}
-                    </span>
-                );
-            }
+            cellRenderer: (params) => <StatusBadgeRenderer value={params.value} />
         }
     ], []);
 
@@ -276,27 +269,12 @@ const QualityDashboardPage = ({ user, onNavigate }) => {
             </div>
 
             {/* 입고 검사 그리드 */}
-            <div style={{
-                padding: '20px 24px',
-                backgroundColor: '#ffffff',
-                borderRadius: '16px',
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-                boxSizing: 'border-box',
-                display: 'flex',
-                flexDirection: 'column',
-                minHeight: '450px'
-            }}>
-                <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
-                    📋 입고 검수 및 판정 내역
-                </h3>
-                <DataGrid
-                    ref={gridRef}
-                    rowData={inbounds}
-                    columnDefs={columnDefs}
-                    paginationPageSize={50}
-                />
-            </div>
+            <DashboardDataTable
+                title="📋 입고 검수 및 판정 내역"
+                rowData={inbounds}
+                columnDefs={columnDefs}
+                defaultPageSize={50}
+            />
         </AnalyticsDashboardShell>
     );
 };

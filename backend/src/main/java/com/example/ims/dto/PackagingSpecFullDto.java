@@ -20,4 +20,5 @@ public class PackagingSpecFullDto {
     private PackagingSpecification spec;
     private List<PackagingSpecRevision> revisions;
     private List<PackagingSpecComponent> components;
+    private List<com.example.ims.entity.PackagingMethodImage> methodImages;
 }
