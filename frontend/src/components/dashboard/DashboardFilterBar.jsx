@@ -4,7 +4,7 @@ import React from 'react';
  * 대시보드 내 검색 조건을 균일하게 나열하고 배치하는 필터 바 컴포넌트입니다.
  * 다크 카드 테마에 맞춰 고주파 입력창 및 유리 질감 버튼이 적용되었습니다.
  */
-const DashboardFilterBar = ({ fields = [], onSearch, onReset }) => {
+const DashboardFilterBar = ({ fields = [], onSearch, onReset, children }) => {
     return (
         <div style={{
             display: 'flex',
@@ -26,7 +26,7 @@ const DashboardFilterBar = ({ fields = [], onSearch, onReset }) => {
                 gap: '18px',
                 flex: 1
             }}>
-                {fields.map((f, idx) => (
+                {children ? children : fields.map((f, idx) => (
                     <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '180px' }}>
                         <label style={{ fontSize: '13px', fontWeight: '700', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
                             {f.icon && <span style={{ fontSize: '14px' }}>{f.icon}</span>} {f.label}

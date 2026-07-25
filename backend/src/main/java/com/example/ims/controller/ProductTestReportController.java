@@ -6,6 +6,7 @@ import com.example.ims.repository.ProductRepository;
 import com.example.ims.repository.ProductTestReportRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -29,6 +30,7 @@ public class ProductTestReportController {
     }
 
     @PostMapping("/{id}/test-reports")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
     public ResponseEntity<?> addTestReport(@PathVariable Long id, @RequestBody Map<String, String> payload) {
         Product product = productRepository.findById(id).orElse(null);
         if (product == null) {
@@ -47,6 +49,7 @@ public class ProductTestReportController {
     }
 
     @DeleteMapping("/test-reports/{reportId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
     public ResponseEntity<?> deleteTestReport(@PathVariable Long reportId) {
         ProductTestReport report = testReportRepository.findById(reportId).orElse(null);
         if (report != null) {

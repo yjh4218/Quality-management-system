@@ -82,6 +82,10 @@ public class ManufacturerService {
                 .collect(java.util.stream.Collectors.toList());
     }
 
+    public org.springframework.data.domain.Page<Manufacturer> getAllPaged(String username, org.springframework.data.domain.Pageable pageable) {
+        return manufacturerRepository.findByActiveTrueAndIsDeletedFalse(pageable);
+    }
+
     @Transactional
     public Manufacturer save(Manufacturer manufacturer, String username) {
         if (manufacturer.getFiles() != null) {

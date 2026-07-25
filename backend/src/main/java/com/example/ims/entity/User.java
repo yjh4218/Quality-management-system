@@ -36,6 +36,10 @@ public class User {
     @Column(name = "company_name")
     private String companyName;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "manufacturer_id")
+    private Manufacturer manufacturer;
+
     private String department;
 
     private String position;

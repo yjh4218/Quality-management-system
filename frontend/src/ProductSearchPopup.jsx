@@ -39,8 +39,8 @@ const ProductSearchPopup = ({ onClose, onSelect }) => {
     };
 
     return (
-        <div className="drawer-overlay" style={{ zIndex: 3000 }}>
-            <div className="modal-content" style={{ width: '1000px' }} onClick={e => e.stopPropagation()}>
+        <div className="drawer-overlay" style={{ zIndex: 3500 }}>
+            <div className="modal-content" style={{ width: '1200px', maxWidth: '96vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
                 {/* 1. Modal Header */}
                 <div className="modal-header">
                     <h3>🔍 품목 상세 검색</h3>

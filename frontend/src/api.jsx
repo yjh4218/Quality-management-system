@@ -68,18 +68,32 @@ export const downloadBlob = (response, defaultFileName) => {
     window.URL.revokeObjectURL(url);
 };
 
+const getCookie = (name) => {
+    if (typeof document === 'undefined') return null;
+    const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+    return match ? decodeURIComponent(match[2]) : null;
+};
+
 const api = axios.create({
     baseURL: getBaseURL(),
     withCredentials: true,
+    xsrfCookieName: 'XSRF-TOKEN',
+    xsrfHeaderName: 'X-XSRF-TOKEN'
 });
 
-// [고도화 3] Request 인프라: 로딩 시작 및 인증 토큰 주입
+// [고도화 3] Request 인프라: 로딩 시작, CSRF 토큰 헤더 주입 및 HTTP 메서드 우회
 api.interceptors.request.use(
     (config) => {
         if (!config.skipLoading) {
             setGlobalLoading(true); // 스피너 시작
         }
-        
+
+        // [CSRF SECURITY] XSRF-TOKEN 쿠키를 읽어 X-XSRF-TOKEN 헤더에 주입
+        const xsrfToken = getCookie('XSRF-TOKEN');
+        if (xsrfToken) {
+            config.headers['X-XSRF-TOKEN'] = xsrfToken;
+        }
+
         // [HTTP METHOD OVERRIDE] PUT, PATCH, DELETE 시 OPTIONS preflight를 회피하기 위해 POST + _method 쿼리스트링 조합으로 변환
         const upperMethod = config.method ? config.method.toUpperCase() : '';
         if (['PUT', 'PATCH', 'DELETE'].includes(upperMethod)) {
@@ -87,22 +101,22 @@ api.interceptors.request.use(
             config.url = `${config.url}${separator}_method=${upperMethod}`;
             config.method = 'post';
         }
-        
+
         const reqContentType = config.headers?.['Content-Type'] || config.headers?.['content-type'] || '';
         const isUrlEncoded = String(reqContentType).toLowerCase().includes('application/x-www-form-urlencoded');
         const isMultipart = String(reqContentType).toLowerCase().includes('multipart/form-data');
 
         // [CORS PREFLIGHT BYPASS] OPTIONS preflight 요청을 원천 회피하기 위해 JSON 요청을 text/plain으로 우회 전송
-        if (config.data && 
-            !isUrlEncoded && 
-            !isMultipart && 
-            !(config.data instanceof FormData) && 
-            !(config.data instanceof URLSearchParams) && 
+        if (config.data &&
+            !isUrlEncoded &&
+            !isMultipart &&
+            !(config.data instanceof FormData) &&
+            !(config.data instanceof URLSearchParams) &&
             typeof config.data === 'object') {
             config.headers['Content-Type'] = 'text/plain;charset=UTF-8';
             config.data = JSON.stringify(config.data);
         }
-        
+
         return config;
     },
     (error) => {
@@ -798,9 +812,14 @@ export const flushPendingBugReports = async () => {
             }
 
             try {
+                const token = localStorage.getItem('token');
+                const headers = {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {})
+                };
                 await axios.post(`${getBaseURL()}/api/bug-reports`, report, { 
                     withCredentials: true,
-                    headers: { 'Content-Type': 'application/json' }
+                    headers
                 });
                 consecutiveFailures = 0; // 성공 시 실패 카운트 초기화
             } catch (err) {

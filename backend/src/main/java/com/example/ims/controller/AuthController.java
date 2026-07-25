@@ -145,12 +145,7 @@ public class AuthController {
         user.setDepartment(dto.department());
         user.setPosition(dto.position());
 
-        if (!"더파운더즈".equals(user.getCompanyName())) {
-            if (dto.companyName() != null && !dto.companyName().isBlank()) {
-                manufacturerRepository.findByName(dto.companyName())
-                        .ifPresent(mfr -> user.setCompanyName(mfr.getName()));
-            }
-        }
+        // [보안] companyName 및 manufacturer_id는 셀프서비스 변경 금지 (관리자 승인으로만 변경 가능)
 
         userRepository.save(user);
         return ResponseEntity.ok(ApiResponse.success("프로필 정보가 성공적으로 업데이트되었습니다.", null));

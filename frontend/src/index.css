@@ -649,16 +649,16 @@ body:has(.modal-overlay) {
   right: 0;
   bottom: 0;
   background-color: rgba(0, 0, 0, 0.4);
-  z-index: 2000;
+  z-index: 4000;
   display: flex;
   justify-content: center;
   align-items: center;
 }
 
 .drawer {
-  width: 1400px; /* Adjusted to keep same visual scaling on zoom removal */
-  max-width: 95vw;
-  height: 90vh;
+  width: 1600px; /* Adjusted to keep same visual scaling on zoom removal */
+  max-width: 98vw;
+  height: 94vh;
   background-color: white;
   padding: 0;
   box-sizing: border-box;

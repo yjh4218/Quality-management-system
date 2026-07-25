@@ -38,6 +38,14 @@ public class ClaimController {
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
     }
 
+    private String getEffectiveCompanyName(User user) {
+        if (user == null) return null;
+        if (user.getManufacturer() != null) {
+            return user.getManufacturer().getName();
+        }
+        return user.getCompanyName();
+    }
+
     @GetMapping
     public ResponseEntity<List<Claim>> getClaims(
             @AuthenticationPrincipal UserDetails userDetails,
@@ -58,9 +66,9 @@ public class ClaimController {
             roleStr = "ROLE_" + roleStr;
         }
         
-        System.out.println("DEBUG: Incoming Request with sharedFilter String = [" + sharedWithManufacturer + "]");
-        
-        return ResponseEntity.ok(claimService.searchClaims(roleStr, user.getCompanyName(), startDate, endDate, itemCode, productName, lotNumber, country, qualityStatus, claimNumber, manufacturer, sharedWithManufacturer, isCriticalClaim));
+        String effectiveCompany = getEffectiveCompanyName(user);
+
+        return ResponseEntity.ok(claimService.searchClaims(roleStr, effectiveCompany, startDate, endDate, itemCode, productName, lotNumber, country, qualityStatus, claimNumber, manufacturer, sharedWithManufacturer, isCriticalClaim));
     }
 
     @GetMapping("/paged")
@@ -88,8 +96,10 @@ public class ClaimController {
             org.springframework.data.domain.PageRequest.of(page, size,
                 org.springframework.data.domain.Sort.by("receiptDate").descending());
 
+        String effectiveCompany = getEffectiveCompanyName(user);
+
         return ResponseEntity.ok(claimService.searchClaimsPaged(
-            roleStr, user.getCompanyName(), startDate, endDate, itemCode, productName,
+            roleStr, effectiveCompany, startDate, endDate, itemCode, productName,
             lotNumber, country, qualityStatus, claimNumber, manufacturer,
             sharedWithManufacturer, isCriticalClaim, pageable));
     }

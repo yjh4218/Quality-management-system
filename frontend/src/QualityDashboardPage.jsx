@@ -6,12 +6,15 @@ import SummaryCardRow from './components/dashboard/SummaryCardRow';
 import ChartCard from './components/dashboard/ChartCard';
 import DashboardDataTable from './components/dashboard/DashboardDataTable';
 import StatusBadgeRenderer from './components/dashboard/StatusBadgeRenderer';
+import ProductSearchPopup from './ProductSearchPopup';
+import useDateRangePreset from './hooks/useDateRangePreset';
 
 const QualityDashboardPage = ({ user, onNavigate }) => {
     const gridRef = useRef();
     const [inbounds, setInbounds] = useState([]);
     const [manufacturers, setManufacturers] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
 
     // Filter States
     const [startDate, setStartDate] = useState(() => {
@@ -21,6 +24,8 @@ const QualityDashboardPage = ({ user, onNavigate }) => {
     const [itemCode, setItemCode] = useState('');
     const [productName, setProductName] = useState('');
     const [selectedManufacturer, setSelectedManufacturer] = useState('');
+
+    const { renderPresetButtons } = useDateRangePreset(setStartDate, setEndDate);
 
     const [stats, setStats] = useState({
         total: 0,
@@ -147,24 +152,6 @@ const QualityDashboardPage = ({ user, onNavigate }) => {
         }
     ], []);
 
-    const filterFields = [
-        { label: '조회 시작일', type: 'date', value: startDate, onChange: e => setStartDate(e.target.value), icon: '🗓️' },
-        { label: '조회 종료일', type: 'date', value: endDate, onChange: e => setEndDate(e.target.value), icon: '🗓️' },
-        { label: '품목코드', type: 'text', value: itemCode, onChange: e => setItemCode(e.target.value), icon: '🏷️', placeholder: '코드 검색' },
-        { label: '품목명', type: 'text', value: productName, onChange: e => setProductName(e.target.value), icon: '📦', placeholder: '품목명 검색' },
-        ...(!isManufacturer ? [{
-            label: '제조사',
-            type: 'select',
-            value: selectedManufacturer,
-            onChange: e => setSelectedManufacturer(e.target.value),
-            icon: '🏭',
-            options: [
-                { label: '전체', value: '' },
-                ...manufacturers.map(m => ({ label: m.name, value: m.name }))
-            ]
-        }] : [])
-    ];
-
     // 전체 대비 대기 비중 계산 및 50% 초과 여부
     const isPendingOverHalf = stats.total > 0 && (stats.pendingCount / stats.total) > 0.5;
 
@@ -210,10 +197,93 @@ const QualityDashboardPage = ({ user, onNavigate }) => {
         >
             {/* 필터바 */}
             <DashboardFilterBar 
-                fields={filterFields}
                 onSearch={handleSearch}
                 onReset={handleReset}
-            />
+            >
+                <div style={{ display: 'flex', gap: '14px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '4px' }}>📅 조회 시작일</label>
+                        <input
+                            type="date"
+                            value={startDate}
+                            onChange={e => setStartDate(e.target.value)}
+                            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', width: '150px' }}
+                        />
+                    </div>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '4px' }}>📅 조회 종료일</label>
+                        <input
+                            type="date"
+                            value={endDate}
+                            onChange={e => setEndDate(e.target.value)}
+                            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', width: '150px' }}
+                        />
+                    </div>
+                    {/* 기간 빠른 선택 버튼 그룹 */}
+                    <div style={{ alignSelf: 'flex-end', marginBottom: '2px' }}>
+                        {renderPresetButtons()}
+                    </div>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '4px' }}>🏷️ 품목코드</label>
+                        <input
+                            type="text"
+                            placeholder="코드 검색 (예: PRD-001)"
+                            value={itemCode}
+                            onChange={e => setItemCode(e.target.value)}
+                            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', width: '170px' }}
+                        />
+                    </div>
+                    {/* 품목 검색 돋보기 버튼 */}
+                    <div style={{ alignSelf: 'flex-end', marginBottom: '2px' }}>
+                        <button
+                            type="button"
+                            onClick={() => setIsProductSearchOpen(true)}
+                            title="품목 상세 검색"
+                            style={{
+                                padding: '6px 12px',
+                                backgroundColor: '#f1f5f9',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontSize: '14px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                height: '34px'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#e2e8f0'}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                        >
+                            🔍
+                        </button>
+                    </div>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '4px' }}>📦 품목명</label>
+                        <input
+                            type="text"
+                            placeholder="품목명 검색 (예: 수분크림)"
+                            value={productName}
+                            onChange={e => setProductName(e.target.value)}
+                            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', width: '190px' }}
+                        />
+                    </div>
+                    {!isManufacturer && (
+                        <div>
+                            <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '4px' }}>🏭 제조사</label>
+                            <select
+                                value={selectedManufacturer}
+                                onChange={e => setSelectedManufacturer(e.target.value)}
+                                style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', width: '160px', backgroundColor: '#fff', cursor: 'pointer' }}
+                            >
+                                <option value="">전체 제조사</option>
+                                {manufacturers.map((m, idx) => (
+                                    <option key={idx} value={m.name}>{m.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+                </div>
+            </DashboardFilterBar>
 
             {/* 통계 요약 */}
             <SummaryCardRow cards={summaryCards} />
@@ -275,6 +345,18 @@ const QualityDashboardPage = ({ user, onNavigate }) => {
                 columnDefs={columnDefs}
                 defaultPageSize={50}
             />
+
+            {/* 품목 검색 팝업 모달 */}
+            {isProductSearchOpen && (
+                <ProductSearchPopup
+                    onClose={() => setIsProductSearchOpen(false)}
+                    onSelect={(p) => {
+                        if (p.itemCode) setItemCode(p.itemCode);
+                        if (p.productName) setProductName(p.productName);
+                        setIsProductSearchOpen(false);
+                    }}
+                />
+            )}
         </AnalyticsDashboardShell>
     );
 };

@@ -10,7 +10,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/mail-templates")
-@CrossOrigin(origins = "*")
 public class MailTemplateController {
 
     @Autowired

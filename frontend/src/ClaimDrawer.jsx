@@ -619,7 +619,7 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
     };
 
     return (
-        <div className="drawer-overlay">
+        <div className="drawer-overlay" style={{ zIndex: 4500 }}>
             <div className="drawer" onClick={e => e.stopPropagation()}>
                 {/* 1. Header Section */}
                 <div className="drawer-header">

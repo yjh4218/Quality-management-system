@@ -3,7 +3,9 @@ import { AgGridReact } from 'ag-grid-react';
 import * as api from './api';
 import { toast } from 'react-toastify';
 import BomRegistrationDrawer from './BomRegistrationDrawer';
+import ProductSearchPopup from './ProductSearchPopup';
 import { usePermissions } from './usePermissions';
+import useDateRangePreset from './hooks/useDateRangePreset';
 
 const BOM_TYPE_MAP = {
     '용기': ['PET병', '초자(유리)', '파우치', '필름', '합성수지 용기(헤비브로우, 트레이)', '튜브', '기타'],
@@ -18,7 +20,10 @@ const BomMasterPage = ({ user }) => {
     const [materials, setMaterials] = useState([]);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [selectedMaterial, setSelectedMaterial] = useState(null);
+    const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
     const [filters, setFilters] = useState({
+        startDate: '',
+        endDate: '',
         bomCode: '',
         componentName: '',
         type: '',
@@ -26,6 +31,11 @@ const BomMasterPage = ({ user }) => {
         detailedMaterial: '',
         manufacturer: ''
     });
+
+    const { renderPresetButtons } = useDateRangePreset(
+        (start) => setFilters(prev => ({ ...prev, startDate: start })),
+        (end) => setFilters(prev => ({ ...prev, endDate: end }))
+    );
 
     const [loading, setLoading] = useState(false);
 
@@ -200,17 +210,43 @@ const BomMasterPage = ({ user }) => {
 
             {/* 검색 필터 그리드 */}
             <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
-                    <div>
-                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🔢 BOM 코드</label>
-                        <input
-                            type="text"
-                            value={filters.bomCode}
-                            onChange={e => setFilters({...filters, bomCode: e.target.value})}
-                            placeholder="코드 검색"
-                            style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px' }}
-                        />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
+                    {/* 1. 등록/생성 기간 (날짜 + ⚡빠른선택) */}
+                    <div style={{ gridColumn: 'span 2', minWidth: '420px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'flex', alignItems: 'center', gap: '4px', margin: 0 }}>🗓️ 등록 기간</label>
+                            {renderPresetButtons()}
+                        </div>
+                        <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+                            <input type="date" value={filters.startDate || ''} onChange={e => setFilters({ ...filters, startDate: e.target.value })} style={{ flex: 1, padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
+                            <span style={{ color: '#94a3b8' }}>~</span>
+                            <input type="date" value={filters.endDate || ''} onChange={e => setFilters({ ...filters, endDate: e.target.value })} style={{ flex: 1, padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
+                        </div>
                     </div>
+
+                    {/* 2. BOM 코드 + 🔍 돋보기 */}
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🔢 BOM 코드 / 품목코드</label>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                            <input
+                                type="text"
+                                value={filters.bomCode}
+                                onChange={e => setFilters({...filters, bomCode: e.target.value})}
+                                placeholder="코드 검색"
+                                style={{ flex: 1, padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setIsProductSearchOpen(true)}
+                                title="품목 상세 검색"
+                                style={{ padding: '0 10px', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer' }}
+                            >
+                                🔍
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* 3. 구성품명 */}
                     <div>
                         <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>📦 구성품명</label>
                         <input
@@ -218,31 +254,11 @@ const BomMasterPage = ({ user }) => {
                             value={filters.componentName}
                             onChange={e => setFilters({...filters, componentName: e.target.value})}
                             placeholder="구성품명 검색"
-                            style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px' }}
+                            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                         />
                     </div>
-                    <div>
-                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>📂 유형</label>
-                        <select
-                            value={filters.type}
-                            onChange={e => setFilters({...filters, type: e.target.value, detailedType: ''})}
-                            style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px' }}
-                        >
-                            <option value="">전체 유형</option>
-                            {Object.keys(BOM_TYPE_MAP).map(t => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>📝 세부 유형</label>
-                        <select
-                            value={filters.detailedType}
-                            onChange={e => setFilters({...filters, detailedType: e.target.value})}
-                            style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px' }}
-                        >
-                            <option value="">전체 세부유형</option>
-                            {filters.type && BOM_TYPE_MAP[filters.type].map(dt => <option key={dt} value={dt}>{dt}</option>)}
-                        </select>
-                    </div>
+
+                    {/* 4. 제조사 */}
                     <div>
                         <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏭 제조사</label>
                         <input
@@ -250,7 +266,31 @@ const BomMasterPage = ({ user }) => {
                             value={filters.manufacturer}
                             onChange={e => setFilters({...filters, manufacturer: e.target.value})}
                             placeholder="제조사 검색"
-                            style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px' }}
+                            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
+                        />
+                    </div>
+
+                    {/* 5. 유형 */}
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>📂 유형</label>
+                        <select
+                            value={filters.type}
+                            onChange={e => setFilters({...filters, type: e.target.value, detailedType: ''})}
+                            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', height: '37px', backgroundColor: '#fff' }}
+                        >
+                            <option value="">전체 유형</option>
+                            {Object.keys(BOM_TYPE_MAP).map(t => (
+                                <option key={t} value={t}>{t}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* 6. 세부 유형 */}
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>📂 세부 유형</label>
+                        <select
+                            value={filters.detailedType}
+                            onChange={e => setFilters({...filters, detailedType: e.target.value})}
                         />
                     </div>
                 </div>
@@ -281,6 +321,29 @@ const BomMasterPage = ({ user }) => {
                         if (saved) fetchMaterials();
                     }}
                     user={user}
+                />
+            )}
+
+            {isProductSearchOpen && (
+                <ProductSearchPopup 
+                    isOpen={isProductSearchOpen}
+                    onClose={() => setIsProductSearchOpen(false)}
+                    onSelect={(p) => {
+                        setFilters(prev => ({
+                            ...prev,
+                            bomCode: p.itemCode || prev.bomCode,
+                            componentName: p.productName || prev.componentName
+                        }));
+                        setIsProductSearchOpen(false);
+                    }}
+                    onSelectProduct={(p) => {
+                        setFilters(prev => ({
+                            ...prev,
+                            bomCode: p.itemCode || prev.bomCode,
+                            componentName: p.productName || prev.componentName
+                        }));
+                        setIsProductSearchOpen(false);
+                    }}
                 />
             )}
         </div>

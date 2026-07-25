@@ -21,12 +21,15 @@ import {
  */
 const ChartCard = ({
     title,
+    subtitle,
     type = 'bar',
     data = [],
     dataKey,
     nameKey,
-    emptyThreshold = 3,
-    colors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899']
+    emptyThreshold = 1,
+    colors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'],
+    onClickItem,
+    children
 }) => {
     
     // 데이터의 건수가 임계치 미만인 경우 플레이스홀더 처리
@@ -154,6 +157,8 @@ const ChartCard = ({
                                     fill={sortedActiveData.length > 0 ? '#8884d8' : '#cbd5e1'}
                                     dataKey={dataKey}
                                     nameKey={nameKey}
+                                    onClick={(entry) => onClickItem && onClickItem(entry)}
+                                    style={{ cursor: onClickItem ? 'pointer' : 'default' }}
                                 >
                                     {sortedActiveData.length > 0 ? (
                                         sortedActiveData.map((entry, index) => (
@@ -199,7 +204,13 @@ const ChartCard = ({
                                 <YAxis tick={{ fontSize: 13, fill: '#64748b' }} allowDecimals={false} ticks={niceTicks} domain={[0, niceTicks[niceTicks.length - 1]]} />
                                 <Tooltip {...commonTooltipStyle} />
                                 <Legend wrapperStyle={{ fontSize: '13px', paddingTop: '10px' }} />
-                                <Bar dataKey={dataKey} fill="#6366f1" radius={[4, 4, 0, 0]}>
+                                <Bar 
+                                    dataKey={dataKey} 
+                                    fill="#6366f1" 
+                                    radius={[4, 4, 0, 0]}
+                                    onClick={(entry) => onClickItem && onClickItem(entry)}
+                                    style={{ cursor: onClickItem ? 'pointer' : 'default' }}
+                                >
                                     {data.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
                                     ))}
@@ -221,18 +232,25 @@ const ChartCard = ({
             boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.03)',
             boxSizing: 'border-box'
         }}>
-            <h3 style={{
-                fontSize: '16px',
-                fontWeight: '700',
-                color: '#1e293b',
-                margin: '0 0 20px 0',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-            }}>
-                📈 {title}
-            </h3>
-            {renderChartContent()}
+            <div style={{ marginBottom: '20px' }}>
+                <h3 style={{
+                    fontSize: '16px',
+                    fontWeight: '700',
+                    color: '#1e293b',
+                    margin: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                }}>
+                    {title}
+                </h3>
+                {subtitle && (
+                    <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' }}>
+                        {subtitle}
+                    </p>
+                )}
+            </div>
+            {children ? children : renderChartContent()}
         </section>
     );
 };

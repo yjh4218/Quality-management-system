@@ -15,6 +15,7 @@ import dayjs from 'dayjs';
 import { IconButton, InputAdornment } from '@mui/material';
 import ProductSearchPopup from '../ProductSearchPopup';
 import * as api from '../api';
+import useDateRangePreset from '../hooks/useDateRangePreset';
 
 
 const QualitySearchFilter = ({
@@ -33,6 +34,12 @@ const QualitySearchFilter = ({
     inboundCount
 }) => {
     const [showSearchPopup, setShowSearchPopup] = React.useState(false);
+
+    const { renderPresetButtons } = useDateRangePreset(
+        (start) => setSearchParams(prev => ({ ...prev, startDate: start })),
+        (end) => setSearchParams(prev => ({ ...prev, endDate: end }))
+    );
+
     const handleChange = (field) => (event) => {
         setSearchParams(prev => ({ ...prev, [field]: event.target.value }));
     };
@@ -105,28 +112,6 @@ const QualitySearchFilter = ({
                         검색 필터를 설정하고 데이터를 조회하세요.
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                        {isInternalQuality && (
-                            <>
-                                <button className="outline" onClick={onDownloadTemplate} style={{ fontSize: '14px', padding: '10px 16px', borderColor: '#107c41', backgroundColor: '#fff', color: '#107c41' }}>
-                                    📥 양식
-                                </button>
-                                <input 
-                                    type="file" 
-                                    id="excel-upload-input" 
-                                    style={{ display: 'none' }} 
-                                    accept=".xlsx, .xls"
-                                    onChange={onExcelImport}
-                                />
-                                <button 
-                                    className="outline" 
-                                    onClick={() => document.getElementById('excel-upload-input').click()}
-                                    style={{ fontSize: '14px', padding: '10px 16px', backgroundColor: '#fff', color: '#107c41', borderColor: '#107c41' }}
-                                >
-                                    📤 업로드
-                                </button>
-                            </>
-                        )}
-                        
                         {canViewInbound && (
                             <button 
                                 className="outline" 
@@ -178,8 +163,12 @@ const QualitySearchFilter = ({
 
             <Paper elevation={0} sx={{ p: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', background: '#fff' }}>
                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '20px', alignItems: 'start' }}>
-                    <Box sx={{ gridColumn: { xs: 'span 1', md: 'span 2' }, minWidth: '400px' }}>
-                        <label style={labelStyle}>🗓️ 입고 기간</label>
+                    {/* 1. 입고 기간 (날짜 + ⚡빠른선택) */}
+                    <Box sx={{ gridColumn: { xs: 'span 1', md: 'span 2' }, minWidth: '420px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <label style={{ ...labelStyle, marginBottom: 0 }}>🗓️ 입고 기간</label>
+                            {renderPresetButtons()}
+                        </div>
                         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                             <DatePicker
                                 value={searchParams.startDate ? dayjs(searchParams.startDate) : null}
@@ -197,24 +186,14 @@ const QualitySearchFilter = ({
                         </Box>
                     </Box>
 
-                    <Box>
-                        <label style={labelStyle}>🆔 입고번호</label>
-                        <TextField
-                            size="small"
-                            fullWidth
-                            placeholder="GRN-YYYYMMDD-XXX"
-                            value={searchParams.grnNumber || ''}
-                            onChange={handleChange('grnNumber')}
-                        />
-                    </Box>
-
+                    {/* 2. 품목코드 + 🔍 돋보기 */}
                     <Box>
                         <label style={labelStyle}>🏷️ 품목코드</label>
                         <TextField
                             size="small"
                             fullWidth
                             placeholder="품목코드 입력"
-                            value={searchParams.itemCode}
+                            value={searchParams.itemCode || ''}
                             onChange={handleChange('itemCode')}
                             InputProps={{
                                 endAdornment: (
@@ -228,28 +207,19 @@ const QualitySearchFilter = ({
                         />
                     </Box>
 
+                    {/* 3. 제품명 */}
                     <Box>
                         <label style={labelStyle}>📦 제품명</label>
                         <TextField
                             size="small"
                             fullWidth
                             placeholder="제품명 입력"
-                            value={searchParams.productName}
+                            value={searchParams.productName || ''}
                             onChange={handleChange('productName')}
                         />
                     </Box>
 
-                    <Box>
-                        <label style={labelStyle}>🔢 LOT 번호</label>
-                        <TextField
-                            size="small"
-                            fullWidth
-                            placeholder="LOT 번호"
-                            value={searchParams.lotNumber}
-                            onChange={handleChange('lotNumber')}
-                        />
-                    </Box>
-
+                    {/* 4. 제조사명 */}
                     <Box>
                         <label style={labelStyle}>🏭 제조사명</label>
                         <Autocomplete
@@ -275,14 +245,42 @@ const QualitySearchFilter = ({
                         />
                     </Box>
 
+                    {/* 5. LOT 번호 */}
                     <Box>
-                        <label style={labelStyle}>🚩 상태 필터</label>
+                        <label style={labelStyle}>🔢 LOT 번호</label>
+                        <TextField
+                            size="small"
+                            fullWidth
+                            placeholder="LOT 번호"
+                            value={searchParams.lotNumber || ''}
+                            onChange={handleChange('lotNumber')}
+                        />
+                    </Box>
+
+                    {/* 6. 입고번호 */}
+                    <Box>
+                        <label style={labelStyle}>🆔 입고번호</label>
+                        <TextField
+                            size="small"
+                            fullWidth
+                            placeholder="GRN-YYYYMMDD-XXX"
+                            value={searchParams.grnNumber || ''}
+                            onChange={handleChange('grnNumber')}
+                        />
+                    </Box>
+
+                    {/* 7. 입고검사 상태 필터 */}
+                    <Box>
+                        <label style={labelStyle}>🚩 입고검사 상태</label>
                         <FormControl size="small" fullWidth>
                             <Select
-                                value={searchParams.excludeStatus}
+                                value={searchParams.excludeStatus || ''}
                                 onChange={handleChange('excludeStatus')}
                             >
                                 <MenuItem value="">전체 보기</MenuItem>
+                                <MenuItem value="검사 대기">검사 대기</MenuItem>
+                                <MenuItem value="검사 중">검사 중</MenuItem>
+                                <MenuItem value="검사 완료">검사 완료</MenuItem>
                                 <MenuItem value="STEP5_FINAL_COMPLETE">진행 중인 것만 (5단계 제외)</MenuItem>
                             </Select>
                         </FormControl>

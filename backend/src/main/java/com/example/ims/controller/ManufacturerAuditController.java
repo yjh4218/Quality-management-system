@@ -21,14 +21,29 @@ public class ManufacturerAuditController {
     private final ManufacturerAuditService auditService;
     private final com.example.ims.service.FileStorageService fileStorageService;
 
+    private final com.example.ims.repository.UserRepository userRepository;
+
+    private com.example.ims.entity.User getUser(Authentication authentication) {
+        if (authentication == null) return null;
+        return userRepository.findByUsername(authentication.getName()).orElse(null);
+    }
+
     @GetMapping("/search")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM') or @perm.can('manufacturerAudits', 'VIEW')")
     public ResponseEntity<List<ManufacturerAudit>> searchAudits(
+            Authentication authentication,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(required = false) String manufacturerName,
             @RequestParam(required = false) String manufacturerCode,
             @RequestParam(required = false) String grade) {
+        
+        com.example.ims.entity.User user = getUser(authentication);
+        if (user != null && (user.getRole().contains("ROLE_MANUFACTURER") || "제조사".equals(user.getDepartment()))) {
+            String mfrName = user.getManufacturer() != null ? user.getManufacturer().getName() : user.getCompanyName();
+            manufacturerName = mfrName;
+        }
+
         return ResponseEntity.ok(auditService.searchAudits(startDate, endDate, manufacturerName, manufacturerCode, grade));
     }
 

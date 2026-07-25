@@ -10,7 +10,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/mail-categories")
-@CrossOrigin(origins = "*")
 public class MailCategoryController {
 
     @Autowired

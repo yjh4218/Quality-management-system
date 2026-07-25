@@ -38,7 +38,34 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(AbstractHttpConfigurer::disable) 
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(org.springframework.security.web.csrf.CookieCsrfTokenRepository.withHttpOnlyFalse())
+                        .csrfTokenRequestHandler(new org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler())
+                        .ignoringRequestMatchers(
+                                "/api/vendor-upload/**",
+                                "/api/auth/login",
+                                "/api/auth/register",
+                                "/api/auth/check-username",
+                                "/api/auth/find-password",
+                                "/api/auth/verify-email",
+                                "/api/admin/system/health",
+                                "/api/manufacturers/invite/**"
+                        )
+                )
+                .addFilterAfter(new org.springframework.web.filter.OncePerRequestFilter() {
+                    @Override
+                    protected void doFilterInternal(jakarta.servlet.http.HttpServletRequest request,
+                                                    jakarta.servlet.http.HttpServletResponse response,
+                                                    jakarta.servlet.FilterChain filterChain)
+                            throws jakarta.servlet.ServletException, java.io.IOException {
+                        org.springframework.security.web.csrf.CsrfToken csrfToken =
+                                (org.springframework.security.web.csrf.CsrfToken) request.getAttribute(org.springframework.security.web.csrf.CsrfToken.class.getName());
+                        if (csrfToken != null) {
+                            csrfToken.getToken();
+                        }
+                        filterChain.doFilter(request, response);
+                    }
+                }, org.springframework.security.web.authentication.www.BasicAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         // [CORS PATCH] OPTIONS preflight 요청 무조건 허용
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
@@ -54,9 +81,9 @@ public class SecurityConfig {
                         // 로그 및 보안 관련 경로 관리자 보호 (Controller에서 @PreAuthorize로 정밀 제어)
                         .requestMatchers("/api/logs/access/page-move").authenticated()
                         .requestMatchers("/api/logs/access/**").authenticated()
-                        .requestMatchers("/api/logs/**").authenticated()
-                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/bug-reports").authenticated()
-                        .requestMatchers("/api/bug-reports/**").authenticated()
+                        // 버그 리포트 제출 (익명/오프라인 큐 전송 포함 무조건 허용)
+                        .requestMatchers("/api/bug-reports", "/api/bug-reports/**").permitAll()
+                        .requestMatchers("/api/admin/master-data/**").authenticated()
                         
                         .requestMatchers("/api/admin/system/**").hasRole("ADMIN")
                         .requestMatchers("/api/admin/trash/**").hasRole("ADMIN")
@@ -90,7 +117,7 @@ public class SecurityConfig {
                                 response.setHeader("Access-Control-Allow-Origin", origin);
                                 response.setHeader("Access-Control-Allow-Credentials", "true");
                                 response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
-                                response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With, Accept, Origin");
+                                response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With, X-XSRF-TOKEN, Accept, Origin");
                             }
                             response.setStatus(HttpStatus.UNAUTHORIZED.value());
                             response.setContentType("application/json;charset=UTF-8");
@@ -123,10 +150,16 @@ public class SecurityConfig {
             );
         }
         
-        configuration.setAllowedOriginPatterns(List.of("*"));
+        configuration.setAllowedOriginPatterns(originsList);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-        configuration.setAllowedHeaders(List.of("*"));
-        configuration.setExposedHeaders(List.of("Set-Cookie", "Authorization"));
+        configuration.setAllowedHeaders(List.of(
+            "Authorization",
+            "Content-Type",
+            "X-Requested-With",
+            "X-XSRF-TOKEN",
+            "Accept"
+        ));
+        configuration.setExposedHeaders(List.of("Set-Cookie", "Authorization", "XSRF-TOKEN", "X-XSRF-TOKEN"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 

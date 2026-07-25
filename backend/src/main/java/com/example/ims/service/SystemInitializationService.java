@@ -110,13 +110,16 @@ public class SystemInitializationService {
                 "WHERE manufacturer_id IS NOT NULL"
             );
 
-            // 2. 클레임 정보의 품목코드 기준 제품명, 제조사 정보 동기화
-            jdbcTemplate.execute(
+            // 2. 클레임 정보의 품목코드 기준 제품명, 제조사 정보 동기화 (값이 실제로 변경된 경우만 갱신)
+            int updatedClaimsCount = jdbcTemplate.update(
                 "UPDATE claims " +
                 "SET product_name = (SELECT p.product_name FROM products p WHERE p.item_code = claims.item_code AND (p.is_deleted = false OR p.is_deleted IS NULL) LIMIT 1), " +
                 "    manufacturer = (SELECT m.name FROM manufacturers m JOIN products p ON p.manufacturer_id = m.id WHERE p.item_code = claims.item_code AND (p.is_deleted = false OR p.is_deleted IS NULL) LIMIT 1) " +
-                "WHERE EXISTS (SELECT 1 FROM products p WHERE p.item_code = claims.item_code AND (p.is_deleted = false OR p.is_deleted IS NULL))"
+                "WHERE EXISTS (SELECT 1 FROM products p WHERE p.item_code = claims.item_code AND (p.is_deleted = false OR p.is_deleted IS NULL)) " +
+                "  AND (claims.product_name IS DISTINCT FROM (SELECT p.product_name FROM products p WHERE p.item_code = claims.item_code AND (p.is_deleted = false OR p.is_deleted IS NULL) LIMIT 1) " +
+                "   OR claims.manufacturer IS DISTINCT FROM (SELECT m.name FROM manufacturers m JOIN products p ON p.manufacturer_id = m.id WHERE p.item_code = claims.item_code AND (p.is_deleted = false OR p.is_deleted IS NULL) LIMIT 1))"
             );
+            log.info(">>>> [SYSTEM INIT] Claim alignment completed. Updated {} changed claims.", updatedClaimsCount);
 
             // 3. 클레임 품목코드 중 등록되어 있지 않은(products 테이블에 매핑되지 않는) 클레임은 논리 또는 물리 삭제 처리
             // soft delete (is_deleted = true) 규칙 적용
@@ -839,29 +842,118 @@ public class SystemInitializationService {
                 log.warn(">>>> [SYSTEM INIT] Could not seed test claims: {}", e.getMessage(), e);
             }
 
-            // Seed 3 additional test claims for 한국콜마 (등록된 품목코드 매핑)
+            // Seed WMS Inbounds for PRD-2026-001 (기존 입고 누락 해결)
             try {
-                Integer newClaimsCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM claims WHERE claim_number = 'CLM-20260627-911'", Integer.class);
-                if (newClaimsCount == null || newClaimsCount == 0) {
+                Integer inboundPrdCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM wms_inbound WHERE grn_number = 'GRN-20260625-001'", Integer.class);
+                if (inboundPrdCount == null || inboundPrdCount == 0) {
                     jdbcTemplate.update(
-                        "INSERT INTO claims (claim_number, receipt_date, country, item_code, product_name, lot_number, manufacturer, occurrence_qty, primary_category, claim_content, quality_status, shared_with_manufacturer, mfr_status, mfr_root_cause_analysis, mfr_preventative_action, is_critical_claim, critical_request_status, is_deleted, created_at, updated_at, version) " +
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
-                        "CLM-20260627-911", java.time.LocalDate.now(), "한국", "PRD-2026-001", "모이스처 수분 크림 50ml", "LOT-202606D", "한국콜마", 80, "용기불량", "튜브 어깨 씰 부위 균열 및 미세 샘 현상", "1. 클레임 접수", true, "3. 대책수립", "원자재 용기 사출 성형 시 노즐 내 융착 온도 급랭으로 인한 강도 저하", "용기 성양 사출 금형 온도 센서 보강 및 노즐 가열 시간 표준 가이드 수립.", true, "SUBMITTED"
+                        "INSERT INTO wms_inbound (grn_number, item_code, product_name, quantity, manufacturer, inbound_date, lot_number, is_deleted, last_modified_at) " +
+                        "VALUES ('GRN-20260625-001', 'PRD-2026-001', '모이스처 수분 크림 50ml', 1000, '한국콜마', CURRENT_TIMESTAMP, 'LOT-202606A', false, CURRENT_TIMESTAMP)"
                     );
                     jdbcTemplate.update(
-                        "INSERT INTO claims (claim_number, receipt_date, country, item_code, product_name, lot_number, manufacturer, occurrence_qty, primary_category, claim_content, quality_status, shared_with_manufacturer, mfr_status, mfr_root_cause_analysis, mfr_preventative_action, is_critical_claim, critical_request_status, is_deleted, created_at, updated_at, version) " +
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
-                        "CLM-20260627-912", java.time.LocalDate.now(), "일본", "PRD-2026-002", "안티에이징 세럼 30ml", "LOT-202606E", "한국콜마", 30, "이물혼입", "스포이트 캡 내부 미세 유리 파편 발견 보고", "1. 클레임 접수", true, "3. 대책수립", "스포이트 유리 대량 세척 공정 후 이송 컨베이어 벨트 마찰 진동에 의한 미세 크랙 발생", "컨베이어 이송 가이드를 충격 완화 실리콘 가이드로 교체 및 비전 이물 검사장치 검출 감도 설정 변경.", true, "SUBMITTED"
+                        "INSERT INTO wms_inbound (grn_number, item_code, product_name, quantity, manufacturer, inbound_date, lot_number, is_deleted, last_modified_at) " +
+                        "VALUES ('GRN-20260625-002', 'PRD-2026-001', '모이스처 수분 크림 50ml', 800, '한국콜마', CURRENT_TIMESTAMP, 'LOT-202606B', false, CURRENT_TIMESTAMP)"
                     );
                     jdbcTemplate.update(
-                        "INSERT INTO claims (claim_number, receipt_date, country, item_code, product_name, lot_number, manufacturer, occurrence_qty, primary_category, claim_content, quality_status, shared_with_manufacturer, mfr_status, mfr_root_cause_analysis, mfr_preventative_action, is_critical_claim, critical_request_status, is_deleted, created_at, updated_at, version) " +
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
-                        "CLM-20260627-913", java.time.LocalDate.now(), "미국", "PARENT-001", "기준 마스터 본품", "LOT-202606F", "한국콜마", 10, "기타불량", "박스 패키지 오기재로 인한 오인식 바코드 라벨 부착", "1. 클레임 접수", true, "3. 대책수립", "수동 제품 패킹 중 작업 지시서 오독에 의한 이종 라벨 부착 실수", "라벨 부착 전 바코드 스캐너 3중 대조 인터락 시스템 구축 및 표준 검수 가이드 시행.", true, "SUBMITTED"
+                        "INSERT INTO wms_inbound (grn_number, item_code, product_name, quantity, manufacturer, inbound_date, lot_number, is_deleted, last_modified_at) " +
+                        "VALUES ('GRN-20260625-003', 'PRD-2026-001', '모이스처 수분 크림 50ml', 600, '한국콜마', CURRENT_TIMESTAMP, 'LOT-202606C', false, CURRENT_TIMESTAMP)"
                     );
-                    log.info(">>>> [SYSTEM INIT] Seeded 3 additional test claims for 한국콜마.");
+                    log.info(">>>> [SYSTEM INIT] Seeded WMS inbounds for PRD-2026-001.");
                 }
             } catch (Exception e) {
-                log.warn(">>>> [SYSTEM INIT] Could not seed additional test claims: {}", e.getMessage(), e);
+                log.warn(">>>> [SYSTEM INIT] Could not seed WMS inbounds for PRD-2026-001: {}", e.getMessage());
+            }
+
+            // Seed WMS Inbounds for Kolmar products (PPM 분석 샘플 데이터)
+            try {
+                Integer inboundCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM wms_inbound WHERE grn_number = 'GRN-20260725-001'", Integer.class);
+                if (inboundCount == null || inboundCount == 0) {
+                    jdbcTemplate.update(
+                        "INSERT INTO wms_inbound (grn_number, item_code, product_name, quantity, manufacturer, inbound_date, lot_number, is_deleted, last_modified_at) " +
+                        "VALUES ('GRN-20260725-001', 'KOLMAR-CH-GENERAL', '[일반] 한국콜마 에센스', 500, '한국콜마', CURRENT_TIMESTAMP, 'LOT-KOLMAR-001', false, CURRENT_TIMESTAMP)"
+                    );
+                    jdbcTemplate.update(
+                        "INSERT INTO wms_inbound (grn_number, item_code, product_name, quantity, manufacturer, inbound_date, lot_number, is_deleted, last_modified_at) " +
+                        "VALUES ('GRN-20260725-002', 'KOLMAR-CH-OY', '[올리브영] 한국콜마 에센스', 400, '한국콜마', CURRENT_TIMESTAMP, 'LOT-KOLMAR-001', false, CURRENT_TIMESTAMP)"
+                    );
+                    jdbcTemplate.update(
+                        "INSERT INTO wms_inbound (grn_number, item_code, product_name, quantity, manufacturer, inbound_date, lot_number, is_deleted, last_modified_at) " +
+                        "VALUES ('GRN-20260725-003', 'KOLMAR-CH-PX', '[군마트] 한국콜마 에센스', 300, '한국콜마', CURRENT_TIMESTAMP, 'LOT-KOLMAR-002', false, CURRENT_TIMESTAMP)"
+                    );
+                    jdbcTemplate.update(
+                        "INSERT INTO wms_inbound (grn_number, item_code, product_name, quantity, manufacturer, inbound_date, lot_number, is_deleted, last_modified_at) " +
+                        "VALUES ('GRN-20260725-004', 'KOLMAR-CH-JP-ON', '[일본/온라인] 한국콜마 에센스', 200, '한국콜마', CURRENT_TIMESTAMP, 'LOT-KOLMAR-002', false, CURRENT_TIMESTAMP)"
+                    );
+                    // LOT-KOLMAR-003 및 다변화 추가 입고
+                    jdbcTemplate.update(
+                        "INSERT INTO wms_inbound (grn_number, item_code, product_name, quantity, manufacturer, inbound_date, lot_number, is_deleted, last_modified_at) " +
+                        "VALUES ('GRN-20260725-005', 'KOLMAR-CH-GENERAL', '[일반] 한국콜마 에센스', 350, '한국콜마', CURRENT_TIMESTAMP, 'LOT-KOLMAR-003', false, CURRENT_TIMESTAMP)"
+                    );
+                    jdbcTemplate.update(
+                        "INSERT INTO wms_inbound (grn_number, item_code, product_name, quantity, manufacturer, inbound_date, lot_number, is_deleted, last_modified_at) " +
+                        "VALUES ('GRN-20260725-006', 'KOLMAR-CH-OY', '[올리브영] 한국콜마 에센스', 250, '한국콜마', CURRENT_TIMESTAMP, 'LOT-KOLMAR-003', false, CURRENT_TIMESTAMP)"
+                    );
+                    jdbcTemplate.update(
+                        "INSERT INTO wms_inbound (grn_number, item_code, product_name, quantity, manufacturer, inbound_date, lot_number, is_deleted, last_modified_at) " +
+                        "VALUES ('GRN-20260725-007', 'KOLMAR-CH-JP-ON', '[일본/온라인] 한국콜마 에센스', 150, '한국콜마', CURRENT_TIMESTAMP, 'LOT-KOLMAR-001', false, CURRENT_TIMESTAMP)"
+                    );
+                    log.info(">>>> [SYSTEM INIT] Seeded 7 test WMS inbounds for Kolmar products.");
+                }
+            } catch (Exception e) {
+                log.warn(">>>> [SYSTEM INIT] Could not seed test WMS inbounds: {}", e.getMessage());
+            }
+
+            // Seed Kolmar channel specific claims (LOT-KOLMAR-001 이상 불량 유도)
+            try {
+                Integer claimKolmarCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM claims WHERE claim_number = 'CLM-20260725-701'", Integer.class);
+                if (claimKolmarCount == null || claimKolmarCount == 0) {
+                    jdbcTemplate.update(
+                        "INSERT INTO claims (claim_number, receipt_date, country, item_code, product_name, lot_number, manufacturer, occurrence_qty, primary_category, claim_content, quality_status, shared_with_manufacturer, is_deleted, created_at, updated_at, version) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
+                        "CLM-20260725-701", java.time.LocalDate.now(), "한국", "KOLMAR-CH-GENERAL", "[일반] 한국콜마 에센스", "LOT-KOLMAR-001", "한국콜마", 45, "용기불량", "펌프 작동 불량 및 노즐 막힘 현상", "1. 클레임 접수", true
+                    );
+                    jdbcTemplate.update(
+                        "INSERT INTO claims (claim_number, receipt_date, country, item_code, product_name, lot_number, manufacturer, occurrence_qty, primary_category, claim_content, quality_status, shared_with_manufacturer, is_deleted, created_at, updated_at, version) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
+                        "CLM-20260725-702", java.time.LocalDate.now(), "한국", "KOLMAR-CH-OY", "[올리브영] 한국콜마 에센스", "LOT-KOLMAR-001", "한국콜마", 35, "용기불량", "올리브영 기획 세트 펌프 압출 불량", "1. 클레임 접수", true
+                    );
+                    jdbcTemplate.update(
+                        "INSERT INTO claims (claim_number, receipt_date, country, item_code, product_name, lot_number, manufacturer, occurrence_qty, primary_category, claim_content, quality_status, shared_with_manufacturer, is_deleted, created_at, updated_at, version) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
+                        "CLM-20260725-703", java.time.LocalDate.now(), "한국", "KOLMAR-CH-PX", "[군마트] 한국콜마 에센스", "LOT-KOLMAR-002", "한국콜마", 2, "포장불량", "단상자 미세 찌그러짐", "1. 클레임 접수", true
+                    );
+                    log.info(">>>> [SYSTEM INIT] Seeded 3 channel claims for Kolmar products.");
+                }
+            } catch (Exception e) {
+                log.warn(">>>> [SYSTEM INIT] Could not seed Kolmar channel claims: {}", e.getMessage());
+            }
+
+            // Seed WMS Inbounds & Claims for PRD-2026-002 (안티에이징 세럼 30ml)
+            try {
+                Integer inboundPrd2Count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM wms_inbound WHERE grn_number = 'GRN-20260726-001'", Integer.class);
+                if (inboundPrd2Count == null || inboundPrd2Count == 0) {
+                    jdbcTemplate.update(
+                        "INSERT INTO wms_inbound (grn_number, item_code, product_name, quantity, manufacturer, inbound_date, lot_number, is_deleted, last_modified_at) " +
+                        "VALUES ('GRN-20260726-001', 'PRD-2026-002', '안티에이징 세럼 30ml', 500, '한국콜마', CURRENT_TIMESTAMP, 'LOT-202607A', false, CURRENT_TIMESTAMP)"
+                    );
+                    jdbcTemplate.update(
+                        "INSERT INTO wms_inbound (grn_number, item_code, product_name, quantity, manufacturer, inbound_date, lot_number, is_deleted, last_modified_at) " +
+                        "VALUES ('GRN-20260726-002', 'PRD-2026-002', '안티에이징 세럼 30ml', 400, '한국콜마', CURRENT_TIMESTAMP, 'LOT-202607B', false, CURRENT_TIMESTAMP)"
+                    );
+                    jdbcTemplate.update(
+                        "INSERT INTO claims (claim_number, receipt_date, country, item_code, product_name, lot_number, manufacturer, occurrence_qty, primary_category, claim_content, quality_status, shared_with_manufacturer, is_deleted, created_at, updated_at, version) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
+                        "CLM-20260726-801", java.time.LocalDate.now(), "한국", "PRD-2026-002", "안티에이징 세럼 30ml", "LOT-202607A", "한국콜마", 3, "내용물불량", "내용물 미세 변색 보고", "1. 클레임 접수", true
+                    );
+                    jdbcTemplate.update(
+                        "INSERT INTO claims (claim_number, receipt_date, country, item_code, product_name, lot_number, manufacturer, occurrence_qty, primary_category, claim_content, quality_status, shared_with_manufacturer, is_deleted, created_at, updated_at, version) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
+                        "CLM-20260726-802", java.time.LocalDate.now(), "한국", "PRD-2026-002", "안티에이징 세럼 30ml", "LOT-202607B", "한국콜마", 1, "포장불량", "펌프 스티커 미세 비뚤어짐", "1. 클레임 접수", true
+                    );
+                    log.info(">>>> [SYSTEM INIT] Seeded WMS inbounds and claims for PRD-2026-002.");
+                }
+            } catch (Exception e) {
+                log.warn(">>>> [SYSTEM INIT] Could not seed WMS inbounds/claims for PRD-2026-002: {}", e.getMessage());
             }
             
             // [보정] 모든 인서트 완료 후 version 컬럼이 NULL인 데이터들을 최종적으로 0으로 덮어씀 (Optimistic Locking 방어)

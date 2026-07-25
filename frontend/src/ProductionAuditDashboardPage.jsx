@@ -6,16 +6,25 @@ import SummaryCardRow from './components/dashboard/SummaryCardRow';
 import ChartCard from './components/dashboard/ChartCard';
 import DashboardDataTable from './components/dashboard/DashboardDataTable';
 import StatusBadgeRenderer from './components/dashboard/StatusBadgeRenderer';
+import ProductSearchPopup from './ProductSearchPopup';
+import useDateRangePreset from './hooks/useDateRangePreset';
 
 const ProductionAuditDashboardPage = ({ user, onNavigate }) => {
     const gridRef = useRef();
     const [audits, setAudits] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
 
     // Filter States
+    const [startDate, setStartDate] = useState(() => {
+        const d = new Date(); d.setMonth(d.getMonth() - 6); return d.toISOString().split('T')[0];
+    });
+    const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
     const [manufacturerFilter, setManufacturerFilter] = useState('');
     const [itemCodeFilter, setItemCodeFilter] = useState('');
     const [productNameFilter, setProductNameFilter] = useState('');
+
+    const { renderPresetButtons } = useDateRangePreset(setStartDate, setEndDate);
 
     const [stats, setStats] = useState({
         total: 0,
@@ -98,7 +107,13 @@ const ProductionAuditDashboardPage = ({ user, onNavigate }) => {
             const res = await getProductionAudits(targetManufacturer);
             let list = res.data || [];
 
-            // 클라이언트 단에서 추가 필터링 (품목코드, 품목명)
+            // 클라이언트 단에서 추가 필터링 (날짜, 품목코드, 품목명)
+            if (startDate) {
+                list = list.filter(a => !a.auditDate || a.auditDate.substring(0, 10) >= startDate);
+            }
+            if (endDate) {
+                list = list.filter(a => !a.auditDate || a.auditDate.substring(0, 10) <= endDate);
+            }
             if (itemCodeFilter) {
                 list = list.filter(a => a.itemCode?.toLowerCase().includes(itemCodeFilter.toLowerCase()));
             }
@@ -113,7 +128,7 @@ const ProductionAuditDashboardPage = ({ user, onNavigate }) => {
         } finally {
             setLoading(false);
         }
-    }, [manufacturerFilter, itemCodeFilter, productNameFilter, isManufacturer, user]);
+    }, [startDate, endDate, manufacturerFilter, itemCodeFilter, productNameFilter, isManufacturer, user]);
 
     useEffect(() => {
         loadData();
@@ -121,6 +136,9 @@ const ProductionAuditDashboardPage = ({ user, onNavigate }) => {
 
     const handleSearch = () => loadData();
     const handleReset = () => {
+        const d = new Date(); d.setMonth(d.getMonth() - 6);
+        setStartDate(d.toISOString().split('T')[0]);
+        setEndDate(new Date().toISOString().split('T')[0]);
         setManufacturerFilter('');
         setItemCodeFilter('');
         setProductNameFilter('');
@@ -152,19 +170,6 @@ const ProductionAuditDashboardPage = ({ user, onNavigate }) => {
             }
         }
     ], []);
-
-    const filterFields = [
-        ...(!isManufacturer ? [{
-            label: '제조사명',
-            type: 'text',
-            value: manufacturerFilter,
-            onChange: e => setManufacturerFilter(e.target.value),
-            icon: '🏭',
-            placeholder: '제조사 검색'
-        }] : []),
-        { label: '품목코드', type: 'text', value: itemCodeFilter, onChange: e => setItemCodeFilter(e.target.value), icon: '🏷️', placeholder: '코드 검색' },
-        { label: '품목명', type: 'text', value: productNameFilter, onChange: e => setProductNameFilter(e.target.value), icon: '📦', placeholder: '품목명 검색' }
-    ];
 
     // 사진 감사 미제출 건수 (용기, 아웃박스, 적재 이미지 중 비어 있는 항목 집계)
     const missingPhotoCount = useMemo(() => {
@@ -206,10 +211,90 @@ const ProductionAuditDashboardPage = ({ user, onNavigate }) => {
         >
             {/* 필터바 */}
             <DashboardFilterBar 
-                fields={filterFields}
                 onSearch={handleSearch}
                 onReset={handleReset}
-            />
+            >
+                <div style={{ display: 'flex', gap: '14px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '4px' }}>📅 감리 시작일</label>
+                        <input
+                            type="date"
+                            value={startDate}
+                            onChange={e => setStartDate(e.target.value)}
+                            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', width: '150px' }}
+                        />
+                    </div>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '4px' }}>📅 감리 종료일</label>
+                        <input
+                            type="date"
+                            value={endDate}
+                            onChange={e => setEndDate(e.target.value)}
+                            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', width: '150px' }}
+                        />
+                    </div>
+                    {/* 기간 빠른 선택 버튼 그룹 */}
+                    <div style={{ alignSelf: 'flex-end', marginBottom: '2px' }}>
+                        {renderPresetButtons()}
+                    </div>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '4px' }}>🏷️ 품목코드</label>
+                        <input
+                            type="text"
+                            placeholder="코드 검색 (예: PRD-001)"
+                            value={itemCodeFilter}
+                            onChange={e => setItemCodeFilter(e.target.value)}
+                            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', width: '170px' }}
+                        />
+                    </div>
+                    {/* 품목 검색 돋보기 버튼 */}
+                    <div style={{ alignSelf: 'flex-end', marginBottom: '2px' }}>
+                        <button
+                            type="button"
+                            onClick={() => setIsProductSearchOpen(true)}
+                            title="품목 상세 검색"
+                            style={{
+                                padding: '6px 12px',
+                                backgroundColor: '#f1f5f9',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontSize: '14px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                height: '34px'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#e2e8f0'}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                        >
+                            🔍
+                        </button>
+                    </div>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '4px' }}>📦 품목명</label>
+                        <input
+                            type="text"
+                            placeholder="품목명 검색 (예: 수분크림)"
+                            value={productNameFilter}
+                            onChange={e => setProductNameFilter(e.target.value)}
+                            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', width: '190px' }}
+                        />
+                    </div>
+                    {!isManufacturer && (
+                        <div>
+                            <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '4px' }}>🏭 제조사명</label>
+                            <input
+                                type="text"
+                                placeholder="제조사 검색"
+                                value={manufacturerFilter}
+                                onChange={e => setManufacturerFilter(e.target.value)}
+                                style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', width: '160px' }}
+                            />
+                        </div>
+                    )}
+                </div>
+            </DashboardFilterBar>
 
             {/* 통계 요약 */}
             <SummaryCardRow cards={summaryCards} />
@@ -254,6 +339,18 @@ const ProductionAuditDashboardPage = ({ user, onNavigate }) => {
                 columnDefs={columnDefs}
                 defaultPageSize={50}
             />
+
+            {/* 품목 검색 팝업 모달 */}
+            {isProductSearchOpen && (
+                <ProductSearchPopup
+                    onClose={() => setIsProductSearchOpen(false)}
+                    onSelect={(p) => {
+                        if (p.itemCode) setItemCodeFilter(p.itemCode);
+                        if (p.productName) setProductNameFilter(p.productName);
+                        setIsProductSearchOpen(false);
+                    }}
+                />
+            )}
         </AnalyticsDashboardShell>
     );
 };

@@ -45,6 +45,45 @@ public class QualityReportService {
     }
 
     /**
+     * 적부판정일(또는 입고/검수일자) 기준 출하 승인 기록 조회
+     */
+    @Transactional(readOnly = true)
+    public List<WmsInbound> getReleaseRecords(String date) {
+        String targetDateStr = (date != null && !date.trim().isEmpty()) ? date.trim() : java.time.LocalDate.now().toString();
+        java.time.LocalDate targetDate;
+        try {
+            targetDate = java.time.LocalDate.parse(targetDateStr);
+        } catch (Exception e) {
+            targetDate = java.time.LocalDate.now();
+        }
+
+        java.time.ZoneId kst = java.time.ZoneId.of("Asia/Seoul");
+        java.time.LocalDateTime start = targetDate.atStartOfDay(kst).toOffsetDateTime().toLocalDateTime();
+        java.time.LocalDateTime end = targetDate.atTime(23, 59, 59, 999999999).atZone(kst).toOffsetDateTime().toLocalDateTime();
+
+        // 1. inboundDate 일시 범위로 검색
+        List<WmsInbound> listByInboundDate = inboundRepository.findByInboundDateBetween(start, end);
+        
+        // 2. 전체 목록 중 coaDecisionDate 또는 inboundDate가 해당 날짜 문자열과 일치하는 내역도 추가 수집
+        List<WmsInbound> allList = inboundRepository.findAll();
+        java.util.Set<Long> existingIds = listByInboundDate.stream().map(WmsInbound::getId).collect(java.util.stream.Collectors.toSet());
+
+        for (WmsInbound item : allList) {
+            if (existingIds.contains(item.getId())) continue;
+            
+            boolean matchesCoaDate = item.getCoaDecisionDate() != null && item.getCoaDecisionDate().startsWith(targetDateStr);
+            boolean matchesInboundString = item.getInboundDate() != null && item.getInboundDate().toString().startsWith(targetDateStr);
+            
+            if (matchesCoaDate || matchesInboundString) {
+                listByInboundDate.add(item);
+                existingIds.add(item.getId());
+            }
+        }
+
+        return listByInboundDate;
+    }
+
+    /**
      * Update an inbound quality report from the grid UI.
      * Restricts editing if the status is already 'Final Complete'.
      * Logs the changes to WmsInboundHistory.

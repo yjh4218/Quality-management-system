@@ -120,7 +120,22 @@ export const useQualityManagement = (user, navigationData, onNavigated) => {
         setIsLoading(true);
         try {
             const response = await getInboundData(searchParams);
-            setRowData(response.data || []);
+            let data = response.data || [];
+            
+            // excludeStatus 필터값에 따른 입고검사 상태 필터링
+            if (searchParams.excludeStatus) {
+                const statusFilter = searchParams.excludeStatus;
+                if (statusFilter === 'STEP5_FINAL_COMPLETE') {
+                    data = data.filter(item => item.overallStatus !== 'STEP5_FINAL_COMPLETE');
+                } else {
+                    data = data.filter(item => {
+                        const currentStatus = item.inboundInspectionStatus || '검사 대기';
+                        return currentStatus === statusFilter;
+                    });
+                }
+            }
+            
+            setRowData(data);
         } catch (error) {
             toast.error("입고 데이터를 불러오지 못했습니다.");
         } finally {

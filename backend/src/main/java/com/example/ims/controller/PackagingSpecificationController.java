@@ -13,6 +13,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
@@ -36,6 +37,7 @@ public class PackagingSpecificationController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
     public ResponseEntity<PackagingSpecification> saveSpec(@RequestBody PackagingSpecification spec,
             @AuthenticationPrincipal UserDetails userDetails) {
         spec.setLastModifiedBy(userDetails.getUsername());
@@ -171,6 +173,7 @@ public class PackagingSpecificationController {
     }
 
     @PostMapping("/save-full")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
     public ResponseEntity<PackagingSpecFullDto> saveFullSpec(@RequestBody PackagingSpecFullDto dto,
             @AuthenticationPrincipal UserDetails userDetails) {
         try {
@@ -204,6 +207,7 @@ public class PackagingSpecificationController {
     }
 
     @PostMapping("/{specId}/method-images/batch-upload")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
     public ResponseEntity<List<com.example.ims.entity.PackagingMethodImage>> batchUploadMethodImages(
             @PathVariable Long specId,
             @RequestParam("files") org.springframework.web.multipart.MultipartFile[] files,
@@ -288,6 +292,7 @@ public class PackagingSpecificationController {
     }
 
     @PutMapping("/method-images/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
     public ResponseEntity<com.example.ims.entity.PackagingMethodImage> updateMethodImage(
             @PathVariable Long id,
             @RequestBody com.example.ims.entity.PackagingMethodImage updateDto) {
@@ -318,6 +323,7 @@ public class PackagingSpecificationController {
     }
 
     @DeleteMapping("/method-images/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
     public ResponseEntity<Void> deleteMethodImage(@PathVariable Long id) {
         com.example.ims.entity.PackagingMethodImage existing = methodImageRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Image not found"));
@@ -327,6 +333,7 @@ public class PackagingSpecificationController {
     }
 
     @PostMapping("/method-images/{id}/restore")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
     public ResponseEntity<com.example.ims.entity.PackagingMethodImage> restoreMethodImage(@PathVariable Long id) {
         com.example.ims.entity.PackagingMethodImage existing = methodImageRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Image not found"));

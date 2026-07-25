@@ -70,6 +70,11 @@ const SummaryCardRow = ({ cards = [] }) => {
                             }}>
                                 {typeof card.value === 'number' ? card.value.toLocaleString() : (card.value ?? 0)}
                             </span>
+                            {card.description && (
+                                <span style={{ fontSize: '11.5px', fontWeight: '500', color: '#64748b', marginTop: '2px' }}>
+                                    {card.description}
+                                </span>
+                            )}
                         </div>
                     </div>
                 );

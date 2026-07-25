@@ -14,6 +14,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.security.access.prepost.PreAuthorize;
+
 /**
  * QMS 통합 알림(Notification) REST 컨트롤러.
  * 모든 사용자가 본인의 알림에 대한 조회 및 읽음 처리를 수행할 수 있도록 설정합니다.
@@ -21,6 +23,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/notifications")
 @RequiredArgsConstructor
+@PreAuthorize("isAuthenticated()")
 public class NotificationController {
 
     private final NotificationService notificationService;

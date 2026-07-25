@@ -20,7 +20,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*", allowedHeaders = "*")
 public class SpaceRatioController {
 
     private final SpaceRatioService spaceRatioService;

@@ -5,6 +5,7 @@ import ProductionAuditDrawer from './ProductionAuditDrawer';
 import ProductSearchPopup from './ProductSearchPopup';
 import * as api from './api';
 import { usePermissions } from './usePermissions';
+import useDateRangePreset from './hooks/useDateRangePreset';
 
 /**
  * 신제품 생산감리(사진감리) 메인 화면 컴포넌트입니다.
@@ -25,11 +26,18 @@ const ProductionAuditPage = ({ user, navigationData, onNavigated }) => {
     const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
     const [viewMode, setViewMode] = useState('completed'); // 'completed' or 'pending'
     const [searchFields, setSearchFields] = useState({
+        startDate: '',
+        endDate: '',
         itemCode: '',
         productName: '',
         manufacturerName: '',
         disclosureFilter: 'ALL' // 'ALL', 'DISCLOSED', 'HIDDEN'
     });
+
+    const { renderPresetButtons } = useDateRangePreset(
+        (start) => setSearchFields(prev => ({ ...prev, startDate: start })),
+        (end) => setSearchFields(prev => ({ ...prev, endDate: end }))
+    );
     const [loading, setLoading] = useState(false);
     const [exporting, setExporting] = useState(false);
 
@@ -451,61 +459,80 @@ const ProductionAuditPage = ({ user, navigationData, onNavigated }) => {
             {/* 검색 필터 그리드 */}
             <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
+                    {/* 1. 감리 기간 (날짜 + ⚡빠른선택) */}
+                    <div style={{ gridColumn: 'span 2', minWidth: '420px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'flex', alignItems: 'center', gap: '4px', margin: 0 }}>🗓️ 감리 기간</label>
+                            {renderPresetButtons()}
+                        </div>
+                        <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+                            <input type="date" value={searchFields.startDate || ''} onChange={e => setSearchFields({ ...searchFields, startDate: e.target.value })} style={{ flex: 1, padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
+                            <span style={{ color: '#94a3b8' }}>~</span>
+                            <input type="date" value={searchFields.endDate || ''} onChange={e => setSearchFields({ ...searchFields, endDate: e.target.value })} style={{ flex: 1, padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
+                        </div>
+                    </div>
+
+                    {/* 2. 품목코드 + 🔍 돋보기 */}
                     <div>
                         <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏷️ 품목코드</label>
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        <div style={{ display: 'flex', gap: '6px' }}>
                             <input
                                 type="text"
                                 value={searchFields.itemCode}
                                 onChange={(e) => setSearchFields({ ...searchFields, itemCode: e.target.value })}
                                 onKeyDown={(e) => e.key === 'Enter' && handleSearchClick()}
                                 placeholder="코드 입력"
-                                style={{ flex: 1, padding: '10px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px' }}
+                                style={{ flex: 1, padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                             />
                             <button 
                                 type="button" 
                                 onClick={() => setIsProductSearchOpen(true)}
-                                style={{ padding: '0 12px', minWidth: '44px', width: '44px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', border: '1px solid #cbd5e0', borderRadius: '8px', cursor: 'pointer' }}
+                                title="품목 상세 검색"
+                                style={{ padding: '0 10px', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer' }}
                             >
                                 🔍
                             </button>
                         </div>
                     </div>
+
+                    {/* 3. 품목명 */}
                     <div>
-                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>📦 제품명</label>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>📦 품목명</label>
                         <input
                             type="text"
                             value={searchFields.productName}
                             onChange={(e) => setSearchFields({ ...searchFields, productName: e.target.value })}
                             onKeyDown={(e) => e.key === 'Enter' && handleSearchClick()}
-                            placeholder="제품명 입력"
-                            style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px' }}
+                            placeholder="품목명 입력"
+                            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                         />
                     </div>
+
+                    {/* 4. 제조사명 및 공개여부 (관리자 전용) */}
                     {!isManufacturer && (
                         <>
                             <div>
-                                <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏭 제조사</label>
+                                <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏭 제조사명</label>
                                 <input
                                     type="text"
                                     value={searchFields.manufacturerName}
                                     onChange={(e) => setSearchFields({ ...searchFields, manufacturerName: e.target.value })}
                                     onKeyDown={(e) => e.key === 'Enter' && handleSearchClick()}
-                                    placeholder="제조사명 입력"
-                                    style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px' }}
+                                    placeholder="제조사 입력"
+                                    style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                                 />
                             </div>
                             <div>
-                                <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🚩 제조사 공개 여부</label>
-                                <select 
+                                <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>👁️ 제조사 공개 여부</label>
+                                <select
                                     value={searchFields.disclosureFilter}
                                     onChange={(e) => setSearchFields({ ...searchFields, disclosureFilter: e.target.value })}
-                                    style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', height: '42px' }}
+                                    style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', backgroundColor: '#fff', height: '37px' }}
                                 >
-                                    <option value="ALL">전체</option>
-                                    <option value="DISCLOSED">공개됨</option>
-                                    <option value="HIDDEN">비공개</option>
+                                    <option value="ALL">전체 보기 (공개/비공개)</option>
+                                    <option value="DISCLOSED">공개만 보기</option>
+                                    <option value="HIDDEN">비공개만 보기</option>
                                 </select>
                             </div>
                         </>
@@ -552,8 +579,24 @@ const ProductionAuditPage = ({ user, navigationData, onNavigated }) => {
 
             {isProductSearchOpen && (
                 <ProductSearchPopup 
+                    isOpen={isProductSearchOpen}
                     onClose={() => setIsProductSearchOpen(false)}
-                    onSelect={handleProductSelect}
+                    onSelect={(p) => {
+                        setSearchFields(prev => ({
+                            ...prev,
+                            itemCode: p.itemCode || prev.itemCode,
+                            productName: p.productName || prev.productName
+                        }));
+                        setIsProductSearchOpen(false);
+                    }}
+                    onSelectProduct={(p) => {
+                        setSearchFields(prev => ({
+                            ...prev,
+                            itemCode: p.itemCode || prev.itemCode,
+                            productName: p.productName || prev.productName
+                        }));
+                        setIsProductSearchOpen(false);
+                    }}
                 />
             )}
         </div>

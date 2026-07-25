@@ -5,6 +5,7 @@ import * as api from './api';
 import ProductSearchPopup from './ProductSearchPopup';
 import { usePermissions } from './usePermissions';
 import ProductSpaceRatioCheckModal from './components/ProductSpaceRatioCheckModal';
+import useDateRangePreset from './hooks/useDateRangePreset';
 
 const ProductListPage = ({ user, navigationData, onNavigated }) => {
     const defaultPageSize = 100;
@@ -14,12 +15,19 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
     const [selectedProduct, setSelectedProduct] = useState(null);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [searchFields, setSearchFields] = useState({
+        startDate: '',
+        endDate: '',
         itemCode: '',
         productName: '',
         brand: '',
         manufacturer: '',
         ingredients: ''
     });
+
+    const { renderPresetButtons } = useDateRangePreset(
+        (start) => setSearchFields(prev => ({ ...prev, startDate: start })),
+        (end) => setSearchFields(prev => ({ ...prev, endDate: end }))
+    );
     const [showOnlyMaster, setShowOnlyMaster] = useState(false);
     const [showSearchPopup, setShowSearchPopup] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -421,8 +429,20 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
             {/* 검색 필터 그리드 */}
             <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
+                    {/* 1. 등록 기간 (날짜 + ⚡빠른선택) */}
+                    <div style={{ gridColumn: 'span 2', minWidth: '420px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'flex', alignItems: 'center', gap: '4px', margin: 0 }}>🗓️ 등록 기간</label>
+                            {renderPresetButtons()}
+                        </div>
+                        <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+                            <input type="date" value={searchFields.startDate || ''} onChange={e => setSearchFields({ ...searchFields, startDate: e.target.value })} style={{ flex: 1, padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
+                            <span style={{ color: '#94a3b8' }}>~</span>
+                            <input type="date" value={searchFields.endDate || ''} onChange={e => setSearchFields({ ...searchFields, endDate: e.target.value })} style={{ flex: 1, padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
+                        </div>
+                    </div>
 
-                    {/* 1. 품목코드 (ID/고유번호 개념) */}
+                    {/* 2. 품목코드 + 🔍 돋보기 */}
                     <div>
                         <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏷️ 품목코드</label>
                         <div style={{ display: 'flex', gap: '5px' }}>
@@ -438,7 +458,7 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
                         </div>
                     </div>
 
-                    {/* 2. 제품명 */}
+                    {/* 3. 제품명 */}
                     <div>
                         <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>📦 제품명</label>
                         <input
@@ -451,22 +471,9 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
                         />
                     </div>
 
-                    {/* 3. 브랜드 */}
-                    <div>
-                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>✨ 브랜드</label>
-                        <input
-                            type="text"
-                            placeholder="브랜드 검색"
-                            value={searchFields.brand}
-                            onChange={(e) => setSearchFields({ ...searchFields, brand: e.target.value })}
-                            onKeyDown={(e) => e.key === 'Enter' && handleSearchClick()}
-                            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
-                        />
-                    </div>
-
                     {/* 4. 제조사 */}
                     <div>
-                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏭 제조사명</label>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏭 제조사</label>
                         <input
                             type="text"
                             placeholder="제조사 검색"
@@ -477,7 +484,20 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
                         />
                     </div>
 
-                    {/* 5. 전성분 (기타) */}
+                    {/* 5. 브랜드 */}
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏢 브랜드</label>
+                        <input
+                            type="text"
+                            placeholder="브랜드 검색"
+                            value={searchFields.brand}
+                            onChange={(e) => setSearchFields({ ...searchFields, brand: e.target.value })}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSearchClick()}
+                            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
+                        />
+                    </div>
+
+                    {/* 6. 전성분 (기타) */}
                     <div>
                         <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🧪 전성분</label>
                         <input

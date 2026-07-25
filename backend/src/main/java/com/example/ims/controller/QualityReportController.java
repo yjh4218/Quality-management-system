@@ -66,6 +66,11 @@ public class QualityReportController {
         return ResponseEntity.ok(wmsService.searchInbound(companyFilter, start, end, itemCode, productName, lotNumber, manufacturer, excludeStatus, grnNumber));
     }
 
+    @GetMapping("/inbound/release-record")
+    public ResponseEntity<List<WmsInbound>> getReleaseRecord(@RequestParam(required = false) String date) {
+        return ResponseEntity.ok(qualityReportService.getReleaseRecords(date));
+    }
+
     @GetMapping("/export")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'MANUFACTURER', 'SALES', 'RESPONSIBLE_SALES')")
     public ResponseEntity<byte[]> exportInbound(
@@ -101,11 +106,6 @@ public class QualityReportController {
             log.error(">>>> [EXPORT] [ERROR] Quality Excel failed for user {}: {}", username, e.getMessage(), e);
             throw e;
         }
-    }
-
-    @GetMapping("/inbound/release-record")
-    public ResponseEntity<List<WmsInbound>> getReleaseRecords(@RequestParam String date) {
-        return ResponseEntity.ok(wmsService.getReleaseRecords(date));
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'MANUFACTURER', 'RESPONSIBLE_SALES')")

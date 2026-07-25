@@ -1,17 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import LoginPage from './LoginPage';
 import ProductListPage from './ProductListPage';
 import UserManagementPage from './UserManagementPage';
-import QualityManagementPage from './QualityManagementPage';
 import ManufacturerManagementPage from './ManufacturerManagementPage';
 import BrandManagementPage from './BrandManagementPage';
 import LogManagementPage from './LogManagementPage';
-import DashboardPage from './DashboardPage';
-import ClaimManagementPage from './ClaimManagementPage';
-import ClaimDashboardPage from './ClaimDashboardPage.jsx';
-import QualityDashboardPage from './QualityDashboardPage.jsx';
-import ProductDashboardPage from './ProductDashboardPage.jsx';
-import ProductionAuditDashboardPage from './ProductionAuditDashboardPage.jsx';
+
+// [코드 스플리팅] 대시보드 5종 및 대형 모듈 React.lazy 동적 로드 적용
+const DashboardPage = lazy(() => import('./DashboardPage'));
+const ClaimManagementPage = lazy(() => import('./ClaimManagementPage'));
+const ClaimDashboardPage = lazy(() => import('./ClaimDashboardPage.jsx'));
+const QualityDashboardPage = lazy(() => import('./QualityDashboardPage.jsx'));
+const ProductDashboardPage = lazy(() => import('./ProductDashboardPage.jsx'));
+const ProductionAuditDashboardPage = lazy(() => import('./ProductionAuditDashboardPage.jsx'));
+const QualityManagementPage = lazy(() => import('./QualityManagementPage'));
+const PackagingSpaceRatioCalculatorPage = lazy(() => import('./PackagingSpaceRatioCalculatorPage.jsx'));
+const LotPpmDashboardPage = lazy(() => import('./LotPpmDashboardPage.jsx'));
+
 import MarketReleaseRecordPage from './MarketReleaseRecordPage.jsx';
 import BomMasterPage from './BomMasterPage.jsx';
 import BomCategoryManagementPage from './BomCategoryManagementPage.jsx';
@@ -28,7 +33,6 @@ import NotificationSettingsPage from './NotificationSettingsPage.jsx';
 import IngredientCompliancePage from './IngredientCompliancePage.jsx';
 import HelpCenterModal from './components/HelpCenterModal';
 import ProfileModal from './ProfileModal';
-import PackagingSpaceRatioCalculatorPage from './PackagingSpaceRatioCalculatorPage.jsx';
 import { getCurrentUser, logout, getMyNotifications, getUnreadNotificationCount, readNotification, readAllNotifications, deleteNotification, submitBugReport, getBaseURL } from './api';
 import ManufacturerAuditItemPage from './ManufacturerAuditItemPage';
 import ManufacturerAuditPage from './ManufacturerAuditPage';
@@ -67,6 +71,7 @@ const PAGE_INFO = {
     productionAuditDashboard: { title: '📊 생산감리 대시보드' },
     claims: { title: '🔍 클레임 조회/입력' },
     claimDashboard: { title: '📈 클레임 대시보드' },
+    lotPpmDashboard: { title: '📉 LOT PPM 분석 & 근본원인' },
     qualityDashboard: { title: '📊 입고 품질 검사 대시보드' },
     productDashboard: { title: '📊 제품코드 마스터 대시보드' },
     manufacturerAuditItems: { title: '📋 제조사 점검항목 관리' },
@@ -1199,6 +1204,11 @@ const App = () => {
                                         📈 클레임 대시보드
                                     </button>
                                 )}
+                                {canAccess('lotPpmDashboard') && (
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'lotPpmDashboard' ? 'active' : ''}`} onClick={() => handleNavigate('lotPpmDashboard')}>
+                                        📉 LOT PPM 분석 & 근본원인
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>
@@ -1318,13 +1328,19 @@ const App = () => {
                 </div>
 
                 <div className="tab-content-container">
-                    {tabs.map(tab => (
-                        <div 
-                            key={tab.id} 
-                            className="tab-page-wrapper"
-                            style={{ display: tab.id === activeTabId ? 'flex' : 'none' }}
-                        >
-                            <div className="page-container-inner">
+                    <Suspense fallback={
+                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', padding: '40px', flexDirection: 'column', gap: '12px' }}>
+                            <div className="spinner" style={{ width: '40px', height: '40px', border: '4px solid #f3f3f3', borderTop: '4px solid #2563eb', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                            <span style={{ fontSize: '14px', color: '#64748b', fontWeight: '600' }}>페이지 로딩 중...</span>
+                        </div>
+                    }>
+                        {tabs.map(tab => (
+                            <div 
+                                key={tab.id} 
+                                className="tab-page-wrapper"
+                                style={{ display: tab.id === activeTabId ? 'flex' : 'none' }}
+                            >
+                                <div className="page-container-inner">
                                 {canAccess('users') && tab.page === 'users' && (
                                     <UserManagementPage 
                                         user={user}
@@ -1402,6 +1418,12 @@ const App = () => {
                                         onNavigate={handleNavigate}
                                     />
                                 )}
+                                {tab.page === 'lotPpmDashboard' && (
+                                    <LotPpmDashboardPage 
+                                        user={user}
+                                        onNavigate={handleNavigate}
+                                    />
+                                )}
                                 {tab.page === 'qualityDashboard' && (
                                     <QualityDashboardPage 
                                         user={user}
@@ -1434,6 +1456,7 @@ const App = () => {
                             </div>
                         </div>
                     ))}
+                    </Suspense>
                 </div>
             </main>
 

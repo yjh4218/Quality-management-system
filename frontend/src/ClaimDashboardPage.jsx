@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { getClaimDashboard } from './api';
+import { getClaimDashboard, getActiveSalesChannels } from './api';
 import ClaimDrawer from './ClaimDrawer';
 import AnalyticsDashboardShell from './components/dashboard/AnalyticsDashboardShell';
 import DashboardFilterBar from './components/dashboard/DashboardFilterBar';
@@ -7,14 +7,12 @@ import SummaryCardRow from './components/dashboard/SummaryCardRow';
 import ChartCard from './components/dashboard/ChartCard';
 import DashboardDataTable from './components/dashboard/DashboardDataTable';
 import StatusBadgeRenderer from './components/dashboard/StatusBadgeRenderer';
-
-// ==========================================
-// PRODUCTION READY - PERFORMANCE OPTIMIZED
-// ==========================================
+import ProductSearchPopup from './ProductSearchPopup';
+import ClaimListModal from './components/dashboard/ClaimListModal';
+import useDateRangePreset from './hooks/useDateRangePreset';
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
 
-// MOUNT LOOP KILLER - GLOBAL DATA STORE
 let globalDashboardData = { stats: null, claims: [], key: '' };
 let globalDashboardPromise = null;
 
@@ -24,23 +22,47 @@ function ClaimDashboardPage({ user, onNavigate }) {
     
     const [stats, setStats] = useState(globalDashboardData.stats);
     const [claims, setClaims] = useState(globalDashboardData.claims);
+    const [channelOptions, setChannelOptions] = useState([]);
     const [loading, setLoading] = useState(false);
     
     const [startDate, setStartDate] = useState(() => {
         const d = new Date(); d.setMonth(d.getMonth() - 3); return d.toISOString().split('T')[0];
     });
     const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+    
+    const { renderPresetButtons } = useDateRangePreset(setStartDate, setEndDate);
+
     const [itemCode, setItemCode] = useState('');
     const [productName, setProductName] = useState('');
+    const [channel, setChannel] = useState('');
+    const [lotNumber, setLotNumber] = useState('');
     const [manufacturer, setManufacturer] = useState('');
 
-    const [modalOpen, setModalOpen] = useState(false);
-    const [modalTitle, setModalTitle] = useState('');
-    const [modalData, setModalData] = useState([]);
+    const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
+
+    // 팝업 모달 상태
+    const [isListModalOpen, setIsListModalOpen] = useState(false);
+    const [listModalTitle, setListModalTitle] = useState('');
+    const [listModalClaims, setListModalClaims] = useState([]);
+    const [selectedClaimDetail, setSelectedClaimDetail] = useState(null);
     const [detailRow, setDetailRow] = useState(null);
 
+    // 유통 채널 동적 수집
+    useEffect(() => {
+        const fetchChannels = async () => {
+            try {
+                const res = await getActiveSalesChannels();
+                const apiChannels = (res.data || []).map(ch => ch.name);
+                setChannelOptions(apiChannels);
+            } catch (err) {
+                setChannelOptions(['JP/OFF', 'JP/ON(AMZ)', 'Domestic/OY', 'EU/ON(AMZ)', 'Export/Others', '스마트스토어', '올리브영', '쿠팡', '자사몰']);
+            }
+        };
+        fetchChannels();
+    }, []);
+
     const load = useCallback(async (force = false) => {
-        const currentKey = `${startDate}-${endDate}-${itemCode}-${productName}-${manufacturer}`;
+        const currentKey = `${startDate}-${endDate}-${itemCode}-${productName}-${channel}-${lotNumber}-${manufacturer}`;
         
         if (!force && globalDashboardData.key === currentKey && globalDashboardData.stats) {
             return;
@@ -58,7 +80,7 @@ function ClaimDashboardPage({ user, onNavigate }) {
         }
 
         const fetchFunc = async () => {
-            const params = { startDate, endDate, itemCode, productName, manufacturer };
+            const params = { startDate, endDate, itemCode, productName, lotNumber, manufacturer };
             const response = await getClaimDashboard(params);
             return response.data;
         };
@@ -77,7 +99,7 @@ function ClaimDashboardPage({ user, onNavigate }) {
             setLoading(false);
             globalDashboardPromise = null;
         }
-    }, [startDate, endDate, itemCode, productName, manufacturer]);
+    }, [startDate, endDate, itemCode, productName, channel, lotNumber, manufacturer]);
 
     useEffect(() => {
         if (hasEffectRun.current) return;
@@ -92,51 +114,69 @@ function ClaimDashboardPage({ user, onNavigate }) {
         setEndDate(new Date().toISOString().split('T')[0]);
         setItemCode('');
         setProductName('');
+        setChannel('');
+        setLotNumber('');
         setManufacturer('');
     };
 
-    // --- Interaction Handlers ---
+    // 채널 필터링 반영된 클레임 목록
+    const filteredClaims = useMemo(() => {
+        if (!claims) return [];
+        if (!channel) return claims;
+
+        return claims.filter(c => {
+            if (channel === '기타/직접') {
+                return !c.productName || !c.productName.includes('[');
+            }
+            return c.productName && c.productName.includes(`[${channel}]`);
+        });
+    }, [claims, channel]);
+
+    // --- Interaction Handlers (그래프/카드 클릭 시 팝업 모달 표출) ---
     const handleMonthClick = (data) => {
-        const monthPrefix = data.activePayload?.[0]?.payload?.name;
+        const monthPrefix = data.activePayload?.[0]?.payload?.name || data.name;
         if (!monthPrefix) return;
-        const filtered = claims.filter(c => c.receiptDate && c.receiptDate.startsWith(monthPrefix));
-        setModalTitle(`${monthPrefix} 접수 클레임`);
-        setModalData(filtered);
-        setModalOpen(true);
+        const filtered = filteredClaims.filter(c => c.receiptDate && c.receiptDate.startsWith(monthPrefix));
+        setListModalTitle(`${monthPrefix} 접수 클레임 목록`);
+        setListModalClaims(filtered);
+        setIsListModalOpen(true);
     };
 
     const handleCountryClick = (data) => {
         const country = data.name;
-        const filtered = claims.filter(c => (c.country || '알 수 없음') === country);
-        setModalTitle(`국가: ${country} 접수 클레임`);
-        setModalData(filtered);
-        setModalOpen(true);
+        if (!country) return;
+        const filtered = filteredClaims.filter(c => (c.country || '알 수 없음') === country);
+        setListModalTitle(`국가: ${country} 접수 클레임 목록`);
+        setListModalClaims(filtered);
+        setIsListModalOpen(true);
     };
 
-    const handleCategoryClick = (data) => {
-        if (!data || !data.name) return;
-        const categoryClaims = claims.filter(c => (c.primaryCategory || '미분류') === data.name);
-        setModalTitle(`대분류: ${data.name} 접수 클레임`);
-        setModalData(categoryClaims);
-        setModalOpen(true);
+    const handleTopProductClick = (itemCode, prodName) => {
+        const productClaims = filteredClaims.filter(c => c.itemCode === itemCode || (c.productName && c.productName.includes(prodName)));
+        setListModalTitle(`품목별 상세 내역: ${prodName}`);
+        setListModalClaims(productClaims);
+        setIsListModalOpen(true);
     };
 
-    const handleTopProductClick = (itemCode, productName) => {
-        const productClaims = claims.filter(c => c.itemCode === itemCode);
-        setModalTitle(`품목별 상세 내역: ${productName}`);
-        setModalData(productClaims);
-        setModalOpen(true);
+    const handleTopCategoryClick = (catName) => {
+        const categoryClaims = filteredClaims.filter(c => (c.primaryCategory || '미분류') === catName);
+        setListModalTitle(`대분류별 상세 내역: ${catName}`);
+        setListModalClaims(categoryClaims);
+        setIsListModalOpen(true);
     };
 
-    const handleTopCategoryClick = (category) => {
-        const categoryClaims = claims.filter(c => (c.primaryCategory || '미분류') === category);
-        setModalTitle(`대분류별 상세 내역: ${category}`);
-        setModalData(categoryClaims);
-        setModalOpen(true);
+    const handleRowClick = (params) => {
+        if (params && params.data && onNavigate) {
+            onNavigate('claims', params.data);
+        } else if (params && params.data) {
+            setDetailRow(params.data);
+        }
     };
 
     const handleRowDoubleClick = (params) => {
-        if (params && params.data) {
+        if (params && params.data && onNavigate) {
+            onNavigate('claims', params.data);
+        } else if (params && params.data) {
             setDetailRow(params.data);
         }
     };
@@ -144,7 +184,7 @@ function ClaimDashboardPage({ user, onNavigate }) {
     const columnDefs = useMemo(() => [
         { field: 'receiptDate', headerName: '접수일자', width: 120, cellClass: 'text-center' },
         { field: 'itemCode', headerName: '품목코드', width: 120, cellClass: 'text-center' },
-        { field: 'productName', headerName: '품목명', flex: 1, cellClass: 'text-left' },
+        { field: 'productName', headerName: '품목명 (채널명)', flex: 1, cellClass: 'text-left' },
         { field: 'lotNumber', headerName: 'LOT Number', width: 130, cellClass: 'text-center' },
         { field: 'country', headerName: '국가', width: 100, cellClass: 'text-center' },
         { field: 'primaryCategory', headerName: '대분류', width: 140, cellClass: 'text-center' },
@@ -183,39 +223,17 @@ function ClaimDashboardPage({ user, onNavigate }) {
 
     const isManufacturer = user?.roles?.some(r => r.authority?.includes('MANUFACTURER'));
 
-    // SLA 임박 건수 산출 (품질/제조사 완료되지 않았으면서 접수일로부터 4일 이상 경과한 건)
-    const slaUrgentCount = React.useMemo(() => {
+    const slaUrgentCount = useMemo(() => {
         const today = new Date();
-        return claims.filter(c => {
+        return filteredClaims.filter(c => {
+            const isFinished = c.qualityStatus && (c.qualityStatus.includes('5단계') || c.qualityStatus.includes('완료'));
+            if (isFinished) return false;
             if (!c.receiptDate) return false;
-            // 5단계(종결) 또는 4단계(종결) 이외의 건 대상
-            const isCompleted = c.qualityStatus?.includes('4단계') || c.mfrStatus?.includes('5단계') || c.mfrStatus?.includes('4단계');
-            if (isCompleted) return false;
-            const diffTime = Math.abs(today - new Date(c.receiptDate));
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            return diffDays >= 4; // 접수 후 4일 이상 지남 -> SLA 3일 이내 임박
+            const rDate = new Date(c.receiptDate);
+            const diffDays = (today - rDate) / (1000 * 60 * 60 * 24);
+            return diffDays >= 4;
         }).length;
-    }, [claims]);
-
-    // 제조사별 평균 답변 소요시간 집계
-    const mfrRankings = React.useMemo(() => {
-        const mfrData = {};
-        claims.forEach(c => {
-            if (c.receiptDate && c.mfrTerminationDate) {
-                const diffTime = Math.abs(new Date(c.mfrTerminationDate) - new Date(c.receiptDate));
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                if (!mfrData[c.manufacturer]) {
-                    mfrData[c.manufacturer] = { totalDays: 0, count: 0 };
-                }
-                mfrData[c.manufacturer].totalDays += diffDays;
-                mfrData[c.manufacturer].count++;
-            }
-        });
-        return Object.entries(mfrData).map(([name, data]) => ({
-            name,
-            avgDays: (data.totalDays / data.count).toFixed(1)
-        })).sort((a, b) => parseFloat(a.avgDays) - parseFloat(b.avgDays));
-    }, [claims]);
+    }, [filteredClaims]);
 
     if (!stats && loading) return null;
 
@@ -223,41 +241,30 @@ function ClaimDashboardPage({ user, onNavigate }) {
 
     const countryMap = {};
     const monthlyMap = {};
-    const categoryMap = {};
 
-    claims.forEach(c => {
+    filteredClaims.forEach(c => {
         if (!c.receiptDate) return;
         const country = c.country || '알 수 없음';
         countryMap[country] = (countryMap[country] || 0) + 1;
         const month = c.receiptDate.substring(0, 7);
         monthlyMap[month] = (monthlyMap[month] || 0) + 1;
-        const cat = c.primaryCategory || '미분류';
-        categoryMap[cat] = (categoryMap[cat] || 0) + 1;
     });
 
     const countryData = Object.keys(countryMap).map(k => ({ name: k, value: countryMap[k] }));
     const monthlyData = Object.keys(monthlyMap).sort().map(k => ({ name: k, 클레임발생건수: monthlyMap[k] }));
 
-    const filterFields = [
-        { label: '조회 기간 (시작)', type: 'date', value: startDate, onChange: e => setStartDate(e.target.value), icon: '🗓️' },
-        { label: '조회 기간 (종료)', type: 'date', value: endDate, onChange: e => setEndDate(e.target.value), icon: '🗓️' },
-        { label: '품목코드', type: 'text', value: itemCode, onChange: e => setItemCode(e.target.value), icon: '🏷️', placeholder: '코드 검색' },
-        { label: '품목명', type: 'text', value: productName, onChange: e => setProductName(e.target.value), icon: '📦', placeholder: '품목명 검색' },
-        ...(!isManufacturer ? [{ label: '제조사', type: 'text', value: manufacturer, onChange: e => setManufacturer(e.target.value), icon: '🏭', placeholder: '제조사명 검색' }] : [])
-    ];
-
     const summaryCards = [
-        { icon: '📅', label: '이번달 발생', value: `${stats.thisMonthCount || 0}건` },
-        { icon: '🚨', label: 'SLA 임박 (3일 이내)', value: `${slaUrgentCount}건`, valueColor: slaUrgentCount > 0 ? '#ef4444' : '#64748b' },
-        { icon: '📊', label: '전분기 발생', value: `${stats.lastQuarterCount || 0}건` },
-        { icon: '💯', label: '최근 1년 발생', value: `${stats.oneYearCount || 0}건`, valueColor: '#ef4444' }
+        { icon: '📅', label: '기간 내 발생', value: `${filteredClaims.length}건`, description: '현재 필터 조건에 부합하는 총 접수 건수' },
+        { icon: '🚨', label: 'SLA 임박 (4일 이상)', value: `${slaUrgentCount}건`, valueColor: slaUrgentCount > 0 ? '#ef4444' : '#64748b', description: '접수 4일 이상 경과 미종결 건 (SLA 목표 4일 이내)' },
+        { icon: '📊', label: '전분기 발생', value: `${stats.lastQuarterCount || 0}건`, description: '직전 분기 총 품질 클레임 건수' },
+        { icon: '💯', label: '최근 1년 발생', value: `${stats.oneYearCount || 0}건`, valueColor: '#ef4444', description: '최근 365일 누적 품질 클레임 건수' }
     ];
 
     return (
         <AnalyticsDashboardShell
             icon="📊"
             title="클레임 종합 대시보드"
-            subtitle="품질 이슈 실시간 모니터링 및 분석"
+            subtitle="품질 이슈 실시간 모니터링, 차트 클릭 드릴다운 팝업 및 채널별 분석을 제공합니다."
             backTo="claims"
             backLabel="클레임 관리로 돌아가기"
             onDownloadReport={() => alert("대시보드 통계 엑셀 다운로드 기능 준비 중입니다.")}
@@ -265,15 +272,119 @@ function ClaimDashboardPage({ user, onNavigate }) {
         >
             {/* 필터 검색 바 */}
             <DashboardFilterBar 
-                fields={filterFields}
                 onSearch={handleSearch}
                 onReset={handleReset}
-            />
+            >
+                <div style={{ display: 'flex', gap: '14px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '4px' }}>📅 조회 시작일</label>
+                        <input
+                            type="date"
+                            value={startDate}
+                            onChange={e => setStartDate(e.target.value)}
+                            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', width: '150px' }}
+                        />
+                    </div>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '4px' }}>📅 조회 종료일</label>
+                        <input
+                            type="date"
+                            value={endDate}
+                            onChange={e => setEndDate(e.target.value)}
+                            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', width: '150px' }}
+                        />
+                    </div>
+                    {/* 기간 빠른 선택 버튼 그룹 */}
+                    <div style={{ alignSelf: 'flex-end', marginBottom: '2px' }}>
+                        {renderPresetButtons()}
+                    </div>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '4px' }}>🏷️ 품목코드</label>
+                        <input
+                            type="text"
+                            placeholder="코드 검색 (예: PRD-001)"
+                            value={itemCode}
+                            onChange={e => setItemCode(e.target.value)}
+                            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', width: '170px' }}
+                        />
+                    </div>
+                    {/* 품목 검색 돋보기 버튼 */}
+                    <div style={{ alignSelf: 'flex-end', marginBottom: '2px' }}>
+                        <button
+                            type="button"
+                            onClick={() => setIsProductSearchOpen(true)}
+                            title="품목 상세 검색"
+                            style={{
+                                padding: '6px 12px',
+                                backgroundColor: '#f1f5f9',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontSize: '14px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                height: '34px'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#e2e8f0'}
+                            onMouseLeave={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                        >
+                            🔍
+                        </button>
+                    </div>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '4px' }}>📦 품목명</label>
+                        <input
+                            type="text"
+                            placeholder="품목명 검색 (예: 수분크림)"
+                            value={productName}
+                            onChange={e => setProductName(e.target.value)}
+                            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', width: '190px' }}
+                        />
+                    </div>
+                    {!isManufacturer && (
+                        <div>
+                            <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '4px' }}>🏭 제조사</label>
+                            <input
+                                type="text"
+                                placeholder="제조사명 검색"
+                                value={manufacturer}
+                                onChange={e => setManufacturer(e.target.value)}
+                                style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', width: '160px' }}
+                            />
+                        </div>
+                    )}
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '4px' }}>🛒 판매 채널</label>
+                        <select
+                            value={channel}
+                            onChange={e => setChannel(e.target.value)}
+                            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', width: '170px', backgroundColor: '#fff', cursor: 'pointer' }}
+                        >
+                            <option value="">전체 채널</option>
+                            {channelOptions.map((chOption, idx) => (
+                                <option key={idx} value={chOption}>{chOption}</option>
+                            ))}
+                            <option value="기타/직접">기타/직접</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '4px' }}>🏷️ LOT 번호</label>
+                        <input
+                            type="text"
+                            placeholder="LOT 검색 (예: LOT-202606A)"
+                            value={lotNumber}
+                            onChange={e => setLotNumber(e.target.value)}
+                            style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', width: '180px' }}
+                        />
+                    </div>
+                </div>
+            </DashboardFilterBar>
 
             {/* 수치 요약 */}
             <SummaryCardRow cards={summaryCards} />
 
-            {/* 기타 커스텀 랭킹 카드 영역 */}
+            {/* 랭킹 카드 영역 */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px' }}>
                 <div style={{
                     padding: '24px 28px',
@@ -284,7 +395,7 @@ function ClaimDashboardPage({ user, onNavigate }) {
                     boxSizing: 'border-box'
                 }}>
                     <h3 style={{ fontSize: '15px', fontWeight: '700', color: '#1e293b', margin: '0 0 16px 0' }}>
-                        🏆 최근 1개월 최다 발생 품목
+                        🏆 최근 1개월 최다 발생 품목 (클릭 시 팝업)
                     </h3>
                     <div style={{ maxHeight: '160px', overflowY: 'auto' }}>
                         {loading ? (
@@ -297,7 +408,7 @@ function ClaimDashboardPage({ user, onNavigate }) {
                                     <strong style={{ color: '#6366f1', fontSize: '13.5px' }}>{brand}</strong>
                                     <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: '#475569' }}>
                                         {products.map((p, idx) => (
-                                            <li key={idx} style={{ cursor: 'pointer', textDecoration: 'underline', padding: '3px 0' }} onClick={() => handleTopProductClick(p.itemCode, p.productName)}>
+                                            <li key={idx} style={{ cursor: 'pointer', textDecoration: 'underline', padding: '3px 0', color: '#2563eb' }} onClick={() => handleTopProductClick(p.itemCode, p.productName)}>
                                                 [{p.itemCode}] {p.productName} ({p.count}건)
                                             </li>
                                         ))}
@@ -317,13 +428,13 @@ function ClaimDashboardPage({ user, onNavigate }) {
                     boxSizing: 'border-box'
                 }}>
                     <h3 style={{ fontSize: '15px', fontWeight: '700', color: '#1e293b', margin: '0 0 16px 0' }}>
-                        ⚠️ 최다 발생 클레임 유형
+                        ⚠️ 최다 발생 클레임 유형 (클릭 시 팝업)
                     </h3>
                     <div style={{ maxHeight: '160px', overflowY: 'auto' }}>
                         {stats.topCategories && stats.topCategories.length > 0 ? (
                             <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13.5px', color: '#475569', lineHeight: '1.6' }}>
                                 {stats.topCategories.map((cat, idx) => (
-                                    <li key={idx} style={{ marginBottom: '6px', cursor: 'pointer', textDecoration: 'underline' }} onClick={() => handleTopCategoryClick(cat.category)}>
+                                    <li key={idx} style={{ marginBottom: '6px', cursor: 'pointer', textDecoration: 'underline', color: '#ef4444' }} onClick={() => handleTopCategoryClick(cat.category)}>
                                         <strong>{cat.category}</strong> ({cat.count}건)
                                     </li>
                                 ))}
@@ -333,102 +444,73 @@ function ClaimDashboardPage({ user, onNavigate }) {
                 </div>
             </div>
 
-            {/* 차트 영역 */}
+            {/* 차트 영역 (클릭 시 팝업 연동) */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px' }}>
                 <ChartCard 
-                    title="월간 접수 추이"
+                    title="월간 접수 추이 (막대 클릭 시 팝업)"
                     type="bar"
                     data={monthlyData}
                     dataKey="클레임발생건수"
                     nameKey="name"
-                    emptyThreshold={2}
+                    emptyThreshold={1}
                     colors={COLORS}
+                    onClickItem={handleMonthClick}
                 />
                 <ChartCard 
-                    title="국가별 비중"
+                    title="국가별 비중 (파이 조각 클릭 시 팝업)"
                     type="pie"
                     data={countryData}
                     dataKey="value"
                     nameKey="name"
-                    emptyThreshold={2}
+                    emptyThreshold={1}
                     colors={COLORS}
+                    onClickItem={handleCountryClick}
                 />
-            </div>
-
-            {/* 제조사 답변 소요일 랭킹 위젯 추가 */}
-            <div style={{
-                padding: '24px 28px',
-                backgroundColor: '#ffffff',
-                borderRadius: '20px',
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.03)',
-                boxSizing: 'border-box',
-                marginBottom: '20px'
-            }}>
-                <h3 style={{ margin: '0 0 16px 0', fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
-                    🏭 제조사별 평균 클레임 답변 소요 기간 (랭킹)
-                </h3>
-                {mfrRankings.length === 0 ? (
-                    <div style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', padding: '20px' }}>
-                        충분한 답변 데이터가 축적되지 않았습니다.
-                    </div>
-                ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
-                        {mfrRankings.slice(0, 5).map((rank, i) => (
-                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderRadius: '10px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                                <span style={{ fontSize: '13.5px', fontWeight: '600', color: '#475569' }}>{i+1}위. {rank.name}</span>
-                                <span style={{ fontSize: '13.5px', fontWeight: '700', color: '#6366f1' }}>{rank.avgDays}일</span>
-                            </div>
-                        ))}
-                    </div>
-                )}
             </div>
 
             {/* 데이터 테이블 목록 */}
             <DashboardDataTable
-                title="📋 클레임 조회 결과 목록"
-                rowData={claims || []}
+                title="📋 클레임 조회 결과 목록 (항목 클릭 시 '클레임 등록 및 현황' 세부 화면 이동)"
+                rowData={filteredClaims}
                 columnDefs={columnDefs}
+                onRowClicked={handleRowClick}
                 onRowDoubleClick={handleRowDoubleClick}
                 defaultPageSize={50}
             />
 
-            {/* Drill-down Modal */}
-            {modalOpen && (
-                <div className="drawer-overlay" onClick={(e) => e.target === e.currentTarget && setModalOpen(false)}>
-                    <div style={{ background: 'white', width: '85%', height: '85%', margin: 'auto', borderRadius: '12px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
-                            <h3 style={{ margin: 0 }}>{modalTitle}</h3>
-                            <button onClick={() => setModalOpen(false)} style={{ fontSize: '24px', border: 'none', background: 'none', cursor: 'pointer' }}>&times;</button>
-                        </div>
-                        <div style={{ flex: 1, minHeight: 0 }}>
-                            <DashboardDataTable
-                                rowData={modalData}
-                                columnDefs={columnDefs}
-                                onRowDoubleClick={handleRowDoubleClick}
-                                defaultPageSize={10}
-                            />
-                        </div>
-                    </div>
-                </div>
+            {/* 선택된 클레임 상세 Drawer */}
+            {detailRow && (
+                <ClaimDrawer
+                    claim={detailRow}
+                    readOnly={true}
+                    onClose={() => setDetailRow(null)}
+                />
             )}
 
-            {/* Detail Drawer */}
-            {detailRow && (
-                <ClaimDrawer 
-                    claim={detailRow} 
-                    onClose={() => setDetailRow(null)} 
-                    readOnly={true}
-                    onNavigateToEdit={() => {
-                        const row = detailRow;
-                        setDetailRow(null);
-                        onNavigate('claims', row);
+            {/* 품목/제품 검색 팝업 모달 */}
+            {isProductSearchOpen && (
+                <ProductSearchPopup
+                    onClose={() => setIsProductSearchOpen(false)}
+                    onSelect={(product) => {
+                        if (product) {
+                            if (product.itemCode) setItemCode(product.itemCode);
+                            if (product.productName) setProductName(product.productName);
+                        }
+                        setIsProductSearchOpen(false);
                     }}
                 />
             )}
+
+            {/* 클레임 목록 드릴다운 팝업 모달 */}
+            <ClaimListModal
+                isOpen={isListModalOpen}
+                onClose={() => setIsListModalOpen(false)}
+                title={listModalTitle}
+                claims={listModalClaims}
+                user={user}
+            />
         </AnalyticsDashboardShell>
     );
 }
 
-const FinalClaimDashboardPage = React.memo(ClaimDashboardPage);
-export default FinalClaimDashboardPage;
+export default ClaimDashboardPage;

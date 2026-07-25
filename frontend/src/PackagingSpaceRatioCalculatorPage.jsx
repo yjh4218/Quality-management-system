@@ -154,6 +154,33 @@ const PackagingSpaceRatioCalculatorPage = ({ user, onNavigate }) => {
         'JAPAN': '🇯🇵', 'EU': '🇪🇺', 'US': '🇺🇸'
     };
 
+    const card = {
+        backgroundColor: '#ffffff',
+        borderRadius: '16px',
+        border: '1px solid #e2e8f0',
+        padding: '24px',
+        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
+    };
+
+    const label = {
+        display: 'block',
+        marginBottom: '6px',
+        fontSize: '13px',
+        fontWeight: '600',
+        color: '#334155'
+    };
+
+    const inputStyle = {
+        width: '100%',
+        padding: '10px 14px',
+        fontSize: '13px',
+        borderRadius: '8px',
+        border: '1px solid #cbd5e1',
+        backgroundColor: '#fff',
+        outline: 'none',
+        boxSizing: 'border-box'
+    };
+
     const countryColors = {
         'PASS': { bg: '#f0fdf4', border: '#86efac', text: '#15803d', badge: '#dcfce7', badgeText: '#166534' },
         'FAIL': { bg: '#fff1f2', border: '#fca5a5', text: '#dc2626', badge: '#fee2e2', badgeText: '#991b1b' },

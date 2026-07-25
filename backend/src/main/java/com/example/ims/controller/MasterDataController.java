@@ -51,26 +51,7 @@ public class MasterDataController {
         return ResponseEntity.ok(masterDataService.saveTemplate(template, userDetails.getUsername()));
     }
 
-    // --- Rules (Feature 3, 4) ---
-    @GetMapping("/rules")
-    public ResponseEntity<List<ChannelPackagingRule>> getRules() {
-        return ResponseEntity.ok(masterDataService.getAllRules());
-    }
 
-    @PostMapping("/rules")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM')")
-    public ResponseEntity<ChannelPackagingRule> saveRule(
-            @RequestBody ChannelPackagingRule rule,
-            @AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(masterDataService.saveRule(rule, userDetails.getUsername()));
-    }
-
-    @DeleteMapping("/rules/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM')")
-    public ResponseEntity<Void> deleteRule(@PathVariable Long id) {
-        masterDataService.deleteRule(id);
-        return ResponseEntity.ok().build();
-    }
 
     // --- Materials (Feature 11) ---
     @GetMapping("/materials")

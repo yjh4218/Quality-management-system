@@ -68,9 +68,10 @@ window.addEventListener('error', async (event) => {
 
   try {
     const axios = (await import('axios')).default;
-    // VITE_API_BASE_URL 환경 변수가 올바른 키입니다.
     const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
-    await axios.post(`${apiBase}/api/bug-reports`, report, { withCredentials: true });
+    const token = localStorage.getItem('token');
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    await axios.post(`${apiBase}/api/bug-reports`, report, { headers, withCredentials: true });
   } catch (err) {
     console.error('Failed to auto-report frontend error, queuing locally:', err);
     queueFailedBugReport(report);
@@ -100,7 +101,9 @@ window.addEventListener('unhandledrejection', async (event) => {
   try {
     const axios = (await import('axios')).default;
     const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
-    await axios.post(`${apiBase}/api/bug-reports`, report, { withCredentials: true });
+    const token = localStorage.getItem('token');
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    await axios.post(`${apiBase}/api/bug-reports`, report, { headers, withCredentials: true });
   } catch (err) {
     console.error('Failed to auto-report unhandled promise rejection, queuing locally:', err);
     queueFailedBugReport(report);

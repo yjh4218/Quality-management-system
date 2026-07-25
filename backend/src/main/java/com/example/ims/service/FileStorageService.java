@@ -48,9 +48,46 @@ public class FileStorageService {
         }
     }
 
+    @jakarta.annotation.PostConstruct
+    public void initAndQuarantineExistingSvgFiles() {
+        try {
+            Path isolatedDir = this.fileStorageLocation.resolve("isolated");
+            if (!Files.exists(isolatedDir)) {
+                Files.createDirectories(isolatedDir);
+            }
+
+            try (java.util.stream.Stream<Path> stream = Files.walk(this.fileStorageLocation, 1)) {
+                stream.filter(Files::isRegularFile)
+                        .filter(path -> {
+                            String name = path.getFileName().toString().toLowerCase();
+                            if (name.endsWith(".svg") || name.endsWith(".xml")) {
+                                return true;
+                            }
+                            try {
+                                String type = tika.detect(path);
+                                return type.equalsIgnoreCase("image/svg+xml") || type.contains("xml");
+                            } catch (Exception e) {
+                                return false;
+                            }
+                        })
+                        .forEach(path -> {
+                            try {
+                                Path target = isolatedDir.resolve(path.getFileName());
+                                Files.move(path, target, StandardCopyOption.REPLACE_EXISTING);
+                                log.warn("[SECURITY QUARANTINE] Isolated malicious/SVG file: {} -> {}", path.getFileName(), target);
+                            } catch (Exception e) {
+                                log.error("[SECURITY QUARANTINE FAILED] Could not isolate file {}: {}", path.getFileName(), e.getMessage());
+                            }
+                        });
+            }
+        } catch (Exception e) {
+            log.error("[SECURITY QUARANTINE ERROR] Failed during SVG scan: {}", e.getMessage());
+        }
+    }
+
     /**
-     * [Task 6] 파일 MIME 타입 및 무결성 검증 (Whitelist 방식)
-     * [보안] 실행 파일 및 알 수 없는 바이너리(octet-stream) 차단
+     * [Task 6 & 보안 강화] 파일 MIME 타입 및 무결성 검증 (Whitelist 방식)
+     * [보안] SVG/XML 차단, 실행 파일 및 알 수 없는 바이너리(octet-stream) 차단
      */
     private void validateFile(MultipartFile file) {
         // 1. 서비스 레이어 용량 재검증 (10MB)
@@ -62,6 +99,25 @@ public class FileStorageService {
             // Tika를 이용한 실제 컨텐츠 분석
             String detectedType = tika.detect(file.getInputStream());
             log.debug("[SECURITY] Content detection: {}", detectedType);
+
+            // [보안] SVG / XML 저장형 XSS 시도 즉시 차단 (image/ 시작 검사보다 먼저 실행)
+            if (detectedType != null) {
+                String lowerType = detectedType.toLowerCase();
+                if (lowerType.contains("svg") || lowerType.contains("xml")) {
+                    log.warn("[SECURITY] Blocked SVG/XML XSS upload attempt: {}", detectedType);
+                    throw new RuntimeException("보안 경고: SVG 및 XML 파일 업로드는 XSS 위험으로 금지되어 있습니다.");
+                }
+            }
+
+            // 파일명 확장자 기반 차단 선 검증
+            String originalName = file.getOriginalFilename();
+            if (originalName != null) {
+                String lowerName = originalName.toLowerCase();
+                if (lowerName.endsWith(".svg") || lowerName.endsWith(".xml") || lowerName.endsWith(".html") || lowerName.endsWith(".htm")) {
+                    log.warn("[SECURITY] Blocked dangerous extension attempt: {}", originalName);
+                    throw new RuntimeException("보안 경고: 허용되지 않는 파일 확장자입니다. (.svg, .xml 등 불가)");
+                }
+            }
 
             Set<String> safeTypes = Set.of(
                     "application/pdf",
@@ -77,8 +133,7 @@ public class FileStorageService {
 
             // 2. MIME 타입 검증
             if (!safeTypes.contains(detectedType) && !detectedType.startsWith("image/")) {
-                // Tika가 파일 타입을 잘못 식별하는 경우가 많으므로 (예: text/plain, application/octet-stream 등)
-                // 확장자 기반으로 한 번 더 검증을 시도합니다.
+                // Tika가 파일 타입을 잘못 식별하는 경우가 많으므로 확장자 기반 검증
                 try {
                     validateByExtension(file.getOriginalFilename());
                     log.info("[FILE] Allowed file with MIME type '{}' based on extension fallback.", detectedType);
@@ -99,6 +154,10 @@ public class FileStorageService {
     private void validateByExtension(String originalFilename) {
         if (originalFilename == null) throw new RuntimeException("파일명이 존재하지 않습니다.");
         String ext = originalFilename.toLowerCase();
+        if (ext.endsWith(".svg") || ext.endsWith(".xml") || ext.endsWith(".html") || ext.endsWith(".htm")) {
+            throw new RuntimeException("보안 위험: SVG 및 XML/HTML 파일은 업로드할 수 없습니다.");
+        }
+
         Set<String> allowedExtensions = Set.of(".xlsx", ".xls", ".doc", ".docx", ".hwp", ".pdf",
                 ".jpg", ".jpeg", ".png", ".gif", ".webp");
         boolean allowed = allowedExtensions.stream().anyMatch(ext::endsWith);
@@ -199,8 +258,25 @@ public class FileStorageService {
 
     private String uploadToS3(MultipartFile file, String fileName) throws IOException {
         ObjectMetadata metadata = new ObjectMetadata();
-        metadata.setContentType(file.getContentType());
+        String contentType = tika.detect(file.getInputStream());
+        if (contentType == null || contentType.isEmpty() || "application/octet-stream".equals(contentType)) {
+            contentType = file.getContentType();
+        }
+        if (contentType == null || contentType.isEmpty()) {
+            contentType = "application/octet-stream";
+        }
+        metadata.setContentType(contentType);
         metadata.setContentLength(file.getSize());
+
+        // 비이미지 파일(PDF, 엑셀, Word, HWP 등)은 강제 다운로드(attachment) 설정
+        boolean isImage = contentType.startsWith("image/") && !contentType.contains("svg");
+        if (!isImage) {
+            String safeHeaderFilename = fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
+            metadata.setContentDisposition("attachment; filename=\"" + safeHeaderFilename + "\"");
+        } else {
+            metadata.setContentDisposition("inline");
+        }
+
         s3Client.putObject(new PutObjectRequest(bucketName, fileName, file.getInputStream(), metadata));
         return fileName;
     }

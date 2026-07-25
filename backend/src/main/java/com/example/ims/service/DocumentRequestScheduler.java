@@ -6,8 +6,8 @@ import com.example.ims.repository.DocumentRequirementRepository;
 import com.example.ims.repository.DocumentRequestLogRepository;
 import com.example.ims.repository.ProductRepository;
 import com.example.ims.repository.ManufacturerRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,10 +20,11 @@ import java.util.Optional;
 /**
  * 마스터 품목 필수 서류 자동요청 스케줄러.
  * 매일 새벽 2시에 시스템 부하가 적은 시간에 기동됩니다.
+ * [성능 개선]
+ * 1. requirementRepository.findAll() 2회 호출 전면 제거
+ * 2. @EntityGraph 기반 전용 쿼리로 N+1 문제 해소 (Product/Manufacturer 1회 Fetch Join)
+ * 3. 기한 도래/OVERDUE 전용 필터링 쿼리 사용으로 데이터 로딩 및 인메모리 루핑 최소화
  */
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 @Component
 public class DocumentRequestScheduler {
 
@@ -58,17 +59,17 @@ public class DocumentRequestScheduler {
     @Transactional
     public void runDocumentSchedulingTask() {
         log.info("[SCHEDULE] Starting scheduled document request management task...");
-        
+
         try {
             // 1단계: 신규 마스터 제품/제조사 요구조건(Requirements) 자동 누락 스캔 및 동기화
             syncDocumentRequirements();
-            
-            // 2단계: 신규/주기 도래 대상 필수서류 이메일 발송
+
+            // 2단계: 신규/주기 도래 대상 필수서류 이메일 발송 (N+1 및 findAll 제거 전용 쿼리)
             processScheduledRequests();
-            
-            // 3단계: 리마인드 발송 및 기한 경과(OVERDUE) 전환 처리
+
+            // 3단계: 리마인드 발송 및 기한 경과(OVERDUE) 전환 처리 (전용 쿼리 사용)
             processRemindersAndOverdues();
-            
+
             log.info("[SCHEDULE] Scheduled document request management task completed successfully.");
         } catch (Exception e) {
             log.error("[SCHEDULE] Scheduled document request management task failed: {}", e.getMessage(), e);
@@ -101,39 +102,29 @@ public class DocumentRequestScheduler {
     }
 
     /**
-     * 신규 등록(PENDING) 또는 예정기한 도래(PERIODIC)인 대상을 감지하여 이메일 발송을 처리합니다.
+     * 신규 등록(PENDING) 또는 연체(OVERDUE) 또는 다음 기한 도래 대상을 조건부 쿼리(@EntityGraph)로 가져와 이메일 발송
      */
     private void processScheduledRequests() {
-        List<DocumentRequirement> requirements = requirementRepository.findAll();
-        
+        List<DocumentRequirement> requirements = requirementRepository.findScheduledTargets(
+                List.of(DocumentStatus.PENDING, DocumentStatus.OVERDUE),
+                LocalDate.now()
+        );
+
         for (DocumentRequirement req : requirements) {
-            // FULFILLED 이면서 아직 다음 갱신 주기가 도래하지 않은 대상은 생략
             if (req.getStatus() == DocumentStatus.FULFILLED) {
                 continue;
             }
 
-            boolean shouldRequest = false;
-
-            if (req.getStatus() == DocumentStatus.PENDING) {
-                shouldRequest = true; // 최초 요청 전 대기 상태
-            } else if (req.getStatus() == DocumentStatus.OVERDUE) {
-                shouldRequest = true; // 이미 연체되어 있는 상태도 재요청
-            } else if (req.getNextDueDate() != null && req.getNextDueDate().isBefore(LocalDate.now())) {
-                shouldRequest = true; // 다음 갱신 기한 초과 도래
-            }
-
-            if (shouldRequest) {
-                String recipientEmail = getRecipientEmail(req);
-                if (recipientEmail != null && !recipientEmail.trim().isEmpty()) {
-                    try {
-                        requestService.sendEmailRequest(req, recipientEmail);
-                        log.info("[SCHEDULE] Document request email sent successfully to: {}, ReqId={}", recipientEmail, req.getId());
-                    } catch (Exception e) {
-                        log.error("[SCHEDULE] Failed to send document request email to: {}, ReqId={}: {}", recipientEmail, req.getId(), e.getMessage());
-                    }
-                } else {
-                    log.warn("[SCHEDULE] Recipient email is empty for requirement ID: {}", req.getId());
+            String recipientEmail = getRecipientEmail(req);
+            if (recipientEmail != null && !recipientEmail.trim().isEmpty()) {
+                try {
+                    requestService.sendEmailRequest(req, recipientEmail);
+                    log.info("[SCHEDULE] Document request email sent successfully to: {}, ReqId={}", recipientEmail, req.getId());
+                } catch (Exception e) {
+                    log.error("[SCHEDULE] Failed to send document request email to: {}, ReqId={}: {}", recipientEmail, req.getId(), e.getMessage());
                 }
+            } else {
+                log.warn("[SCHEDULE] Recipient email is empty for requirement ID: {}", req.getId());
             }
         }
     }
@@ -143,11 +134,11 @@ public class DocumentRequestScheduler {
      */
     private void processRemindersAndOverdues() {
         LocalDateTime sevenDaysAgo = LocalDateTime.now().minusDays(7);
-        
+
         // 1. 리마인드 처리 (7일 전 요청되었으며 아직 리마인드 횟수가 0회인 것)
         List<DocumentRequestLog> activeLogs = requestLogRepository
                 .findByRequestedAtBeforeAndReminderCount(sevenDaysAgo, 0);
-        
+
         for (DocumentRequestLog logEntity : activeLogs) {
             if (logEntity.getUploadedAt() == null) {
                 Optional<DocumentRequirement> reqOpt = requirementRepository.findById(logEntity.getRequirementId());
@@ -166,20 +157,24 @@ public class DocumentRequestScheduler {
             }
         }
 
-        // 2. 기한 경과(OVERDUE) 상태 갱신
-        List<DocumentRequirement> activeRequirements = requirementRepository.findAll();
-        for (DocumentRequirement req : activeRequirements) {
-            if (req.getStatus() == DocumentStatus.REQUESTED && req.getNextDueDate() != null 
-                    && req.getNextDueDate().isBefore(LocalDate.now())) {
-                req.setStatus(DocumentStatus.OVERDUE);
-                requirementRepository.save(req);
-                log.info("[SCHEDULE-OVERDUE] Requirement ID {} status updated to OVERDUE due to nextDueDate = {}", req.getId(), req.getNextDueDate());
-            }
+        // 2. 기한 경과(OVERDUE) 상태 갱신 (전용 조건 쿼리로 N+1 및 findAll 제거)
+        List<DocumentRequirement> overdueCandidates = requirementRepository.findOverdueCandidates(
+                DocumentStatus.REQUESTED,
+                LocalDate.now()
+        );
+        for (DocumentRequirement req : overdueCandidates) {
+            req.setStatus(DocumentStatus.OVERDUE);
+            requirementRepository.save(req);
+            log.info("[SCHEDULE-OVERDUE] Requirement ID {} status updated to OVERDUE due to nextDueDate = {}", req.getId(), req.getNextDueDate());
         }
     }
 
     private String getRecipientEmail(DocumentRequirement req) {
-        if (req.getProductId() != null) {
+        if (req.getProduct() != null && req.getProduct().getManufacturerInfo() != null) {
+            return req.getProduct().getManufacturerInfo().getEmail();
+        } else if (req.getManufacturer() != null) {
+            return req.getManufacturer().getEmail();
+        } else if (req.getProductId() != null) {
             Product prod = productRepository.findById(req.getProductId()).orElse(null);
             if (prod != null && prod.getManufacturerInfo() != null) {
                 return prod.getManufacturerInfo().getEmail();

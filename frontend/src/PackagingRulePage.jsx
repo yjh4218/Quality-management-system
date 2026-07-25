@@ -22,23 +22,29 @@ const PackagingRulePage = ({ user }) => {
     const [quickFilterText, setQuickFilterText] = useState('');
 
     useEffect(() => {
+        window.__QMS_ACTIVE_PAGE__ = '📑 채널별 포장 규칙 관리';
         fetchData();
     }, []);
 
     const fetchData = async () => {
         try {
-            const [channelsRes, rulesRes, stickersRes] = await Promise.all([
+            const [channelsResult, rulesResult, stickersResult] = await Promise.allSettled([
                 api.getSalesChannels(),
                 api.getMasterRules(),
                 api.getMasterStickers()
             ]);
             
-            const activeChannels = channelsRes.data.filter(c => c.active);
+            const channelsRes = channelsResult.status === 'fulfilled' ? channelsResult.value : { data: [] };
+            const rulesRes = rulesResult.status === 'fulfilled' ? rulesResult.value : { data: [] };
+            const stickersRes = stickersResult.status === 'fulfilled' ? stickersResult.value : { data: [] };
+
+            const rawChannels = channelsRes?.data || [];
+            const activeChannels = Array.isArray(rawChannels) ? rawChannels.filter(c => c.active) : [];
             setChannels(activeChannels);
-            setRules(rulesRes.data);
-            setStickers(stickersRes.data);
+            setRules(Array.isArray(rulesRes?.data) ? rulesRes.data : []);
+            setStickers(Array.isArray(stickersRes?.data) ? stickersRes.data : []);
         } catch (error) {
-            toast.error("데이터를 불러오지 못했습니다.");
+            console.error("채널별 포장 규칙 데이터 파싱 실패:", error);
         }
     };
 

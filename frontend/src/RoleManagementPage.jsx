@@ -12,38 +12,7 @@ import { usePermissions } from './usePermissions';
  * [UX 개선] 권한 목록을 Ag-Grid로 유지하되, 헤더와 버튼 배치를 시스템 표준에 맞춰 정렬했습니다.
  */
 
-const MENU_OPTIONS = [
-    { key: 'dashboard', category: '현황 모니터링', label: '시스템 대시보드 (제조사 접근 필요)', actions: ['VIEW'] },
-    { key: 'announcements', category: '현황 모니터링', label: '전체공지', actions: ['VIEW', 'EDIT', 'DELETE'] },
-    { key: 'notifications', category: '현황 모니터링', label: '알림 확인', actions: ['VIEW', 'DELETE'] },
-    { key: 'users', category: '시스템', label: '사용자 승인 관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
-    { key: 'accessLogs', category: '시스템', label: '사용자 접근 로그', actions: ['VIEW'] },
-    { key: 'bugReports', category: '시스템', label: '버그 리포트 관리', actions: ['VIEW', 'EDIT'] },
-    { key: 'logs', category: '시스템', label: '시스템 변경 이력', actions: ['VIEW', 'EDIT', 'DELETE'] },
-    { key: 'roles', category: '시스템', label: '권한 관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
-    { key: 'guideManagement', category: '시스템', label: '가이드 관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
-    { key: 'dashboardMgmt', category: '시스템', label: '대시보드 제작/관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
-    { key: 'trashBin', category: '시스템', label: '데이터 복구 (휴지통)', actions: ['VIEW', 'EDIT', 'DELETE'] },
-    { key: 'mailTemplates', category: '시스템', label: '제조사 전달 메일 관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
-    { key: 'products', category: '마스터', label: '제품코드 마스터', actions: ['VIEW', 'EDIT', 'DELETE'] },
-    { key: 'bomMaster', category: '마스터', label: '구성품 BOM 마스터 관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
-    { key: 'bomCategories', category: '마스터', label: 'BOM 유형 설정/관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
-    { key: 'ingredientCompliance', category: '마스터', label: '성분 안전성 검토 (Global Compliance)', actions: ['VIEW'] },
-    { key: 'manufacturerAuditItems', category: '마스터', label: '제조사 점검항목 관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
-    { key: 'packagingTemplates', category: '마스터', label: '포장공정 템플릿 관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
-    { key: 'packagingRules', category: '마스터', label: '채널별 포장 규칙 관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
-    { key: 'brands', category: '운영', label: '브랜드 마스터 관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
-    { key: 'manufacturers', category: '운영', label: '제조사 정보 관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
-    { key: 'salesChannels', category: '운영', label: '유통 채널 관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
-    { key: 'manufacturerAudits', category: '운영', label: '제조사 Audit 관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
-    { key: 'manufacturerAuditDashboard', category: '운영', label: '제조사 Audit 대시보드', actions: ['VIEW'] },
-    { key: 'quality', category: '운영', label: '입고 품질 관리 (제조사 접근 필요)', actions: ['VIEW', 'EDIT', 'DELETE'] },
-    { key: 'releaseRecord', category: '운영', label: '시장출하 적부판정 기록', actions: ['VIEW', 'EDIT', 'DELETE'] },
-    { key: 'qualityPhotoAudit', category: '운영', label: '신제품 생산감리(사진감리)', actions: ['VIEW', 'EDIT', 'DELETE'] },
-    { key: 'announcementCategories', category: '운영', label: '공지 분류 관리', actions: ['VIEW', 'EDIT', 'DELETE'] },
-    { key: 'claims', category: '클레임', label: '클레임 조회 및 입력 (제조사 접근 필요)', actions: ['VIEW', 'EDIT', 'DELETE'] },
-    { key: 'claimDashboard', category: '클레임', label: '클레임 대시보드', actions: ['VIEW'] },
-];
+import { MENU_REGISTRY as MENU_OPTIONS } from './config/menuRegistry';
 
 
 const FUNCTIONAL_PERMISSIONS = [
@@ -545,10 +514,11 @@ const RoleManagementPage = ({ user }) => {
                                                 <tbody>
                                                     {(() => {
                                                         const currentAllowedMenus = getParsedPermissions(selectedRole.allowedMenus);
-                                                        return ['현황 모니터링', '시스템', '마스터', '운영', '클레임'].map(cat => (
+                                                        const categories = Array.from(new Set(MENU_OPTIONS.map(m => m.category)));
+                                                        return categories.map(cat => (
                                                             <React.Fragment key={cat}>
                                                                 <tr style={{ background: '#eef2ff', borderTop: '2px solid #c7d2fe' }}>
-                                                                    <td style={{ fontWeight: '900', color: 'var(--primary-color)', padding: '12px 20px', fontSize: '14px' }}>📁 {cat} 관리 그룹</td>
+                                                                    <td style={{ fontWeight: '900', color: 'var(--primary-color)', padding: '12px 20px', fontSize: '14px' }}>{cat}</td>
                                                                     <td style={{ textAlign: 'center', fontWeight: '700', fontSize: '11px', color: '#6366f1' }}>
                                                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                                                                             <span style={{ color: '#64748b', fontSize: '10px' }}>조회(V)</span>
@@ -572,7 +542,15 @@ const RoleManagementPage = ({ user }) => {
                                                                     const permissions = currentAllowedMenus[menu.key] || [];
                                                                     return (
                                                                         <tr key={menu.key}>
-                                                                            <td style={{ paddingLeft: '45px', color: permissions.length > 0 ? '#1e293b' : '#94a3b8', fontWeight: permissions.length > 0 ? '800' : '500', padding: '12px 20px 12px 45px' }}>{menu.label}</td>
+                                                                            <td style={{ paddingLeft: '35px', color: permissions.length > 0 ? '#1e293b' : '#94a3b8', fontWeight: permissions.length > 0 ? '800' : '500', padding: '12px 20px 12px 35px' }}>
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                                    <span>{menu.icon || '📄'}</span>
+                                                                                    <span>{menu.label}</span>
+                                                                                    <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: '#f1f5f9', color: '#64748b', fontFamily: 'monospace' }}>
+                                                                                        /{menu.path}
+                                                                                    </span>
+                                                                                </div>
+                                                                            </td>
                                                                             <td style={{ textAlign: 'center' }}>
                                                                                 <input type="checkbox" style={{ width: '18px', height: '18px' }} checked={permissions.includes('VIEW')} onChange={() => togglePermission(menu.key, 'VIEW')} disabled={!menu.actions.includes('VIEW') || !canEdit || (isInitialSystemRole && isEditMode && !isAdmin)} />
                                                                             </td>

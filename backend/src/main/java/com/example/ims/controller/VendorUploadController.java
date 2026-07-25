@@ -5,21 +5,19 @@ import com.example.ims.entity.DocumentRequirement;
 import com.example.ims.service.DocumentRequestService;
 import com.example.ims.service.FileStorageService;
 import com.example.ims.util.UploadType;
-import io.github.bucket4j.Bandwidth;
-import io.github.bucket4j.Bucket;
-import io.github.bucket4j.Refill;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import java.time.Duration;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
+/**
+ * 제조사 공개 서류 제출 및 토큰 정보 조회 컨트롤러.
+ * [보안 개선] Rate Limiting은 RateLimitFilter 전역 필터에서 통합 관리하며,
+ * 내부 예외 메시지 직접 노출을 방지하고 캡슐화된 메시지를 제공합니다.
+ */
 @RestController
 @RequestMapping("/api/vendor-upload")
 public class VendorUploadController {
@@ -29,35 +27,9 @@ public class VendorUploadController {
     private final DocumentRequestService requestService;
     private final FileStorageService fileStorageService;
 
-    // IP별 버킷 메모리 캐시 (IP당 분당 3회 제한 가드)
-    private final Map<String, Bucket> ipBuckets = new ConcurrentHashMap<>();
-
     public VendorUploadController(DocumentRequestService requestService, FileStorageService fileStorageService) {
         this.requestService = requestService;
         this.fileStorageService = fileStorageService;
-    }
-
-    private Bucket resolveBucket(String ip) {
-        return ipBuckets.computeIfAbsent(ip, key -> {
-            // IP당 분당 최대 3회 토큰 리필 버킷 생성
-            return Bucket.builder()
-                    .addLimit(Bandwidth.classic(3, Refill.intervally(3, Duration.ofMinutes(1))))
-                    .build();
-        });
-    }
-
-    private String getClientIp(HttpServletRequest request) {
-        String ip = request.getHeader("X-Forwarded-For");
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("Proxy-Client-IP");
-        }
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("WL-Proxy-Client-IP");
-        }
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getRemoteAddr();
-        }
-        return ip;
     }
 
     /**
@@ -97,12 +69,13 @@ public class VendorUploadController {
 
             return ResponseEntity.ok(res);
         } catch (IllegalStateException e) {
+            log.warn("[VENDOR-UPLOAD-INFO] Expired upload token used: {}", token);
             return ResponseEntity.status(HttpStatus.GONE)
-                    .body("{\"error\": \"Expired Link\", \"message\": \"" + e.getMessage() + "\"}");
+                    .body("{\"error\": \"Expired Link\", \"message\": \"만료되었거나 이미 사용된 요청 링크입니다.\"}");
         } catch (Exception e) {
-            log.error("[VENDOR-UPLOAD-INFO] Token verification failed: {}", e.getMessage());
+            log.error("[VENDOR-UPLOAD-INFO] Token verification failed for token '{}': {}", token, e.getMessage(), e);
             return ResponseEntity.badRequest()
-                    .body("{\"error\": \"Invalid Token\", \"message\": \"" + e.getMessage() + "\"}");
+                    .body("{\"error\": \"Invalid Token\", \"message\": \"유효하지 않은 업로드 요청 링크입니다.\"}");
         }
     }
 
@@ -115,15 +88,6 @@ public class VendorUploadController {
             @RequestParam("file") MultipartFile file,
             HttpServletRequest request
     ) {
-        String clientIp = getClientIp(request);
-        Bucket bucket = resolveBucket(clientIp);
-
-        if (!bucket.tryConsume(1)) {
-            log.warn("[RATE LIMIT] Blocked IP {} from uploading file via token.", clientIp);
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .body("{\"error\": \"Too Many Requests\", \"message\": \"업로드 요청 한도를 초과했습니다. 잠시 후 다시 시도해 주십시오. (IP당 분당 3회 제한)\"}");
-        }
-
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().body("{\"message\": \"업로드할 파일이 비어 있습니다.\"}");
         }
@@ -140,12 +104,13 @@ public class VendorUploadController {
 
             return ResponseEntity.ok().body("{\"message\": \"제출이 완료되었습니다. 감사합니다.\"}");
         } catch (IllegalStateException e) {
+            log.warn("[VENDOR-UPLOAD-FILE] Expired token attempt during file submit: {}", token);
             return ResponseEntity.status(HttpStatus.GONE)
-                    .body("{\"error\": \"Expired Link\", \"message\": \"" + e.getMessage() + "\"}");
+                    .body("{\"error\": \"Expired Link\", \"message\": \"만료되었거나 이미 사용된 요청 링크입니다.\"}");
         } catch (Exception e) {
-            log.error("[VENDOR-UPLOAD-FILE] File upload failed: {}", e.getMessage(), e);
+            log.error("[VENDOR-UPLOAD-FILE] File upload failed for token '{}': {}", token, e.getMessage(), e);
             return ResponseEntity.badRequest()
-                    .body("{\"error\": \"Upload Failed\", \"message\": \"" + e.getMessage() + "\"}");
+                    .body("{\"error\": \"Upload Failed\", \"message\": \"파일 제출 처리에 실패했습니다. 잠시 후 다시 시도해 주십시오.\"}");
         }
     }
 

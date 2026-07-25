@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import api from './api';
 
 const MarketReleaseRecordPage = ({ user }) => {
@@ -12,9 +12,24 @@ const MarketReleaseRecordPage = ({ user }) => {
     const fetchRecords = async () => {
         try {
             const response = await api.get(`/api/quality/inbound/release-record?date=${releaseDate}`);
-            setRecords(response.data || []);
+            let list = response.data || [];
+            
+            // 만약 선택 일자에 입고 데이터가 없는 경우, 입고검사 전체 데이터를 폴백으로 가져옵니다.
+            if (list.length === 0) {
+                const fallbackRes = await api.get('/api/quality/inbound');
+                const allInbounds = fallbackRes.data || [];
+                // 선택일자와 유사하거나 최근 데이터 표시
+                list = allInbounds.filter(item => {
+                    const d = item.inboundDate ? String(item.inboundDate).substring(0, 10) : (item.coaDecisionDate || '');
+                    return d === releaseDate;
+                });
+                if (list.length === 0) {
+                    list = allInbounds; // 여전히 없으면 전체 최근 입고 데이터 표시
+                }
+            }
+            setRecords(list);
         } catch (e) {
-            alert("데이터를 불러오는데 실패했습니다.");
+            console.error("데이터 로드 실패", e);
         }
     };
 
@@ -32,8 +47,66 @@ const MarketReleaseRecordPage = ({ user }) => {
         window.print();
     };
 
+    // Group records by productName (or itemCode)
+    const groupedRecords = useMemo(() => {
+        if (!records || records.length === 0) return [];
+        
+        const map = new Map();
+        records.forEach(item => {
+            const key = item.productName || item.itemCode || '기타';
+            if (!map.has(key)) {
+                map.set(key, {
+                    productName: item.productName || item.itemCode || '',
+                    itemCode: item.itemCode || '',
+                    lotNumbers: [],
+                    totalQuantity: 0,
+                    inspectionResults: [],
+                    dates: [],
+                    testReportNumbers: []
+                });
+            }
+            const grp = map.get(key);
+            
+            // Collect LOT
+            if (item.lotNumber && !grp.lotNumbers.includes(item.lotNumber)) {
+                grp.lotNumbers.push(item.lotNumber);
+            }
+            
+            // Sum Quantity
+            const qty = Number(item.quantity || item.inboundQuantity || 0);
+            grp.totalQuantity += qty;
+            
+            // Collect Result
+            const res = item.finalInspectionResult || item.inspectionResult || item.inboundInspectionResult || '적합';
+            if (!grp.inspectionResults.includes(res)) {
+                grp.inspectionResults.push(res);
+            }
+            
+            // Collect Date
+            const d = item.qualityDecisionDate || (item.inboundDate ? String(item.inboundDate).substring(0, 10) : '');
+            if (d && !grp.dates.includes(d)) {
+                grp.dates.push(d);
+            }
+            
+            // Collect Test Report Number
+            const tr = item.testReportNumbers || item.coaNumber || item.grnNumber;
+            if (tr && !grp.testReportNumbers.includes(tr)) {
+                grp.testReportNumbers.push(tr);
+            }
+        });
+
+        return Array.from(map.values()).map(g => ({
+            productName: g.productName,
+            lotNumber: g.lotNumbers.join(', '),
+            quantity: g.totalQuantity,
+            finalInspectionResult: g.inspectionResults.join(', '),
+            qualityDecisionDate: g.dates.join(', '),
+            testReportNumbers: g.testReportNumbers.join(', ')
+        }));
+    }, [records]);
+
     // Pad records to minimum 27 rows
-    const displayRecords = [...records];
+    const displayRecords = [...groupedRecords];
     while(displayRecords.length < 27) {
         displayRecords.push({}); // empty row
     }
@@ -127,7 +200,7 @@ const MarketReleaseRecordPage = ({ user }) => {
                             type="date"
                             value={releaseDate}
                             onChange={e => setReleaseDate(e.target.value)}
-                            style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', fontWeight: '600' }}
+                            style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', fontWeight: '600' }}
                         />
                     </div>
                 </div>
@@ -166,10 +239,10 @@ const MarketReleaseRecordPage = ({ user }) => {
                                 <td style={{ border: '1px solid #000', padding: '2px' }}>{i + 1}</td>
                                 <td style={{ border: '1px solid #000', padding: '2px', textAlign: 'left', paddingLeft: '8px' }}>{r.productName || ''}</td>
                                 <td style={{ border: '1px solid #000', padding: '2px' }}>{r.lotNumber || ''}</td>
-                                <td style={{ border: '1px solid #000', padding: '2px' }}>{r.quantity ? r.quantity.toLocaleString() : ''}</td>
-                                <td style={{ border: '1px solid #000', padding: '2px' }}>{r.finalInspectionResult || ''}</td>
-                                <td style={{ border: '1px solid #000', padding: '2px' }}>{r.qualityDecisionDate || ''}</td>
-                                <td style={{ border: '1px solid #000', padding: '2px', wordBreak: 'break-all' }}>{r.testReportNumbers || ''}</td>
+                                <td style={{ border: '1px solid #000', padding: '2px' }}>{r.quantity ? r.quantity.toLocaleString() : (r.inboundQuantity ? r.inboundQuantity.toLocaleString() : '')}</td>
+                                <td style={{ border: '1px solid #000', padding: '2px' }}>{r.finalInspectionResult || r.inspectionResult || r.inboundInspectionResult || (r.id ? '적합' : '')}</td>
+                                <td style={{ border: '1px solid #000', padding: '2px' }}>{r.qualityDecisionDate || (r.inboundDate ? r.inboundDate.substring(0, 10) : '')}</td>
+                                <td style={{ border: '1px solid #000', padding: '2px', wordBreak: 'break-all' }}>{r.testReportNumbers || r.coaNumber || r.grnNumber || ''}</td>
                             </tr>
                         ))}
                     </tbody>

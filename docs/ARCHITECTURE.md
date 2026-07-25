@@ -1,113 +1,84 @@
-# QMS System Architecture & Security Specification
+# QMS (Quality Management System) 아키텍처 문서 (docs/ARCHITECTURE.md)
 
-본 문서는 통합 품질 관리 시스템(QMS)의 전체적인 구성 설계, 6개국 포장공간비율 검증 엔진(Strategy 패턴), 필수 품질 서류 자동 요청 스케줄링 시스템 및 시스템 보안 운영 정책을 총괄하는 아키텍처 설명서입니다.
+본 문서는 QMS(품질관리시스템)의 핵심 아키텍처 설계 패턴, 데이터 모델링 배경, 대시보드 컴포넌트 구조 및 최신 보안 결정을 정리한 공식 아키텍처 명세서입니다.
 
 ---
 
-## 1. System Topology
+## 1. 마스터 상속 구조 (Master Product Copy Pattern)
 
-QMS 프로그램은 Vite React 프론트엔드와 Java Spring Boot 백엔드, 그리고 PostgreSQL/H2 관계형 데이터베이스 계층으로 유기적으로 결합되어 있습니다.
+QMS는 **단일 마스터 제품(Master Product)** 정보를 기반으로 각 유통 채널(쿠팡, 네이버, 11번가 등)에 종속된 채널별 제품 정보를 확장·복사하는 상속 구조를 가집니다.
 
-```mermaid
-graph TD
-    Client["Vite React Frontend (Port 5173)"]
-    API_Gateway["Spring Security & RateLimit Filter"]
-    WAS["Spring Boot WAS (Port 8080)"]
-    DB[("H2 (Local) / Supabase (Prod)")]
-
-    Client -->|HTTPS / REST API| API_Gateway
-    API_Gateway -->|Authorized Request| WAS
-    WAS -->|JPA / JDBC Batch Write| DB
+```
+[ Master Product (is_master = true) ]
+         │
+         ├─── (copyFromMaster) ───► [ Channel Product (is_master = false, channel_id = 1) ]
+         └─── (copyFromMaster) ───► [ Channel Product (is_master = false, channel_id = 2) ]
 ```
 
----
-
-## 2. 국가별 포장공간비율 검증 엔진 (Strategy Pattern)
-
-국가별로 포장공간비율 및 충전율에 관한 산출 공식과 판정 임계치, 면제 조건이 상이하므로 객체 지향의 **Strategy 패턴**을 적용하여 모듈화하였습니다.
-
-```mermaid
-classDiagram
-    class PackagingSpaceRatioStrategy {
-        <<interface>>
-        +calculate(Product, List~PackagingComponent~) RatioResult
-    }
-    class KoreaSpaceRatioStrategy {
-        +calculate() RatioResult
-    }
-    class ChinaSpaceRatioStrategy {
-        +calculate() RatioResult
-    }
-    class TaiwanSpaceRatioStrategy {
-        +calculate() RatioResult
-    }
-    class JapanSpaceRatioStrategy {
-        +calculate() RatioResult
-    }
-    class EuSpaceRatioStrategy {
-        +calculate() RatioResult
-    }
-    class UsSpaceRatioStrategy {
-        +calculate() RatioResult
-    }
-
-    PackagingSpaceRatioStrategy <|.. KoreaSpaceRatioStrategy
-    PackagingSpaceRatioStrategy <|.. ChinaSpaceRatioStrategy
-    PackagingSpaceRatioStrategy <|.. TaiwanSpaceRatioStrategy
-    PackagingSpaceRatioStrategy <|.. JapanSpaceRatioStrategy
-    PackagingSpaceRatioStrategy <|.. EuSpaceRatioStrategy
-    PackagingSpaceRatioStrategy <|.. UsSpaceRatioStrategy
-
-    class SpaceRatioService {
-        -List~PackagingSpaceRatioStrategy~ strategies
-        +checkProductSpaceRatio(productId, username) List~SpaceRatioResult~
-    }
-    SpaceRatioService --> PackagingSpaceRatioStrategy
-```
-
-### 각 국가별 정책 하이라이트
-- **한국(KR)**: 단품 포장(10%/15% 상한, 레이어 캐스케이드 및 완충재 5mm 가산) 및 종합세트(개별 구성품 PASS + 세트박스 25% PASS 동시 만족 시 최종 합격) 독립 검증 체계.
-- **중국(CN)**: SAMR(GB 23350-2021) 규격을 따르며, 내용물별 k값 대입 및 1겹 포장 자동 합격(PASS) 예외 보장.
-- **대만(TW)**: 화장품 기획세트(禮盒) 대상 정수올림 NPV(額定包裝體積) 연산 및 단일/복합 재질 C값 분기(3.1 / 2.7) 적용.
-- **일본(JP)**: 적정포장규칙 1차 용기 충전율 40% 이상(40g 이하는 30%) 판정. 30g 이하 소형 및 메이크업/향수 류 수치 면제 처리.
-- **EU/미국(US)**: EU 수송포장 50% 이하 가이드라인 제공 및 미국 FDA 정성적 오도 가능성 판정 보류(null 반환) 사양 구현.
+- **설계 의도**: 마스터 정보 변경 시 개별 채널 상품으로 기본 사양이 안전하게 전파되며, 채널별 전용 속성(패키징 규칙, 채널 전용 품목명)만 오버라이딩하여 관리가 용이합니다.
+- **주요 메서드**: `Product.copyFromMaster(Product master, SalesChannel channel)`
 
 ---
 
-## 3. 마스터 필수서류 자동요청 스케줄러 (Document Automation)
+## 2. EAV (Entity-Attribute-Value) & JSON 컬럼 설계 배경
 
-마스터 코드 품목 등록 및 제조사 연동 시, MSDS(12개월 주기) 및 최초 1회 필수 품질서류(제조공정도, 제품표준서, 안정성테스트보고서)를 자동 요청하고 벤더가 비인증 보안링크로 직접 셀프 업로드하도록 하는 파이프라인입니다.
+제품 및 제조사별 동적 확장 필드(예: 국가별 규제 성분, 커스텀 필수 서류, 포장 방식 메타데이터)를 지원하기 위해 EAV 패턴과 PostgreSQL/H2 JSONB 컬럼을 혼합 사용합니다.
 
-```mermaid
-sequenceDiagram
-    participant DB as 데이터베이스
-    participant Scheduler as 자동요청 스케줄러 (02:00)
-    participant Vendor as 제조사 담당자 (Email Link)
-    participant Controller as VendorUploadController
-
-    Scheduler->>DB: 1. PENDING 및 주기 갱신 도래 건 스캔
-    Scheduler->>Vendor: 2. 14일 만료 보안 토큰이 포함된 이메일 발송
-    Vendor->>Controller: 3. 로그인 없이 고유 링크 접속 및 토큰 검증 요청
-    Controller-->>Vendor: 4. 타겟 제품명 및 문서 유형 반환
-    Vendor->>Controller: 5. PDF 서류 파일 업로드 제출
-    Controller->>DB: 6. FULFILLED 상태 갱신 및 차기 만료 예정일 자동 계산 적재
-```
+- **장점**: RDBMS 테이블 스키마의 잦은 변경 없이 신규 채널 및 국가별 서류 규격을 즉시 수용할 수 있습니다.
+- **보완책**: 무분별한 EAV 검색 성능 저하를 방지하기 위해 핵심 외래키(`product_id`, `manufacturer_id`, `status`, `next_due_date`)에는 Flyway `V62` 인덱스를 추가하여 인덱스 스캔을 보장합니다.
 
 ---
 
-## 4. 보안 및 성능 운영 정책
+## 3. Strategy 패턴 기반 포장공간비율 및 검증 규칙
 
-### 4.1 이중 Rate Limiting 방어선 (전역 + 비인증 업로드 경로)
-- **전역 서블릿 필터 (`RateLimitFilter.java`)**:
-  - `POST /api/auth/login` (로그인): IP당 분당 5회 제한.
-  - 파일 업로드 API (`/upload`, `/file`, `/image` 포함): IP당 분당 10회 제한.
-  - 메일 발송 API (`/send-email`, `/re-request`, `/mail` 포함): IP당 분당 10회 제한.
-- **공개 비인증 API (`VendorUploadController.java`)**:
-  - `GET /api/vendor-upload/{token}` 및 `POST /api/vendor-upload/{token}/file` 경로: IP당 **분당 3회**로 엄격하게 차단하여 외부 무단 업로드 공격 방어.
+국가별(한국, 중국, 일본, 미국, EU, ASEAN) 포장공간비율 계산 및 환경 규제 검증 로직은 **Strategy 패턴**으로 분리되어 있습니다.
 
-### 4.2 페이징 전수 적용 정책
-대용량 데이터를 전량 메모리에 적재하는 무페이징(Memory-Heavy) 조회를 원천 배제하기 위해, 휴지통 및 생산감리 목록 조회를 JpaRepository 페이징(`Pageable`) 기반으로 강제 전환하였습니다. 
-특히 여러 엔티티가 혼재된 휴지통(`Trash`)의 경우, 타입별로 최초 50개만 조회(Limit 50)하여 메모리상에서 병합/정렬 후 페이징 슬라이싱(Offset/Limit) 처리함으로써 병목을 완벽하게 해소합니다.
+- **구조**: `SpaceRatioChecker` 인터페이스를 상속받은 국가별 전략 클래스(`KoreaSpaceRatioStrategy`, `ChinaSpaceRatioStrategy` 등)가 존재합니다.
+- **효과**: 신규 국가 규제 추가 시 기존 코드 변경 없이 전략 클래스만 새로 추가하여 OCP(Open-Closed Principle)를 준수합니다.
 
-### 4.3 JPA 스키마 정합성 보장 (ddl-auto=validate)
-JPA 엔티티의 구조와 실제 DB 마이그레이션 테이블 간 불일치로 인한 오작동을 차단하기 위해, 로컬 개발 및 테스트 실행 프로파일(`application-local.properties`)의 ddl-auto 값을 **`validate`**로 상시 강제 지정하여 시동 단계에서 오류를 검출합니다.
+---
+
+## 4. 프론트엔드 코드 스플리팅 및 대시보드 구조
+
+초기 번들 크기(기존 3.08MB 단일 번들)로 인한 초기 로딩 속도 저하를 해결하기 위해 다음과 같이 구현되었습니다.
+
+- **React.lazy() + Suspense**: 대시보드 5종(`DashboardPage`, `ClaimDashboardPage`, `QualityDashboardPage`, `ProductDashboardPage`, `ProductionAuditDashboardPage`) 및 대형 화면 동적 로드.
+- **Rollup manualChunks (Vite)**:
+  - `vendor-aggrid`: AG Grid 라이브러리
+  - `vendor-recharts`: 차트 시각화
+  - `vendor-xlsx`: 엑셀 파싱
+  - `vendor-mui`: UI 컴포넌트 라이브러리
+
+---
+
+## 5. 보안 강화 결정 근거 (Security Architecture Decisions)
+
+### 5.1 SVG 업로드 저장형 XSS 차단
+- Tika MIME 분석 시 `image/svg+xml`, `text/xml` 및 `.svg` 확장자를 `image/` 검사보다 선행하여 즉시 업로드 차단.
+- 서비스 기동 시 `uploads` 내 기존 SVG 파일 `uploads/isolated/`로 자동 격리/삭제.
+
+### 5.2 Content-Security-Policy (CSP) 및 보안 헤더
+- `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; object-src 'none'; frame-ancestors 'self';` 헤더 추가.
+- `/uploads/**` 응답 시 `X-Content-Type-Options: nosniff` 및 비이미지 문서 `Content-Disposition: attachment` 지정.
+
+### 5.3 Rate Limiting 근본 재설계
+- Caffeine Cache 적용 (TTL 10분, Max 10,000).
+- URL 경로 변수(토큰)를 키에서 제외하고 `clientIp:Category` 기준으로 버킷 구성하여 토큰 무차별 대입 및 DoS 완벽 차단.
+
+### 5.4 CORS 와일드카드 전면 제거
+- Controller 레벨 `@CrossOrigin(origins = "*")` 전면 삭제.
+- `SecurityConfig`에 명시된 Whitelist 도메인만 허용.
+
+### 5.5 CSRF 보호 복원 (SameSite=None 대응)
+- `CookieCsrfTokenRepository.withHttpOnlyFalse()` 기반 CSRF 보호 복원.
+- SPA 프론트엔드는 Axios 인터셉터를 통해 `XSRF-TOKEN` 쿠키를 읽고 `X-XSRF-TOKEN` 헤더를 자동 실어 전송하여 CSRF 공격 차단.
+
+### 5.6 RBAC 권한 세분화
+- 생성/수정/삭제 액션에 `@PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")` 적용.
+
+---
+
+## 6. 파일 스토리지 접근 제어 및 Presigned URL 가이드
+
+- **S3 Public Read 미설정 권장**: S3 버킷 업로드 파일이 Public Open되지 않도록 Private 버킷으로 설정합니다.
+- **Presigned URL 방식 도입**: 파일 다운로드 시 유효 기간 15분의 임시 서명 URL(`s3Client.generatePresignedUrl(...)`)을 발급하여 외부 유출 및 무단 직접링크(Hotlinking)를 차단합니다.
