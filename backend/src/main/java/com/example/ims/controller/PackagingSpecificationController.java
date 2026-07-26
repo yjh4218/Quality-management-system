@@ -272,12 +272,20 @@ public class PackagingSpecificationController {
                 String storedFileName = fileStorageService.storeFile(file, com.example.ims.util.UploadType.GENERAL, "pkg_method");
                 String fileUrl = "/uploads/" + storedFileName;
 
+                String currentUsername = "admin";
+                org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+                if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+                    currentUsername = auth.getName();
+                }
+
                 com.example.ims.entity.PackagingMethodImage img = com.example.ims.entity.PackagingMethodImage.builder()
                         .packagingSpecId(specId)
                         .imageUrl(fileUrl)
+                        .imagePath(fileUrl)
                         .displayOrder(currentOrder)
                         .layoutWidthPx(400)
                         .layoutHeightPx(300)
+                        .createdBy(currentUsername)
                         .build();
 
                 uploadedList.add(methodImageRepository.save(img));

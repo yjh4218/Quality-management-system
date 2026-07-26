@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     createProduct,
     updateProduct,
@@ -167,6 +167,8 @@ const ProductDrawer = ({ product, onClose, user }) => {
         }
     }, [activeTab, product]);
 
+    const packagingMethodSaveRef = useRef(null);
+
     const handleSaveFullSpec = async () => {
         try {
             const payload = {
@@ -179,6 +181,10 @@ const ProductDrawer = ({ product, onClose, user }) => {
             };
             const res = await api.saveFullPackagingSpec(payload);
             if (res.data) {
+                // 포장방법 사진/캡션/주석 변경사항이 있다면 함께 일괄 저장
+                if (packagingMethodSaveRef.current) {
+                    await packagingMethodSaveRef.current();
+                }
                 toast.success("포장사양서가 성공적으로 저장되었습니다.");
                 fetchPackagingSpecs(product.id);
             }
@@ -2051,17 +2057,17 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                             📄 Sheet 1: 사양서 양식
                                         </button>
                                         <button type="button" onClick={() => setSpecSubTab('sheet2')} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: specSubTab === 'sheet2' ? '#003366' : 'transparent', color: specSubTab === 'sheet2' ? '#fff' : '#4a5568', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' }}>
-                                            📦 Sheet 2: 현품표 아웃박스
+                                            📸 Sheet 2: 포장방법 사진
                                         </button>
                                         <button type="button" onClick={() => setSpecSubTab('sheet3')} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: specSubTab === 'sheet3' ? '#003366' : 'transparent', color: specSubTab === 'sheet3' ? '#fff' : '#4a5568', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' }}>
-                                            🧱 Sheet 3: 현품표 팔레트
+                                            📦 Sheet 3: 현품표 아웃박스
                                         </button>
                                         <button type="button" onClick={() => setSpecSubTab('sheet4')} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: specSubTab === 'sheet4' ? '#003366' : 'transparent', color: specSubTab === 'sheet4' ? '#fff' : '#4a5568', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' }}>
-                                            📸 Sheet 4: 포장방법 사진
+                                            🧱 Sheet 4: 현품표 팔레트
                                         </button>
                                     </div>
                                     <div style={{ display: 'flex', gap: '8px' }}>
-                                        {canEdit && specSubTab !== 'sheet4' && (
+                                        {canEdit && specSubTab !== 'sheet2' && (
                                             <button type="button" onClick={handleSaveFullSpec} className="primary" style={{ background: '#10b981', borderColor: '#10b981', color: '#fff', fontSize: '12px', padding: '6px 14px' }}>
                                                 💾 사양서 저장
                                             </button>
@@ -2415,9 +2421,32 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                 )}
 
                                 {specSubTab === 'sheet2' && (
+                                    currentSpec && currentSpec.id ? (
+                                         <PackagingMethodTab 
+                                             specId={currentSpec.id} 
+                                             canEdit={canEdit} 
+                                             onRegisterSaveHandler={(fn) => { packagingMethodSaveRef.current = fn; }}
+                                         />
+                                    ) : (
+                                        <div style={{ textAlign: 'center', padding: '40px 20px', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
+                                            <div style={{ fontSize: '32px', marginBottom: '10px' }}>📸</div>
+                                            <div style={{ fontWeight: 'bold', fontSize: '15px', color: '#1e293b', marginBottom: '6px' }}>포장사양서 기본 정보를 먼저 저장해주세요</div>
+                                            <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>포장방법 사진 등록은 사양서 저장(생성) 완료 후 이용하실 수 있습니다.</div>
+                                            <button 
+                                                type="button" 
+                                                onClick={handleSaveFullSpec} 
+                                                style={{ backgroundColor: '#0f172a', color: '#fff', padding: '10px 20px', borderRadius: '8px', border: 'none', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' }}
+                                            >
+                                                💾 포장사양서 저장하기
+                                            </button>
+                                        </div>
+                                    )
+                                )}
+
+                                {specSubTab === 'sheet3' && (
                                     <div className="card" style={{ padding: '25px', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#f8fafc' }}>
                                         <h3 style={{ margin: '0 0 20px 0', fontSize: '16px', color: '#1e293b', borderBottom: '2px solid #e2e8f0', paddingBottom: '10px' }}>
-                                            📦 Sheet 2: 현품표 아웃박스 시각화
+                                            📦 Sheet 3: 현품표 아웃박스 시각화
                                         </h3>
                                         
                                         {/* 현품표 가상 카드 레이아웃 */}
@@ -2476,10 +2505,10 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                     </div>
                                 )}
 
-                                {specSubTab === 'sheet3' && (
+                                {specSubTab === 'sheet4' && (
                                     <div className="card" style={{ padding: '25px', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#f8fafc' }}>
                                         <h3 style={{ margin: '0 0 20px 0', fontSize: '16px', color: '#1e293b', borderBottom: '2px solid #e2e8f0', paddingBottom: '10px' }}>
-                                            🧱 Sheet 3: 현품표 팔레트 시각화
+                                            🧱 Sheet 4: 현품표 팔레트 시각화
                                         </h3>
                                         
                                         {/* 팔레트 현품표 가상 카드 */}
@@ -2531,10 +2560,6 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                             </div>
                                         </div>
                                     </div>
-                                )}
-
-                                {specSubTab === 'sheet4' && currentSpec && currentSpec.id && (
-                                    <PackagingMethodTab specId={currentSpec.id} canEdit={canEdit} />
                                 )}
                             </div>
                         )}

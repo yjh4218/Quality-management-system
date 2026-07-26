@@ -45,7 +45,8 @@ import NotificationListPage from './NotificationListPage.jsx';
 import ManufacturerGuidePage from './ManufacturerGuidePage.jsx';
 import VendorUploadPage from './VendorUploadPage.jsx';
 import DocumentRequestManagementPage from './DocumentRequestManagementPage.jsx';
-import DocumentTypeConfigPage from './DocumentTypeConfigPage.jsx';
+import DocumentCycleConfigPage from './DocumentCycleConfigPage.jsx';
+import ChannelNoteCategoryConfigPage from './ChannelNoteCategoryConfigPage.jsx';
 
 const PAGE_INFO = {
     dashboard: { title: '📊 시스템 대시보드' },
@@ -59,6 +60,7 @@ const PAGE_INFO = {
     brands: { title: '🏷️ 브랜드 마스터' },
     manufacturers: { title: '🏭 제조사 정보' },
     salesChannels: { title: '🌐 유통 채널 관리' },
+    channelNoteConfig: { title: '⚙️ 유통 채널 포장 특이사항 항목 설정' },
     products: { title: '📦 제품코드 마스터' },
     bomMaster: { title: '📏 BOM 마스터' },
     bomCategories: { title: '⚙️ BOM 유형 설정' },
@@ -647,6 +649,9 @@ const App = () => {
             console.log(">>>> [DEBUG] Current User Data:", response.data);
             setUser(response.data);
             setIsLoggedIn(true);
+            if (window.location.pathname === '/channel-note-config') {
+                handleNavigate('channelNoteConfig');
+            }
         } catch (err) {
             setIsLoggedIn(false);
         }
@@ -746,6 +751,11 @@ const App = () => {
             return acc;
         }, []);
     }, [user]);
+
+    // 제조사 전용 보안링크 접속 시 비인증 포털 바로 연결
+    if (window.location.pathname.startsWith('/vendor/upload') || window.location.search.includes('token=')) {
+        return <VendorUploadPage />;
+    }
 
     if (!isLoggedIn) {
         return <LoginPage onLoginSuccess={handleLoginSuccess} />;
@@ -1363,7 +1373,7 @@ const App = () => {
                                     />
                                 )}
                                 {canAccess('documentRequests') && tab.page === 'documentTypeConfig' && (
-                                    <DocumentTypeConfigPage 
+                                    <DocumentCycleConfigPage 
                                         user={user} 
                                         onBack={() => handleNavigate('documentRequests')}
                                     />
@@ -1372,6 +1382,7 @@ const App = () => {
                                 {tab.page === 'brands' && <BrandManagementPage user={user} onNavigate={handleNavigate} />}
                                 {tab.page === 'manufacturers' && <ManufacturerManagementPage user={user} />}
                                 {tab.page === 'salesChannels' && <SalesChannelManagement user={user} />}
+                                {tab.page === 'channelNoteConfig' && <ChannelNoteCategoryConfigPage user={user} />}
                                 {tab.page === 'manufacturerCategories' && <ManufacturerCategoryPage user={user} />}
                                 {tab.page === 'products' && (
                                     <ProductListPage 

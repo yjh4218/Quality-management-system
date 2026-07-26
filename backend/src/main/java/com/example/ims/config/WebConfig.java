@@ -31,10 +31,10 @@ public class WebConfig implements WebMvcConfigurer {
                     response.setHeader("X-Content-Type-Options", "nosniff");
                     response.setHeader("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'");
 
-                    boolean isImage = uri.endsWith(".jpg") || uri.endsWith(".jpeg") || uri.endsWith(".png")
-                            || uri.endsWith(".gif") || uri.endsWith(".webp");
+                    boolean isInlineMedia = uri.endsWith(".jpg") || uri.endsWith(".jpeg") || uri.endsWith(".png")
+                            || uri.endsWith(".gif") || uri.endsWith(".webp") || uri.endsWith(".pdf");
 
-                    if (!isImage) {
+                    if (!isInlineMedia) {
                         int lastSlash = uri.lastIndexOf('/');
                         String fileName = (lastSlash >= 0) ? uri.substring(lastSlash + 1) : "file";
                         response.setHeader("Content-Disposition", "attachment; filename=\"" + fileName + "\"");

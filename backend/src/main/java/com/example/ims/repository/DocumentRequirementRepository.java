@@ -27,6 +27,8 @@ public interface DocumentRequirementRepository extends JpaRepository<DocumentReq
     
     Optional<DocumentRequirement> findByManufacturerIdAndCustomDocumentTypeId(Long manufacturerId, Long customTypeId);
 
+    Optional<DocumentRequirement> findBySecurityToken(String securityToken);
+
     /**
      * [스케줄러 N+1 최적화] PENDING, OVERDUE이거나 기한 초과(nextDueDate <= date)인 요구조건을 EntityGraph 연동 1회 JOIN으로 조회
      */

@@ -22,15 +22,17 @@ public class BugReportController {
 
     @PostMapping
     public ResponseEntity<BugReport> submitReport(@RequestBody BugReport report, Authentication authentication) {
-        if (authentication != null) {
+        BugReport targetReport = (report != null) ? report : new BugReport();
+        if (authentication != null && authentication.isAuthenticated()) {
             String username = authentication.getName();
-            report.setReporterUsername(username);
-            
-            userRepository.findByUsername(username).ifPresent(u -> {
-                report.setReporterName(u.getName());
-            });
+            if (username != null && !username.trim().isEmpty() && !"anonymousUser".equalsIgnoreCase(username)) {
+                targetReport.setReporterUsername(username);
+                userRepository.findByUsername(username).ifPresent(u -> {
+                    targetReport.setReporterName(u.getName());
+                });
+            }
         }
-        return ResponseEntity.ok(bugReportService.submitReport(report));
+        return ResponseEntity.ok(bugReportService.submitReport(targetReport));
     }
 
     @GetMapping

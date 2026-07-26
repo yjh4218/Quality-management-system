@@ -110,6 +110,11 @@ public class RateLimitFilter implements Filter {
             return new BucketLimitConfig("EMAIL", 10, "메일 발송 요청 한도를 초과했습니다. 1분 뒤에 다시 시도해 주십시오.");
         }
 
+        // 5. 버그 리포트 전송 엔드포인트: 분당 10회 제한
+        if (path.equals("/api/bug-reports") && "POST".equalsIgnoreCase(method)) {
+            return new BucketLimitConfig("BUG_REPORT", 10, "버그 리포트 제출 한도를 초과했습니다. 1분 뒤 시도해 주십시오.");
+        }
+
         return null; // 제한 대상이 아님
     }
 

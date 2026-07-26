@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getBaseURL } from './api';
+import api from './api';
 
 export default function DocumentTypeConfigPage({ user, onBack }) {
     const [customTypes, setCustomTypes] = useState([]);
@@ -14,8 +14,6 @@ export default function DocumentTypeConfigPage({ user, onBack }) {
 
     const [submitting, setSubmitting] = useState(false);
 
-    const baseURL = getBaseURL();
-
     const showToast = (message, type = 'success') => {
         setToast({ message, type });
         setTimeout(() => setToast(null), 3000);
@@ -24,19 +22,10 @@ export default function DocumentTypeConfigPage({ user, onBack }) {
     const fetchCustomTypes = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`${baseURL}/api/document-requests/custom-types`, {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setCustomTypes(data);
-            } else {
-                showToast("커스텀 추가서류 목록 로드 실패", "error");
-            }
+            const res = await api.get('/api/document-requests/custom-types');
+            setCustomTypes(res.data || []);
         } catch (err) {
-            showToast("서버 통신 에러 발생", "error");
+            showToast("커스텀 추가서류 목록 로드 실패", "error");
         } finally {
             setLoading(false);
         }
@@ -63,27 +52,15 @@ export default function DocumentTypeConfigPage({ user, onBack }) {
                 isActive: true
             };
 
-            const res = await fetch(`${baseURL}/api/document-requests/custom-types`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify(payload)
-            });
-
-            if (res.ok) {
-                showToast("신규 품질서류 종류가 등록 및 전체 배포되었습니다.");
-                setName('');
-                setRecurrenceType('ONE_TIME');
-                setPeriodMonths(12);
-                fetchCustomTypes(); // 목록 새로고침
-            } else {
-                const data = await res.json();
-                showToast(data.message || "등록 실패", "error");
-            }
+            await api.post('/api/document-requests/custom-types', payload);
+            showToast("신규 품질서류 종류가 등록 및 전체 배포되었습니다.");
+            setName('');
+            setRecurrenceType('ONE_TIME');
+            setPeriodMonths(12);
+            fetchCustomTypes();
         } catch (err) {
-            showToast("서류 추가 작업 중 오류가 발생했습니다.", "error");
+            const errorMsg = err.response?.data?.message || "등록 실패";
+            showToast(errorMsg, "error");
         } finally {
             setSubmitting(false);
         }
@@ -91,23 +68,11 @@ export default function DocumentTypeConfigPage({ user, onBack }) {
 
     const handleToggleActive = async (id, currentActive) => {
         try {
-            const res = await fetch(`${baseURL}/api/document-requests/custom-types/${id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({ isActive: !currentActive })
-            });
-
-            if (res.ok) {
-                showToast("상태 변경이 저장되었습니다.");
-                fetchCustomTypes();
-            } else {
-                showToast("상태 변경 저장 실패", "error");
-            }
+            await api.put(`/api/document-requests/custom-types/${id}`, { isActive: !currentActive });
+            showToast("상태 변경이 저장되었습니다.");
+            fetchCustomTypes();
         } catch (err) {
-            showToast("작업 처리 중 네트워크 오류 발생", "error");
+            showToast("상태 변경 저장 실패", "error");
         }
     };
 

@@ -307,17 +307,20 @@ public class ClaimService {
     public Claim getClaim(Long id, User user, boolean fromEmail) {
         Claim claim = claimRepository.findById(id).orElseThrow(() -> new RuntimeException("Claim not found"));
 
-        boolean isManufacturer = user.getRole().contains("ROLE_MANUFACTURER") || "제조사".equals(user.getDepartment());
+        boolean isManufacturer = user.getRole() != null && (user.getRole().equals("ROLE_MANUFACTURER") || user.getRole().equals("MANUFACTURER"));
         if (isManufacturer) {
+            String userMfrName = (user.getManufacturer() != null) ? user.getManufacturer().getName() : user.getCompanyName();
+            boolean nameMatches = Objects.equals(cleanCompanyName(userMfrName), cleanCompanyName(claim.getManufacturer()));
+
             // 메일 링크로 들어왔고 제조사명이 일치한다면 자동으로 공개 처리
-            if (fromEmail && Objects.equals(cleanCompanyName(user.getCompanyName()), cleanCompanyName(claim.getManufacturer()))) {
+            if (fromEmail && nameMatches) {
                 if (!claim.isSharedWithManufacturer()) {
                     claim.setSharedWithManufacturer(true);
                     claimRepository.save(claim);
                 }
             }
 
-            if (!Objects.equals(cleanCompanyName(user.getCompanyName()), cleanCompanyName(claim.getManufacturer())) || !claim.isSharedWithManufacturer()) {
+            if (!nameMatches || !claim.isSharedWithManufacturer()) {
                 throw new RuntimeException("해당 클레임에 대한 접근 권한이 없습니다.");
             }
         }

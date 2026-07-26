@@ -64,16 +64,10 @@ public class ProductionAuditService {
             }
         } else {
             // 제조사는 무조건 본인 업체 데이터 중 '공개'된 것만 조회
-            log.info(">>>> [AUDIT DEBUG] Manufacturer Audits request. User: '{}', User Company: '{}'", username, user.getCompanyName());
-            audits = repository.findByManufacturerNameAndIsDisclosedTrueAndIsDeletedFalse(cleanCompanyName(user.getCompanyName()));
+            String mfrName = (user.getManufacturer() != null) ? user.getManufacturer().getName() : user.getCompanyName();
+            log.info(">>>> [AUDIT DEBUG] Manufacturer Audits request. User: '{}', User Company: '{}'", username, mfrName);
+            audits = repository.findByManufacturerNameAndIsDisclosedTrueAndIsDeletedFalse(cleanCompanyName(mfrName));
             log.info(">>>> [AUDIT DEBUG] Found Manufacturer Audits count: {}", audits.size());
-            if (audits.isEmpty()) {
-                List<ProductionAudit> all = repository.findAll();
-                log.info(">>>> [AUDIT DEBUG] DB Audits total size: {}. All manufacturers in DB: {}", 
-                    all.size(), 
-                    all.stream().map(a -> "[" + a.getManufacturerName() + ", isDiscl=" + a.isDisclosed() + ", isDel=" + a.isDeleted() + ", item=" + a.getItemCode() + "]").collect(Collectors.toList())
-                );
-            }
         }
 
         return audits.stream().map(this::convertToDTO).collect(Collectors.toList());

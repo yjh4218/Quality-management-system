@@ -30,6 +30,9 @@ public class SystemInitializationService {
     private final MailTemplateService mailTemplateService;
     private final SalesChannelRepository salesChannelRepository;
     private final ChannelPackagingRuleRepository channelPackagingRuleRepository;
+    private final DocumentRequestService documentRequestService;
+    private final com.example.ims.repository.ChannelNoteCategoryRepository categoryRepository;
+    private final com.example.ims.repository.ChannelSpecialNoteRepository noteRepository;
 
     @Transactional
     public void seedAndRepairData(String adminInitialPassword) {
@@ -65,6 +68,13 @@ public class SystemInitializationService {
         repairOtherTablesSchema(); // [추가] 소프트 델리트 및 기타 스키마 보정
         repairRegulatoryIngredientsTableSchema(); // Drop unique constraints/indexes on regulatory_ingredients for full sync
         seedDummyProducts(); // Seed dummy products for testing
+
+        try {
+            documentRequestService.syncAllMasterProductRequirements();
+            log.info(">>>> [SYSTEM INIT] Master product document requirements synced successfully.");
+        } catch (Exception e) {
+            log.error(">>>> [SYSTEM INIT] [ERROR] Failed to sync master product requirements: {}", e.getMessage(), e);
+        }
 
         // [추가] 유통 채널 및 포장 규칙 시딩
         try {
@@ -165,8 +175,7 @@ public class SystemInitializationService {
             }
 
             // Force set/reset if it's local and we want the default "admin"
-            if (isLocal && (admin.getPassword() == null || admin.getPassword().isEmpty()
-                    || "admin".equals(targetPassword))) {
+            if (isLocal) {
                 admin.setPassword(passwordEncoder.encode("admin"));
                 admin.setLocked(false);
                 admin.setFailedAttempts(0);
@@ -174,7 +183,7 @@ public class SystemInitializationService {
                 changed = true;
                 log.info(
                         ">>>> [SYSTEM INIT] [LOCAL] Ensuring admin password is set to 'admin', unlocked, and enabled.");
-            } else if (targetPassword != null && !targetPassword.isEmpty() && !targetPassword.equals("admin")) {
+            } else if (targetPassword != null && !targetPassword.isEmpty()) {
                 admin.setPassword(passwordEncoder.encode(targetPassword));
                 changed = true;
             }
@@ -1196,6 +1205,161 @@ public class SystemInitializationService {
             log.info(">>>> [SYSTEM INIT] Notification Settings seeded successfully.");
         } catch (Exception e) {
             log.error(">>>> [SYSTEM INIT] [ERROR] Failed to seed notification settings: {}", e.getMessage(), e);
+        }
+
+        seedChannelNoteCategoriesAndNotes();
+    }
+
+    private void seedChannelNoteCategoriesAndNotes() {
+        try {
+            log.info(">>>> [SYSTEM INIT] Starting seedChannelNoteCategoriesAndNotes...");
+
+            // 1. 카테고리 시드 생성 (채널 스티커 / 바코드 부착 규정 / 아웃박스 바코드 부착 규정 분리)
+            Object[][] categories = new Object[][]{
+                    {"INBOX_USAGE", "인박스 사용 규정", 1},
+                    {"OUTBOX_VOID_FILL", "아웃박스 완충재/빈공간 처리", 2},
+                    {"EXPIRY_MARKING", "사용기한 착인/압인 기준", 3},
+                    {"LABEL_CARD_MARKING", "현품표 표기 규정", 4},
+                    {"PACKAGE_LANGUAGE", "패키지 언어/표기 규정", 5},
+                    {"GIFT_SET_LOT_MARKING", "기획세트 로트 착인 규정", 6},
+                    {"CHANNEL_STICKER", "채널 스티커 부착 규정", 7},
+                    {"BARCODE_ATTACHMENT", "바코드 부착 규정", 8},
+                    {"OUTBOX_BARCODE_REQ", "아웃박스 바코드 부착 규정", 9},
+                    {"ETC", "기타 특이사항", 10}
+            };
+
+            for (Object[] cat : categories) {
+                String key = (String) cat[0];
+                String label = (String) cat[1];
+                Integer order = (Integer) cat[2];
+
+                var existingOpt = categoryRepository.findByCategoryKey(key);
+                if (existingOpt.isEmpty()) {
+                    categoryRepository.save(com.example.ims.entity.ChannelNoteCategory.builder()
+                            .categoryKey(key)
+                            .categoryLabel(label)
+                            .displayOrder(order)
+                            .isActive(true)
+                            .build());
+                } else {
+                    var existing = existingOpt.get();
+                    existing.setCategoryLabel(label);
+                    existing.setDisplayOrder(order);
+                    categoryRepository.save(existing);
+                }
+            }
+
+            var catInbox = categoryRepository.findByCategoryKey("INBOX_USAGE").orElseThrow();
+            var catOutbox = categoryRepository.findByCategoryKey("OUTBOX_VOID_FILL").orElseThrow();
+            var catExpiry = categoryRepository.findByCategoryKey("EXPIRY_MARKING").orElseThrow();
+            var catLabelCard = categoryRepository.findByCategoryKey("LABEL_CARD_MARKING").orElseThrow();
+            var catPkgLang = categoryRepository.findByCategoryKey("PACKAGE_LANGUAGE").orElseThrow();
+            var catGiftLot = categoryRepository.findByCategoryKey("GIFT_SET_LOT_MARKING").orElseThrow();
+            var catSticker = categoryRepository.findByCategoryKey("CHANNEL_STICKER").orElseThrow();
+            var catBarcode = categoryRepository.findByCategoryKey("BARCODE_ATTACHMENT").orElseThrow();
+            var catOutboxBarcode = categoryRepository.findByCategoryKey("OUTBOX_BARCODE_REQ").orElseThrow();
+            var catEtc = categoryRepository.findByCategoryKey("ETC").orElseThrow();
+
+            // 2. 전체 채널 조회 및 바코드 부착 규정 기본값 & PX 전용 설정
+            var channels = salesChannelRepository.findAll();
+            for (var ch : channels) {
+                String code = ch.getChannelCode() != null ? ch.getChannelCode().toUpperCase() : "";
+                String name = ch.getName() != null ? ch.getName() : "";
+
+                // 모든 채널 기본 바코드 부착 규정
+                saveOrUpdateNote(ch, catBarcode, "아웃박스 현품표, 팔레트 현품표, 바코드 라벨에 부착 필수");
+
+                if (code.contains("PX") || name.contains("PX") || name.contains("군납")) {
+                    // PX 전용 아웃박스 바코드 부착 필수
+                    saveOrUpdateNote(ch, catOutboxBarcode, "아웃박스 바코드 부착 필수");
+                }
+
+                if (code.contains("OY") || name.contains("올리브영")) {
+                    // OY 매핑 (4개 항목 정확 원문)
+                    saveOrUpdateNote(ch, catInbox, "인박스 사용 시 B형 인박스 사용, 인박스에 박스 테이프 부착 금지");
+                    saveOrUpdateNote(ch, catOutbox, "아웃박스 포장 중 단상자 POP 등으로 빈공간 발생 시 비닐 에어캡으로 공간 완충 필요 (부직포, 발포지, 폐지, 신문지 등 사용 금지)");
+                    saveOrUpdateNote(ch, catExpiry, "사용기한 착인 또는 압인 시 'EXP YYYYMMDD까지' 기재");
+                    saveOrUpdateNote(ch, catLabelCard, "인박스 현품표 사용 시 '바코드' 미기재 필수");
+                } else if (code.contains("JP-OFF") || (name.contains("일본") && name.contains("오프라인"))) {
+                    // JP-OFF 매핑 (5개 항목 정확 원문)
+                    saveOrUpdateNote(ch, catInbox, "인박스(+현품표) 필수");
+                    saveOrUpdateNote(ch, catExpiry, "전 품목 사용기한 착인 또는 압인 금지, 제조번호만 착인 또는 압인");
+                    saveOrUpdateNote(ch, catLabelCard, "인박스, 아웃박스, 팔레트 현품표에 사용기한 기재 금지");
+                    saveOrUpdateNote(ch, catPkgLang, "일문 패키지");
+                    saveOrUpdateNote(ch, catGiftLot, "기획세트의 경우, 모든 구성품의 로트 착인하며, 인박스, 아웃박스, 팔레트 현품표에도 모든 구성품의 로트 착인");
+                } else {
+                    // 기타 채널: 기존 specialNotes 통짜 원문을 문장/라인별로 분석하여 8개 항목으로 자동 이관 정리
+                    if (ch.getSpecialNotes() != null && !ch.getSpecialNotes().trim().isEmpty()) {
+                        String rawNotes = ch.getSpecialNotes().trim();
+                        String[] lines = rawNotes.split("\n");
+
+                        for (String line : lines) {
+                            String trimmed = line.trim();
+                            if (trimmed.isEmpty()) continue;
+
+                            if (trimmed.contains("인박스") || trimmed.contains("내포장")) {
+                                appendOrCreateNote(ch, catInbox, trimmed);
+                            } else if (trimmed.contains("아웃박스") || trimmed.contains("완충") || trimmed.contains("에어캡") || trimmed.contains("빈공간")) {
+                                appendOrCreateNote(ch, catOutbox, trimmed);
+                            } else if (trimmed.contains("사용기한") || trimmed.contains("EXP") || trimmed.contains("착인") || trimmed.contains("압인")) {
+                                appendOrCreateNote(ch, catExpiry, trimmed);
+                            } else if (trimmed.contains("현품표") || trimmed.contains("라벨표")) {
+                                appendOrCreateNote(ch, catLabelCard, trimmed);
+                            } else if (trimmed.contains("패키지") || trimmed.contains("언어") || trimmed.contains("일문") || trimmed.contains("영문")) {
+                                appendOrCreateNote(ch, catPkgLang, trimmed);
+                            } else if (trimmed.contains("기획") || trimmed.contains("로트")) {
+                                appendOrCreateNote(ch, catGiftLot, trimmed);
+                            } else if (trimmed.contains("스티커") || trimmed.contains("바코드") || trimmed.contains("물류")) {
+                                appendOrCreateNote(ch, catSticker, trimmed);
+                            } else {
+                                appendOrCreateNote(ch, catEtc, trimmed);
+                            }
+                        }
+                    }
+                }
+                // 이관 완료 후 레거시 통짜 specialNotes 컬럼 완전 삭제/초기화
+                ch.setSpecialNotes(null);
+                salesChannelRepository.save(ch);
+            }
+            log.info(">>>> [SYSTEM INIT] All channel legacy specialNotes mapped to 8 categories and legacy field cleared successfully.");
+        } catch (Exception e) {
+            log.error(">>>> [SYSTEM INIT] [ERROR] Failed to seed channel notes: {}", e.getMessage(), e);
+        }
+    }
+
+    private void appendOrCreateNote(com.example.ims.entity.SalesChannel ch, com.example.ims.entity.ChannelNoteCategory cat, String lineContent) {
+        var existing = noteRepository.findByChannelIdAndCategoryId(ch.getId(), cat.getId());
+        if (existing.isPresent()) {
+            var note = existing.get();
+            if (note.getNoteContent() == null || note.getNoteContent().trim().isEmpty()) {
+                note.setNoteContent(lineContent);
+            } else if (!note.getNoteContent().contains(lineContent)) {
+                note.setNoteContent(note.getNoteContent() + "\n" + lineContent);
+            }
+            noteRepository.save(note);
+        } else {
+            noteRepository.save(com.example.ims.entity.ChannelSpecialNote.builder()
+                    .channel(ch)
+                    .category(cat)
+                    .noteContent(lineContent)
+                    .updatedBy("MIGRATION")
+                    .build());
+        }
+    }
+
+    private void saveOrUpdateNote(com.example.ims.entity.SalesChannel ch, com.example.ims.entity.ChannelNoteCategory cat, String content) {
+        var existing = noteRepository.findByChannelIdAndCategoryId(ch.getId(), cat.getId());
+        if (existing.isPresent()) {
+            var note = existing.get();
+            note.setNoteContent(content);
+            noteRepository.save(note);
+        } else {
+            noteRepository.save(com.example.ims.entity.ChannelSpecialNote.builder()
+                    .channel(ch)
+                    .category(cat)
+                    .noteContent(content)
+                    .updatedBy("SYSTEM_INIT")
+                    .build());
         }
     }
 }

@@ -15,10 +15,12 @@ public class AccessLogService {
 
     private final AccessLogRepository accessLogRepository;
 
+    private final com.example.ims.repository.UserRepository userRepository;
+
     @Transactional
     public void log(String username, String name, String action, String pageUrl, String pageName, HttpServletRequest request) {
-        String ipAddress = request.getRemoteAddr();
-        String userAgent = request.getHeader("User-Agent");
+        String ipAddress = request != null ? request.getRemoteAddr() : "127.0.0.1";
+        String userAgent = request != null ? request.getHeader("User-Agent") : "System";
 
         AccessLog log = AccessLog.builder()
                 .username(username)
@@ -28,6 +30,36 @@ public class AccessLogService {
                 .pageName(pageName)
                 .ipAddress(ipAddress)
                 .userAgent(userAgent)
+                .build();
+
+        accessLogRepository.save(log);
+    }
+
+    @Transactional
+    public void recordPageView(String username, String pageKey, String pageTitle, java.time.LocalDateTime now) {
+        if (username == null || username.trim().isEmpty()) {
+            username = "anonymous";
+        }
+        
+        String name = username;
+        try {
+            var userOpt = userRepository.findByUsername(username);
+            if (userOpt.isPresent()) {
+                name = userOpt.get().getName();
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+
+        AccessLog log = AccessLog.builder()
+                .username(username)
+                .name(name)
+                .action("PAGE_VIEW")
+                .pageUrl(pageKey)
+                .pageName(pageTitle)
+                .ipAddress("127.0.0.1")
+                .userAgent("Web Client / Single Page App")
+                .createdAt(now != null ? now : java.time.LocalDateTime.now())
                 .build();
 
         accessLogRepository.save(log);

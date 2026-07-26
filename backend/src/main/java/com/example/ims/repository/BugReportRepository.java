@@ -6,7 +6,14 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
+import java.time.LocalDateTime;
+import java.util.Optional;
+
 @Repository
 public interface BugReportRepository extends JpaRepository<BugReport, Long> {
     List<BugReport> findAllByOrderByCreatedAtDesc();
+    
+    Optional<BugReport> findFirstByScreenNameAndDescriptionAndCreatedAtAfterOrderByCreatedAtDesc(
+        String screenName, String description, LocalDateTime since
+    );
 }

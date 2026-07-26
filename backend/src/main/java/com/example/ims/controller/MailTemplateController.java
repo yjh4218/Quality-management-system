@@ -4,6 +4,7 @@ import com.example.ims.entity.MailTemplate;
 import com.example.ims.service.MailTemplateService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -29,17 +30,20 @@ public class MailTemplateController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','QUALITY_TEAM')")
     public ResponseEntity<MailTemplate> createTemplate(@RequestBody MailTemplate template) {
         return ResponseEntity.ok(mailTemplateService.saveTemplate(template));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','QUALITY_TEAM')")
     public ResponseEntity<MailTemplate> updateTemplate(@PathVariable Long id, @RequestBody MailTemplate template) {
         template.setId(id);
         return ResponseEntity.ok(mailTemplateService.saveTemplate(template));
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','QUALITY_TEAM')")
     public ResponseEntity<Void> deleteTemplate(@PathVariable Long id) {
         mailTemplateService.deleteTemplate(id);
         return ResponseEntity.noContent().build();

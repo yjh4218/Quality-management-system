@@ -2,11 +2,17 @@ package com.example.ims.entity;
 
 import jakarta.persistence.*;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  * 품목 또는 제조사별 필수 서류 요구사항 (DocumentRequirement) 엔티티.
  */
 @Entity
+@Getter
+@Setter
 @Table(name = "document_requirements")
 public class DocumentRequirement {
 
@@ -48,6 +54,18 @@ public class DocumentRequirement {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private DocumentStatus status = DocumentStatus.PENDING;
+
+    @Column(name = "security_token")
+    private String securityToken;
+
+    @Column(name = "token_expires_at")
+    private LocalDateTime tokenExpiresAt;
+
+    @Column(name = "last_uploaded_by")
+    private String lastUploadedBy;
+
+    @Column(name = "last_uploaded_at")
+    private LocalDateTime lastUploadedAt;
 
     public DocumentRequirement() {}
 

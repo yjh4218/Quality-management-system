@@ -27,17 +27,20 @@ public class DocumentRequestService {
     private final CustomDocumentTypeRepository customDocumentTypeRepository;
     private final ProductRepository productRepository;
     private final EmailService emailService;
+    private final AuditLogService auditLogService;
 
     public DocumentRequestService(DocumentRequirementRepository requirementRepository,
                                    DocumentRequestLogRepository requestLogRepository,
                                    CustomDocumentTypeRepository customDocumentTypeRepository,
                                    ProductRepository productRepository,
-                                   EmailService emailService) {
+                                   EmailService emailService,
+                                   AuditLogService auditLogService) {
         this.requirementRepository = requirementRepository;
         this.requestLogRepository = requestLogRepository;
         this.customDocumentTypeRepository = customDocumentTypeRepository;
         this.productRepository = productRepository;
         this.emailService = emailService;
+        this.auditLogService = auditLogService;
     }
 
     @Value("${app.frontend.url:http://localhost:5173}")
@@ -84,6 +87,26 @@ public class DocumentRequestService {
                 }
             }
         }
+    }
+
+    /**
+     * 기존 DB의 모든 마스터 제품(isMaster=true)을 조회하여 4종 기본 서류 및 커스텀 서류 요구사항을 전수 동기화/생성합니다.
+     */
+    @Transactional
+    public int syncAllMasterProductRequirements() {
+        List<Product> masterProducts = productRepository.findByIsMasterTrue();
+        if (masterProducts == null || masterProducts.isEmpty()) {
+            // fallback: find all active products if isMaster status is unassigned
+            masterProducts = productRepository.findAll().stream().filter(Product::isActive).toList();
+        }
+
+        int count = 0;
+        for (Product master : masterProducts) {
+            initializeMasterProductRequirements(master);
+            count++;
+        }
+        log.info("[DOCUMENT] Successfully synced requirements for {} master products.", count);
+        return count;
     }
 
     /**
@@ -163,28 +186,109 @@ public class DocumentRequestService {
                 .build();
         requestLogRepository.save(logEntity);
 
-        // 2. 이메일 템플릿 본문 작성
-        String uploadLink = frontendUrl + "/vendor-upload/" + token;
-        String subject = "[QMS 필수서류 제출 요청] " + targetName + " - " + docName;
+        // 2. 이메일 템플릿 본문 작성 (한국어/영어 병기)
+        String uploadLink = frontendUrl + "/vendor/upload?token=" + token;
+        String subject = "[QMS 필수서류 제출 요청 / Document Request] " + targetName + " - " + docName;
         String body = "<html>" +
-                "<body>" +
-                "  <h2>QMS 필수 품질서류 자동 요청 안내</h2>" +
-                "  <p>안녕하세요. <b>" + targetName + "</b> 관련 품질서류 보완 및 제출을 요청드립니다.</p>" +
-                "  <p>제출 대상 서류: <b>" + docName + "</b></p>" +
-                "  <p>아래 안전 링크를 클릭하여 로그인 없이 직접 관련 PDF/이미지 파일을 제출할 수 있습니다.</p>" +
-                "  <p><a href=\"" + uploadLink + "\" style=\"display: inline-block; padding: 12px 24px; color: white; background-color: #003366; text-decoration: none; border-radius: 6px; font-weight: bold;\">📂 품질 서류 제출하러 가기</a></p>" +
-                "  <p>링크가 클릭되지 않는 경우 아래 주소를 복사하여 브라우저에 붙여넣어 주세요.</p>" +
-                "  <p>" + uploadLink + "</p>" +
-                "  <p>※ 본 링크는 발송일로부터 14일 동안만 유효합니다. (만료일시: " + expiresAt.toString().substring(0, 16).replace("T", " ") + ")</p>" +
+                "<body style=\"font-family: Arial, sans-serif; line-height: 1.6; color: #333;\">" +
+                "  <h2>QMS 필수 품질서류 자동 요청 안내 <br/><span style=\"font-size: 14px; color: #666; font-weight: normal;\">Notice of Required Quality Document Submission</span></h2>" +
+                "  <hr style=\"border: none; border-top: 1px solid #eee; margin: 15px 0;\"/>" +
+                "  <p>안녕하세요. <b>" + targetName + "</b> 관련 품질서류 보완 및 제출을 요청드립니다.<br/>" +
+                "  <span style=\"font-size: 12px; color: #555;\">Dear Vendor, please submit the required quality document for <b>" + targetName + "</b>.</span></p>" +
+                "  <p>제출 대상 서류 (Document): <b>" + docName + "</b></p>" +
+                "  <p>아래 안전 링크를 클릭하여 별도의 회원가입/로그인 없이 파일(PDF, DOCX, 이미지)을 직접 제출하실 수 있습니다.<br/>" +
+                "  <span style=\"font-size: 12px; color: #555;\">Please click the secure link below to upload your document directly without login.</span></p>" +
+                "  <p style=\"margin: 20px 0;\"><a href=\"" + uploadLink + "\" style=\"display: inline-block; padding: 12px 24px; color: white; background-color: #2563eb; text-decoration: none; border-radius: 6px; font-weight: bold;\">📂 품질 서류 제출하러 가기 (Submit Document)</a></p>" +
+                "  <p style=\"font-size: 12px; color: #666;\">링크가 클릭되지 않는 경우 아래 주소를 복사하여 브라우저에 붙여넣어 주세요.<br/>If the button doesn't work, copy and paste the URL below into your browser:</p>" +
+                "  <p style=\"font-size: 12px; color: #2563eb;\">" + uploadLink + "</p>" +
+                "  <p style=\"font-size: 12px; color: #dc2626;\">※ 본 링크는 발송일로부터 14일 동안 유효하며 1회 제출 시 파기됩니다. (만료일: " + expiresAt.toString().substring(0, 16).replace("T", " ") + ")<br/>" +
+                "  * This link is valid for 14 days and will expire after a successful submission.</p>" +
                 "</body>" +
                 "</html>";
 
         // EmailService의 공용 비동기 발송 활용
         emailService.sendCustomEmail(emailAddress, subject, body);
 
-        // 3. 요구사항 상태 변경
+        // 3. 요구사항 상태 및 보안 토큰 변경
         req.setStatus(DocumentStatus.REQUESTED);
+        req.setSecurityToken(token);
+        req.setTokenExpiresAt(expiresAt);
         requirementRepository.save(req);
+
+        try {
+            auditLogService.logAction(
+                    "SYSTEM_MAIL",
+                    "DOCUMENT_REQUEST_EMAIL",
+                    "필수 품질서류 발송/독촉 이메일",
+                    String.format("서류 ID [%d] 제출 요청 이메일 발송 완료 (수신: %s)", req.getId(), emailAddress)
+            );
+        } catch (Exception e) {
+            log.error("Failed to log audit for document request email", e);
+        }
+    }
+
+    /**
+     * 마스터 품목에 연동된 복수의 선택 서류들을 한 번의 이메일 전송으로 일괄 재발송 처리합니다.
+     */
+    @Transactional
+    public int sendBatchDocumentRequests(List<Long> requirementIds, String emailAddress) {
+        if (requirementIds == null || requirementIds.isEmpty()) {
+            return 0;
+        }
+
+        List<DocumentRequirement> reqs = requirementRepository.findAllById(requirementIds);
+        if (reqs.isEmpty()) return 0;
+
+        StringBuilder docNamesBuilder = new StringBuilder();
+        String targetName = getTargetName(reqs.get(0));
+
+        String token = UUID.randomUUID().toString();
+        LocalDateTime expiresAt = LocalDateTime.now().plusDays(14);
+
+        for (int i = 0; i < reqs.size(); i++) {
+            DocumentRequirement req = reqs.get(i);
+            String docName = getDocumentName(req);
+            docNamesBuilder.append(docName);
+            if (i < reqs.size() - 1) docNamesBuilder.append(", ");
+
+            DocumentRequestLog logEntity = DocumentRequestLog.builder()
+                    .requirementId(req.getId())
+                    .requestedAt(LocalDateTime.now())
+                    .uploadToken(token)
+                    .tokenExpiresAt(expiresAt)
+                    .emailSentTo(emailAddress)
+                    .reminderCount(0)
+                    .build();
+            requestLogRepository.save(logEntity);
+
+            req.setStatus(DocumentStatus.REQUESTED);
+            req.setSecurityToken(token);
+            req.setTokenExpiresAt(expiresAt);
+            requirementRepository.save(req);
+        }
+
+        String allDocNames = docNamesBuilder.toString();
+        String uploadLink = frontendUrl + "/vendor/upload?token=" + token;
+        String subject = "[QMS 필수서류 제출 요청 / Document Request] " + (targetName != null ? targetName : "마스터 품목") + " - " + allDocNames;
+        String body = "<html>" +
+                "<body style=\"font-family: Arial, sans-serif; line-height: 1.6; color: #333;\">" +
+                "  <h2>QMS 필수 품질서류 일괄 요청 안내 <br/><span style=\"font-size: 14px; color: #666; font-weight: normal;\">Notice of Required Quality Documents Submission</span></h2>" +
+                "  <hr style=\"border: none; border-top: 1px solid #eee; margin: 15px 0;\"/>" +
+                "  <p>안녕하세요. <b>" + targetName + "</b> 관련 필수 품질서류 보완 및 제출을 요청드립니다.<br/>" +
+                "  <span style=\"font-size: 12px; color: #555;\">Dear Vendor, please submit the required quality documents for <b>" + targetName + "</b>.</span></p>" +
+                "  <p>제출 대상 서류 목록 (Selected Documents): <b>" + allDocNames + "</b></p>" +
+                "  <p>아래 안전 링크를 클릭하여 별도의 회원가입/로그인 없이 파일(PDF, DOCX, 이미지)을 직접 제출하실 수 있습니다.<br/>" +
+                "  <span style=\"font-size: 12px; color: #555;\">Please click the secure link below to upload your documents directly without login.</span></p>" +
+                "  <p style=\"margin: 20px 0;\"><a href=\"" + uploadLink + "\" style=\"display: inline-block; padding: 12px 24px; color: white; background-color: #2563eb; text-decoration: none; border-radius: 6px; font-weight: bold;\">📂 선택 서류 제출하러 가기 (Submit Selected Documents)</a></p>" +
+                "  <p style=\"font-size: 12px; color: #666;\">링크가 클릭되지 않는 경우 아래 주소를 복사하여 브라우저에 붙여넣어 주세요.<br/>If the button doesn't work, copy and paste the URL below into your browser:</p>" +
+                "  <p style=\"font-size: 12px; color: #2563eb;\">" + uploadLink + "</p>" +
+                "  <p style=\"font-size: 12px; color: #dc2626;\">※ 본 링크는 발송일로부터 14일 동안 유효하며 1회 제출 시 파기됩니다. (만료일: " + expiresAt.toString().substring(0, 16).replace("T", " ") + ")<br/>" +
+                "  * This link is valid for 14 days and will expire after a successful submission.</p>" +
+                "</body>" +
+                "</html>";
+
+        emailService.sendCustomEmail(emailAddress, subject, body);
+        return reqs.size();
     }
 
     /**

@@ -32,6 +32,7 @@ public class AuditLogService {
     private final WmsInboundRepository wmsInboundRepository;
     private final ProductionAuditRepository productionAuditRepository;
     private final ObjectMapper objectMapper;
+    private final AccessLogService accessLogService;
     
     // 순환 참조 방지를 위해 서비스 대신 레포지토리 직접 사용 또는 이벤트 핸들링만 수행
     // productService, claimService, wmsService는 더 이상 직접 참조하지 않음
@@ -61,8 +62,8 @@ public class AuditLogService {
             Long modifierId, String modifierUsername, String modifierName, String modifierCompany,
             String description, String oldValue, String newValue, String changeDetail) {
         AuditLog auditLog = AuditLog.builder()
-                .entityType(entityType)
-                .entityId(entityId)
+                .entityType(entityType != null ? entityType : "GENERAL")
+                .entityId(entityId != null ? entityId : 0L)
                 .action(action)
                 .modifier(modifier)
                 .modifierId(modifierId)
@@ -87,6 +88,14 @@ public class AuditLogService {
             String description, String oldValue, String newValue) {
         log(entityType, entityId, action, modifier, modifierId, modifierUsername, modifierName, modifierCompany, 
             description, oldValue, newValue, null);
+    }
+
+    /**
+     * [추가] 간편 액션 로그 기록용 헬퍼 메서드
+     */
+    @Transactional
+    public void logAction(String modifier, String action, String description, String changeDetail) {
+        log(action, null, action, modifier, null, modifier, modifier, null, description, null, null, changeDetail);
     }
 
     @Transactional
@@ -225,12 +234,16 @@ public class AuditLogService {
     }
 
     /**
-     * 사용자의 페이지 열람 기록을 남깁니다.
+     * 사용자의 페이지 열람 기록을 AccessLogService에 저장합니다.
      */
     @Transactional
     public void logPageView(String username, String pageKey, String pageTitle) {
-        // [수정] 페이지 열람 기록은 AccessLogService에서 관리하므로 AuditLog에서는 기록하지 않음
-        log.debug("[AUDIT] Page View (Skipped in AuditLog): {} by {}", pageKey, username);
+        try {
+            accessLogService.recordPageView(username, pageKey, pageTitle, LocalDateTime.now());
+            log.debug("[AUDIT] Recorded Page View: {} ({}) by {}", pageTitle, pageKey, username);
+        } catch (Exception e) {
+            log.error("[AUDIT] Failed to record page view log: {}", e.getMessage());
+        }
     }
 
     /**

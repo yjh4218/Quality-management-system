@@ -44,10 +44,14 @@ public class AdminController {
         return ResponseEntity.ok(response);
     }
 
+    private final com.example.ims.service.AuditLogService auditLogService;
+
     @PostMapping("/{id}/approve")
     @PreAuthorize("@perm.can('users', 'EDIT')")
     @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
-    public ResponseEntity<?> approveUser(@PathVariable Long id) {
+    public ResponseEntity<?> approveUser(
+            @PathVariable Long id,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal org.springframework.security.core.userdetails.UserDetails userDetails) {
         log.info("[ADMIN] Approving user ID: {}", id);
         return userRepository.findById(id)
                 .map(user -> {
@@ -60,6 +64,18 @@ public class AdminController {
                         log.warn("No email address found for user: {}, skipping notification.", user.getUsername());
                     }
                     
+                    String modifier = (userDetails != null) ? userDetails.getUsername() : "ADMIN";
+                    try {
+                        auditLogService.logAction(
+                            modifier,
+                            "USER_APPROVE",
+                            "사용자 승인",
+                            String.format("사용자 [%s](ID:%d, %s) 계정 승인 처리", user.getName(), user.getId(), user.getUsername())
+                        );
+                    } catch (Exception auditEx) {
+                        log.error("Failed to log audit for user approval", auditEx);
+                    }
+
                     return ResponseEntity.ok("User approved successfully");
                 })
                 .orElse(ResponseEntity.notFound().build());

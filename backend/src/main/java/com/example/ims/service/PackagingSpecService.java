@@ -11,6 +11,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Comparator;
 import java.util.stream.Collectors;
 
 /**
@@ -28,6 +29,8 @@ public class PackagingSpecService {
     private final PackagingSpecRevisionRepository revisionRepository;
     private final PackagingSpecComponentRepository componentRepository;
     private final PackagingMethodImageRepository methodImageRepository;
+    private final AuditLogService auditLogService;
+    private final com.example.ims.repository.ChannelSpecialNoteRepository specialNoteRepository;
 
     @Transactional(readOnly = true)
     public List<PackagingSpecification> getSpecsByProductId(Long productId) {
@@ -78,7 +81,20 @@ public class PackagingSpecService {
             }
         }
 
-        return specRepository.save(spec);
+        PackagingSpecification savedSpec = specRepository.save(spec);
+
+        try {
+            auditLogService.logAction(
+                    username != null ? username : "SYSTEM",
+                    "CREATE_PACKAGING_SPEC",
+                    "PACKAGING_SPEC",
+                    String.format("포장사양서 신규 생성 [ID: %d, 품목: %s, 버전: %s]", savedSpec.getId(), product.getProductName(), savedSpec.getVersion())
+            );
+        } catch (Exception e) {
+            log.error("Audit log failed for createSpec", e);
+        }
+
+        return savedSpec;
     }
 
     /**
@@ -255,6 +271,23 @@ public class PackagingSpecService {
             }
         }
 
+        // 유통 채널별 항목별 특이사항 (ChannelSpecialNote) 렌더링 연결 ([항목명] 내용)
+        if (spec.getProduct() != null && spec.getProduct().getChannels() != null) {
+            for (SalesChannel ch : spec.getProduct().getChannels()) {
+                var notes = specialNoteRepository.findByChannelId(ch.getId());
+                notes.stream()
+                        .filter(n -> n.getCategory() != null && Boolean.TRUE.equals(n.getCategory().getIsActive()))
+                        .filter(n -> n.getNoteContent() != null && !n.getNoteContent().trim().isEmpty())
+                        .sorted(Comparator.comparingInt(n -> n.getCategory().getDisplayOrder()))
+                        .forEach(n -> {
+                            if (remarksBuilder.length() > 0) {
+                                remarksBuilder.append("\n");
+                            }
+                            remarksBuilder.append(String.format("[%s] %s", n.getCategory().getCategoryLabel(), n.getNoteContent().trim()));
+                        });
+            }
+        }
+
         if (remarksBuilder.length() > 0) {
             spec.setRemarks(remarksBuilder.toString());
         }
@@ -389,6 +422,12 @@ public class PackagingSpecService {
             spec.setRevisionNotes("포장사양 업데이트");
         }
         
+        if (spec.getId() != null) {
+            specRepository.findById(spec.getId()).ifPresent(existing -> {
+                spec.setBomItems(existing.getBomItems());
+            });
+        }
+        
         PackagingSpecification savedSpec = specRepository.save(spec);
         Long specId = savedSpec.getId();
         
@@ -431,6 +470,17 @@ public class PackagingSpecService {
         }
         
         List<com.example.ims.entity.PackagingMethodImage> activeImages = methodImageRepository.findActiveBySpecId(specId);
+
+        try {
+            auditLogService.logAction(
+                    username != null ? username : "SYSTEM",
+                    "SAVE_PACKAGING_SPEC",
+                    "PACKAGING_SPEC",
+                    String.format("포장사양서 전체 저장/업데이트 [ID: %d, 품목: %s, 버전: %s]", specId, savedSpec.getProduct() != null ? savedSpec.getProduct().getProductName() : "-", savedSpec.getVersion())
+            );
+        } catch (Exception e) {
+            log.error("Audit log failed for saveFullSpec", e);
+        }
         
         return new PackagingSpecFullDto(savedSpec, revisions, components, activeImages);
     }

@@ -409,6 +409,10 @@ const LogManagementPage = ({ user }) => {
                             <option value="INBOUND">입고 품질</option>
                             <option value="MANUFACTURER">제조사 관리</option>
                             <option value="BRAND">브랜드 관리</option>
+                            <option value="ROLE_PERMISSIONS_UPDATE">역할 권한 변경 (Diff)</option>
+                            <option value="DOCUMENT_RE_REQUEST">서류 독촉 및 재발송</option>
+                            <option value="MANUFACTURER_INVITE_CREATE">제조사 초대 생성</option>
+                            <option value="USER_APPROVE">사용자 계정 승인</option>
                             <option value="ACCESS">시스템 접속</option>
                             <option value="VIEW">페이지 열람</option>
                         </select>

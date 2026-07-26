@@ -71,8 +71,9 @@ public class DashboardService {
 
         // 1. Common Logic: Recent Claims (Limited to 50)
         if ("ROLE_MANUFACTURER".equals(role)) {
+            String mfrName = (user.getManufacturer() != null) ? user.getManufacturer().getName() : user.getCompanyName();
             builder.recentClaims(claimRepository
-                    .findTop50ByManufacturerAndReceiptDateAfterOrderByReceiptDateDesc(company,
+                    .findTop50ByManufacturerAndReceiptDateAfterOrderByReceiptDateDesc(mfrName,
                             oneMonthAgo.toLocalDate())
                     .stream().map(this::mapClaimToItem).collect(Collectors.toList()));
         } else {

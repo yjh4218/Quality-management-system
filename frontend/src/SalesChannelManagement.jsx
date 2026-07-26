@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AgGridReact } from 'ag-grid-react';
-import * as api from './api';
+import apiDefault, * as api from './api';
 import { toast } from 'react-toastify';
 import SaveConfirmModal from './components/SaveConfirmModal';
 import { usePermissions } from './usePermissions';
@@ -31,10 +31,98 @@ const SalesChannelManagement = ({ user }) => {
     });
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
     const [quickFilterText, setQuickFilterText] = useState('');
+    const [categorizedNotes, setCategorizedNotes] = useState([]);
+    const [showLegacyNotes, setShowLegacyNotes] = useState(false);
+    const [previewFile, setPreviewFile] = useState(null); // { url, type }
+
+    const getFullFileUrl = (url) => {
+        if (!url) return '';
+        if (url.startsWith('http://') || url.startsWith('https://')) return url;
+        const baseUrl = api.getBaseURL ? api.getBaseURL() : 'http://localhost:8080';
+        return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+    };
 
     useEffect(() => {
         fetchChannels();
     }, []);
+
+    const applyFormat = (itemCatId, formatType, colorVal = null) => {
+        setCategorizedNotes(prev => prev.map(n => {
+            if (n.categoryId !== itemCatId) return n;
+            let current = n.noteContent || '';
+            let formatted = current;
+
+            if (formatType === 'bold') {
+                formatted = `<b>${current}</b>`;
+            } else if (formatType === 'italic') {
+                formatted = `<i>${current}</i>`;
+            } else if (formatType === 'color' && colorVal) {
+                formatted = `<span style="color: ${colorVal}">${current}</span>`;
+            }
+
+            return { ...n, noteContent: formatted };
+        }));
+    };
+
+    const handleFileUpload = async (itemCatId, file) => {
+        if (!file) return;
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+            const res = await apiDefault.post('/api/sales-channels/upload-sticker-file', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            const { fileUrl, fileType } = res.data;
+
+            setCategorizedNotes(prev => prev.map(n => {
+                if (n.categoryId === itemCatId) {
+                    return {
+                        ...n,
+                        fileUrl: fileUrl,
+                        fileType: fileType,
+                        noteContent: n.noteContent || '채널 스티커 규정 파일 첨부됨'
+                    };
+                }
+                return n;
+            }));
+
+            toast.success("스티커 파일이 성공적으로 첨부되었습니다.");
+        } catch (err) {
+            console.error("파일 업로드 실패:", err);
+            toast.error("스티커 파일 업로드 중 오류가 발생했습니다.");
+        }
+    };
+
+    const fetchSpecialNotes = async (channelId) => {
+        try {
+            const res = await apiDefault.get(`/api/sales-channels/${channelId}/special-notes`);
+            if (res.data?.notes && res.data.notes.length > 0) {
+                setCategorizedNotes(res.data.notes);
+            } else {
+                await fetchCategoriesOnly();
+            }
+        } catch (err) {
+            console.error("특이사항 항목 조회 실패:", err);
+            await fetchCategoriesOnly();
+        }
+    };
+
+    const fetchCategoriesOnly = async () => {
+        try {
+            const res = await apiDefault.get('/api/channel-note-categories');
+            const cats = res.data || [];
+            setCategorizedNotes(cats.map(c => ({
+                categoryId: c.id,
+                categoryKey: c.categoryKey,
+                categoryLabel: c.categoryLabel,
+                displayOrder: c.displayOrder,
+                noteContent: ''
+            })));
+        } catch (err) {
+            console.error("카테고리 목록 조회 실패:", err);
+        }
+    };
 
     const fetchChannels = async () => {
         try {
@@ -60,6 +148,7 @@ const SalesChannelManagement = ({ user }) => {
                 expDateFormat: channel.expDateFormat || '',
                 specialNotes: channel.specialNotes || ''
             });
+            fetchSpecialNotes(channel.id);
         } else {
             setEditingChannel(null);
             setFormData({
@@ -74,6 +163,7 @@ const SalesChannelManagement = ({ user }) => {
                 expDateFormat: '',
                 specialNotes: ''
             });
+            fetchCategoriesOnly();
         }
         setShowDrawer(true);
     };
@@ -87,8 +177,14 @@ const SalesChannelManagement = ({ user }) => {
         setIsConfirmOpen(false);
         try {
             const channelData = editingChannel ? { ...editingChannel, ...formData } : formData;
-            await api.saveSalesChannel(channelData);
-            toast.success(editingChannel ? "채널 포장 규칙이 수정되었습니다." : "새 채널이 등록되었습니다.");
+            const res = await api.saveSalesChannel(channelData);
+            const savedChannelId = editingChannel ? editingChannel.id : res.data?.id;
+
+            if (savedChannelId && categorizedNotes.length > 0) {
+                await apiDefault.post(`/api/sales-channels/${savedChannelId}/special-notes`, categorizedNotes);
+            }
+
+            toast.success(editingChannel ? "채널 포장 규칙 및 항목별 특이사항이 수정되었습니다." : "새 채널 및 특이사항이 등록되었습니다.");
             setShowDrawer(false);
             fetchChannels();
         } catch (error) {
@@ -191,17 +287,25 @@ const SalesChannelManagement = ({ user }) => {
 
                     <div style={{ display: 'flex', gap: '8px' }}>
                         <button 
+                            className="outline" 
+                            onClick={() => window.location.href = '/channel-note-config'} 
+                            style={{ padding: '10px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#ffffff', color: '#1e293b', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' }}
+                        >
+                            ⚙️ 특이사항 항목 설정
+                        </button>
+                        <button 
                             className="primary" 
                             onClick={() => handleOpenDrawer()} 
                             style={{ 
-                                padding: '10px 24px', 
-                                borderRadius: '10px', 
-                                fontWeight: '800', 
-                                backgroundColor: '#0f172a',
-                                color: '#fff',
-                                border: 'none',
+                                padding: '10px 20px', 
+                                borderRadius: '8px', 
+                                border: 'none', 
+                                backgroundColor: canEdit ? '#2563eb' : '#94a3b8', 
+                                color: '#ffffff', 
+                                fontWeight: 'bold', 
+                                fontSize: '13px',
                                 cursor: canEdit ? 'pointer' : 'not-allowed',
-                                opacity: canEdit ? 1 : 0.5
+                                boxShadow: '0 2px 4px rgba(37, 99, 235, 0.2)'
                             }} 
                             disabled={!canEdit}
                         >
@@ -282,7 +386,7 @@ const SalesChannelManagement = ({ user }) => {
 
             {showDrawer && (
                 <div className="modal-overlay" style={{ zIndex: 1000, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <div className="modal-content" onClick={e => e.stopPropagation()} style={{ width: '640px', maxHeight: '85vh', padding: '35px', borderRadius: '20px', backgroundColor: 'white', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', border: '1px solid #e2e8f0', overflowY: 'auto' }}>
+                    <div className="modal-content" onClick={e => e.stopPropagation()} style={{ width: '1100px', maxWidth: '95vw', maxHeight: '92vh', padding: '35px', borderRadius: '20px', backgroundColor: 'white', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', border: '1px solid #e2e8f0', overflowY: 'auto' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px', borderBottom: '1px solid #f1f5f9', paddingBottom: '15px' }}>
                             <h3 style={{ fontSize: '20px', fontWeight: '800', margin: 0, color: '#0f172a' }}>{editingChannel ? '📝 유통 채널 포장 규격 수정' : '✨ 신규 유통 채널 등록'}</h3>
                             <button className="secondary" onClick={() => setShowDrawer(false)} style={{ borderRadius: '50%', width: '32px', height: '32px', padding: 0, border: 'none', background: '#f1f5f9', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>✕</button>
@@ -352,25 +456,8 @@ const SalesChannelManagement = ({ user }) => {
                                         value={formData.maxStackHeightMm}
                                         onChange={e => setFormData({ ...formData, maxStackHeightMm: parseInt(e.target.value) || 0 })}
                                         disabled={!canEdit}
-                                        style={{ width: '100%', borderRadius: '8px', padding: '10px', border: '1px solid #cbd5e1', fontWeight: '600' }}
+                                        style={{ width: '100%', borderRadius: '8px', padding: '10px', border: '1px solid #cbd5e1', fontWeight: '600', fontSize: '13px' }}
                                     />
-                                </div>
-                                <div className="form-group" style={{ flex: 1 }}>
-                                    <label style={{ fontWeight: '700', fontSize: '13px', marginBottom: '8px', display: 'block', color: '#475569' }}>사용기한 규격 형식</label>
-                                    <select
-                                        value={formData.expDateFormat}
-                                        onChange={e => setFormData({ ...formData, expDateFormat: e.target.value })}
-                                        disabled={!canEdit}
-                                        style={{ width: '100%', borderRadius: '8px', padding: '10px', border: '1px solid #cbd5e1', fontWeight: '600', backgroundColor: '#fff' }}
-                                    >
-                                        <option value="">선택 안 함</option>
-                                        <option value="YYYYMMDD까지">YYYYMMDD까지</option>
-                                        <option value="MM-DD-YYYY">MM-DD-YYYY</option>
-                                        <option value="DDMMYYYY">DDMMYYYY</option>
-                                        <option value="YYYY-MM">YYYY-MM</option>
-                                        <option value="표기금지">표기금지 (제조번호만 허용)</option>
-                                        <option value="(미정)">(미정)</option>
-                                    </select>
                                 </div>
                             </div>
 
@@ -397,16 +484,192 @@ const SalesChannelManagement = ({ user }) => {
                                 </label>
                             </div>
 
-                            <div className="form-group">
-                                <label style={{ fontWeight: '700', fontSize: '13px', marginBottom: '8px', display: 'block', color: '#475569' }}>채널별 핵심 특이사항 원문 (Special Notes)</label>
-                                <textarea
-                                    value={formData.specialNotes}
-                                    onChange={e => setFormData({ ...formData, specialNotes: e.target.value })}
-                                    placeholder="유통 가이드라인의 원문 규정을 개행하여 그대로 입력하십시오."
-                                    rows={4}
-                                    disabled={!canEdit}
-                                    style={{ width: '100%', borderRadius: '8px', padding: '10px', border: '1px solid #cbd5e1', resize: 'none', fontSize: '13px', fontWeight: '500', lineHeight: 1.5 }}
-                                />
+                            {/* 항목화된 채널 포장 특이사항 영역 */}
+                            <div className="form-group" style={{ backgroundColor: '#f8fafc', padding: '20px', borderRadius: '14px', border: '1px solid #cbd5e1', fontFamily: "'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif", WebkitFontSmoothing: 'antialiased' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                                    <label style={{ fontWeight: '900', fontSize: '15px', color: '#0f172a', letterSpacing: '-0.3px' }}>
+                                        📋 채널별 포장 특이사항 (항목별 규정)
+                                    </label>
+                                    <span style={{ fontSize: '13px', fontWeight: '600', color: '#475569' }}>입력 시 포장사양서 비고란에 자동 조합 출력됩니다.</span>
+                                </div>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                    {categorizedNotes.length === 0 ? (
+                                        <div style={{ gridColumn: 'span 2', padding: '20px', textOverflow: 'ellipsis', textAlign: 'center', color: '#64748b', fontSize: '13px', fontWeight: '600' }}>
+                                            특이사항 항목을 로딩 중입니다... 
+                                            <button 
+                                                type="button" 
+                                                onClick={fetchCategoriesOnly} 
+                                                style={{ marginLeft: '10px', background: 'none', border: 'none', color: '#1d4ed8', textDecoration: 'underline', cursor: 'pointer', fontWeight: 'bold' }}
+                                            >
+                                                [항목 목록 불러오기]
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        categorizedNotes.map((item, idx) => {
+                                            const isSticker = item.categoryKey === 'CHANNEL_STICKER';
+                                            const isExpiry = item.categoryKey === 'EXPIRY_MARKING';
+
+                                            return (
+                                                <div key={item.categoryId || idx} style={{ backgroundColor: '#ffffff', padding: '14px', borderRadius: '10px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', gap: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <label style={{ fontWeight: '800', fontSize: '13.5px', color: '#1d4ed8', letterSpacing: '-0.2px' }}>
+                                                            [{item.categoryLabel}]
+                                                        </label>
+
+                                                        {/* 서식 편집 툴바 (Bold, Italic, Color) */}
+                                                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                                            <button
+                                                                type="button"
+                                                                title="글자 굵게"
+                                                                onClick={() => applyFormat(item.categoryId, 'bold')}
+                                                                style={{ padding: '2px 6px', fontWeight: 'bold', fontSize: '12px', border: '1px solid #cbd5e1', borderRadius: '4px', backgroundColor: '#f8fafc', cursor: 'pointer' }}
+                                                            >
+                                                                B
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                title="기울임"
+                                                                onClick={() => applyFormat(item.categoryId, 'italic')}
+                                                                style={{ padding: '2px 6px', fontStyle: 'italic', fontSize: '12px', border: '1px solid #cbd5e1', borderRadius: '4px', backgroundColor: '#f8fafc', cursor: 'pointer' }}
+                                                            >
+                                                                I
+                                                            </button>
+                                                            <input
+                                                                type="color"
+                                                                title="글자 색상 변경"
+                                                                onChange={(e) => applyFormat(item.categoryId, 'color', e.target.value)}
+                                                                style={{ width: '22px', height: '22px', border: 'none', background: 'none', cursor: 'pointer' }}
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* 1. 채널 스티커 규정: 이미지/PDF 첨부 및 썸네일 카드 미리보기 */}
+                                                    {isSticker ? (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                                <input
+                                                                    type="file"
+                                                                    accept="image/*,application/pdf"
+                                                                    onChange={(e) => handleFileUpload(item.categoryId, e.target.files[0])}
+                                                                    style={{ fontSize: '12px', flex: 1 }}
+                                                                    disabled={!canEdit}
+                                                                />
+                                                            </div>
+
+                                                            {/* 첨부된 파일 썸네일 카드 노출 */}
+                                                            {item.fileUrl && (
+                                                                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', backgroundColor: '#f1f5f9', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                                                                    {item.fileType === 'PDF' || item.fileUrl.toLowerCase().endsWith('.pdf') ? (
+                                                                        <div style={{ width: '54px', height: '54px', backgroundColor: '#fee2e2', color: '#dc2626', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '12px', borderRadius: '6px' }}>
+                                                                            📄 PDF
+                                                                        </div>
+                                                                    ) : (
+                                                                        <img
+                                                                            src={getFullFileUrl(item.fileUrl)}
+                                                                            alt="Sticker Thumbnail"
+                                                                            style={{ width: '54px', height: '54px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff' }}
+                                                                            onError={(e) => {
+                                                                                console.error("Thumbnail load failed:", item.fileUrl);
+                                                                            }}
+                                                                        />
+                                                                    )}
+                                                                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                                        <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>
+                                                                            채널 스티커 규정 파일 ({item.fileType || 'MEDIA'})
+                                                                        </span>
+                                                                        <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: '600' }}>
+                                                                            ✓ 백엔드 저장 완료
+                                                                        </span>
+                                                                    </div>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setPreviewFile({ url: getFullFileUrl(item.fileUrl), type: item.fileType })}
+                                                                        style={{ padding: '6px 12px', fontSize: '12px', fontWeight: 'bold', color: '#fff', backgroundColor: '#2563eb', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                                                                    >
+                                                                        👁️ 확대 미리보기
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setCategorizedNotes(categorizedNotes.map(n => n.categoryId === item.categoryId ? { ...n, fileUrl: null, fileType: null } : n))}
+                                                                        style={{ padding: '6px 10px', fontSize: '12px', fontWeight: 'bold', color: '#ef4444', backgroundColor: '#fff', border: '1px solid #fca5a5', borderRadius: '6px', cursor: 'pointer' }}
+                                                                        title="첨부 파일 삭제"
+                                                                    >
+                                                                        ✕
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                            <textarea
+                                                                value={item.noteContent || ''}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value;
+                                                                    setCategorizedNotes(categorizedNotes.map(n => n.categoryId === item.categoryId ? { ...n, noteContent: val } : n));
+                                                                }}
+                                                                placeholder="채널 스티커 관련 세부 설명 입력..."
+                                                                rows={2}
+                                                                disabled={!canEdit}
+                                                                style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', lineHeight: 1.4 }}
+                                                            />
+                                                        </div>
+                                                    ) : isExpiry ? (
+                                                        /* 2. 사용기한 착인 규정: 목록 선택형 */
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                            <select
+                                                                value={item.expiryOption || (item.noteContent?.includes('LOT EXP YYYYMMDD') ? 'LOT EXP YYYYMMDD까지' : item.noteContent?.includes('LOT EXP DDMMYYYY') ? 'LOT EXP DDMMYYYY' : item.noteContent?.includes('LOT EXP MM-DD-YYYY') ? 'LOT EXP MM-DD-YYYY' : item.noteContent?.includes('표시금지') ? '표시금지(제조번호만 허용)' : item.noteContent ? '그 외' : '')}
+                                                                onChange={(e) => {
+                                                                    const opt = e.target.value;
+                                                                    setCategorizedNotes(categorizedNotes.map(n => {
+                                                                        if (n.categoryId === item.categoryId) {
+                                                                            let content = opt !== '그 외' ? opt : n.customExpiryFormat || '';
+                                                                            return { ...n, expiryOption: opt, noteContent: content };
+                                                                        }
+                                                                        return n;
+                                                                    }));
+                                                                }}
+                                                                disabled={!canEdit}
+                                                                style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: 'bold', backgroundColor: '#fff' }}
+                                                            >
+                                                                <option value="">-- 사용기한 착인 규정 선택 --</option>
+                                                                <option value="LOT EXP YYYYMMDD까지">LOT EXP YYYYMMDD까지</option>
+                                                                <option value="LOT EXP DDMMYYYY">LOT EXP DDMMYYYY</option>
+                                                                <option value="LOT EXP MM-DD-YYYY">LOT EXP MM-DD-YYYY</option>
+                                                                <option value="표시금지(제조번호만 허용)">표시금지(제조번호만 허용)</option>
+                                                                <option value="그 외">그 외 (직접 별도 유형 기재)</option>
+                                                            </select>
+
+                                                            {(item.expiryOption === '그 외' || (item.noteContent && !['LOT EXP YYYYMMDD까지','LOT EXP DDMMYYYY','LOT EXP MM-DD-YYYY','표시금지(제조번호만 허용)'].includes(item.noteContent))) && (
+                                                                <textarea
+                                                                    value={item.noteContent || ''}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value;
+                                                                        setCategorizedNotes(categorizedNotes.map(n => n.categoryId === item.categoryId ? { ...n, customExpiryFormat: val, noteContent: val } : n));
+                                                                    }}
+                                                                    placeholder="별도 사용기한 착인 규정 입력..."
+                                                                    rows={2}
+                                                                    disabled={!canEdit}
+                                                                    style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        /* 3. 일반 항목 */
+                                                        <textarea
+                                                            value={item.noteContent || ''}
+                                                            onChange={(e) => {
+                                                                const val = e.target.value;
+                                                                setCategorizedNotes(categorizedNotes.map(n => n.categoryId === item.categoryId ? { ...n, noteContent: val } : n));
+                                                            }}
+                                                            placeholder="해당 없음 (입력 시 포장사양서 비고란에 자동 출력)"
+                                                            rows={2}
+                                                            disabled={!canEdit}
+                                                            style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #cbd5e1', fontSize: '13px', lineHeight: 1.4, resize: 'vertical' }}
+                                                        />
+                                                    )}
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
                             </div>
 
                             <div className="form-group">
@@ -438,6 +701,32 @@ const SalesChannelManagement = ({ user }) => {
                     onClose={() => setIsConfirmOpen(false)}
                     onConfirm={handleConfirmSave}
                 />
+            )}
+
+            {/* 스티커 첨부 파일 미리보기 모달 (PDF / 이미지 뷰어) */}
+            {previewFile && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.75)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(4px)' }}>
+                    <div style={{ width: '80vw', height: '85vh', backgroundColor: '#fff', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px' }}>
+                            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#1e293b' }}>
+                                🏷️ 채널 스티커 첨부 규정 미리보기 ({previewFile.type})
+                            </h3>
+                            <button
+                                onClick={() => setPreviewFile(null)}
+                                style={{ border: 'none', background: '#f1f5f9', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', fontWeight: 'bold' }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'auto', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
+                            {previewFile.type === 'PDF' || previewFile.url?.toLowerCase().endsWith('.pdf') ? (
+                                <iframe src={previewFile.url} title="PDF Viewer" style={{ width: '100%', height: '100%', border: 'none' }} />
+                            ) : (
+                                <img src={previewFile.url} alt="Sticker Preview" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                            )}
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

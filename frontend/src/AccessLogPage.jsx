@@ -133,13 +133,26 @@ const AccessLogPage = () => {
 
             {/* 검색 필터 그리드 */}
             <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
                     <div>
-                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🔍 로그 검색</label>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>📋 로그 액션 유형</label>
+                        <select
+                            value={quickFilterText}
+                            onChange={(e) => setQuickFilterText(e.target.value)}
+                            style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', backgroundColor: '#fff' }}
+                        >
+                            <option value="">전체 로그 보기</option>
+                            <option value="PAGE_VIEW">👁️ 페이지 열람 (PAGE_VIEW)</option>
+                            <option value="LOGIN">🔑 로그인 (LOGIN)</option>
+                            <option value="LOGOUT">🚪 로그아웃 (LOGOUT)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🔍 직접 통합 키워드 검색</label>
                         <div style={{ position: 'relative' }}>
                             <input
                                 type="text"
-                                placeholder="ID, 성명, 액션 등 검색..."
+                                placeholder="ID, 사용자명, 화면명 등 입력..."
                                 value={quickFilterText}
                                 onChange={(e) => setQuickFilterText(e.target.value)}
                                 style={{ width: '100%', padding: '10px 40px 10px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px' }}

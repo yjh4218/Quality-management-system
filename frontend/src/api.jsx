@@ -805,26 +805,23 @@ export const flushPendingBugReports = async () => {
         let hasErrorThisRun = false;
         
         for (const report of validQueue) {
-            // 한 주기에서 전송 실패 시 후속 요청은 더 이상 시도하지 않고 즉시 쿨다운에 돌입
             if (hasErrorThisRun) {
                 remaining.push(report);
                 continue;
             }
 
+            const currentRetry = (report.retryCount || 0) + 1;
+            if (currentRetry > 3) {
+                console.warn("[QMS] Dropping bug report after 3 failed retries:", report);
+                continue; // 3회 초과 실패 시 영구 삭제
+            }
+
             try {
-                const token = localStorage.getItem('token');
-                const headers = {
-                    'Content-Type': 'application/json',
-                    ...(token ? { Authorization: `Bearer ${token}` } : {})
-                };
-                await axios.post(`${getBaseURL()}/api/bug-reports`, report, { 
-                    withCredentials: true,
-                    headers
-                });
-                consecutiveFailures = 0; // 성공 시 실패 카운트 초기화
+                await api.post('/api/bug-reports', report);
+                consecutiveFailures = 0;
             } catch (err) {
-                console.error("Failed to flush single offline report, retaining in queue:", err);
-                remaining.push(report);
+                console.error(`Failed to flush offline report (attempt ${currentRetry}/3):`, err);
+                remaining.push({ ...report, retryCount: currentRetry });
                 hasErrorThisRun = true;
                 consecutiveFailures++;
             }

@@ -143,6 +143,15 @@ public class ClaimController {
         return ResponseEntity.ok(claimService.getDashboardStats(standardizedRole, user.getCompanyName(), startDate, endDate, itemCode, productName, manufacturer));
     }
 
+    @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
+    public ResponseEntity<Claim> createClaim(
+            @jakarta.validation.Valid @RequestBody Claim claim,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        claim.setId(null); // Mass Assignment 방어: 클라이언트가 보낸 ID 무시
+        return ResponseEntity.ok(claimService.saveClaim(claim));
+    }
+
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> deleteClaim(

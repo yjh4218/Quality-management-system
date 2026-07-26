@@ -76,6 +76,9 @@ public class SecurityConfig {
                         .requestMatchers("/", "/api/auth/login", "/api/auth/logout").permitAll()
                         .requestMatchers("/api/auth/register", "/api/auth/check-username", "/api/auth/find-password", "/api/auth/verify-email").permitAll()
                         .requestMatchers("/api/vendor-upload/**").permitAll()
+                        // Spring Boot Actuator 모니터링 엔드포인트 세분화 (health, info 공개 / 기타 민감정보 보호)
+                        .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                        .requestMatchers("/actuator/**").hasRole("ADMIN")
                         .requestMatchers("/api/auth/unlock/**", "/api/auth/reset-password/**").hasRole("ADMIN")
                         
                         // 로그 및 보안 관련 경로 관리자 보호 (Controller에서 @PreAuthorize로 정밀 제어)

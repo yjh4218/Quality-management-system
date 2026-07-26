@@ -13,6 +13,7 @@ const AnalyticsDashboardShell = ({
     onDownloadReport, 
     onSearch, 
     onReset, 
+    extraHeaderActions,
     children,
     onNavigate
 }) => {
@@ -69,6 +70,7 @@ const AnalyticsDashboardShell = ({
                     gap: '10px',
                     flexWrap: 'wrap'
                 }}>
+                    {extraHeaderActions}
                     {backTo && onNavigate && (
                         <button 
                             onClick={() => onNavigate(backTo)}

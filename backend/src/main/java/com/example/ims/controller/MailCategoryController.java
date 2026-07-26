@@ -4,6 +4,7 @@ import com.example.ims.entity.MailCategory;
 import com.example.ims.service.MailCategoryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,6 +22,7 @@ public class MailCategoryController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','QUALITY_TEAM')")
     public ResponseEntity<?> createCategory(@RequestBody MailCategory category) {
         try {
             return ResponseEntity.ok(service.saveCategory(category));
@@ -30,6 +32,7 @@ public class MailCategoryController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','QUALITY_TEAM')")
     public ResponseEntity<?> updateCategory(@PathVariable Long id, @RequestBody MailCategory category) {
         try {
             category.setId(id);
@@ -40,6 +43,7 @@ public class MailCategoryController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','QUALITY_TEAM')")
     public ResponseEntity<Void> deleteCategory(@PathVariable Long id) {
         service.deleteCategory(id);
         return ResponseEntity.noContent().build();

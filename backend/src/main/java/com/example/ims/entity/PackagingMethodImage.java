@@ -27,6 +27,9 @@ public class PackagingMethodImage {
     @Column(name = "image_url", nullable = false, length = 500)
     private String imageUrl;
 
+    @Column(name = "image_path", length = 500)
+    private String imagePath;
+
     @Column(name = "display_order")
     private Double displayOrder;
 
@@ -44,6 +47,9 @@ public class PackagingMethodImage {
 
     @Column(name = "thumbnail_url", length = 500)
     private String thumbnailUrl;
+
+    @Column(name = "created_by", length = 100)
+    private String createdBy;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

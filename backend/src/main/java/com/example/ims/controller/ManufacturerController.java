@@ -38,6 +38,7 @@ public class ManufacturerController {
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
     public ResponseEntity<Manufacturer> create(@RequestBody Manufacturer manufacturer,
             @AuthenticationPrincipal UserDetails userDetails) {
+        manufacturer.setId(null); // Mass Assignment 방어
         return ResponseEntity.ok(manufacturerService.save(manufacturer, userDetails.getUsername()));
     }
 

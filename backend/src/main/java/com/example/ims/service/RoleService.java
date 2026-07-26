@@ -87,6 +87,28 @@ public class RoleService {
         
         Role updated = roleRepository.save(role);
 
+        // AuditLog에 변경 전/후 권한 목록 Diff 명시적 적재
+        try {
+            String oldMenus = oldSnapshot.getAllowedMenus() != null ? String.join(",", oldSnapshot.getAllowedMenus()) : "";
+            String newMenus = updated.getAllowedMenus() != null ? String.join(",", updated.getAllowedMenus()) : "";
+            String oldPerms = oldSnapshot.getAllowedPermissions() != null ? String.join(",", oldSnapshot.getAllowedPermissions()) : "";
+            String newPerms = updated.getAllowedPermissions() != null ? String.join(",", updated.getAllowedPermissions()) : "";
+
+            String details = String.format(
+                "역할 [%s](ID:%d) 권한 변경 완료 | [메뉴] 이전:(%s) -> 신규:(%s) | [세부권한] 이전:(%s) -> 신규:(%s)",
+                updated.getDisplayName(), updated.getId(), oldMenus, newMenus, oldPerms, newPerms
+            );
+
+            auditLogService.logAction(
+                modifier != null ? modifier : "SYSTEM",
+                "ROLE_PERMISSIONS_UPDATE",
+                "역할 권한 변경",
+                details
+            );
+        } catch (Exception auditEx) {
+            log.error("Failed to log audit for role permissions update", auditEx);
+        }
+
         eventPublisher.publishEvent(EntityChangeEvent.builder()
                 .entityType("ROLE")
                 .entityId(updated.getId())

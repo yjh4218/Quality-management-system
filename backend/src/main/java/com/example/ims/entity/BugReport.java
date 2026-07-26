@@ -47,6 +47,9 @@ public class BugReport {
 
     private String severity; // LOW, MEDIUM, HIGH, CRITICAL
 
+    @Builder.Default
+    private Integer occurrenceCount = 1;
+
     @org.springframework.data.annotation.CreatedDate
     private LocalDateTime createdAt;
 
