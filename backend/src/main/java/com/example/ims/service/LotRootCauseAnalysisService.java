@@ -38,8 +38,9 @@ public class LotRootCauseAnalysisService {
     }
 
     public List<LotPpmAnalysisDto> analyzeLotPpm(String itemCode, String productName, String lotNumber, LocalDate startDate, LocalDate endDate, boolean groupByMaster) {
-        LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : LocalDateTime.now().minusMonths(6);
-        LocalDateTime endDateTime = endDate != null ? endDate.atTime(23, 59, 59) : LocalDateTime.now();
+        try {
+            LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : LocalDateTime.now().minusMonths(6);
+            LocalDateTime endDateTime = endDate != null ? endDate.atTime(23, 59, 59) : LocalDateTime.now();
 
         // 1. 기간 내 WmsInbound (입고 정보) 조회
         List<WmsInbound> inbounds = wmsInboundRepository.findAll().stream()
@@ -204,14 +205,19 @@ public class LotRootCauseAnalysisService {
         });
 
         return resultList;
+        } catch (Exception e) {
+            log.error("Failed to analyze lot PPM: {}", e.getMessage(), e);
+            return Collections.emptyList();
+        }
     }
 
     /**
      * 월별 클레임율 추이, 제품별 PPM 순위, 클레임 유형별 비중 통합 요약 통계
      */
     public com.example.ims.dto.QualityAnalyticsSummaryDto getQualityAnalyticsSummary(LocalDate startDate, LocalDate endDate) {
-        LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : LocalDateTime.now().minusMonths(6);
-        LocalDateTime endDateTime = endDate != null ? endDate.atTime(23, 59, 59) : LocalDateTime.now();
+        try {
+            LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : LocalDateTime.now().minusMonths(6);
+            LocalDateTime endDateTime = endDate != null ? endDate.atTime(23, 59, 59) : LocalDateTime.now();
 
         // 1. Inbounds & Claims 조회
         List<WmsInbound> inbounds = wmsInboundRepository.findAll().stream()
@@ -370,6 +376,15 @@ public class LotRootCauseAnalysisService {
                 .claimCategoryList(categoryList)
                 .channelClaimList(channelList)
                 .build();
+        } catch (Exception e) {
+            log.error("Failed to get quality analytics summary: {}", e.getMessage(), e);
+            return com.example.ims.dto.QualityAnalyticsSummaryDto.builder()
+                    .monthlyPpmList(Collections.emptyList())
+                    .topProductPpmList(Collections.emptyList())
+                    .claimCategoryList(Collections.emptyList())
+                    .channelClaimList(Collections.emptyList())
+                    .build();
+        }
     }
 
     private String cleanMasterName(String name) {
