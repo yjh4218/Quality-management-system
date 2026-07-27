@@ -37,7 +37,18 @@ CREATE TABLE IF NOT EXISTS channel_sticker_images (
 );
 
 -- 2. Packaging Specification Enhancements
--- Note: packaging_specifications already exists. Adding new columns.
+CREATE TABLE IF NOT EXISTS packaging_specifications (
+    id SERIAL PRIMARY KEY,
+    product_id BIGINT,
+    packaging_method_text TEXT,
+    packaging_method_image VARCHAR(500),
+    version INTEGER DEFAULT 1,
+    revision_notes TEXT,
+    last_modified_by VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 ALTER TABLE packaging_specifications ADD COLUMN IF NOT EXISTS inbox_spec TEXT;
 ALTER TABLE packaging_specifications ADD COLUMN IF NOT EXISTS zipper_bag_spec TEXT;
 ALTER TABLE packaging_specifications ADD COLUMN IF NOT EXISTS outbox_spec TEXT;
