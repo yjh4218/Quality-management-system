@@ -91,11 +91,25 @@ public class AuditLogService {
     }
 
     /**
-     * [추가] 간편 액션 로그 기록용 헬퍼 메서드
+     * [추가] 간편 액션 로그 기록용 헬퍼 메서드 (SecurityContext 자동 추출 포함)
      */
     @Transactional
     public void logAction(String modifier, String action, String description, String changeDetail) {
-        log(action, null, action, modifier, null, modifier, modifier, null, description, null, null, changeDetail);
+        String effectiveModifier = modifier;
+        if (effectiveModifier == null || effectiveModifier.isBlank() || "SYSTEM".equalsIgnoreCase(effectiveModifier)) {
+            try {
+                org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+                if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+                    effectiveModifier = auth.getName();
+                }
+            } catch (Exception e) {
+                // Keep default
+            }
+        }
+        if (effectiveModifier == null || effectiveModifier.isBlank()) {
+            effectiveModifier = "SYSTEM";
+        }
+        log(action, null, action, effectiveModifier, null, effectiveModifier, effectiveModifier, null, description, null, null, changeDetail);
     }
 
     @Transactional
@@ -187,26 +201,36 @@ public class AuditLogService {
         try {
             Long entityId = logEntry.getEntityId();
             if ("PRODUCT".equals(logEntry.getEntityType())) {
-                productRepository.findById(entityId).orElseThrow();
-                Product restored = objectMapper.readValue(json, Product.class);
-                // Copy restorable fields... (Simplified for now)
-                restored.setId(entityId); 
-                productRepository.save(restored);
+                Product existing = productRepository.findById(entityId).orElseThrow(() -> new RuntimeException("Product not found"));
+                Product snapshot = objectMapper.readValue(json, Product.class);
+                snapshot.setId(entityId);
+                // Preserve non-serialized binary/file and relationship references
+                if (snapshot.getImagePath() == null) snapshot.setImagePath(existing.getImagePath());
+                if (snapshot.getCertMsds() == null) snapshot.setCertMsds(existing.getCertMsds());
+                if (snapshot.getCertStandard() == null) snapshot.setCertStandard(existing.getCertStandard());
+                if (snapshot.getCertFunction() == null) snapshot.setCertFunction(existing.getCertFunction());
+                if (snapshot.getCertExpiry() == null) snapshot.setCertExpiry(existing.getCertExpiry());
+                if (snapshot.getIngredients() == null || snapshot.getIngredients().isEmpty()) snapshot.setIngredients(existing.getIngredients());
+                if (snapshot.getManufacturerInfo() == null) snapshot.setManufacturerInfo(existing.getManufacturerInfo());
+                if (snapshot.getChannels() == null || snapshot.getChannels().isEmpty()) snapshot.setChannels(existing.getChannels());
+                productRepository.save(snapshot);
             } else if ("CLAIM".equals(logEntry.getEntityType())) {
-                claimRepository.findById(entityId).orElseThrow();
-                Claim restored = objectMapper.readValue(json, Claim.class);
-                restored.setId(entityId);
-                claimRepository.save(restored);
+                Claim existing = claimRepository.findById(entityId).orElseThrow(() -> new RuntimeException("Claim not found"));
+                Claim snapshot = objectMapper.readValue(json, Claim.class);
+                snapshot.setId(entityId);
+                if (snapshot.getClaimPhotos() == null || snapshot.getClaimPhotos().isEmpty()) snapshot.setClaimPhotos(existing.getClaimPhotos());
+                if (snapshot.getManufacturerResponsePdf() == null) snapshot.setManufacturerResponsePdf(existing.getManufacturerResponsePdf());
+                claimRepository.save(snapshot);
             } else if ("WMS_INBOUND".equals(logEntry.getEntityType())) {
-                wmsInboundRepository.findById(entityId).orElseThrow();
-                com.example.ims.entity.WmsInbound restored = objectMapper.readValue(json, com.example.ims.entity.WmsInbound.class);
-                restored.setId(entityId);
-                wmsInboundRepository.save(restored);
+                com.example.ims.entity.WmsInbound existing = wmsInboundRepository.findById(entityId).orElseThrow(() -> new RuntimeException("WMS Inbound not found"));
+                com.example.ims.entity.WmsInbound snapshot = objectMapper.readValue(json, com.example.ims.entity.WmsInbound.class);
+                snapshot.setId(entityId);
+                wmsInboundRepository.save(snapshot);
             } else if ("PRODUCTION_AUDIT".equals(logEntry.getEntityType())) {
-                productionAuditRepository.findById(entityId).orElseThrow();
-                com.example.ims.entity.ProductionAudit restored = objectMapper.readValue(json, com.example.ims.entity.ProductionAudit.class);
-                restored.setId(entityId);
-                productionAuditRepository.save(restored);
+                com.example.ims.entity.ProductionAudit existing = productionAuditRepository.findById(entityId).orElseThrow(() -> new RuntimeException("Production Audit not found"));
+                com.example.ims.entity.ProductionAudit snapshot = objectMapper.readValue(json, com.example.ims.entity.ProductionAudit.class);
+                snapshot.setId(entityId);
+                productionAuditRepository.save(snapshot);
             }
 
             log(logEntry.getEntityType(), entityId, "RESTORE", modifier, 

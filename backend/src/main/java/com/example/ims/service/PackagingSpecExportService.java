@@ -31,6 +31,7 @@ import java.util.List;
  */
 @Service
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 @Transactional(readOnly = true)
 public class PackagingSpecExportService {
 
@@ -376,6 +377,42 @@ public class PackagingSpecExportService {
                 }
                 setCellValue(sheet, 45, 1, methodCombinedText); // B46
 
+                // [엑셀 포장방법 사진 자동 그리기 (로컬파일 + Canvas base64 데이터 지원)]
+                if (methodImages != null && !methodImages.isEmpty()) {
+                    try {
+                        org.apache.poi.ss.usermodel.Drawing<?> drawing = sheet.createDrawingPatriarch();
+                        int startRow = 47; // Row 48부터 이미지 배치
+                        for (int i = 0; i < Math.min(methodImages.size(), 4); i++) {
+                            com.example.ims.entity.PackagingMethodImage mImg = methodImages.get(i);
+                            if (mImg.getImageUrl() != null && !mImg.getImageUrl().isEmpty()) {
+                                byte[] bytes = null;
+                                if (mImg.getImageUrl().startsWith("data:image")) {
+                                    String base64Data = mImg.getImageUrl().substring(mImg.getImageUrl().indexOf(",") + 1);
+                                    bytes = java.util.Base64.getDecoder().decode(base64Data);
+                                } else {
+                                    String localPath = mImg.getImageUrl().replace("/uploads/", "uploads/");
+                                    java.io.File file = new java.io.File(localPath);
+                                    if (file.exists()) {
+                                        bytes = java.nio.file.Files.readAllBytes(file.toPath());
+                                    }
+                                }
+
+                                if (bytes != null && bytes.length > 0) {
+                                    int pictureIdx = workbook.addPicture(bytes, Workbook.PICTURE_TYPE_PNG);
+                                    org.apache.poi.ss.usermodel.ClientAnchor anchor = workbook.getCreationHelper().createClientAnchor();
+                                    anchor.setCol1(1 + (i % 2) * 12); // B열 또는 N열
+                                    anchor.setRow1(startRow + (i / 2) * 10);
+                                    anchor.setCol2(12 + (i % 2) * 12);
+                                    anchor.setRow2(startRow + (i / 2) * 10 + 9);
+                                    drawing.createPicture(anchor, pictureIdx);
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        log.warn("Failed to insert packaging method images into Excel: {}", e.getMessage());
+                    }
+                }
+
                 // 적재사항: 인박스 & 아웃박스
                 setCellValue(sheet, 69, 4, spec.getInboxType() != null ? spec.getInboxType() : "인박스"); // E70 (Row 70 is index 69)
                 setCellValue(sheet, 69, 8, spec.getInboxQty() != null ? String.valueOf(spec.getInboxQty()) + " EA" : "-"); // I70
@@ -588,7 +625,37 @@ public class PackagingSpecExportService {
             }
             document.add(new Paragraph("----------------------------------------------------------------------------------------------------------------", normalFont));
 
-            // 4. 아웃박스 & 착인 기준 및 포장방법
+            // 4. 포장방법 사진 및 3줄 캡션 상세 (PDF 내 직접 포함)
+            document.add(new Paragraph("[포장방법 사진 및 캡션 / Packaging Method Images]", sectionFont));
+            List<com.example.ims.entity.PackagingMethodImage> methodImages = methodImageRepository.findActiveBySpecId(spec.getId());
+            if (methodImages == null || methodImages.isEmpty()) {
+                document.add(new Paragraph("등록된 포장방법 사진이 없습니다.", normalFont));
+            } else {
+                for (int i = 0; i < methodImages.size(); i++) {
+                    com.example.ims.entity.PackagingMethodImage imgEntity = methodImages.get(i);
+                    document.add(new Paragraph(String.format("NO %d. %s", (i + 1), 
+                        imgEntity.getCaptionText() != null ? imgEntity.getCaptionText() : ""), normalFont));
+                    
+                    if (imgEntity.getImageUrl() != null && !imgEntity.getImageUrl().isEmpty()) {
+                        try {
+                            String localPath = imgEntity.getImageUrl().replace("/uploads/", "uploads/");
+                            java.io.File imgFile = new java.io.File(localPath);
+                            if (imgFile.exists()) {
+                                com.itextpdf.text.Image pdfImg = com.itextpdf.text.Image.getInstance(imgFile.getAbsolutePath());
+                                pdfImg.scaleToFit(400f, 250f);
+                                pdfImg.setAlignment(com.itextpdf.text.Element.ALIGN_LEFT);
+                                pdfImg.setSpacingAfter(10f);
+                                document.add(pdfImg);
+                            }
+                        } catch (Exception e) {
+                            // Image rendering error logging
+                        }
+                    }
+                }
+            }
+            document.add(new Paragraph("----------------------------------------------------------------------------------------------------------------", normalFont));
+
+            // 5. 아웃박스 & 착인 기준 및 포장방법 (서술)
             document.add(new Paragraph("[아웃박스 및 착인기준 / Marking & Packaging Method]", sectionFont));
             document.add(new Paragraph("표기 방법: " + (spec.getMarkingMethod() != null ? spec.getMarkingMethod() : "-"), normalFont));
             document.add(new Paragraph("표기 기준: " + (spec.getMarkingStandard() != null ? spec.getMarkingStandard() : "-"), normalFont));

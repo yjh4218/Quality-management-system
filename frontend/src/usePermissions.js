@@ -56,6 +56,7 @@ export const usePermissions = (user) => {
         canEdit: (menuKey) => hasPermission(menuKey, 'EDIT'),
         canDelete: (menuKey) => hasPermission(menuKey, 'DELETE'),
         hasPerm: hasFunctionalPermission,
+        canViewHistory: hasFunctionalPermission('VIEW_CHANGE_HISTORY') || isAdmin,
         // Utility for UI
         getAccessProps: (menuKey, action = 'EDIT') => ({
             disabled: !hasPermission(menuKey, action),

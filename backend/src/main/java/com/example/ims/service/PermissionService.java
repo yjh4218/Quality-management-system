@@ -5,6 +5,8 @@ import com.example.ims.repository.UserRepository;
 import com.example.ims.entity.Role;
 import com.example.ims.repository.RoleRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -12,6 +14,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @Service("perm")
 @RequiredArgsConstructor
@@ -21,6 +24,12 @@ public class PermissionService {
     private final RoleRepository roleRepository;
     private final ObjectMapper objectMapper;
 
+    // roleKey + ":" + menuKey + ":" + action 결과를 5분간 캐싱
+    private final Cache<String, Boolean> permCache = Caffeine.newBuilder()
+            .expireAfterWrite(5, TimeUnit.MINUTES)
+            .maximumSize(5000)
+            .build();
+
     public boolean can(String menuKey, String action) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) return false;
@@ -28,26 +37,41 @@ public class PermissionService {
         String username = auth.getName();
         if ("anonymousUser".equals(username)) return false;
 
+        // Admin checks using Authorities exact match
+        boolean isAdmin = auth.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()) || "ADMIN".equals(a.getAuthority()));
+        if (isAdmin) return true;
+
         User user = userRepository.findByUsername(username).orElse(null);
-        if (user == null) return false;
+        if (user == null || user.getRole() == null) return false;
 
-        // Admin has all permissions
-        if (user.getRole() != null && user.getRole().contains("ADMIN")) return true;
+        // Second check for User.role string
+        if (user.getRole().equals("ADMIN") || user.getRole().equals("ROLE_ADMIN")) return true;
 
-        // Check each role's allowedMenus
-        // Note: The user entity's 'role' field is a comma-separated string of roleKeys (e.g. "USER,QUALITY_TEAM")
         String[] roleKeys = user.getRole().split(",");
         for (String key : roleKeys) {
             String roleKey = key.trim();
             if (!roleKey.startsWith("ROLE_")) {
                 roleKey = "ROLE_" + roleKey;
             }
+
+            String cacheKey = roleKey + ":" + menuKey + ":" + action;
+            Boolean cached = permCache.getIfPresent(cacheKey);
+            if (cached != null) {
+                if (cached) return true;
+                continue;
+            }
             
             final String finalRoleKey = roleKey;
             Role role = roleRepository.findByRoleKey(finalRoleKey).orElse(null);
-            if (role == null) continue;
+            if (role == null) {
+                permCache.put(cacheKey, false);
+                continue;
+            }
 
-            if (checkRolePermission(role, menuKey, action)) return true;
+            boolean hasPerm = checkRolePermission(role, menuKey, action);
+            permCache.put(cacheKey, hasPerm);
+            if (hasPerm) return true;
         }
 
         return false;
@@ -58,15 +82,17 @@ public class PermissionService {
         try {
             String json = role.getAllowedMenus().trim();
             if (json.startsWith("{")) {
-                Map<String, List<String>> permissions = objectMapper.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<Map<String, List<String>>>() {});
-                List<String> actions = permissions.get(menuKey);
-                return actions != null && actions.contains(action);
-            } else {
-                // Legacy CSV support (VIEW only)
-                return "VIEW".equals(action) && List.of(json.split(",")).contains(menuKey);
+                Map<String, Object> map = objectMapper.readValue(json, Map.class);
+                Object val = map.get(menuKey);
+                if (val instanceof List) {
+                    return ((List<?>) val).contains(action);
+                }
+            } else if (json.contains(menuKey) && "VIEW".equals(action)) {
+                return true;
             }
         } catch (Exception e) {
-            return false;
+            // Fallback for parsing errors
         }
+        return false;
     }
 }

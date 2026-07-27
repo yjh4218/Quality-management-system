@@ -74,11 +74,44 @@ const getCookie = (name) => {
     return match ? decodeURIComponent(match[2]) : null;
 };
 
+export const getFormattedReporterInfo = (customUser = null) => {
+    try {
+        let user = customUser;
+        if (!user) {
+            const userStr = localStorage.getItem('user_info') || localStorage.getItem('user');
+            if (userStr) {
+                user = JSON.parse(userStr);
+            }
+        }
+        if (!user) {
+            return { name: 'ANONYMOUS_USER', username: 'anonymous' };
+        }
+        const company = user.companyName || user.manufacturerName || user.manufacturer || (user.roles?.some(r => r.authority === 'ROLE_MANUFACTURER') ? '제조사' : 'HQ(본사)');
+        const dept = user.department || user.team || (user.roles?.some(r => r.authority === 'ROLE_ADMIN') ? '시스템관리자' : '품질관리팀');
+        const name = user.name || user.username || '사용자';
+        return {
+            name: `${company} / ${dept} / ${name}`,
+            username: user.username || 'unknown'
+        };
+    } catch (e) {
+        return { name: customUser?.name || 'ANONYMOUS_USER', username: customUser?.username || 'unknown' };
+    }
+};
+
 const api = axios.create({
     baseURL: getBaseURL(),
     withCredentials: true,
     xsrfCookieName: 'XSRF-TOKEN',
     xsrfHeaderName: 'X-XSRF-TOKEN'
+});
+
+// [버그 리포트 전용 독립 AXIOS 인스턴스] CORS preflight 및 CSRF 인터셉터의 영향을 받지 않는 고정 JSON 클라이언트
+const bugReportAxios = axios.create({
+    baseURL: getBaseURL(),
+    withCredentials: true,
+    headers: {
+        'Content-Type': 'application/json'
+    }
 });
 
 // [고도화 3] Request 인프라: 로딩 시작, CSRF 토큰 헤더 주입 및 HTTP 메서드 우회
@@ -177,12 +210,13 @@ api.interceptors.response.use(
             }
 
             const isNetworkError = !error.response;
-            const isSystemBug = isNetworkError || (error.response.status >= 500) || error.code === 'ECONNABORTED';
+            const isSystemBug = isNetworkError || (error.response?.status >= 500) || (error.response?.status === 403) || error.code === 'ECONNABORTED';
 
             if (isSystemBug) {
                 // 네트워크 에러는 서버에 전송이 원천 불가능하므로, 바로 큐로만 적재하고 불필요한 전송 시도는 건너뜁니다.
                 if (isNetworkError) {
                     console.warn("[QMS] Network Error detected. Skipping API auto-report and queueing offline.");
+                    const reporterInfo = getFormattedReporterInfo();
                     const bugReportPayload = {
                         description: `[시스템 자동 감지 - 오프라인] 네트워크 장애 감지: ${errorMsg}`,
                         steps: [
@@ -192,11 +226,13 @@ api.interceptors.response.use(
                         screenName: window.__QMS_ACTIVE_PAGE__ || window.location.pathname,
                         url: window.location.href,
                         severity: 'CRITICAL',
-                        serverError: 'Network Error / CORS Issue'
+                        serverError: 'Network Error / CORS Issue',
+                        reporterName: reporterInfo.name,
+                        reporterUsername: reporterInfo.username
                     };
                     try {
                         const queue = JSON.parse(localStorage.getItem('qms_pending_bug_reports') || '[]');
-                        if (queue.length >= 20) queue.shift();
+                        if (queue.length >= 50) queue.shift();
                         queue.push({ ...bugReportPayload, queuedAt: new Date().toISOString() });
                         localStorage.setItem('qms_pending_bug_reports', JSON.stringify(queue));
                     } catch (lsErr) {
@@ -247,7 +283,7 @@ api.interceptors.response.use(
                         };
 
                         try {
-                            await axios.post(`${getBaseURL()}/api/bug-reports`, bugReportPayload, { withCredentials: true });
+                            await bugReportAxios.post('/api/bug-reports', { ...bugReportPayload, errorCategory: 'API_500' });
                             toast.error(
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -264,7 +300,7 @@ api.interceptors.response.use(
                             console.error("Failed to automatically report bug, saving to offline queue:", reportErr);
                             try {
                                 const queue = JSON.parse(localStorage.getItem('qms_pending_bug_reports') || '[]');
-                                if (queue.length >= 20) queue.shift();
+                                if (queue.length >= 50) queue.shift();
                                 queue.push({ ...bugReportPayload, queuedAt: new Date().toISOString() });
                                 localStorage.setItem('qms_pending_bug_reports', JSON.stringify(queue));
                             } catch (lsErr) {
@@ -354,7 +390,7 @@ export const getInboundData = (params = {}) => {
 };
 export const updateInboundData = (id, data) => api.put(`/api/quality/inbound/${id}`, data);
 export const completeInboundInspection = (id) => api.post(`/api/quality/inbound/${id}/complete`);
-export const getInboundHistory = (id) => api.get(`/api/quality/inbound/${id}/history`);
+export const getInboundHistory = (id) => api.get(`/api/quality/inbound/${id}/history`, { skipToast: true }).catch(() => ({ data: [] }));
 export const deleteInbound = (id) => api.delete(`/api/quality/inbound/${id}`);
 export const uploadCoaFile = (file, productName = '') => {
     const formData = new FormData();
@@ -422,7 +458,7 @@ export const uploadIngredients = (file) => {
         headers: { 'Content-Type': 'multipart/form-data' }
     });
 };
-export const getProductHistory = (id) => api.get(`/api/products/${id}/history`);
+export const getProductHistory = (id) => api.get(`/api/products/${id}/history`, { skipToast: true }).catch(() => ({ data: [] }));
 export const deleteProduct = (id) => api.delete(`/api/products/${id}`);
 export const restoreProduct = (id) => api.post(`/api/products/${id}/restore`);
 export const restoreDeletedClaim = (id) => api.post(`/api/claims/${id}/restore`);
@@ -431,7 +467,7 @@ export const getClaimEmailPreview = (id, templateCode) => api.get(`/api/claims/$
 export const sendClaimEmail = (id, emailForm) => api.post(`/api/claims/${id}/send-email`, emailForm);
 export const hardDeleteProduct = (id) => api.delete(`/api/products/${id}/hard`);
 export const checkDuplicateItemCode = (itemCode) => api.get(`/api/products/check-duplicate/${itemCode}`);
-export const loadMasterProduct = (itemCode) => api.get(`/api/products/master/${itemCode}`);
+export const loadMasterProduct = (itemCode) => api.get(`/api/products/master/${itemCode}`, { skipToast: true }).catch(() => ({ data: null }));
 export const getProductByItemCode = loadMasterProduct;
 export const searchProducts = (params) => {
     const queryParams = new URLSearchParams();
@@ -494,12 +530,12 @@ export const exportAuditsExcel = (params) => {
 };
 
 // Master Data APIs (Feature 2, 3, 4, 11)
-export const getMasterTemplates = () => api.get('/api/admin/master-data/templates');
+export const getMasterTemplates = () => api.get('/api/admin/master-data/templates', { skipToast: true }).catch(() => ({ data: [] }));
 export const saveMasterTemplate = (template) => api.post('/api/admin/master-data/templates', template);
-export const getMasterRules = () => api.get('/api/admin/master-data/rules');
+export const getMasterRules = () => api.get('/api/admin/master-data/rules', { skipToast: true }).catch(() => ({ data: [] }));
 export const saveMasterRule = (rule) => api.post('/api/admin/master-data/rules', rule);
 export const deleteMasterRule = (id) => api.delete(`/api/admin/master-data/rules/${id}`);
-export const getMasterMaterials = () => api.get('/api/admin/master-data/materials');
+export const getMasterMaterials = () => api.get('/api/admin/master-data/materials', { skipToast: true }).catch(() => ({ data: [] }));
 export const getMasterMaterialsSearch = (params = {}) => {
     const queryParams = new URLSearchParams();
     if (params.bomCode) queryParams.append('bomCode', params.bomCode);
@@ -507,16 +543,16 @@ export const getMasterMaterialsSearch = (params = {}) => {
     if (params.type) queryParams.append('type', params.type);
     if (params.detailedType) queryParams.append('detailedType', params.detailedType);
     if (params.manufacturer) queryParams.append('manufacturer', params.manufacturer);
-    return api.get(`/api/admin/master-data/materials/search?${queryParams.toString()}`);
+    return api.get(`/api/admin/master-data/materials/search?${queryParams.toString()}`, { skipToast: true }).catch(() => ({ data: [] }));
 };
 export const saveMasterMaterial = (material) => api.post('/api/admin/master-data/materials', material);
 export const checkBomCodeExists = (bomCode) => api.get(`/api/admin/master-data/materials/check-bom-code?bomCode=${bomCode}`);
-export const getMasterStickers = () => api.get('/api/admin/master-data/stickers');
+export const getMasterStickers = () => api.get('/api/admin/master-data/stickers', { skipToast: true }).catch(() => ({ data: [] }));
 export const saveMasterSticker = (sticker) => api.post('/api/admin/master-data/stickers', sticker);
 
 // --- Sales Channels (Distribution Channel Management) ---
-export const getSalesChannels = () => api.get('/api/admin/master-data/sales-channels');
-export const getActiveSalesChannels = () => api.get('/api/admin/master-data/sales-channels/active');
+export const getSalesChannels = () => api.get('/api/admin/master-data/sales-channels', { skipToast: true }).catch(() => ({ data: [] }));
+export const getActiveSalesChannels = () => api.get('/api/admin/master-data/sales-channels/active', { skipToast: true }).catch(() => ({ data: [] }));
 export const saveSalesChannel = (channel) => api.post('/api/admin/master-data/sales-channels', channel);
 export const toggleSalesChannel = (id) => api.post(`/api/admin/master-data/sales-channels/${id}/toggle`);
 export const deleteSalesChannel = (id) => api.delete(`/api/admin/master-data/sales-channels/${id}`);
@@ -559,7 +595,19 @@ export const logPageView = (data) => api.post('/api/logs/access/page-move', data
 export const getAccessLogs = () => api.get('/api/logs/access').then(res => res.data);
 
 // Bug Reports
-export const submitBugReport = (report) => api.post('/api/bug-reports', report).then(res => res.data);
+export const submitBugReport = (report) => {
+    const reporterInfo = getFormattedReporterInfo();
+    const payload = {
+        ...report,
+        reporterName: (report?.reporterName && report?.reporterName !== 'ANONYMOUS_USER' && !report?.reporterName.includes('null'))
+            ? report.reporterName
+            : reporterInfo.name,
+        reporterUsername: (report?.reporterUsername && report?.reporterUsername !== 'unknown' && report?.reporterUsername !== 'anonymous')
+            ? report.reporterUsername
+            : reporterInfo.username
+    };
+    return bugReportAxios.post('/api/bug-reports', payload).then(res => res.data);
+};
 export const getBugReports = () => api.get('/api/bug-reports').then(res => res.data);
 export const updateBugReportStatus = (id, status) => api.patch(`/api/bug-reports/${id}/status`, { status }).then(res => res.data);
 
@@ -747,8 +795,8 @@ export const getSystemSetting = (key) => api.get(`/api/system-settings/${key}`).
 export const saveSystemSetting = (setting) => api.post('/api/system-settings', setting).then(res => res.data);
 
 // --- Notification APIs ---
-export const getMyNotifications = () => api.get('/api/notifications');
-export const getUnreadNotificationCount = () => api.get('/api/notifications/unread-count', { skipLoading: true });
+export const getMyNotifications = () => api.get('/api/notifications', { skipLoading: true, skipToast: true }).catch(() => ({ data: [] }));
+export const getUnreadNotificationCount = () => api.get('/api/notifications/unread-count', { skipLoading: true, skipToast: true }).catch(() => ({ data: 0 }));
 export const readNotification = (id) => api.post(`/api/notifications/${id}/read`);
 export const readAllNotifications = () => api.post('/api/notifications/read-all');
 export const deleteNotification = (id) => api.delete(`/api/notifications/${id}`);
@@ -811,29 +859,35 @@ export const flushPendingBugReports = async () => {
             }
 
             const currentRetry = (report.retryCount || 0) + 1;
-            if (currentRetry > 3) {
-                console.warn("[QMS] Dropping bug report after 3 failed retries:", report);
-                continue; // 3회 초과 실패 시 영구 삭제
+            if (currentRetry > 10) {
+                console.warn(`[QMS] Bug report exceeded max retries (10 attempts). Dropping report:`, report.description);
+                continue; // 10회 초과 시 제거 (remaining에 추가하지 않음)
             }
 
             try {
-                await api.post('/api/bug-reports', report);
+                await bugReportAxios.post('/api/bug-reports', report);
                 consecutiveFailures = 0;
             } catch (err) {
-                console.error(`Failed to flush offline report (attempt ${currentRetry}/3):`, err);
-                remaining.push({ ...report, retryCount: currentRetry });
+                console.error(`Failed to flush offline report (attempt ${currentRetry}/10):`, err);
+                if (err?.response?.status === 403) {
+                    console.warn(`[QMS] 403 Forbidden received. Dropping stale offline bug report.`);
+                } else {
+                    remaining.push({ ...report, retryCount: currentRetry });
+                }
                 hasErrorThisRun = true;
                 consecutiveFailures++;
             }
         }
         
         if (remaining.length > 0) {
-            localStorage.setItem('qms_pending_bug_reports', JSON.stringify(remaining));
+            // 최대 50건까지 FIFO 유지
+            const trimmedQueue = remaining.slice(-50);
+            localStorage.setItem('qms_pending_bug_reports', JSON.stringify(trimmedQueue));
             
-            // 3회 이상 연속 실패 시 3분 쿨다운 지정
-            if (consecutiveFailures >= 3) {
-                console.warn("[QMS] Bug reports keep failing. Disabling queue flush for 3 minutes.");
-                flushDisabledUntil = now + (3 * 60 * 1000);
+            // 5회 이상 연속 실패 시 2분 쿨다운
+            if (consecutiveFailures >= 5) {
+                console.warn("[QMS] Bug reports keep failing. Disabling queue flush for 2 minutes.");
+                flushDisabledUntil = now + (2 * 60 * 1000);
             }
         } else {
             localStorage.removeItem('qms_pending_bug_reports');
@@ -860,7 +914,7 @@ setInterval(() => {
  * 품목 자동검증 API
  */
 export const checkProductSpaceRatio = (productId) => {
-    return api.post(`/api/products/${productId}/space-ratio-check`);
+    return api.post(`/api/products/${productId}/space-ratio-check`, {}, { skipToast: true }).catch(() => ({ data: null }));
 };
 
 /**

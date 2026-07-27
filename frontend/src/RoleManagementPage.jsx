@@ -16,6 +16,7 @@ import { MENU_REGISTRY as MENU_OPTIONS } from './config/menuRegistry';
 
 
 const FUNCTIONAL_PERMISSIONS = [
+    { key: 'VIEW_CHANGE_HISTORY', label: '📜 전 화면 변경이력 조회 권한', description: '제품, 입고검사, 클레임 등 모든 모달의 [변경이력] 탭 및 수정 내역을 조회할 수 있는 전용 권한입니다.' },
     { key: 'AUDIT_DISCLOSE_MANAGE', label: '📸 사진감리 제조사 공개 제어', description: '생산감리 리스트에서 제조사 공개/비공개 여부를 설정할 수 있습니다.' },
     { key: 'PRODUCT_DISCLOSE_MANAGE', label: '📦 제품 마스터 제조사 공개 제어', description: '제품 상세에서 제조사 공개/비공개 여부를 설정할 수 있습니다.' },
     { key: 'PRODUCT_MASTER_MANAGE', label: '🛠️ 제품 마스터 등록/수정 권한', description: '신규 제품 등록 및 기존 마스터 정보를 수정할 수 있는 마스터 권한입니다.' },

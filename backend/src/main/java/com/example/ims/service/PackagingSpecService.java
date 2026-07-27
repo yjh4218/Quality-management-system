@@ -631,5 +631,14 @@ public class PackagingSpecService {
                 spec.setMarkingStandard(combined);
             }
         }
+
+        // 5. 유통채널 규칙 동기화
+        if (prod.getChannels() != null && !prod.getChannels().isEmpty()) {
+            spec.setApplyChannelSticker(shouldApplySticker(prod));
+            for (com.example.ims.entity.SalesChannel channel : prod.getChannels()) {
+                List<ChannelPackagingRule> rules = masterDataService.getRulesByChannel(channel);
+                applyChannelRulesToSpec(spec, rules);
+            }
+        }
     }
 }

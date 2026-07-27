@@ -1151,11 +1151,13 @@ const ProductDrawer = ({ product, onClose, user }) => {
                         {permissions.canViewPackaging && (
                             <button type="button" className={`drawer-tab-btn ${activeTab === 'packaging' ? 'active' : ''}`} onClick={() => setActiveTab('packaging')}>포장재 정보 및 사양서</button>
                         )}
-                        {formData.isMaster && (
+                        {formData.isMaster && permissions.canViewPackaging && (
                             <button type="button" className={`drawer-tab-btn ${activeTab === 'spaceRatio' ? 'active' : ''}`} onClick={() => setActiveTab('spaceRatio')}>⚖️ 국가별 공간비율 검증</button>
                         )}
                         <button type="button" className={`drawer-tab-btn ${activeTab === 'testReports' ? 'active' : ''}`} onClick={() => setActiveTab('testReports')}>공인성적서 관리</button>
-                        {product && <button type="button" className={`drawer-tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>변경 이력</button>}
+                        {product && permissions.canViewHistory && (
+                            <button type="button" className={`drawer-tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>변경 이력</button>
+                        )}
                     </div>
                 </div>
 

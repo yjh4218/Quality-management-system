@@ -45,6 +45,9 @@ public class BugReport {
     @Builder.Default
     private String status = "OPEN"; // OPEN, IN_PROGRESS, RESOLVED, CLOSED
 
+    @Builder.Default
+    private String errorCategory = "UNKNOWN"; // NETWORK, RUNTIME, PROMISE, API_500, RENDER, UNKNOWN
+
     private String severity; // LOW, MEDIUM, HIGH, CRITICAL
 
     @Builder.Default

@@ -149,12 +149,13 @@ public class ProductController {
     }
 
     @GetMapping("/{id}/history")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES', 'QUALITY_TEAM', 'MANUFACTURER')")
     public ResponseEntity<List<ProductHistory>> getHistory(@PathVariable Long id) {
         return ResponseEntity.ok(productService.getHistory(id));
     }
 
     @GetMapping("/master/{itemCode}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES', 'QUALITY_TEAM')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES', 'QUALITY_TEAM', 'MANUFACTURER')")
     public ResponseEntity<Product> loadMaster(@PathVariable String itemCode) {
         return ResponseEntity.ok(productService.loadMasterProduct(itemCode));
     }

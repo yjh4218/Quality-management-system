@@ -61,11 +61,11 @@ ${selectedReport.serverError || '없음'}
     };
 
     const columnDefs = useMemo(() => [
-        { field: "id", headerName: "ID", width: 70, sort: 'desc' },
+        { field: "id", headerName: "ID", width: 70 },
         {
             field: "status",
             headerName: "상태",
-            width: 120,
+            width: 110,
             cellRenderer: (params) => {
                 const styles = {
                     'OPEN': { bg: '#fff0f0', color: '#e74c3c', text: '접수' },
@@ -89,18 +89,47 @@ ${selectedReport.serverError || '없음'}
             }
         },
         {
+            field: "occurrenceCount",
+            headerName: "발생 횟수",
+            width: 130,
+            cellRenderer: (params) => {
+                const count = params.value || 1;
+                if (count >= 2) {
+                    return (
+                        <span style={{
+                            backgroundColor: '#fff3bf',
+                            color: '#d9480f',
+                            border: '1px solid #ffe066',
+                            padding: '3px 9px',
+                            borderRadius: '12px',
+                            fontSize: '12px',
+                            fontWeight: '800'
+                        }}>
+                            🔁 {count}회 반복 발생
+                        </span>
+                    );
+                }
+                return <span style={{ color: '#495057', fontSize: '12px', fontWeight: 'bold' }}>1회</span>;
+            }
+        },
+        {
             field: "severity",
             headerName: "심각도",
-            width: 100,
+            width: 95,
             cellRenderer: (params) => {
                 const colors = { 'LOW': '#868e96', 'MEDIUM': '#339af0', 'HIGH': '#f08c00', 'CRITICAL': '#e03131' };
                 return <span style={{ color: colors[params.value] || '#000', fontWeight: 'bold' }}>{params.value}</span>
             }
         },
-        { field: "screenName", headerName: "발생 화면", width: 150 },
+        { field: "screenName", headerName: "발생 화면", width: 140 },
         { field: "description", headerName: "내용 요약", flex: 1, tooltipField: 'description' },
-        { field: "reporterName", headerName: "신고자", width: 120 },
-        { field: "createdAt", headerName: "신고일시", width: 160, valueFormatter: p => p.value ? new Date(p.value).toLocaleString() : '' },
+        { field: "reporterName", headerName: "신고자", width: 110 },
+        { 
+            field: "updatedAt", 
+            headerName: "최근 발생시각", 
+            width: 160, 
+            valueFormatter: p => (p.value || p.data?.createdAt) ? new Date(p.value || p.data?.createdAt).toLocaleString() : '' 
+        },
         {
             headerName: "작업",
             width: 100,
@@ -311,10 +340,14 @@ ${selectedReport.serverError || '없음'}
                         </div>
 
                         <div className="info-group">
-                            <label style={{ fontWeight: 'bold', fontSize: '13px' }}>신고자 정보</label>
-                            <div style={{ marginTop: '5px', fontSize: '14px' }}>
-                                {selectedReport.reporterName} ({selectedReport.reporterUsername}) <br />
-                                <small style={{ color: '#999' }}>{new Date(selectedReport.createdAt).toLocaleString()}</small>
+                            <label style={{ fontWeight: 'bold', fontSize: '13px' }}>신고자 및 발생 이력 정보</label>
+                            <div style={{ marginTop: '5px', fontSize: '14px', backgroundColor: '#fff', padding: '10px', borderRadius: '4px', border: '1px solid #eee' }}>
+                                <div><strong>신고자:</strong> {selectedReport.reporterName} ({selectedReport.reporterUsername})</div>
+                                <div><strong>누적 발생 횟수:</strong> <span style={{ color: selectedReport.occurrenceCount >= 2 ? '#d9480f' : '#333', fontWeight: 'bold' }}>{selectedReport.occurrenceCount || 1} 회</span></div>
+                                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                                    최초 신고: {new Date(selectedReport.createdAt).toLocaleString()} <br />
+                                    최근 발생: {selectedReport.updatedAt ? new Date(selectedReport.updatedAt).toLocaleString() : '최초 1회 발생'}
+                                </div>
                             </div>
                         </div>
                     </div>

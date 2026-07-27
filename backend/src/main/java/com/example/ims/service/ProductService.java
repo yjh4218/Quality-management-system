@@ -42,6 +42,7 @@ public class ProductService {
     private final ExcelExportService excelExportService;
     private final ExcelParsingService excelParsingService;
     private final com.example.ims.repository.ProductionAuditRepository productionAuditRepository;
+    private final PackagingSpecService packagingSpecService;
 
     /**
      * Helper to initialize shelf life for existing products if missing.
@@ -109,9 +110,14 @@ public class ProductService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-        boolean isManufacturer = user.getRole().contains("ROLE_MANUFACTURER") || "제조사".equals(user.getDepartment());
-        if (isManufacturer && !Objects.equals(user.getCompanyName(), product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : null)) {
-            throw new RuntimeException("해당 제품에 대한 접근 권한이 없습니다.");
+        String userCompany = user.getCompanyName() != null ? user.getCompanyName().trim() : "";
+        String productCompany = (product.getManufacturerInfo() != null && product.getManufacturerInfo().getName() != null) 
+                ? product.getManufacturerInfo().getName().trim() : "";
+
+        boolean isManufacturer = user.getRole().contains("ROLE_MANUFACTURER") || "제조사".equalsIgnoreCase(user.getDepartment());
+        if (isManufacturer && !userCompany.isEmpty() && !productCompany.isEmpty() && !userCompany.contains(productCompany) && !productCompany.contains(userCompany)) {
+            log.warn(">>>> [SECURITY] Manufacturer {} attempted to access product {} owned by {}", userCompany, product.getItemCode(), productCompany);
+            return java.util.Optional.empty();
         }
 
         // [FIX] LAZY 단일 엔티티 강제 초기화
@@ -389,6 +395,13 @@ public class ProductService {
         }
 
         Product saved = productRepository.save(existingProduct);
+        
+        // [유통채널 및 정보 변경 시 포장사양서 자동 동기화]
+        try {
+            packagingSpecService.getFullSpecByProductId(saved.getId());
+        } catch (Exception e) {
+            log.error("Failed to auto-sync packaging spec after product update", e);
+        }
         
         // Capture safe snapshot AFTER modification
         String newJson = captureJson(saved);

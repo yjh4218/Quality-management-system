@@ -49,6 +49,11 @@ public class QualityReportService {
      */
     @Transactional(readOnly = true)
     public List<WmsInbound> getReleaseRecords(String date) {
+        return getReleaseRecords(date, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<WmsInbound> getReleaseRecords(String date, String companyFilter) {
         String targetDateStr = (date != null && !date.trim().isEmpty()) ? date.trim() : java.time.LocalDate.now().toString();
         java.time.LocalDate targetDate;
         try {
@@ -78,6 +83,13 @@ public class QualityReportService {
                 listByInboundDate.add(item);
                 existingIds.add(item.getId());
             }
+        }
+
+        // 3. [보안 강화] 제조사 소속 유저인 경우 소속 회사 데이터만 필터링
+        if (companyFilter != null && !companyFilter.trim().isEmpty()) {
+            listByInboundDate = listByInboundDate.stream()
+                    .filter(item -> companyFilter.equals(item.getManufacturer()))
+                    .collect(java.util.stream.Collectors.toList());
         }
 
         return listByInboundDate;
@@ -344,13 +356,18 @@ public class QualityReportService {
     }
 
     public List<WmsInboundHistory> getInboundHistory(Long inboundId, User user) {
-        WmsInbound inbound = inboundRepository.findById(inboundId)
-                .orElseThrow(() -> new RuntimeException("Inbound not found"));
+        WmsInbound inbound = inboundRepository.findById(inboundId).orElse(null);
+        if (inbound == null) {
+            return java.util.Collections.emptyList();
+        }
         
-        boolean isManufacturer = user.getRole().contains("ROLE_MANUFACTURER") || "제조사".equals(user.getDepartment());
+        boolean isManufacturer = (user.getRole() != null && user.getRole().toUpperCase().contains("MANUFACTURER")) || "제조사".equals(user.getDepartment());
         if (isManufacturer) {
-            if (!java.util.Objects.equals(user.getCompanyName(), inbound.getManufacturer())) {
-                throw new RuntimeException("해당 이력에 대한 조회 권한이 없습니다.");
+            String uComp = user.getCompanyName() != null ? user.getCompanyName().trim() : "";
+            String iComp = inbound.getManufacturer() != null ? inbound.getManufacturer().trim() : "";
+            if (!uComp.equals(iComp)) {
+                System.out.println(">>>> [SECURITY] Manufacturer " + uComp + " attempted to view history for inbound " + inboundId + " owned by " + iComp);
+                return java.util.Collections.emptyList();
             }
         }
         return historyRepository.findByWmsInboundIdOrderByModifiedAtDesc(inboundId);

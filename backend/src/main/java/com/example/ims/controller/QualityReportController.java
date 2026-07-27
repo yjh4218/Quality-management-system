@@ -67,8 +67,16 @@ public class QualityReportController {
     }
 
     @GetMapping("/inbound/release-record")
-    public ResponseEntity<List<WmsInbound>> getReleaseRecord(@RequestParam(required = false) String date) {
-        return ResponseEntity.ok(qualityReportService.getReleaseRecords(date));
+    public ResponseEntity<List<WmsInbound>> getReleaseRecord(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestParam(required = false) String date) {
+        User user = userRepository.findByUsername(userDetails.getUsername())
+                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        String companyFilter = null;
+        if (user.getRole() != null && user.getRole().toUpperCase().contains("MANUFACTURER")) {
+            companyFilter = user.getCompanyName();
+        }
+        return ResponseEntity.ok(qualityReportService.getReleaseRecords(date, companyFilter));
     }
 
     @GetMapping("/export")

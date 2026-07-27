@@ -11,6 +11,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class BugReportService {
 
     private final BugReportRepository bugReportRepository;
@@ -39,6 +40,9 @@ public class BugReportService {
         if (report.getUrl() != null && report.getUrl().length() > 950) {
             report.setUrl(report.getUrl().substring(0, 950));
         }
+        if (report.getErrorCategory() == null || report.getErrorCategory().trim().isEmpty()) {
+            report.setErrorCategory("UNKNOWN");
+        }
 
         report.setStatus("OPEN");
         report.setCreatedAt(LocalDateTime.now());
@@ -60,6 +64,9 @@ public class BugReportService {
             BugReport dup = existing.get();
             dup.setOccurrenceCount((dup.getOccurrenceCount() != null ? dup.getOccurrenceCount() : 1) + 1);
             dup.setUpdatedAt(LocalDateTime.now());
+            if (report.getErrorCategory() != null && !"UNKNOWN".equals(report.getErrorCategory())) {
+                dup.setErrorCategory(report.getErrorCategory());
+            }
             return bugReportRepository.save(dup);
         }
 
@@ -70,10 +77,10 @@ public class BugReportService {
                     saved.getReporterUsername() != null ? saved.getReporterUsername() : "SYSTEM",
                     "BUG_REPORT_SUBMIT",
                     "버그 리포트 등록",
-                    String.format("버그 리포트 신규 적재 [ID: %d, 발생위치: %s, 내용: %s]", saved.getId(), saved.getScreenName(), saved.getDescription())
+                    String.format("버그 리포트 신규 적재 [ID: %d, 발생위치: %s, 카테고리: %s, 내용: %s]", saved.getId(), saved.getScreenName(), saved.getErrorCategory(), saved.getDescription())
             );
         } catch (Exception e) {
-            // ignore
+            log.warn("감사 로그 적재 실패 (버그 리포트 제출): {}", e.getMessage());
         }
 
         return saved;
@@ -81,7 +88,7 @@ public class BugReportService {
 
     @Transactional(readOnly = true)
     public List<BugReport> getAllReports() {
-        return bugReportRepository.findAllByOrderByCreatedAtDesc();
+        return bugReportRepository.findAllCustomOrdered();
     }
 
     @Transactional
@@ -100,7 +107,7 @@ public class BugReportService {
                     String.format("버그 리포트 [ID: %d] 상태 변경 -> %s", id, status)
             );
         } catch (Exception e) {
-            // ignore
+            log.warn("감사 로그 적재 실패 (버그 리포트 상태 변경): {}", e.getMessage());
         }
 
         return updated;

@@ -49,7 +49,9 @@ public class SecurityConfig {
                                 "/api/auth/find-password",
                                 "/api/auth/verify-email",
                                 "/api/admin/system/health",
-                                "/api/manufacturers/invite/**"
+                                "/api/manufacturers/invite/**",
+                                "/api/bug-reports",
+                                "/api/bug-reports/**"
                         )
                 )
                 .addFilterAfter(new org.springframework.web.filter.OncePerRequestFilter() {
@@ -70,6 +72,8 @@ public class SecurityConfig {
                         // [CORS PATCH] OPTIONS preflight 요청 무조건 허용
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/error").permitAll()
+                        .requestMatchers("/api/bug-reports", "/api/bug-reports/**").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/bug-reports", "/api/bug-reports/**").permitAll()
                         // [SECURITY PATCH] 관리자 전용 시스템 경로 권한 강화
                         .requestMatchers("/api/admin/system/health").permitAll() 
                         .requestMatchers("/api/debug/**").hasRole("ADMIN")

@@ -19,6 +19,7 @@ public class SystemSettingService {
 
     private final SystemSettingRepository systemSettingRepository;
     private final EncryptionUtil encryptionUtil;
+    private final AuditLogService auditLogService;
 
     // Keys
     public static final String SMTP_HOST = "SMTP_HOST";
@@ -75,6 +76,18 @@ public class SystemSettingService {
             
             setting.setDescription(description);
             systemSettingRepository.save(setting);
+
+            try {
+                auditLogService.logAction(
+                        "SYSTEM",
+                        "SYSTEM_SETTING_UPDATE",
+                        "시스템 설정 변경",
+                        String.format("시스템 설정 변경 [Key: %s, Description: %s]", key, description)
+                );
+            } catch (Exception ex) {
+                log.warn("감사 로그 적재 실패 (시스템 설정): {}", ex.getMessage());
+            }
+
             log.info("[SETTINGS] Saved setting key: {}", key);
         } catch (Exception e) {
             log.error("Error saving setting key [{}]: {}", key, e.getMessage(), e);

@@ -21,15 +21,34 @@ public class BugReportController {
     private final UserRepository userRepository;
 
     @PostMapping
-    public ResponseEntity<BugReport> submitReport(@RequestBody BugReport report, Authentication authentication) {
-        BugReport targetReport = (report != null) ? report : new BugReport();
+    @PreAuthorize("permitAll()")
+    public ResponseEntity<BugReport> submitReport(@jakarta.validation.Valid @RequestBody(required = false) com.example.ims.dto.BugReportSubmitRequest request, Authentication authentication) {
+        com.example.ims.dto.BugReportSubmitRequest dto = (request != null) ? request : new com.example.ims.dto.BugReportSubmitRequest();
+        BugReport targetReport = BugReport.builder()
+                .reporterUsername(dto.getReporterUsername())
+                .reporterName(dto.getReporterName())
+                .screenName(dto.getScreenName())
+                .url(dto.getUrl())
+                .steps(dto.getSteps())
+                .description(dto.getDescription())
+                .serverError(dto.getServerError())
+                .severity(dto.getSeverity())
+                .errorCategory(dto.getErrorCategory() != null ? dto.getErrorCategory() : "UNKNOWN")
+                .build();
+
         if (authentication != null && authentication.isAuthenticated()) {
             String username = authentication.getName();
             if (username != null && !username.trim().isEmpty() && !"anonymousUser".equalsIgnoreCase(username)) {
-                targetReport.setReporterUsername(username);
-                userRepository.findByUsername(username).ifPresent(u -> {
-                    targetReport.setReporterName(u.getName());
-                });
+                if (targetReport.getReporterUsername() == null || targetReport.getReporterUsername().trim().isEmpty() || "unknown".equalsIgnoreCase(targetReport.getReporterUsername())) {
+                    targetReport.setReporterUsername(username);
+                }
+                if (targetReport.getReporterName() == null || targetReport.getReporterName().trim().isEmpty() || "ANONYMOUS_USER".equalsIgnoreCase(targetReport.getReporterName())) {
+                    userRepository.findByUsername(username).ifPresent(u -> {
+                        String company = u.getManufacturer() != null ? u.getManufacturer().getName() : "HQ(본사)";
+                        String dept = u.getDepartment() != null ? u.getDepartment() : "품질관리팀";
+                        targetReport.setReporterName(company + " / " + dept + " / " + u.getName());
+                    });
+                }
             }
         }
         return ResponseEntity.ok(bugReportService.submitReport(targetReport));

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getProductByItemCode } from '../api';
 import SaveConfirmModal from './SaveConfirmModal';
+import { usePermissions } from '../usePermissions';
 import {
     Drawer,
     Box,
@@ -38,6 +39,7 @@ const QualityDetailDrawer = ({
     getCleanFileName,
     isLoading // [추가] 로딩 상태
 }) => {
+    const { canViewHistory } = usePermissions(user);
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
     const [productInfo, setProductInfo] = useState(null);
 
@@ -286,7 +288,7 @@ const QualityDetailDrawer = ({
                         }}
                     >
                         <Tab label="기본 정보" value="info" />
-                        <Tab label="변경 이력" value="history" />
+                        {canViewHistory && <Tab label="변경 이력" value="history" />}
                     </Tabs>
                 </Box>
 

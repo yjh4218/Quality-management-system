@@ -33,7 +33,7 @@ import NotificationSettingsPage from './NotificationSettingsPage.jsx';
 import IngredientCompliancePage from './IngredientCompliancePage.jsx';
 import HelpCenterModal from './components/HelpCenterModal';
 import ProfileModal from './ProfileModal';
-import { getCurrentUser, logout, getMyNotifications, getUnreadNotificationCount, readNotification, readAllNotifications, deleteNotification, submitBugReport, getBaseURL } from './api';
+import { getCurrentUser, logout, getMyNotifications, getUnreadNotificationCount, readNotification, readAllNotifications, deleteNotification, submitBugReport, getBaseURL, getFormattedReporterInfo } from './api';
 import ManufacturerAuditItemPage from './ManufacturerAuditItemPage';
 import ManufacturerAuditPage from './ManufacturerAuditPage';
 import ManufacturerAuditDashboard from './ManufacturerAuditDashboard';
@@ -111,20 +111,42 @@ class ErrorBoundary extends React.Component {
         const { error, errorInfo } = this.state;
         if (!error) return;
 
+        const payload = {
+            screenName: window.__QMS_ACTIVE_PAGE__ || '전역 에러',
+            url: window.location.href,
+            severity: 'CRITICAL',
+            errorCategory: 'RENDER',
+            description: `[자동 감지] 시스템 치명적 오류 발생: ${error.message}`,
+            steps: `사용자 활동 중 예기치 않은 오류가 발생하여 화면이 중단되었습니다.\n\n[Stack Trace]\n${error.stack}\n\n[Component Stack]\n${errorInfo?.componentStack}`,
+            reporterName: this.props.user?.name || '알 수 없는 사용자',
+            reporterUsername: this.props.user?.username || 'unknown'
+        };
+
         try {
             const { submitBugReport } = await import('./api');
-            await submitBugReport({
-                screenName: window.__QMS_ACTIVE_PAGE__ || '전역 에러',
-                url: window.location.href,
-                severity: 'CRITICAL',
-                description: `[자동 감지] 시스템 치명적 오류 발생: ${error.message}`,
-                steps: `사용자 활동 중 예기치 않은 오류가 발생하여 화면이 중단되었습니다.\n\n[Stack Trace]\n${error.stack}\n\n[Component Stack]\n${errorInfo?.componentStack}`,
-                reporterName: this.props.user?.name || '알 수 없는 사용자',
-                reporterUsername: this.props.user?.username || 'unknown'
-            });
+            await submitBugReport(payload);
             this.setState({ autoReported: true });
         } catch (err) {
-            console.error("Automatic bug report failed", err);
+            console.error("Automatic bug report via api.jsx failed, attempting direct fetch fallback:", err);
+            try {
+                const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+                await fetch(`${baseURL}/api/bug-reports`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify(payload)
+                });
+                this.setState({ autoReported: true });
+            } catch (fallbackErr) {
+                console.error("Fallback bug report submission also failed, storing in offline queue:", fallbackErr);
+                try {
+                    const queue = JSON.parse(localStorage.getItem('qms_pending_bug_reports') || '[]');
+                    queue.push({ ...payload, queuedAt: new Date().toISOString() });
+                    localStorage.setItem('qms_pending_bug_reports', JSON.stringify(queue.slice(-50)));
+                } catch (qErr) {
+                    console.error("Failed to queue bug report offline:", qErr);
+                }
+            }
         }
     };
 
@@ -184,20 +206,21 @@ const App = () => {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [user, setUser] = useState(null);
 
-    // [전역 감지] 시스템 자바스크립트 uncaught 에러 및 unhandled rejection 감지 후 자동 버그 신고 연동
+    // [전역 감지] 시스템 자바스크립트 uncaught 에러 및 unhandled rejection 감지 후 자동 버그 신고 연동 (모든 에러 100% 수집)
     useEffect(() => {
-        const submitGlobalBugReport = async (errorMsg, stackTrace, source = 'Global JS Error') => {
+        const submitGlobalBugReport = async (errorMsg, stackTrace, source = 'Global JS Error', category = 'RUNTIME') => {
             try {
+                const reporterInfo = getFormattedReporterInfo(user);
                 await submitBugReport({
                     screenName: window.__QMS_ACTIVE_PAGE__ || '전역 에러 감지',
                     url: window.location.href,
-                    severity: 'CRITICAL',
+                    severity: category === 'NETWORK' ? 'HIGH' : 'CRITICAL',
+                    errorCategory: category,
                     description: `[자동 감지] ${source}: ${errorMsg}`,
-                    steps: `시스템 전역에서 비정상적인 예외 상황이 자동으로 검출되었습니다.\n\n[오류 메시지]\n${errorMsg}\n\n[Stack Trace]\n${stackTrace || 'N/A'}`,
-                    reporterName: user?.name || '알 수 없는 사용자',
-                    reporterUsername: user?.username || 'unknown'
+                    steps: `시스템 전역에서 예외 상황이 감지되었습니다.\n\n[오류 분류]: ${category}\n[오류 메시지]\n${errorMsg}\n\n[Stack Trace]\n${stackTrace || 'N/A'}`,
+                    reporterName: reporterInfo.name,
+                    reporterUsername: reporterInfo.username
                 });
-                console.log(`>>>> [GLOBAL AUTO REPORT] Automatically sent bug report: ${errorMsg}`);
             } catch (err) {
                 console.error("Global bug report auto submission failed:", err);
             }
@@ -206,17 +229,16 @@ const App = () => {
         const handleGlobalError = (event) => {
             const errorMsg = event.message || 'Unknown global error';
             const stackTrace = event.error?.stack || 'N/A';
-            if (errorMsg.includes('Load failed') || errorMsg.includes('Failed to fetch') || errorMsg.includes('Network Error')) return;
-            submitGlobalBugReport(errorMsg, stackTrace, 'Uncaught Exception');
+            const isNetwork = errorMsg.includes('Load failed') || errorMsg.includes('Failed to fetch') || errorMsg.includes('Network Error');
+            submitGlobalBugReport(errorMsg, stackTrace, 'Uncaught Exception', isNetwork ? 'NETWORK' : 'RUNTIME');
         };
 
         const handleUnhandledRejection = (event) => {
             const reason = event.reason;
             const errorMsg = reason instanceof Error ? reason.message : String(reason);
             const stackTrace = reason instanceof Error ? reason.stack : 'N/A';
-            // Filter out Axios aborted error or other normal promise cancellations if any
-            if (errorMsg.includes('canceled')) return;
-            submitGlobalBugReport(errorMsg, stackTrace, 'Unhandled Rejection');
+            const isNetwork = errorMsg.includes('Load failed') || errorMsg.includes('Failed to fetch') || errorMsg.includes('Network Error');
+            submitGlobalBugReport(errorMsg, stackTrace, 'Unhandled Rejection', isNetwork ? 'NETWORK' : 'PROMISE');
         };
 
         window.addEventListener('error', handleGlobalError);

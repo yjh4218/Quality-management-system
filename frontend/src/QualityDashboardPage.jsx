@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { getInboundData, getManufacturers } from './api';
+import { getInboundData, getManufacturers, updateInboundData, getInboundHistory } from './api';
 import AnalyticsDashboardShell from './components/dashboard/AnalyticsDashboardShell';
 import DashboardFilterBar from './components/dashboard/DashboardFilterBar';
 import SummaryCardRow from './components/dashboard/SummaryCardRow';
@@ -8,6 +8,8 @@ import DashboardDataTable from './components/dashboard/DashboardDataTable';
 import StatusBadgeRenderer from './components/dashboard/StatusBadgeRenderer';
 import ProductSearchPopup from './ProductSearchPopup';
 import useDateRangePreset from './hooks/useDateRangePreset';
+import InboundListModal from './components/dashboard/InboundListModal';
+import QualityDetailDrawer from './components/QualityDetailDrawer';
 
 const QualityDashboardPage = ({ user, onNavigate }) => {
     const gridRef = useRef();
@@ -15,6 +17,34 @@ const QualityDashboardPage = ({ user, onNavigate }) => {
     const [manufacturers, setManufacturers] = useState([]);
     const [loading, setLoading] = useState(false);
     const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
+
+    // Drilldown Popup Modal States
+    const [isListModalOpen, setIsListModalOpen] = useState(false);
+    const [listModalTitle, setListModalTitle] = useState('');
+    const [listModalInbounds, setListModalInbounds] = useState([]);
+    const [selectedInboundDetail, setSelectedInboundDetail] = useState(null);
+    const [activeDrawerTab, setActiveDrawerTab] = useState('info');
+    const [history, setHistory] = useState([]);
+
+    const overallStatusMap = useMemo(() => ({
+        'STEP1_WAITING': '1. 입고 검사 대기 중',
+        'STEP2_INSPECTION_IN_PROGRESS': '2. 입고 검사 진행 중',
+        'STEP3_COA_CHECK': '3. CoA 검수',
+        'STEP4_FINAL_APPROVAL': '4. 품질 적합 승인 대기',
+        'STEP5_FINAL_COMPLETE': '5. 입고 검수 최종 완료',
+        'REJECTED': '부적합'
+    }), []);
+
+    // Load Inbound History when a detail item is selected
+    useEffect(() => {
+        if (selectedInboundDetail?.id) {
+            getInboundHistory(selectedInboundDetail.id)
+                .then(res => setHistory(res.data || []))
+                .catch(() => setHistory([]));
+        } else {
+            setHistory([]);
+        }
+    }, [selectedInboundDetail?.id]);
 
     // Filter States
     const [startDate, setStartDate] = useState(() => {
@@ -285,7 +315,7 @@ const QualityDashboardPage = ({ user, onNavigate }) => {
                 </div>
             </DashboardFilterBar>
 
-            {/* 통계 요약 */}
+            {/* 통계 요약 카드 */}
             <SummaryCardRow cards={summaryCards} />
 
             {/* 차트 */}
@@ -297,6 +327,14 @@ const QualityDashboardPage = ({ user, onNavigate }) => {
                     dataKey="value"
                     nameKey="name"
                     emptyThreshold={1}
+                    onClickItem={(entry) => {
+                        const mName = entry?.name || entry?.activePayload?.[0]?.payload?.name;
+                        if (!mName) return;
+                        const filtered = inbounds.filter(item => (item.manufacturer || '기타') === mName);
+                        setListModalTitle(`[${mName}] 입고 검수 및 판정 목록`);
+                        setListModalInbounds(filtered);
+                        setIsListModalOpen(true);
+                    }}
                 />
                 <ChartCard 
                     title="입고 검사 적격 판정 비중"
@@ -306,6 +344,19 @@ const QualityDashboardPage = ({ user, onNavigate }) => {
                     nameKey="name"
                     emptyThreshold={1}
                     colors={['#f59e0b', '#10b981', '#ef4444']}
+                    onClickItem={(entry) => {
+                        const sName = entry?.name || entry?.activePayload?.[0]?.payload?.name;
+                        if (!sName) return;
+                        const filtered = inbounds.filter(item => {
+                            const res = item.inspectionResult || item.inboundInspectionResult || '대기';
+                            if (sName === '적합') return res === '적합' || res === 'PASS';
+                            if (sName === '부적합') return res === '부적합' || res === 'FAIL';
+                            return res !== '적합' && res !== 'PASS' && res !== '부적합' && res !== 'FAIL';
+                        });
+                        setListModalTitle(`[${sName}] 판정 입고 검수 목록`);
+                        setListModalInbounds(filtered);
+                        setIsListModalOpen(true);
+                    }}
                 />
             </div>
 
@@ -344,6 +395,63 @@ const QualityDashboardPage = ({ user, onNavigate }) => {
                 rowData={inbounds}
                 columnDefs={columnDefs}
                 defaultPageSize={50}
+            />
+
+            {/* 드릴다운 목록 팝업 모달 */}
+            {isListModalOpen && (
+                <InboundListModal
+                    title={listModalTitle}
+                    inbounds={listModalInbounds}
+                    onClose={() => setIsListModalOpen(false)}
+                    onSelectInbound={(item) => {
+                        setSelectedInboundDetail(item);
+                    }}
+                />
+            )}
+
+            {/* 원본 입고 품질 검사 상세 모달 (QualityDetailDrawer) */}
+            <QualityDetailDrawer
+                isOpen={Boolean(selectedInboundDetail)}
+                onClose={() => setSelectedInboundDetail(null)}
+                selectedInbound={selectedInboundDetail}
+                setSelectedInbound={setSelectedInboundDetail}
+                activeTab={activeDrawerTab}
+                setActiveTab={setActiveDrawerTab}
+                history={history}
+                manufacturers={manufacturers}
+                isInternalQuality={!isManufacturer}
+                isAdmin={user?.roles?.some(r => r.authority === 'ROLE_ADMIN')}
+                isManufacturer={isManufacturer}
+                overallStatusMap={overallStatusMap}
+                getFullUrl={(path) => {
+                    if (!path) return '';
+                    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+                    const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+                    return `${baseURL}${path.startsWith('/') ? path : '/' + path}`;
+                }}
+                getCleanFileName={(url) => {
+                    if (!url) return '';
+                    const parts = url.split('/');
+                    const fileName = parts[parts.length - 1];
+                    return fileName.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i, '');
+                }}
+                handleSave={async (updatedItem) => {
+                    try {
+                        await updateInboundData(updatedItem);
+                        setSelectedInboundDetail(null);
+                        // Refresh inbounds data
+                        const res = await getInboundData({
+                            startDate,
+                            endDate,
+                            itemCode,
+                            productName,
+                            manufacturer: selectedManufacturer
+                        });
+                        setInbounds(res.data || []);
+                    } catch (err) {
+                        console.error('Failed to save inbound detail:', err);
+                    }
+                }}
             />
 
             {/* 품목 검색 팝업 모달 */}

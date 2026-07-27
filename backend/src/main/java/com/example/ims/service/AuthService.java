@@ -28,6 +28,7 @@ public class AuthService {
     private final MailService mailService;
     private final EmailService emailService;
     private final NotificationService notificationService;
+    private final AuditLogService auditLogService;
 
     /**
      * 신규 사용자 가입 신청을 처리합니다.
@@ -39,9 +40,10 @@ public class AuthService {
             throw new IllegalArgumentException("이미 존재하는 아이디입니다.");
         }
 
+        com.example.ims.entity.Manufacturer matchedManufacturer = null;
         // 제조사 소속일 경우 실제 존재하는 회사인지 검증
         if (dto.companyName() != null && !"더파운더즈".equals(dto.companyName()) && !dto.companyName().isBlank()) {
-            manufacturerRepository.findByName(dto.companyName())
+            matchedManufacturer = manufacturerRepository.findByName(dto.companyName())
                     .orElseThrow(() -> new IllegalArgumentException("등록되지 않은 소속(제조사)입니다."));
         }
 
@@ -52,18 +54,30 @@ public class AuthService {
                 .password(passwordEncoder.encode(dto.password()))
                 .name(dto.name())
                 .companyName(dto.companyName())
+                .manufacturer(matchedManufacturer)
                 .department(dto.department())
                 .phone(dto.phone())
                 .email(dto.email())
                 .role("ROLE_USER")
                 .enabled(false)
                 .locked(false)
-                .failedAttempts(0)
+                .passwordResetRequired(false)
                 .emailVerified(false)
                 .verificationToken(UUID.randomUUID().toString())
                 .build();
 
-        userRepository.save(newUser);
+        User savedUser = userRepository.save(newUser);
+
+        try {
+            auditLogService.logAction(
+                    savedUser.getUsername(),
+                    "USER_REGISTER",
+                    "신규 회원가입 신청",
+                    String.format("신규 사용자 가입 신청 [ID: %s, 이메일: %s, 소속: %s]", savedUser.getUsername(), savedUser.getEmail(), savedUser.getCompanyName())
+            );
+        } catch (Exception e) {
+            log.warn("감사 로그 적재 실패 (회원가입): {}", e.getMessage());
+        }
         log.info("[AUTH] New registration request saved: {}", dto.username());
 
         try {
@@ -85,6 +99,17 @@ public class AuthService {
         user.setEmailVerified(true);
         user.setVerificationToken(null);
         User savedUser = userRepository.save(user);
+
+        try {
+            auditLogService.logAction(
+                    savedUser.getUsername(),
+                    "EMAIL_VERIFIED",
+                    "이메일 인증 완료",
+                    String.format("사용자 이메일 인증 완료 [ID: %s, 이메일: %s]", savedUser.getUsername(), savedUser.getEmail())
+            );
+        } catch (Exception e) {
+            log.warn("감사 로그 적재 실패 (이메일 인증): {}", e.getMessage());
+        }
 
         // 이메일 인증 완료 후 관리자 승인 대기 알림 발송
         try {
@@ -122,6 +147,17 @@ public class AuthService {
                 user.setPassword(passwordEncoder.encode(tempPw));
                 user.setPasswordResetRequired(true);
                 userRepository.save(user);
+
+                try {
+                    auditLogService.logAction(
+                            username,
+                            "TEMP_PASSWORD_ISSUED",
+                            "임시 비밀번호 발급",
+                            String.format("임시 비밀번호 발급 처리 [ID: %s, 이메일: %s]", username, email)
+                    );
+                } catch (Exception ex) {
+                    log.warn("감사 로그 적재 실패 (임시 비밀번호): {}", ex.getMessage());
+                }
 
                 mailService.sendTemporaryPassword(email, name, tempPw);
                 log.info("[SECURITY] High-entropy temporary password issued for user: {}", username);
