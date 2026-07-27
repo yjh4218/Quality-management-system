@@ -105,10 +105,10 @@ const api = axios.create({
     xsrfHeaderName: 'X-XSRF-TOKEN'
 });
 
-// [버그 리포트 전용 독립 AXIOS 인스턴스] CORS preflight 및 CSRF 인터셉터의 영향을 받지 않는 고정 JSON 클라이언트
+// [버그 리포트 전용 독립 AXIOS 인스턴스] CORS preflight 및 CSRF 인터셉터의 영향을 받지 않는 무인증 JSON 클라이언트
 const bugReportAxios = axios.create({
     baseURL: getBaseURL(),
-    withCredentials: true,
+    withCredentials: false,
     headers: {
         'Content-Type': 'application/json'
     }
