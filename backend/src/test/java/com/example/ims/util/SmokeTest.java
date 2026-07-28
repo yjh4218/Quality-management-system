@@ -132,7 +132,6 @@ public class SmokeTest {
                     .username("admin")
                     .password("password")
                     .role("ROLE_ADMIN")
-                    .roleInfo(adminRole)
                     .enabled(true)
                     .build());
         }
