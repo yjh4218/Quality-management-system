@@ -14,7 +14,7 @@ CREATE INDEX IF NOT EXISTS idx_wms_inbound_mfr_status ON wms_inbound(manufacture
 CREATE INDEX IF NOT EXISTS idx_wms_inbound_grn ON wms_inbound(grn_number);
 
 -- 4. audit_logs (누적 테이블 대량 스캔 사전 대비)
-CREATE INDEX IF NOT EXISTS idx_audit_logs_created_user ON audit_logs(created_at, username);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_modified_user ON audit_logs(modified_at, modifier_username);
 
 -- 5. product_images (외래키 조회 성능 향상)
 CREATE INDEX IF NOT EXISTS idx_product_images_product_id ON product_images(product_id);
