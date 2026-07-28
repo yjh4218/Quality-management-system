@@ -4,15 +4,8 @@
 
 -- 1. Roles Table Expansion
 -- V4 only created basic columns. We need to add UI/UX related fields.
-DO $$ 
-BEGIN 
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='roles' AND column_name='allowed_menus') THEN
-        ALTER TABLE roles ADD COLUMN allowed_menus TEXT;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='roles' AND column_name='dashboard_layout_id') THEN
-        ALTER TABLE roles ADD COLUMN dashboard_layout_id BIGINT;
-    END IF;
-END $$;
+ALTER TABLE roles ADD COLUMN IF NOT EXISTS allowed_menus TEXT;
+ALTER TABLE roles ADD COLUMN IF NOT EXISTS dashboard_layout_id BIGINT;
 
 -- 2. Dashboard Layouts Table
 CREATE TABLE IF NOT EXISTS dashboard_layouts (
@@ -62,4 +55,4 @@ ALTER TABLE claims ADD COLUMN IF NOT EXISTS mfr_status VARCHAR(255) DEFAULT '접
 ALTER TABLE production_audit ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
 
 -- 8. Sequences
-CREATE SEQUENCE IF NOT EXISTS claim_number_seq START 1;
+CREATE SEQUENCE IF NOT EXISTS claim_number_seq START WITH 1;

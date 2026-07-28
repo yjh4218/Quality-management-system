@@ -21,29 +21,6 @@ CREATE INDEX IF NOT EXISTS idx_claims_receipt_mfr ON claims (receipt_date DESC, 
 CREATE INDEX IF NOT EXISTS idx_audit_logs_modified_at ON audit_logs (modified_at DESC);
 
 -- 3. GIN Full-Text Search Indexes (Postgres Only)
--- Note: GIN indices are only created if the pg_trgm extension is available.
--- Flyway handles this gracefully in H2 (ignoring extension) but GIN syntax is PG specific.
--- For H2 compatibility, we wrap in a block if needed, but standard GIN is usually fine for PG.
-
-DO $$ 
-BEGIN 
-    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') OR 
-       EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'pg_extension') THEN
-        
-        -- Enable extension if missing
-        CREATE EXTENSION IF NOT EXISTS pg_trgm;
-
-        -- Create GIN indexes for fuzzy search
-        IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'idx_products_product_name_gin') THEN
-            CREATE INDEX idx_products_product_name_gin ON products USING gin (product_name gin_trgm_ops);
-        END IF;
-        
-        IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'idx_products_english_name_gin') THEN
-            CREATE INDEX idx_products_english_name_gin ON products USING gin (english_product_name gin_trgm_ops);
-        END IF;
-        
-        IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'idx_products_ingredients_gin') THEN
-            CREATE INDEX idx_products_ingredients_gin ON products USING gin (ingredients gin_trgm_ops);
-        END IF;
-    END IF;
-END $$;
+-- Note: GIN indexes and pg_trgm extension are PostgreSQL-specific features.
+-- These are created via SystemStartupRunner or a separate Postgres-only init script.
+-- Skipped here for H2 compatibility.

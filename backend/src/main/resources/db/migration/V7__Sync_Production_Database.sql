@@ -79,23 +79,7 @@ CREATE TABLE IF NOT EXISTS product_sales_channels (
 );
 
 -- 5. Role and Product Column Sync
-DO $$ 
-BEGIN 
-    -- Roles: Add missing columns if they don't exist
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='roles' AND column_name='allowed_menus') THEN
-        ALTER TABLE roles ADD COLUMN allowed_menus TEXT;
-    END IF;
-    
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='roles' AND column_name='allowed_permissions') THEN
-        ALTER TABLE roles ADD COLUMN allowed_permissions TEXT;
-    END IF;
-
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='roles' AND column_name='dashboard_layout_id') THEN
-        ALTER TABLE roles ADD COLUMN dashboard_layout_id BIGINT;
-    END IF;
-    
-    -- Products: Add photo audit disclosed column
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='photo_audit_disclosed') THEN
-        ALTER TABLE products ADD COLUMN photo_audit_disclosed BOOLEAN DEFAULT FALSE;
-    END IF;
-END $$;
+ALTER TABLE roles ADD COLUMN IF NOT EXISTS allowed_menus TEXT;
+ALTER TABLE roles ADD COLUMN IF NOT EXISTS allowed_permissions TEXT;
+ALTER TABLE roles ADD COLUMN IF NOT EXISTS dashboard_layout_id BIGINT;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS photo_audit_disclosed BOOLEAN DEFAULT FALSE;

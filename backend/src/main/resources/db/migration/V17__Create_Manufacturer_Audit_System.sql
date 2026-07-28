@@ -65,35 +65,45 @@ INSERT INTO audit_templates (classification_name) VALUES ('사료 제조사 Audi
 INSERT INTO audit_templates (classification_name) VALUES ('동물용 의약외품 제조사 Audit');
 
 -- 6-2. 화장품 제조사용 점검항목 그룹 등록
-DO $$
-DECLARE
-    t_id BIGINT;
-BEGIN
-    SELECT id INTO t_id FROM audit_templates WHERE classification_name = '화장품 제조사 Audit';
-    
-    INSERT INTO audit_template_groups (template_id, group_name, display_order) VALUES (t_id, '운영관리', 1);
-    INSERT INTO audit_template_groups (template_id, group_name, display_order) VALUES (t_id, '위생관리', 2);
-    INSERT INTO audit_template_groups (template_id, group_name, display_order) VALUES (t_id, '공정관리', 3);
-    INSERT INTO audit_template_groups (template_id, group_name, display_order) VALUES (t_id, '품질관리', 4);
-    INSERT INTO audit_template_groups (template_id, group_name, display_order) VALUES (t_id, '교육관리', 5);
-    INSERT INTO audit_template_groups (template_id, group_name, display_order) VALUES (t_id, '클레임관리', 6);
-END $$;
+-- (DO $$ 블록을 서브쿼리 기반 INSERT로 변환)
+INSERT INTO audit_template_groups (template_id, group_name, display_order)
+SELECT id, '운영관리', 1 FROM audit_templates WHERE classification_name = '화장품 제조사 Audit';
+INSERT INTO audit_template_groups (template_id, group_name, display_order)
+SELECT id, '위생관리', 2 FROM audit_templates WHERE classification_name = '화장품 제조사 Audit';
+INSERT INTO audit_template_groups (template_id, group_name, display_order)
+SELECT id, '공정관리', 3 FROM audit_templates WHERE classification_name = '화장품 제조사 Audit';
+INSERT INTO audit_template_groups (template_id, group_name, display_order)
+SELECT id, '품질관리', 4 FROM audit_templates WHERE classification_name = '화장품 제조사 Audit';
+INSERT INTO audit_template_groups (template_id, group_name, display_order)
+SELECT id, '교육관리', 5 FROM audit_templates WHERE classification_name = '화장품 제조사 Audit';
+INSERT INTO audit_template_groups (template_id, group_name, display_order)
+SELECT id, '클레임관리', 6 FROM audit_templates WHERE classification_name = '화장품 제조사 Audit';
 
 -- 6-3. 화장품 제조사 > 위생관리 세부항목 시딩 (예시 5개)
-DO $$
-DECLARE
-    g_id BIGINT;
-BEGIN
-    SELECT g.id INTO g_id 
-    FROM audit_template_groups g 
-    JOIN audit_templates t ON g.template_id = t.id 
-    WHERE t.classification_name = '화장품 제조사 Audit' AND g.group_name = '위생관리';
-    
-    INSERT INTO audit_template_items (group_id, item_content, display_order) VALUES (g_id, '작업장 바닥, 벽, 천장의 청결 상태', 1);
-    INSERT INTO audit_template_items (group_id, item_content, display_order) VALUES (g_id, '작업자의 위생복, 위생모, 위생화 착용 준수', 2);
-    INSERT INTO audit_template_items (group_id, item_content, display_order) VALUES (g_id, '제조 설비 및 도구의 세척/소독 관리 상태', 3);
-    INSERT INTO audit_template_items (group_id, item_content, display_order) VALUES (g_id, '폐기물 처리 및 보관 구역의 격리 상태', 4);
-    INSERT INTO audit_template_items (group_id, item_content, display_order) VALUES (g_id, '외부 오염물질 유입 방지(방충/방서) 시설 관리', 5);
-END $$;
+-- (DO $$ 블록을 서브쿼리 기반 INSERT로 변환)
+INSERT INTO audit_template_items (group_id, item_content, display_order)
+SELECT g.id, '작업장 바닥, 벽, 천장의 청결 상태', 1
+FROM audit_template_groups g JOIN audit_templates t ON g.template_id = t.id
+WHERE t.classification_name = '화장품 제조사 Audit' AND g.group_name = '위생관리';
+
+INSERT INTO audit_template_items (group_id, item_content, display_order)
+SELECT g.id, '작업자의 위생복, 위생모, 위생화 착용 준수', 2
+FROM audit_template_groups g JOIN audit_templates t ON g.template_id = t.id
+WHERE t.classification_name = '화장품 제조사 Audit' AND g.group_name = '위생관리';
+
+INSERT INTO audit_template_items (group_id, item_content, display_order)
+SELECT g.id, '제조 설비 및 도구의 세척/소독 관리 상태', 3
+FROM audit_template_groups g JOIN audit_templates t ON g.template_id = t.id
+WHERE t.classification_name = '화장품 제조사 Audit' AND g.group_name = '위생관리';
+
+INSERT INTO audit_template_items (group_id, item_content, display_order)
+SELECT g.id, '폐기물 처리 및 보관 구역의 격리 상태', 4
+FROM audit_template_groups g JOIN audit_templates t ON g.template_id = t.id
+WHERE t.classification_name = '화장품 제조사 Audit' AND g.group_name = '위생관리';
+
+INSERT INTO audit_template_items (group_id, item_content, display_order)
+SELECT g.id, '외부 오염물질 유입 방지(방충/방서) 시설 관리', 5
+FROM audit_template_groups g JOIN audit_templates t ON g.template_id = t.id
+WHERE t.classification_name = '화장품 제조사 Audit' AND g.group_name = '위생관리';
 
 -- 다른 분류 및 그룹에 대해서도 동일한 방식으로 시딩 (실제 구현 시 더 많은 항목 추가)
