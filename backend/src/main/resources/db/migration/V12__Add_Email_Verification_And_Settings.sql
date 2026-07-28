@@ -1,17 +1,16 @@
 -- V12: Add Email Verification and System Settings
 
 -- 1. Create System Setting table to store SMTP config
-CREATE TABLE system_settings (
+CREATE TABLE IF NOT EXISTS system_settings (
     setting_key VARCHAR(100) PRIMARY KEY,
     setting_value TEXT NOT NULL,
     description VARCHAR(255),
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 2. Add email verification fields to users
-ALTER TABLE users 
-ADD COLUMN email_verified BOOLEAN DEFAULT FALSE,
-ADD COLUMN verification_token VARCHAR(255);
+-- 2. Add email verification fields to users (H2 & Postgres dual compatibility: Individual ALTER TABLE statements)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token VARCHAR(255);
 
 -- 3. Set existing users to be verified so they can log in
 UPDATE users SET email_verified = TRUE;

@@ -2,6 +2,114 @@
 -- Consolidates schema changes from SystemStartupRunner into official migration.
 -- Targets: Postgres (Production) and H2 (Local Development)
 
+-- 0. Ensure All Core Base Tables Exist with Standard Baseline Columns
+-- (Guarantees fresh H2 CI test databases don't throw 'Table/Column not found' during early ALTER TABLE migrations)
+
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(100) UNIQUE,
+    password VARCHAR(255),
+    role VARCHAR(50)
+);
+
+CREATE TABLE IF NOT EXISTS roles (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) UNIQUE NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS manufacturers (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255)
+);
+
+CREATE TABLE IF NOT EXISTS wms_inbound (
+    id SERIAL PRIMARY KEY,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS wms_inbound_history (
+    id SERIAL PRIMARY KEY,
+    inbound_id BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS products (
+    id SERIAL PRIMARY KEY,
+    product_name VARCHAR(255),
+    ingredients TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS claims (
+    id SERIAL PRIMARY KEY,
+    receipt_date DATE,
+    manufacturer VARCHAR(255),
+    claim_content TEXT,
+    root_cause_analysis TEXT,
+    preventative_action TEXT,
+    mfr_root_cause_analysis TEXT,
+    mfr_preventative_action TEXT,
+    quality_remarks TEXT,
+    mfr_remarks TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS product_history (
+    id SERIAL PRIMARY KEY,
+    product_id BIGINT,
+    old_value TEXT,
+    new_value TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS claim_history (
+    id SERIAL PRIMARY KEY,
+    claim_id BIGINT,
+    old_value TEXT,
+    new_value TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS production_audit (
+    id SERIAL PRIMARY KEY,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id BIGSERIAL PRIMARY KEY,
+    entity_type VARCHAR(255),
+    entity_id BIGINT,
+    action VARCHAR(255),
+    modifier VARCHAR(255),
+    modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    description TEXT,
+    old_value TEXT,
+    new_value TEXT
+);
+
+CREATE TABLE IF NOT EXISTS announcements (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS bug_reports (
+    id BIGSERIAL PRIMARY KEY,
+    title VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS notification_settings (
+    id SERIAL PRIMARY KEY,
+    setting_key VARCHAR(100)
+);
+
+CREATE TABLE IF NOT EXISTS regulatory_ingredients (
+    id BIGSERIAL PRIMARY KEY,
+    korean_name VARCHAR(500)
+);
+
 -- 1. Roles Table Expansion
 -- V4 only created basic columns. We need to add UI/UX related fields.
 ALTER TABLE roles ADD COLUMN IF NOT EXISTS allowed_menus TEXT;
