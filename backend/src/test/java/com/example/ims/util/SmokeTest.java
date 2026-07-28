@@ -26,7 +26,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties = "com.example.ims.util.SystemStartupRunner.enabled=false")
 @AutoConfigureMockMvc
-@ActiveProfiles("local")
 @Transactional
 public class SmokeTest {
 

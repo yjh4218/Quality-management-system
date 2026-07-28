@@ -14,7 +14,6 @@ import java.util.Map;
 import java.util.Optional;
 
 @SpringBootTest(properties = "com.example.ims.util.SystemStartupRunner.enabled=false")
-@ActiveProfiles("local")
 public class DBCheckTest {
 
     @Autowired
