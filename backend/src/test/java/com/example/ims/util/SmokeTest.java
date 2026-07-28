@@ -107,12 +107,36 @@ public class SmokeTest {
                 .andExpect(status().is4xxClientError());
     }
 
+    @Autowired
+    private com.example.ims.repository.UserRepository userRepository;
+
+    @Autowired
+    private com.example.ims.repository.RoleRepository roleRepository;
+
     /**
      * 3. 대시보드 5종 마운트 검증
      */
     @Test
     @WithMockUser(username = "admin", roles = {"ADMIN"})
     public void testDashboardDataLoadsSuccessfully() throws Exception {
+        com.example.ims.entity.Role adminRole = roleRepository.findByRoleKey("ROLE_ADMIN")
+                .orElseGet(() -> roleRepository.save(com.example.ims.entity.Role.builder()
+                        .roleKey("ROLE_ADMIN")
+                        .displayName("관리자")
+                        .allowedMenus("ALL")
+                        .allowedPermissions("ALL")
+                        .build()));
+
+        if (userRepository.findByUsername("admin").isEmpty()) {
+            userRepository.saveAndFlush(com.example.ims.entity.User.builder()
+                    .username("admin")
+                    .password("password")
+                    .role("ROLE_ADMIN")
+                    .roleInfo(adminRole)
+                    .enabled(true)
+                    .build());
+        }
+
         mockMvc.perform(get("/api/dashboard")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())

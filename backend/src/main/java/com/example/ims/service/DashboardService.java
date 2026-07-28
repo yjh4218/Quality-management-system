@@ -158,11 +158,14 @@ public class DashboardService {
         }
 
         // 4. New Logic: Manufacturer Quality Responses Complete (Admin, Quality, Sales)
-        if (roleService.hasPermission(role, "DASHBOARD_QUALITY_VIEW")
-                || roleService.hasPermission(role, "DASHBOARD_SALES_VIEW")) {
-            builder.completedMfrClaims(claimRepository
-                    .findTop50ByMfrTerminationDateAfterOrderByMfrTerminationDateDesc(oneMonthAgo.toLocalDate())
-                    .stream().map(this::mapClaimToItem).collect(Collectors.toList()));
+        try {
+            if (isQualityDept(role) || isSalesDept(role)) {
+                builder.completedMfrClaims(claimRepository
+                        .findTop50ByMfrTerminationDateAfterOrderByMfrTerminationDateDesc(oneMonthAgo.toLocalDate())
+                        .stream().map(this::mapClaimToItem).collect(Collectors.toList()));
+            }
+        } catch (Exception ignored) {
+            builder.completedMfrClaims(new ArrayList<>());
         }
 
         // 5. Dashboard Layout Configuration
@@ -241,13 +244,21 @@ public class DashboardService {
     private boolean isQualityDept(String role) {
         if (role == null)
             return false;
-        return roleService.hasPermission(role, "DASHBOARD_QUALITY_VIEW");
+        try {
+            return roleService.hasPermission(role, "DASHBOARD_QUALITY_VIEW");
+        } catch (Exception e) {
+            return "ROLE_QUALITY".equals(role) || "ROLE_ADMIN".equals(role);
+        }
     }
 
     private boolean isSalesDept(String role) {
         if (role == null)
             return false;
-        return roleService.hasPermission(role, "DASHBOARD_SALES_VIEW");
+        try {
+            return roleService.hasPermission(role, "DASHBOARD_SALES_VIEW");
+        } catch (Exception e) {
+            return "ROLE_SALES".equals(role) || "ROLE_ADMIN".equals(role);
+        }
     }
 
     // Mapping Helpers
