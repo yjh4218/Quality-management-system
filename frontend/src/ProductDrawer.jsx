@@ -246,6 +246,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
     }, []);
 
     const [permissions, setPermissions] = useState({ canManageDisclosure: false, canViewPackaging: false });
+    const [hideExpiryOnLabels, setHideExpiryOnLabels] = useState(false);
 
     useEffect(() => {
         const canManageDisclosure = canEditProduct('products', 'EDIT') || isAdmin;
@@ -1464,6 +1465,32 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                     placeholder="단위: 개월 (예: 6, 12 등 최대 2자리 숫자)"
                                 />
                             </div>
+                            <div style={{ display: 'flex', gap: '15px', marginTop: '15px' }}>
+                                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                                    <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b' }}>제품 바코드 (Product Barcode)</label>
+                                    <input
+                                        type="text"
+                                        name="productBarcode"
+                                        style={{ fontSize: '14px', padding: '8px 12px' }}
+                                        value={formData.productBarcode || ''}
+                                        onChange={handleChange}
+                                        disabled={!canEdit}
+                                        placeholder="예: 8809123456789 (13자리 스캔/입력)"
+                                    />
+                                </div>
+                                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                                    <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b' }}>아웃박스 바코드 (Outbox Barcode)</label>
+                                    <input
+                                        type="text"
+                                        name="outboxBarcode"
+                                        style={{ fontSize: '14px', padding: '8px 12px' }}
+                                        value={formData.outboxBarcode || ''}
+                                        onChange={handleChange}
+                                        disabled={!canEdit}
+                                        placeholder="예: 18809123456786 (물류 박스 바코드)"
+                                    />
+                                </div>
+                            </div>
                         </div>
 
                             </div>
@@ -2472,52 +2499,70 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
                                 {specSubTab === 'sheet3' && (
                                     <div className="card" style={{ padding: '25px', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#f8fafc' }}>
-                                        <h3 style={{ margin: '0 0 20px 0', fontSize: '16px', color: '#1e293b', borderBottom: '2px solid #e2e8f0', paddingBottom: '10px' }}>
-                                            📦 Sheet 3: 인박스 현품표 시각화
-                                        </h3>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '2px solid #e2e8f0', paddingBottom: '10px' }}>
+                                            <h3 style={{ margin: 0, fontSize: '16px', color: '#1e293b' }}>
+                                                📦 Sheet 3: 인박스 현품표 (Inbox Label) 시각화
+                                            </h3>
+                                            <label style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#c53030', fontWeight: 'bold' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={hideExpiryOnLabels}
+                                                    onChange={(e) => setHideExpiryOnLabels(e.target.checked)}
+                                                />
+                                                [JP/OFF 옵션] 현품표 사용기한(Exp. Date) 항목 표기 안함 (삭제)
+                                            </label>
+                                        </div>
+
+                                        {/* JP/OFF 채널 특이사항 안내 */}
+                                        <div style={{ padding: '10px 14px', background: '#fefcbf', border: '1px solid #f6e05e', borderRadius: '6px', fontSize: '13px', color: '#744210', marginBottom: '20px' }}>
+                                            💡 <strong>[JP/OFF 채널 특이사항]</strong> 기획세트에만 해당, 구성품의 제조번호 순차적으로 전부 기재. /로 구분
+                                        </div>
                                         
                                         {/* 인박스 현품표 가상 카드 레이아웃 */}
-                                        <div style={{ maxWidth: '500px', margin: '0 auto', background: '#fff', border: '2px solid #2563eb', padding: '20px', fontFamily: 'monospace', color: '#000', borderRadius: '8px' }}>
-                                            <div style={{ textAlign: 'center', fontSize: '20px', fontWeight: 'bold', borderBottom: '2px solid #2563eb', paddingBottom: '10px', marginBottom: '15px', color: '#1e40af' }}>
-                                                [ 인 박 스 현 품 표 ]
+                                        <div style={{ maxWidth: '520px', margin: '0 auto', background: '#fff', border: '2px solid #2563eb', padding: '20px', fontFamily: 'monospace', color: '#000', borderRadius: '8px' }}>
+                                            <div style={{ textAlign: 'center', fontSize: '18px', fontWeight: 'bold', borderBottom: '2px solid #2563eb', paddingBottom: '10px', marginBottom: '15px', color: '#1e40af' }}>
+                                                [ 인 박 스 현 품 표 / INBOX LABEL ]
                                             </div>
-                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                                                 <tbody>
                                                     <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                                                        <td style={{ padding: '8px', fontWeight: 'bold', width: '120px' }}>품목코드:</td>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold', width: '210px', color: '#334155' }}>품목코드 (Product Code):</td>
                                                         <td style={{ padding: '8px' }}>{formData.itemCode || '-'}</td>
                                                     </tr>
                                                     <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>제품명:</td>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold', color: '#334155' }}>국문 제품명 (Product Name KOR):</td>
                                                         <td style={{ padding: '8px' }}>{formData.productName || '-'}</td>
                                                     </tr>
                                                     <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>인박스 구분:</td>
-                                                        <td style={{ padding: '8px' }}>{currentSpec.inboxType || '인박스'}</td>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold', color: '#334155' }}>영문 제품명 (Product Name ENG):</td>
+                                                        <td style={{ padding: '8px' }}>{formData.englishProductName || '-'}</td>
                                                     </tr>
                                                     <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>입수량:</td>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold', color: '#334155' }}>제조번호 (Lot No.):</td>
+                                                        <td style={{ padding: '8px' }}>[ 생산 배치번호 표기 ]</td>
+                                                    </tr>
+                                                    <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold', color: '#334155' }}>제조일자 (Mfg. Date):</td>
+                                                        <td style={{ padding: '8px' }}>[ YYYY.MM.DD 표기 ]</td>
+                                                    </tr>
+                                                    {!hideExpiryOnLabels && (
+                                                        <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                                            <td style={{ padding: '8px', fontWeight: 'bold', color: '#334155' }}>사용기한 (Exp. Date):</td>
+                                                            <td style={{ padding: '8px' }}>[ YYYY.MM.DD 까지 ]</td>
+                                                        </tr>
+                                                    )}
+                                                    <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold', color: '#334155' }}>입수량 (Quantity):</td>
                                                         <td style={{ padding: '8px' }}>{currentSpec.inboxQty ? `${currentSpec.inboxQty} EA` : '0 EA'}</td>
                                                     </tr>
-                                                    <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>인박스 규격:</td>
-                                                        <td style={{ padding: '8px' }}>{currentSpec.inboxSize || '-'}</td>
-                                                    </tr>
-                                                    <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>재 질:</td>
-                                                        <td style={{ padding: '8px' }}>{currentSpec.inboxMaterial || '-'}</td>
-                                                    </tr>
                                                     <tr>
-                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>제조사:</td>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold', color: '#334155' }}>제조사 (Manufacturer):</td>
                                                         <td style={{ padding: '8px' }}>{formData.manufacturerInfo?.name || '-'}</td>
                                                     </tr>
                                                 </tbody>
                                             </table>
-                                            <div style={{ marginTop: '20px', borderTop: '2px dashed #2563eb', paddingTop: '15px', textAlign: 'center' }}>
-                                                <div style={{ letterSpacing: '8px', fontSize: '24px', fontWeight: 'bold', margin: '10px 0', color: '#1e40af' }}>
-                                                    ||||| | |||| ||| ||
-                                                </div>
-                                                <div style={{ fontSize: '13px' }}>{currentSpec.barcode || 'BARCODE-NOT-SET'}</div>
+                                            <div style={{ marginTop: '15px', borderTop: '1px dashed #cbd5e1', paddingTop: '10px', textAlign: 'center', fontSize: '11px', color: '#64748b' }}>
+                                                ⚠️ 인박스 현품표에는 바코드를 부착/표기하지 않습니다. (규정 준수)
                                             </div>
                                         </div>
 
@@ -2532,52 +2577,82 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
                                 {specSubTab === 'sheet4' && (
                                     <div className="card" style={{ padding: '25px', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#f8fafc' }}>
-                                        <h3 style={{ margin: '0 0 20px 0', fontSize: '16px', color: '#1e293b', borderBottom: '2px solid #e2e8f0', paddingBottom: '10px' }}>
-                                            📦 Sheet 4: 아웃박스 현품표 시각화
-                                        </h3>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '2px solid #e2e8f0', paddingBottom: '10px' }}>
+                                            <h3 style={{ margin: 0, fontSize: '16px', color: '#1e293b' }}>
+                                                📦 Sheet 4: 아웃박스 현품표 (Outbox Label) 시각화
+                                            </h3>
+                                            <label style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#c53030', fontWeight: 'bold' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={hideExpiryOnLabels}
+                                                    onChange={(e) => setHideExpiryOnLabels(e.target.checked)}
+                                                />
+                                                [JP/OFF 옵션] 현품표 사용기한(Exp. Date) 항목 표기 안함 (삭제)
+                                            </label>
+                                        </div>
+
+                                        {/* JP/OFF 채널 특이사항 안내 */}
+                                        <div style={{ padding: '10px 14px', background: '#fefcbf', border: '1px solid #f6e05e', borderRadius: '6px', fontSize: '13px', color: '#744210', marginBottom: '20px' }}>
+                                            💡 <strong>[JP/OFF 채널 특이사항]</strong> 기획세트에만 해당, 구성품의 제조번호 순차적으로 전부 기재. /로 구분
+                                        </div>
                                         
-                                        {/* 현품표 가상 카드 레이아웃 */}
-                                        <div style={{ maxWidth: '500px', margin: '0 auto', background: '#fff', border: '2px solid #000', padding: '20px', fontFamily: 'monospace', color: '#000' }}>
-                                            <div style={{ textAlign: 'center', fontSize: '20px', fontWeight: 'bold', borderBottom: '2px solid #000', paddingBottom: '10px', marginBottom: '15px' }}>
-                                                [ 아 웃 박 스 현 품 표 ]
+                                        {/* 아웃박스 현품표 가상 카드 레이아웃 */}
+                                        <div style={{ maxWidth: '520px', margin: '0 auto', background: '#fff', border: '2px solid #000', padding: '20px', fontFamily: 'monospace', color: '#000', borderRadius: '8px' }}>
+                                            <div style={{ textAlign: 'center', fontSize: '18px', fontWeight: 'bold', borderBottom: '2px solid #000', paddingBottom: '10px', marginBottom: '15px' }}>
+                                                [ 아 웃 박 스 현 품 표 / OUTBOX LABEL ]
                                             </div>
-                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                                                 <tbody>
                                                     <tr style={{ borderBottom: '1px solid #000' }}>
-                                                        <td style={{ padding: '8px', fontWeight: 'bold', width: '120px' }}>품목코드:</td>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold', width: '210px' }}>품목코드 (Product Code):</td>
                                                         <td style={{ padding: '8px' }}>{formData.itemCode || '-'}</td>
                                                     </tr>
                                                     <tr style={{ borderBottom: '1px solid #000' }}>
-                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>제품명:</td>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>국문 제품명 (Product Name KOR):</td>
                                                         <td style={{ padding: '8px' }}>{formData.productName || '-'}</td>
                                                     </tr>
                                                     <tr style={{ borderBottom: '1px solid #000' }}>
-                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>입수량:</td>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>영문 제품명 (Product Name ENG):</td>
+                                                        <td style={{ padding: '8px' }}>{formData.englishProductName || '-'}</td>
+                                                    </tr>
+                                                    <tr style={{ borderBottom: '1px solid #000' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>제조번호 (Lot No.):</td>
+                                                        <td style={{ padding: '8px' }}>[ 생산 배치번호 표기 ]</td>
+                                                    </tr>
+                                                    <tr style={{ borderBottom: '1px solid #000' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>제조일자 (Mfg. Date):</td>
+                                                        <td style={{ padding: '8px' }}>[ YYYY.MM.DD 표기 ]</td>
+                                                    </tr>
+                                                    {!hideExpiryOnLabels && (
+                                                        <tr style={{ borderBottom: '1px solid #000' }}>
+                                                            <td style={{ padding: '8px', fontWeight: 'bold' }}>사용기한 (Exp. Date):</td>
+                                                            <td style={{ padding: '8px' }}>[ YYYY.MM.DD 까지 ]</td>
+                                                        </tr>
+                                                    )}
+                                                    <tr style={{ borderBottom: '1px solid #000' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>입수량 (Quantity):</td>
                                                         <td style={{ padding: '8px' }}>{currentSpec.outboxQty ? `${currentSpec.outboxQty} EA` : '0 EA'}</td>
                                                     </tr>
                                                     <tr style={{ borderBottom: '1px solid #000' }}>
-                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>박스 규격:</td>
-                                                        <td style={{ padding: '8px' }}>{currentSpec.outboxSize || '-'}</td>
-                                                    </tr>
-                                                    <tr style={{ borderBottom: '1px solid #000' }}>
-                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>중 량:</td>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>제품무게 (Gross Weight):</td>
                                                         <td style={{ padding: '8px' }}>{currentSpec.oneOutboxWeight ? `${currentSpec.oneOutboxWeight} kg` : '- kg'}</td>
                                                     </tr>
-                                                    <tr style={{ borderBottom: '1px solid #000' }}>
-                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>제조일자:</td>
-                                                        <td style={{ padding: '8px' }}>[ 생산 배치일 별도 표기 ]</td>
-                                                    </tr>
                                                     <tr>
-                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>제조사:</td>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>제조사 (Manufacturer):</td>
                                                         <td style={{ padding: '8px' }}>{formData.manufacturerInfo?.name || '-'}</td>
                                                     </tr>
                                                 </tbody>
                                             </table>
                                             <div style={{ marginTop: '20px', borderTop: '2px dashed #000', paddingTop: '15px', textAlign: 'center' }}>
-                                                <div style={{ letterSpacing: '8px', fontSize: '24px', fontWeight: 'bold', margin: '10px 0' }}>
+                                                <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '4px' }}>
+                                                    바코드 (Barcode): {formData.outboxBarcode ? '아웃박스 바코드' : '제품 바코드 (기본)'}
+                                                </div>
+                                                <div style={{ letterSpacing: '8px', fontSize: '24px', fontWeight: 'bold', margin: '6px 0' }}>
                                                     ||||| | |||| ||| ||
                                                 </div>
-                                                <div style={{ fontSize: '13px' }}>{currentSpec.barcode || 'BARCODE-NOT-SET'}</div>
+                                                <div style={{ fontSize: '13px', fontWeight: 'bold' }}>
+                                                    {formData.outboxBarcode || formData.productBarcode || currentSpec.barcode || 'BARCODE-NOT-SET'}
+                                                </div>
                                             </div>
                                         </div>
 
@@ -2592,49 +2667,87 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
                                 {specSubTab === 'sheet5' && (
                                     <div className="card" style={{ padding: '25px', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#f8fafc' }}>
-                                        <h3 style={{ margin: '0 0 20px 0', fontSize: '16px', color: '#1e293b', borderBottom: '2px solid #e2e8f0', paddingBottom: '10px' }}>
-                                            🧱 Sheet 5: 팔레트 현품표 시각화
-                                        </h3>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '2px solid #e2e8f0', paddingBottom: '10px' }}>
+                                            <h3 style={{ margin: 0, fontSize: '16px', color: '#1e293b' }}>
+                                                🧱 Sheet 5: 팔레트 현품표 (Pallet Label) 시각화
+                                            </h3>
+                                            <label style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#c53030', fontWeight: 'bold' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={hideExpiryOnLabels}
+                                                    onChange={(e) => setHideExpiryOnLabels(e.target.checked)}
+                                                />
+                                                [JP/OFF 옵션] 현품표 사용기한(Exp. Date) 항목 표기 안함 (삭제)
+                                            </label>
+                                        </div>
+
+                                        {/* JP/OFF 채널 특이사항 안내 */}
+                                        <div style={{ padding: '10px 14px', background: '#fefcbf', border: '1px solid #f6e05e', borderRadius: '6px', fontSize: '13px', color: '#744210', marginBottom: '20px' }}>
+                                            💡 <strong>[JP/OFF 채널 특이사항]</strong> 기획세트에만 해당, 구성품의 제조번호 순차적으로 전부 기재. /로 구분
+                                        </div>
                                         
                                         {/* 팔레트 현품표 가상 카드 */}
-                                        <div style={{ maxWidth: '500px', margin: '0 auto', background: '#fff', border: '2px solid #000', padding: '20px', fontFamily: 'monospace', color: '#000' }}>
-                                            <div style={{ textAlign: 'center', fontSize: '20px', fontWeight: 'bold', borderBottom: '2px solid #000', paddingBottom: '10px', marginBottom: '15px' }}>
-                                                [ 팔 레 트 현 품 표 ]
+                                        <div style={{ maxWidth: '520px', margin: '0 auto', background: '#fff', border: '2px solid #000', padding: '20px', fontFamily: 'monospace', color: '#000', borderRadius: '8px' }}>
+                                            <div style={{ textAlign: 'center', fontSize: '18px', fontWeight: 'bold', borderBottom: '2px solid #000', paddingBottom: '10px', marginBottom: '15px' }}>
+                                                [ 팔 레 트 현 품 표 / PALLET LABEL ]
                                             </div>
-                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                                                 <tbody>
                                                     <tr style={{ borderBottom: '1px solid #000' }}>
-                                                        <td style={{ padding: '8px', fontWeight: 'bold', width: '120px' }}>적재 제품:</td>
-                                                        <td style={{ padding: '8px' }}>{formData.productName || '-'} ({formData.itemCode || '-'})</td>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold', width: '210px' }}>품목코드 (Product Code):</td>
+                                                        <td style={{ padding: '8px' }}>{formData.itemCode || '-'}</td>
                                                     </tr>
                                                     <tr style={{ borderBottom: '1px solid #000' }}>
-                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>팔레트 종류:</td>
-                                                        <td style={{ padding: '8px' }}>{currentSpec.palletTypeStr || '-'}</td>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>국문 제품명 (Product Name KOR):</td>
+                                                        <td style={{ padding: '8px' }}>{formData.productName || '-'}</td>
                                                     </tr>
                                                     <tr style={{ borderBottom: '1px solid #000' }}>
-                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>적재 단수/방법:</td>
-                                                        <td style={{ padding: '8px' }}>{currentSpec.palletStackingMethod || '-'} / 높이제한: {currentSpec.palletHeightLimit || '-'}mm</td>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>영문 제품명 (Product Name ENG):</td>
+                                                        <td style={{ padding: '8px' }}>{formData.englishProductName || '-'}</td>
                                                     </tr>
                                                     <tr style={{ borderBottom: '1px solid #000' }}>
-                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>총 적재 높이:</td>
-                                                        <td style={{ padding: '8px', fontWeight: 'bold', color: parseFloat(currentSpec.onePalletHeight || 0) > 1500 ? '#ef4444' : '#000' }}>
-                                                            {currentSpec.onePalletHeight ? `${currentSpec.onePalletHeight} mm` : '- mm'}
-                                                            {parseFloat(currentSpec.onePalletHeight || 0) > 1500 && ' (초과)'}
-                                                        </td>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>제조번호 (Lot No.):</td>
+                                                        <td style={{ padding: '8px' }}>[ 생산 배치번호 표기 ]</td>
                                                     </tr>
                                                     <tr style={{ borderBottom: '1px solid #000' }}>
-                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>총 적재 중량:</td>
-                                                        <td style={{ padding: '8px', fontWeight: 'bold', color: parseFloat(currentSpec.onePalletWeight || 0) > 630 ? '#ef4444' : '#000' }}>
-                                                            {currentSpec.onePalletWeight ? `${currentSpec.onePalletWeight} kg` : '- kg'}
-                                                            {parseFloat(currentSpec.onePalletWeight || 0) > 630 && ' (초과)'}
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>제조일자 (Mfg. Date):</td>
+                                                        <td style={{ padding: '8px' }}>[ YYYY.MM.DD 표기 ]</td>
+                                                    </tr>
+                                                    {!hideExpiryOnLabels && (
+                                                        <tr style={{ borderBottom: '1px solid #000' }}>
+                                                            <td style={{ padding: '8px', fontWeight: 'bold' }}>사용기한 (Exp. Date):</td>
+                                                            <td style={{ padding: '8px' }}>[ YYYY.MM.DD 까지 ]</td>
+                                                        </tr>
+                                                    )}
+                                                    <tr style={{ borderBottom: '1px solid #000' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>적재 박스 수량 (Box Qty/Pallet):</td>
+                                                        <td style={{ padding: '8px' }}>{formData.palletInfo?.palletQuantity ? `${formData.palletInfo.palletQuantity} Box` : '- Box'}</td>
+                                                    </tr>
+                                                    <tr style={{ borderBottom: '1px solid #000' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>적재 낱개 수량 (Total Pcs/Pallet):</td>
+                                                        <td style={{ padding: '8px' }}>
+                                                            {formData.palletInfo?.palletQuantity && currentSpec.outboxQty
+                                                                ? `${parseInt(formData.palletInfo.palletQuantity) * parseInt(currentSpec.outboxQty)} EA`
+                                                                : '- EA'}
                                                         </td>
                                                     </tr>
                                                     <tr>
-                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>적재 시 주의사항:</td>
-                                                        <td style={{ padding: '8px', whiteSpace: 'pre-wrap' }}>{currentSpec.palletPrecautions || '낙하 주의 및 보호 필름 랩핑 필수'}</td>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>제조사 (Manufacturer):</td>
+                                                        <td style={{ padding: '8px' }}>{formData.manufacturerInfo?.name || '-'}</td>
                                                     </tr>
                                                 </tbody>
                                             </table>
+                                            <div style={{ marginTop: '20px', borderTop: '2px dashed #000', paddingTop: '15px', textAlign: 'center' }}>
+                                                <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '4px' }}>
+                                                    바코드 (Barcode): 제품 바코드
+                                                </div>
+                                                <div style={{ letterSpacing: '8px', fontSize: '24px', fontWeight: 'bold', margin: '6px 0' }}>
+                                                    ||||| | |||| ||| ||
+                                                </div>
+                                                <div style={{ fontSize: '13px', fontWeight: 'bold' }}>
+                                                    {formData.productBarcode || currentSpec.barcode || 'BARCODE-NOT-SET'}
+                                                </div>
+                                            </div>
                                         </div>
 
                                         <div style={{ marginTop: '25px', padding: '20px', background: '#fff', border: '1px dashed #cbd5e1', borderRadius: '8px', textAlign: 'center' }}>

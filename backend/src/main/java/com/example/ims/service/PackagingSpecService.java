@@ -399,6 +399,20 @@ public class PackagingSpecService {
 
         spec.setLastModifiedBy(username);
         
+        // 500 에러 예방: Product 엔티티가 detached/transient 상태일 수 있으므로 DB에서 완전한 영속 객체로 조회
+        if (spec.getProduct() != null && spec.getProduct().getId() != null) {
+            Product managedProduct = productRepository.findById(spec.getProduct().getId())
+                    .orElseThrow(() -> new RuntimeException("상품 정보를 찾을 수 없습니다. (ID: " + spec.getProduct().getId() + ")"));
+            spec.setProduct(managedProduct);
+        } else {
+            throw new RuntimeException("사양서 저장을 위한 상품 ID가 전달되지 않았습니다.");
+        }
+
+        // 수치 및 필드 타입 안전 보정
+        if (spec.getPalletHeightLimit() == null && spec.getOnePalletHeight() != null) {
+            spec.setPalletHeightLimit(String.valueOf(spec.getOnePalletHeight().intValue()));
+        }
+
         // 버전 계산 및 개정 노트 세팅
         List<PackagingSpecification> existingSpecs = specRepository.findByProductId(spec.getProduct().getId());
         PackagingSpecification latestSpec = null;

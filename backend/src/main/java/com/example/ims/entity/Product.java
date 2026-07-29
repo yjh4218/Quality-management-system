@@ -106,6 +106,18 @@ public class Product {
     @Column(name = "opened_shelf_life_months")
     private Integer openedShelfLifeMonths;
 
+    /**
+     * Product Barcode (제품 바코드)
+     */
+    @Column(name = "product_barcode")
+    private String productBarcode;
+
+    /**
+     * Outbox Barcode (아웃박스 바코드)
+     */
+    @Column(name = "outbox_barcode")
+    private String outboxBarcode;
+
     @Deprecated
     private String manufacturer; // Linked to User.companyName
 
