@@ -2139,64 +2139,64 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                             </h3>
                                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
                                                 <div className="form-group">
-                                                    <label style={{ fontSize: '11px', color: '#475569' }}>브랜드명</label>
-                                                    <input type="text" readOnly value={formData.brand?.brandName || '-'} style={{ background: '#f8fafc', fontSize: '12px' }} />
+                                                    <label style={{ fontSize: '12px', color: '#475569' }}>브랜드명</label>
+                                                    <input type="text" readOnly value={formData.brand?.brandName || '-'} style={{ background: '#f8fafc', fontSize: '14px' }} />
                                                 </div>
                                                 <div className="form-group">
-                                                    <label style={{ fontSize: '11px', color: '#475569' }}>품명(국문)</label>
-                                                    <input type="text" readOnly value={formData.productName || '-'} style={{ background: '#f8fafc', fontSize: '12px' }} />
+                                                    <label style={{ fontSize: '12px', color: '#475569' }}>품명(국문)</label>
+                                                    <input type="text" readOnly value={formData.productName || '-'} style={{ background: '#f8fafc', fontSize: '14px' }} />
                                                 </div>
                                                 <div className="form-group">
-                                                    <label style={{ fontSize: '11px', color: '#475569' }}>품명(영문)</label>
-                                                    <input type="text" readOnly value={formData.englishProductName || '-'} style={{ background: '#f8fafc', fontSize: '12px' }} />
+                                                    <label style={{ fontSize: '12px', color: '#475569' }}>품명(영문)</label>
+                                                    <input type="text" readOnly value={formData.englishProductName || '-'} style={{ background: '#f8fafc', fontSize: '14px' }} />
                                                 </div>
                                                 <div className="form-group">
-                                                    <label style={{ fontSize: '11px', color: '#475569' }}>품목코드</label>
-                                                    <input type="text" readOnly value={formData.itemCode || '-'} style={{ background: '#f8fafc', fontSize: '12px' }} />
+                                                    <label style={{ fontSize: '12px', color: '#475569' }}>품목코드</label>
+                                                    <input type="text" readOnly value={formData.itemCode || '-'} style={{ background: '#f8fafc', fontSize: '14px' }} />
                                                 </div>
                                                 <div className="form-group">
-                                                    <label style={{ fontSize: '11px', color: '#475569' }}>제조사</label>
-                                                    <input type="text" readOnly value={formData.manufacturerInfo?.name || '-'} style={{ background: '#f8fafc', fontSize: '12px' }} />
+                                                    <label style={{ fontSize: '12px', color: '#475569' }}>제조사</label>
+                                                    <input type="text" readOnly value={formData.manufacturerInfo?.name || '-'} style={{ background: '#f8fafc', fontSize: '14px' }} />
                                                 </div>
                                                 <div className="form-group">
-                                                    <label style={{ fontSize: '11px', color: '#475569' }}>사용기한 / 개봉 후 기한</label>
-                                                    <input type="text" readOnly value={`${formData.shelfLifeMonths || '-'}개월 / ${formData.openedShelfLifeMonths || '-'}개월`} style={{ background: '#f8fafc', fontSize: '12px' }} />
+                                                    <label style={{ fontSize: '12px', color: '#475569' }}>사용기한 / 개봉 후 기한</label>
+                                                    <input type="text" readOnly value={`${formData.shelfLifeMonths || '-'}개월 / ${formData.openedShelfLifeMonths || '-'}개월`} style={{ background: '#f8fafc', fontSize: '14px' }} />
                                                 </div>
                                                 <div className="form-group">
-                                                    <label style={{ fontSize: '11px', color: '#475569' }}>바코드</label>
-                                                    <input type="text" value={currentSpec.barcode || ''} onChange={e => setCurrentSpec({...currentSpec, barcode: e.target.value})} disabled={!canEdit} style={{ fontSize: '12px' }} />
+                                                    <label style={{ fontSize: '12px', color: '#475569' }}>바코드</label>
+                                                    <input type="text" value={currentSpec.barcode || ''} onChange={e => setCurrentSpec({...currentSpec, barcode: e.target.value})} disabled={!canEdit} style={{ fontSize: '14px' }} />
                                                 </div>
                                                 <div className="form-group">
-                                                    <label style={{ fontSize: '11px', color: '#475569' }}>랩 넘버</label>
-                                                    <input type="text" value={currentSpec.labNumber || ''} onChange={e => setCurrentSpec({...currentSpec, labNumber: e.target.value})} disabled={!canEdit} style={{ fontSize: '12px' }} />
+                                                    <label style={{ fontSize: '12px', color: '#475569' }}>랩 넘버</label>
+                                                    <input type="text" value={currentSpec.labNumber || ''} onChange={e => setCurrentSpec({...currentSpec, labNumber: e.target.value})} disabled={!canEdit} style={{ fontSize: '14px' }} />
                                                 </div>
                                                 <div className="form-group">
-                                                    <label style={{ fontSize: '11px', color: '#475569' }}>바코드 담당자</label>
-                                                    <input type="text" value={currentSpec.barcodeManager || ''} onChange={e => setCurrentSpec({...currentSpec, barcodeManager: e.target.value})} disabled={!canEdit} style={{ fontSize: '12px' }} />
+                                                    <label style={{ fontSize: '12px', color: '#475569' }}>바코드 담당자</label>
+                                                    <input type="text" value={currentSpec.barcodeManager || ''} onChange={e => setCurrentSpec({...currentSpec, barcodeManager: e.target.value})} disabled={!canEdit} style={{ fontSize: '14px' }} />
                                                 </div>
                                                 <div className="form-group">
-                                                    <label style={{ fontSize: '11px', color: '#475569' }}>기획 담당</label>
-                                                    <input type="text" value={currentSpec.plannerName || ''} onChange={e => setCurrentSpec({...currentSpec, plannerName: e.target.value})} disabled={!canEdit} style={{ fontSize: '12px' }} />
+                                                    <label style={{ fontSize: '12px', color: '#475569' }}>기획 담당</label>
+                                                    <input type="text" value={currentSpec.plannerName || ''} onChange={e => setCurrentSpec({...currentSpec, plannerName: e.target.value})} disabled={!canEdit} style={{ fontSize: '14px' }} />
                                                 </div>
                                                 <div className="form-group">
-                                                    <label style={{ fontSize: '11px', color: '#475569' }}>디자인 담당</label>
-                                                    <input type="text" value={currentSpec.designerName || ''} onChange={e => setCurrentSpec({...currentSpec, designerName: e.target.value})} disabled={!canEdit} style={{ fontSize: '12px' }} />
+                                                    <label style={{ fontSize: '12px', color: '#475569' }}>디자인 담당</label>
+                                                    <input type="text" value={currentSpec.designerName || ''} onChange={e => setCurrentSpec({...currentSpec, designerName: e.target.value})} disabled={!canEdit} style={{ fontSize: '14px' }} />
                                                 </div>
                                                 <div className="form-group">
-                                                    <label style={{ fontSize: '11px', color: '#475569' }}>품질관리 담당</label>
-                                                    <input type="text" value={currentSpec.qcName || ''} onChange={e => setCurrentSpec({...currentSpec, qcName: e.target.value})} disabled={!canEdit} style={{ fontSize: '12px' }} />
+                                                    <label style={{ fontSize: '12px', color: '#475569' }}>품질관리 담당</label>
+                                                    <input type="text" value={currentSpec.qcName || ''} onChange={e => setCurrentSpec({...currentSpec, qcName: e.target.value})} disabled={!canEdit} style={{ fontSize: '14px' }} />
                                                 </div>
                                                 <div className="form-group">
-                                                    <label style={{ fontSize: '11px', color: '#475569' }}>관리품 구분</label>
-                                                    <select value={currentSpec.managementType || '러닝'} onChange={e => setCurrentSpec({...currentSpec, managementType: e.target.value})} disabled={!canEdit} style={{ fontSize: '12px' }}>
+                                                    <label style={{ fontSize: '12px', color: '#475569' }}>관리품 구분</label>
+                                                    <select value={currentSpec.managementType || '러닝'} onChange={e => setCurrentSpec({...currentSpec, managementType: e.target.value})} disabled={!canEdit} style={{ fontSize: '14px' }}>
                                                         <option value="벌크 신규">벌크 신규</option>
                                                         <option value="사양 변경">사양 변경</option>
                                                         <option value="러닝">러닝</option>
                                                     </select>
                                                 </div>
                                                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                                                    <label style={{ fontSize: '11px', color: '#475569' }}>결재 라인 (기획/디자인/구매/품질 + 검토일)</label>
-                                                    <input type="text" value={currentSpec.approvalChainJson || ''} onChange={e => setCurrentSpec({...currentSpec, approvalChainJson: e.target.value})} disabled={!canEdit} style={{ fontSize: '12px' }} placeholder='[{"role":"기획", "name":"홍길동", "date":"2026-06-21"}]' />
+                                                    <label style={{ fontSize: '12px', color: '#475569' }}>결재 라인 (기획/디자인/구매/품질 + 검토일)</label>
+                                                    <input type="text" value={currentSpec.approvalChainJson || ''} onChange={e => setCurrentSpec({...currentSpec, approvalChainJson: e.target.value})} disabled={!canEdit} style={{ fontSize: '14px' }} placeholder='[{"role":"기획", "name":"홍길동", "date":"2026-06-21"}]' />
                                                 </div>
                                             </div>
                                         </div>
@@ -2326,7 +2326,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                             </div>
                                             <div className="form-group" style={{ marginBottom: '12px' }}>
                                                 <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b', marginBottom: '8px', display: 'block' }}>📝 포장방법 (서술형)</label>
-                                                <textarea value={currentSpec.packagingMethodText || ''} onChange={e => setCurrentSpec({...currentSpec, packagingMethodText: e.target.value})} disabled={!canEdit} style={{ width: '100%', height: '160px', fontSize: '16px', fontWeight: '500', lineHeight: '1.6', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1' }} placeholder="서술형 포장 조립 순서 설명..." />
+                                                <textarea value={currentSpec.packagingMethodText || ''} onChange={e => setCurrentSpec({...currentSpec, packagingMethodText: e.target.value})} disabled={!canEdit} style={{ width: '100%', height: '160px', fontSize: '14px', fontWeight: '500', lineHeight: '1.6', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1' }} placeholder="서술형 포장 조립 순서 설명..." />
                                             </div>
                                         </div>
 
@@ -2338,7 +2338,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                     <button
                                                         type="button"
                                                         className="outline"
-                                                        style={{ fontSize: '11px', padding: '4px 10px', height: 'auto', border: '1px solid #2563eb', color: '#2563eb', borderRadius: '6px', background: 'transparent', cursor: 'pointer' }}
+                                                        style={{ fontSize: '12px', padding: '4px 10px', height: 'auto', border: '1px solid #2563eb', color: '#2563eb', borderRadius: '6px', background: 'transparent', cursor: 'pointer' }}
                                                         onClick={() => {
                                                             const inboxSz = formData.inboxInfo?.inboxLength && formData.inboxInfo?.inboxWidth && formData.inboxInfo?.inboxHeight 
                                                                 ? `${formData.inboxInfo.inboxLength}x${formData.inboxInfo.inboxWidth}x${formData.inboxInfo.inboxHeight}` 
@@ -2375,22 +2375,22 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                             {/* 실시간 검증 경고 배너 */}
                                             <div style={{ marginBottom: '15px' }}>
                                                 {parseFloat(currentSpec.oneOutboxWeight || 0) > 12 && (
-                                                    <div style={{ padding: '8px 12px', marginBottom: '6px', background: '#fee2e2', border: '1px solid #ef4444', borderRadius: '8px', color: '#b91c1c', fontSize: '12px', fontWeight: 'bold' }}>
+                                                    <div style={{ padding: '8px 12px', marginBottom: '6px', background: '#fee2e2', border: '1px solid #ef4444', borderRadius: '8px', color: '#b91c1c', fontSize: '13px', fontWeight: 'bold' }}>
                                                         ⚠️ 1 아웃박스 중량이 제한치(12kg)를 초과했습니다! (현재: {currentSpec.oneOutboxWeight}kg)
                                                     </div>
                                                 )}
                                                 {parseFloat(currentSpec.onePalletWeight || 0) > 630 && (
-                                                    <div style={{ padding: '8px 12px', marginBottom: '6px', background: '#fee2e2', border: '1px solid #ef4444', borderRadius: '8px', color: '#b91c1c', fontSize: '12px', fontWeight: 'bold' }}>
+                                                    <div style={{ padding: '8px 12px', marginBottom: '6px', background: '#fee2e2', border: '1px solid #ef4444', borderRadius: '8px', color: '#b91c1c', fontSize: '13px', fontWeight: 'bold' }}>
                                                         ⚠️ 1 팔레트 중량이 제한치(630kg)를 초과했습니다! (현재: {currentSpec.onePalletWeight}kg)
                                                     </div>
                                                 )}
                                                 {parseFloat(currentSpec.onePalletHeight || 0) > 1500 && (
-                                                    <div style={{ padding: '8px 12px', marginBottom: '6px', background: '#fee2e2', border: '1px solid #ef4444', borderRadius: '8px', color: '#b91c1c', fontSize: '12px', fontWeight: 'bold' }}>
+                                                    <div style={{ padding: '8px 12px', marginBottom: '6px', background: '#fee2e2', border: '1px solid #ef4444', borderRadius: '8px', color: '#b91c1c', fontSize: '13px', fontWeight: 'bold' }}>
                                                         ⚠️ 1 팔레트 적재 높이가 제한치(1,500mm)를 초과했습니다! (현재: {currentSpec.onePalletHeight}mm)
                                                     </div>
                                                 )}
                                                 {checkChannelRules().map((warn, wIdx) => (
-                                                    <div key={wIdx} style={{ padding: '8px 12px', marginBottom: '6px', background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '8px', color: '#b45309', fontSize: '12px', fontWeight: 'bold' }}>
+                                                    <div key={wIdx} style={{ padding: '8px 12px', marginBottom: '6px', background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '8px', color: '#b45309', fontSize: '13px', fontWeight: 'bold' }}>
                                                         {warn}
                                                     </div>
                                                 ))}
@@ -2398,48 +2398,48 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
                                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', marginBottom: '15px' }}>
                                                 <div style={{ border: '1px solid #f1f5f9', padding: '12px', borderRadius: '8px', background: '#f8fafc' }}>
-                                                    <strong style={{ fontSize: '12px', color: '#334155', display: 'block', marginBottom: '8px' }}>📦 인박스</strong>
-                                                    <div className="form-group"><label style={{ fontSize: '10px' }}>구분</label><input type="text" value={currentSpec.inboxType || ''} onChange={e => setCurrentSpec({...currentSpec, inboxType: e.target.value})} disabled={!canEdit} style={{ fontSize: '11px' }} /></div>
-                                                    <div className="form-group"><label style={{ fontSize: '10px' }}>입수량 (ea)</label><input type="number" value={currentSpec.inboxQty || ''} onChange={e => setCurrentSpec({...currentSpec, inboxQty: parseInt(e.target.value)})} disabled={!canEdit} style={{ fontSize: '11px' }} /></div>
-                                                    <div className="form-group"><label style={{ fontSize: '10px' }}>사이즈 (장x폭x고)</label><input type="text" value={currentSpec.inboxSize || ''} onChange={e => setCurrentSpec({...currentSpec, inboxSize: e.target.value})} disabled={!canEdit} style={{ fontSize: '11px' }} placeholder="예: 300x200x150" /></div>
-                                                    <div className="form-group"><label style={{ fontSize: '10px' }}>재질</label><input type="text" value={currentSpec.inboxMaterial || ''} onChange={e => setCurrentSpec({...currentSpec, inboxMaterial: e.target.value})} disabled={!canEdit} style={{ fontSize: '11px' }} /></div>
+                                                    <strong style={{ fontSize: '13px', color: '#334155', display: 'block', marginBottom: '8px' }}>📦 인박스</strong>
+                                                    <div className="form-group"><label style={{ fontSize: '12px' }}>구분</label><input type="text" value={currentSpec.inboxType || ''} onChange={e => setCurrentSpec({...currentSpec, inboxType: e.target.value})} disabled={!canEdit} style={{ fontSize: '14px' }} /></div>
+                                                    <div className="form-group"><label style={{ fontSize: '12px' }}>입수량 (ea)</label><input type="number" value={currentSpec.inboxQty || ''} onChange={e => setCurrentSpec({...currentSpec, inboxQty: parseInt(e.target.value)})} disabled={!canEdit} style={{ fontSize: '14px' }} /></div>
+                                                    <div className="form-group"><label style={{ fontSize: '12px' }}>사이즈 (장x폭x고)</label><input type="text" value={currentSpec.inboxSize || ''} onChange={e => setCurrentSpec({...currentSpec, inboxSize: e.target.value})} disabled={!canEdit} style={{ fontSize: '14px' }} placeholder="예: 300x200x150" /></div>
+                                                    <div className="form-group"><label style={{ fontSize: '12px' }}>재질</label><input type="text" value={currentSpec.inboxMaterial || ''} onChange={e => setCurrentSpec({...currentSpec, inboxMaterial: e.target.value})} disabled={!canEdit} style={{ fontSize: '14px' }} /></div>
                                                 </div>
                                                 <div style={{ border: '1px solid #f1f5f9', padding: '12px', borderRadius: '8px', background: '#f8fafc' }}>
-                                                    <strong style={{ fontSize: '12px', color: '#334155', display: 'block', marginBottom: '8px' }}>📦 아웃박스</strong>
-                                                    <div className="form-group"><label style={{ fontSize: '10px' }}>구분</label><input type="text" value={currentSpec.outboxType || ''} onChange={e => setCurrentSpec({...currentSpec, outboxType: e.target.value})} disabled={!canEdit} style={{ fontSize: '11px' }} /></div>
-                                                    <div className="form-group"><label style={{ fontSize: '10px' }}>입수량 (ea)</label><input type="number" value={currentSpec.outboxQty || ''} onChange={e => setCurrentSpec({...currentSpec, outboxQty: parseInt(e.target.value)})} disabled={!canEdit} style={{ fontSize: '11px' }} /></div>
-                                                    <div className="form-group"><label style={{ fontSize: '10px' }}>사이즈 (장x폭x고)</label><input type="text" value={currentSpec.outboxSize || ''} onChange={e => setCurrentSpec({...currentSpec, outboxSize: e.target.value})} disabled={!canEdit} style={{ fontSize: '11px' }} placeholder="예: 600x400x300" /></div>
-                                                    <div className="form-group"><label style={{ fontSize: '10px' }}>재질</label><input type="text" value={currentSpec.outboxMaterial || ''} onChange={e => setCurrentSpec({...currentSpec, outboxMaterial: e.target.value})} disabled={!canEdit} style={{ fontSize: '11px' }} /></div>
+                                                    <strong style={{ fontSize: '13px', color: '#334155', display: 'block', marginBottom: '8px' }}>📦 아웃박스</strong>
+                                                    <div className="form-group"><label style={{ fontSize: '12px' }}>구분</label><input type="text" value={currentSpec.outboxType || ''} onChange={e => setCurrentSpec({...currentSpec, outboxType: e.target.value})} disabled={!canEdit} style={{ fontSize: '14px' }} /></div>
+                                                    <div className="form-group"><label style={{ fontSize: '12px' }}>입수량 (ea)</label><input type="number" value={currentSpec.outboxQty || ''} onChange={e => setCurrentSpec({...currentSpec, outboxQty: parseInt(e.target.value)})} disabled={!canEdit} style={{ fontSize: '14px' }} /></div>
+                                                    <div className="form-group"><label style={{ fontSize: '12px' }}>사이즈 (장x폭x고)</label><input type="text" value={currentSpec.outboxSize || ''} onChange={e => setCurrentSpec({...currentSpec, outboxSize: e.target.value})} disabled={!canEdit} style={{ fontSize: '14px' }} placeholder="예: 600x400x300" /></div>
+                                                    <div className="form-group"><label style={{ fontSize: '12px' }}>재질</label><input type="text" value={currentSpec.outboxMaterial || ''} onChange={e => setCurrentSpec({...currentSpec, outboxMaterial: e.target.value})} disabled={!canEdit} style={{ fontSize: '14px' }} /></div>
                                                 </div>
                                                 <div style={{ border: '1px solid #f1f5f9', padding: '12px', borderRadius: '8px', background: '#f8fafc' }}>
-                                                    <strong style={{ fontSize: '12px', color: '#334155', display: 'block', marginBottom: '8px' }}>🧱 팔레트 적재</strong>
-                                                    <div className="form-group"><label style={{ fontSize: '10px' }}>종류</label><input type="text" value={currentSpec.palletTypeStr || ''} onChange={e => setCurrentSpec({...currentSpec, palletTypeStr: e.target.value})} disabled={!canEdit} style={{ fontSize: '11px' }} placeholder="예: AJU 11형 플라스틱" /></div>
-                                                    <div className="form-group"><label style={{ fontSize: '10px' }}>적재방법</label><input type="text" value={currentSpec.palletStackingMethod || ''} onChange={e => setCurrentSpec({...currentSpec, palletStackingMethod: e.target.value})} disabled={!canEdit} style={{ fontSize: '11px' }} placeholder="예: 6단 엇갈려 쌓기" /></div>
-                                                    <div className="form-group"><label style={{ fontSize: '10px' }}>사이즈</label><input type="text" value={currentSpec.palletSize || ''} onChange={e => setCurrentSpec({...currentSpec, palletSize: e.target.value})} disabled={!canEdit} style={{ fontSize: '11px' }} placeholder="예: 1100x1100" /></div>
-                                                    <div className="form-group"><label style={{ fontSize: '10px' }}>높이 제한 (mm)</label><input type="text" value={currentSpec.palletHeightLimit || ''} onChange={e => setCurrentSpec({...currentSpec, palletHeightLimit: e.target.value})} disabled={!canEdit} style={{ fontSize: '11px' }} placeholder="예: 1500" /></div>
+                                                    <strong style={{ fontSize: '13px', color: '#334155', display: 'block', marginBottom: '8px' }}>🧱 팔레트 적재</strong>
+                                                    <div className="form-group"><label style={{ fontSize: '12px' }}>종류</label><input type="text" value={currentSpec.palletTypeStr || ''} onChange={e => setCurrentSpec({...currentSpec, palletTypeStr: e.target.value})} disabled={!canEdit} style={{ fontSize: '14px' }} placeholder="예: AJU 11형 플라스틱" /></div>
+                                                    <div className="form-group"><label style={{ fontSize: '12px' }}>적재방법</label><input type="text" value={currentSpec.palletStackingMethod || ''} onChange={e => setCurrentSpec({...currentSpec, palletStackingMethod: e.target.value})} disabled={!canEdit} style={{ fontSize: '14px' }} placeholder="예: 6단 엇갈려 쌓기" /></div>
+                                                    <div className="form-group"><label style={{ fontSize: '12px' }}>사이즈</label><input type="text" value={currentSpec.palletSize || ''} onChange={e => setCurrentSpec({...currentSpec, palletSize: e.target.value})} disabled={!canEdit} style={{ fontSize: '14px' }} placeholder="예: 1100x1100" /></div>
+                                                    <div className="form-group"><label style={{ fontSize: '12px' }}>높이 제한 (mm)</label><input type="text" value={currentSpec.palletHeightLimit || ''} onChange={e => setCurrentSpec({...currentSpec, palletHeightLimit: e.target.value})} disabled={!canEdit} style={{ fontSize: '14px' }} placeholder="예: 1500" /></div>
                                                 </div>
                                             </div>
 
                                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px' }}>
                                                 <div className="form-group">
-                                                    <label style={{ fontSize: '11px', color: '#475569' }}>1 아웃박스 중량 (kg) [제한: 12kg]</label>
-                                                    <input type="number" step="0.01" value={currentSpec.oneOutboxWeight || ''} onChange={e => setCurrentSpec({...currentSpec, oneOutboxWeight: parseFloat(e.target.value) || ''})} disabled={!canEdit} style={{ borderColor: parseFloat(currentSpec.oneOutboxWeight || 0) > 12 ? '#ef4444' : '#ddd', fontSize: '12px' }} />
+                                                    <label style={{ fontSize: '12px', color: '#475569' }}>1 아웃박스 중량 (kg) [제한: 12kg]</label>
+                                                    <input type="number" step="0.01" value={currentSpec.oneOutboxWeight || ''} onChange={e => setCurrentSpec({...currentSpec, oneOutboxWeight: parseFloat(e.target.value) || ''})} disabled={!canEdit} style={{ borderColor: parseFloat(currentSpec.oneOutboxWeight || 0) > 12 ? '#ef4444' : '#ddd', fontSize: '14px' }} />
                                                 </div>
                                                 <div className="form-group">
-                                                    <label style={{ fontSize: '11px', color: '#475569' }}>1 팔레트 중량 (kg) [제한: 630kg]</label>
-                                                    <input type="number" step="0.1" value={currentSpec.onePalletWeight || ''} onChange={e => setCurrentSpec({...currentSpec, onePalletWeight: parseFloat(e.target.value) || ''})} disabled={!canEdit} style={{ borderColor: parseFloat(currentSpec.onePalletWeight || 0) > 630 ? '#ef4444' : '#ddd', fontSize: '12px' }} />
+                                                    <label style={{ fontSize: '12px', color: '#475569' }}>1 팔레트 중량 (kg) [제한: 630kg]</label>
+                                                    <input type="number" step="0.1" value={currentSpec.onePalletWeight || ''} onChange={e => setCurrentSpec({...currentSpec, onePalletWeight: parseFloat(e.target.value) || ''})} disabled={!canEdit} style={{ borderColor: parseFloat(currentSpec.onePalletWeight || 0) > 630 ? '#ef4444' : '#ddd', fontSize: '14px' }} />
                                                 </div>
                                                 <div className="form-group">
-                                                    <label style={{ fontSize: '11px', color: '#475569' }}>1 팔레트 높이 (mm) [제한: 1,500mm]</label>
-                                                    <input type="number" step="1" value={currentSpec.onePalletHeight || ''} onChange={e => setCurrentSpec({...currentSpec, onePalletHeight: parseFloat(e.target.value) || ''})} disabled={!canEdit} style={{ borderColor: parseFloat(currentSpec.onePalletHeight || 0) > 1500 ? '#ef4444' : '#ddd', fontSize: '12px' }} />
+                                                    <label style={{ fontSize: '12px', color: '#475569' }}>1 팔레트 높이 (mm) [제한: 1,500mm]</label>
+                                                    <input type="number" step="1" value={currentSpec.onePalletHeight || ''} onChange={e => setCurrentSpec({...currentSpec, onePalletHeight: parseFloat(e.target.value) || ''})} disabled={!canEdit} style={{ borderColor: parseFloat(currentSpec.onePalletHeight || 0) > 1500 ? '#ef4444' : '#ddd', fontSize: '14px' }} />
                                                 </div>
                                             </div>
                                         </div>
 
                                         {/* 특이사항 */}
                                         <div className="card" style={{ padding: '20px', marginBottom: '20px', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
-                                            <h3 style={{ margin: '0 0 15px 0', fontSize: '16px', fontWeight: 'bold', color: '#1e293b' }}>📝 사양서 특이사항 (기존 대비 2배 확대)</h3>
-                                            <textarea value={currentSpec.remarks || ''} onChange={e => setCurrentSpec({...currentSpec, remarks: e.target.value})} disabled={!canEdit} style={{ width: '100%', height: '160px', fontSize: '16px', fontWeight: '500', lineHeight: '1.6', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1' }} placeholder="공장 출하 또는 적재 보관 시 특이 우려 사항 자유 서술..." />
+                                            <h3 style={{ margin: '0 0 15px 0', fontSize: '15px', fontWeight: 'bold', color: '#1e293b' }}>📝 사양서 특이사항</h3>
+                                            <textarea value={currentSpec.remarks || ''} onChange={e => setCurrentSpec({...currentSpec, remarks: e.target.value})} disabled={!canEdit} style={{ width: '100%', height: '160px', fontSize: '14px', fontWeight: '500', lineHeight: '1.6', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1' }} placeholder="공장 출하 또는 적재 보관 시 특이 우려 사항 자유 서술..." />
                                         </div>
                                     </div>
                                 )}
