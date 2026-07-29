@@ -2084,10 +2084,13 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                             📸 Sheet 2: 포장방법 사진
                                         </button>
                                         <button type="button" onClick={() => setSpecSubTab('sheet3')} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: specSubTab === 'sheet3' ? '#003366' : 'transparent', color: specSubTab === 'sheet3' ? '#fff' : '#4a5568', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' }}>
-                                            📦 Sheet 3: 현품표 아웃박스
+                                            📦 Sheet 3: 인박스 현품표
                                         </button>
                                         <button type="button" onClick={() => setSpecSubTab('sheet4')} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: specSubTab === 'sheet4' ? '#003366' : 'transparent', color: specSubTab === 'sheet4' ? '#fff' : '#4a5568', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' }}>
-                                            🧱 Sheet 4: 현품표 팔레트
+                                            📦 Sheet 4: 아웃박스 현품표
+                                        </button>
+                                        <button type="button" onClick={() => setSpecSubTab('sheet5')} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: specSubTab === 'sheet5' ? '#003366' : 'transparent', color: specSubTab === 'sheet5' ? '#fff' : '#4a5568', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' }}>
+                                            🧱 Sheet 5: 팔레트 현품표
                                         </button>
                                     </div>
                                     <div style={{ display: 'flex', gap: '8px' }}>
@@ -2470,15 +2473,75 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                 {specSubTab === 'sheet3' && (
                                     <div className="card" style={{ padding: '25px', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#f8fafc' }}>
                                         <h3 style={{ margin: '0 0 20px 0', fontSize: '16px', color: '#1e293b', borderBottom: '2px solid #e2e8f0', paddingBottom: '10px' }}>
-                                            📦 Sheet 3: 현품표 아웃박스 시각화
+                                            📦 Sheet 3: 인박스 현품표 시각화
+                                        </h3>
+                                        
+                                        {/* 인박스 현품표 가상 카드 레이아웃 */}
+                                        <div style={{ maxWidth: '500px', margin: '0 auto', background: '#fff', border: '2px solid #2563eb', padding: '20px', fontFamily: 'monospace', color: '#000', borderRadius: '8px' }}>
+                                            <div style={{ textAlign: 'center', fontSize: '20px', fontWeight: 'bold', borderBottom: '2px solid #2563eb', paddingBottom: '10px', marginBottom: '15px', color: '#1e40af' }}>
+                                                [ 인 박 스 현 품 표 ]
+                                            </div>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+                                                <tbody>
+                                                    <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold', width: '120px' }}>품목코드:</td>
+                                                        <td style={{ padding: '8px' }}>{formData.itemCode || '-'}</td>
+                                                    </tr>
+                                                    <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>제품명:</td>
+                                                        <td style={{ padding: '8px' }}>{formData.productName || '-'}</td>
+                                                    </tr>
+                                                    <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>인박스 구분:</td>
+                                                        <td style={{ padding: '8px' }}>{currentSpec.inboxType || '인박스'}</td>
+                                                    </tr>
+                                                    <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>입수량:</td>
+                                                        <td style={{ padding: '8px' }}>{currentSpec.inboxQty ? `${currentSpec.inboxQty} EA` : '0 EA'}</td>
+                                                    </tr>
+                                                    <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>인박스 규격:</td>
+                                                        <td style={{ padding: '8px' }}>{currentSpec.inboxSize || '-'}</td>
+                                                    </tr>
+                                                    <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>재 질:</td>
+                                                        <td style={{ padding: '8px' }}>{currentSpec.inboxMaterial || '-'}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>제조사:</td>
+                                                        <td style={{ padding: '8px' }}>{formData.manufacturerInfo?.name || '-'}</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                            <div style={{ marginTop: '20px', borderTop: '2px dashed #2563eb', paddingTop: '15px', textAlign: 'center' }}>
+                                                <div style={{ letterSpacing: '8px', fontSize: '24px', fontWeight: 'bold', margin: '10px 0', color: '#1e40af' }}>
+                                                    ||||| | |||| ||| ||
+                                                </div>
+                                                <div style={{ fontSize: '13px' }}>{currentSpec.barcode || 'BARCODE-NOT-SET'}</div>
+                                            </div>
+                                        </div>
+
+                                        <div style={{ marginTop: '25px', padding: '20px', background: '#fff', border: '1px dashed #cbd5e1', borderRadius: '8px', textAlign: 'center' }}>
+                                            <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#475569', marginBottom: '8px' }}>📸 인박스 외관 및 포장 상태 이미지 (3D 모델/도면 연동부)</div>
+                                            <div style={{ height: '180px', background: '#f1f5f9', borderRadius: '6px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#94a3b8', fontSize: '12px' }}>
+                                                [ 인박스 3D WebGL / 도면 렌더링 영역 ]
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {specSubTab === 'sheet4' && (
+                                    <div className="card" style={{ padding: '25px', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#f8fafc' }}>
+                                        <h3 style={{ margin: '0 0 20px 0', fontSize: '16px', color: '#1e293b', borderBottom: '2px solid #e2e8f0', paddingBottom: '10px' }}>
+                                            📦 Sheet 4: 아웃박스 현품표 시각화
                                         </h3>
                                         
                                         {/* 현품표 가상 카드 레이아웃 */}
                                         <div style={{ maxWidth: '500px', margin: '0 auto', background: '#fff', border: '2px solid #000', padding: '20px', fontFamily: 'monospace', color: '#000' }}>
                                             <div style={{ textAlign: 'center', fontSize: '20px', fontWeight: 'bold', borderBottom: '2px solid #000', paddingBottom: '10px', marginBottom: '15px' }}>
-                                                [ 아 웁 박 스 현 품 표 ]
+                                                [ 아 웃 박 스 현 품 표 ]
                                             </div>
-                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                                                 <tbody>
                                                     <tr style={{ borderBottom: '1px solid #000' }}>
                                                         <td style={{ padding: '8px', fontWeight: 'bold', width: '120px' }}>품목코드:</td>
@@ -2511,15 +2574,13 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                 </tbody>
                                             </table>
                                             <div style={{ marginTop: '20px', borderTop: '2px dashed #000', paddingTop: '15px', textAlign: 'center' }}>
-                                                {/* 가상 바코드 */}
                                                 <div style={{ letterSpacing: '8px', fontSize: '24px', fontWeight: 'bold', margin: '10px 0' }}>
                                                     ||||| | |||| ||| ||
                                                 </div>
-                                                <div style={{ fontSize: '12px' }}>{currentSpec.barcode || 'BARCODE-NOT-SET'}</div>
+                                                <div style={{ fontSize: '13px' }}>{currentSpec.barcode || 'BARCODE-NOT-SET'}</div>
                                             </div>
                                         </div>
 
-                                        {/* 3D / 이미지 가상 캔버스 영역 설계 */}
                                         <div style={{ marginTop: '25px', padding: '20px', background: '#fff', border: '1px dashed #cbd5e1', borderRadius: '8px', textAlign: 'center' }}>
                                             <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#475569', marginBottom: '8px' }}>📸 아웃박스 외관 및 착인 위치 이미지 (3D 모델/도면 연동부)</div>
                                             <div style={{ height: '180px', background: '#f1f5f9', borderRadius: '6px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#94a3b8', fontSize: '12px' }}>
@@ -2529,10 +2590,10 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                     </div>
                                 )}
 
-                                {specSubTab === 'sheet4' && (
+                                {specSubTab === 'sheet5' && (
                                     <div className="card" style={{ padding: '25px', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#f8fafc' }}>
                                         <h3 style={{ margin: '0 0 20px 0', fontSize: '16px', color: '#1e293b', borderBottom: '2px solid #e2e8f0', paddingBottom: '10px' }}>
-                                            🧱 Sheet 4: 현품표 팔레트 시각화
+                                            🧱 Sheet 5: 팔레트 현품표 시각화
                                         </h3>
                                         
                                         {/* 팔레트 현품표 가상 카드 */}
@@ -2540,7 +2601,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                             <div style={{ textAlign: 'center', fontSize: '20px', fontWeight: 'bold', borderBottom: '2px solid #000', paddingBottom: '10px', marginBottom: '15px' }}>
                                                 [ 팔 레 트 현 품 표 ]
                                             </div>
-                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                                                 <tbody>
                                                     <tr style={{ borderBottom: '1px solid #000' }}>
                                                         <td style={{ padding: '8px', fontWeight: 'bold', width: '120px' }}>적재 제품:</td>
@@ -2576,7 +2637,6 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                             </table>
                                         </div>
 
-                                        {/* 팔레트 입형태 적재 이미지 가상 캔버스 */}
                                         <div style={{ marginTop: '25px', padding: '20px', background: '#fff', border: '1px dashed #cbd5e1', borderRadius: '8px', textAlign: 'center' }}>
                                             <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#475569', marginBottom: '8px' }}>📸 팔레트 적재 형태 도면 / 이미지</div>
                                             <div style={{ height: '180px', background: '#f1f5f9', borderRadius: '6px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#94a3b8', fontSize: '12px' }}>

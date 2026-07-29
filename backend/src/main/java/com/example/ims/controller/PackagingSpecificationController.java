@@ -129,11 +129,16 @@ public class PackagingSpecificationController {
     @GetMapping("/export-excel/{productId}")
     public ResponseEntity<Resource> exportToExcel(@PathVariable Long productId) {
         try {
+            Product product = productRepository.findById(productId).orElse(null);
+            String itemCode = product != null && product.getItemCode() != null ? product.getItemCode() : String.valueOf(productId);
             byte[] excelBytes = exportService.generateExcel(productId);
             ByteArrayResource resource = new ByteArrayResource(excelBytes);
 
+            String encodedFilename = java.net.URLEncoder.encode("포장사양서_" + itemCode + ".xlsx", java.nio.charset.StandardCharsets.UTF_8.name())
+                    .replaceAll("\\+", "%20");
+
             return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=packaging_spec_" + productId + ".xlsx")
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + encodedFilename + "\"; filename*=UTF-8''" + encodedFilename)
                     .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                     .body(resource);
         } catch (Exception e) {
@@ -149,11 +154,16 @@ public class PackagingSpecificationController {
     @GetMapping("/export-pdf/{productId}")
     public ResponseEntity<Resource> exportToPdf(@PathVariable Long productId) {
         try {
+            Product product = productRepository.findById(productId).orElse(null);
+            String itemCode = product != null && product.getItemCode() != null ? product.getItemCode() : String.valueOf(productId);
             byte[] pdfBytes = exportService.generatePdf(productId);
             ByteArrayResource resource = new ByteArrayResource(pdfBytes);
 
+            String encodedFilename = java.net.URLEncoder.encode("포장사양서_" + itemCode + ".pdf", java.nio.charset.StandardCharsets.UTF_8.name())
+                    .replaceAll("\\+", "%20");
+
             return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=packaging_spec_" + productId + ".pdf")
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + encodedFilename + "\"; filename*=UTF-8''" + encodedFilename)
                     .contentType(MediaType.APPLICATION_PDF)
                     .body(resource);
         } catch (Exception e) {
