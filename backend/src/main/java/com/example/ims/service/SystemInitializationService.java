@@ -67,6 +67,7 @@ public class SystemInitializationService {
 
         repairOtherTablesSchema(); // [추가] 소프트 델리트 및 기타 스키마 보정
         repairDocumentRequirementsSchema(); // [추가] document_requirements 런타임 스키마 정렬
+        repairChannelNoteTablesSchema(); // [추가] channel_note_categories / channel_special_notes 런타임 스키마 정렬
         repairRegulatoryIngredientsTableSchema(); // Drop unique constraints/indexes on regulatory_ingredients for full sync
         seedDummyProducts(); // Seed dummy products for testing
 
@@ -470,6 +471,33 @@ public class SystemInitializationService {
             log.info(">>>> [SYSTEM INIT] 'document_requirements' schema alignment check completed.");
         } catch (Exception e) {
             log.warn(">>>> [SYSTEM INIT] 'document_requirements' schema check warning: {}", e.getMessage());
+        }
+    }
+
+    private void repairChannelNoteTablesSchema() {
+        try {
+            jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS channel_note_categories (" +
+                    "id BIGSERIAL PRIMARY KEY, " +
+                    "category_key VARCHAR(100) NOT NULL UNIQUE, " +
+                    "category_label VARCHAR(150) NOT NULL, " +
+                    "display_order INT NOT NULL, " +
+                    "is_active BOOLEAN NOT NULL DEFAULT TRUE, " +
+                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                    "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+            jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS channel_special_notes (" +
+                    "id BIGSERIAL PRIMARY KEY, " +
+                    "channel_id BIGINT NOT NULL, " +
+                    "category_id BIGINT NOT NULL, " +
+                    "note_content TEXT, " +
+                    "file_url VARCHAR(500), " +
+                    "file_type VARCHAR(50), " +
+                    "expiry_option VARCHAR(100), " +
+                    "custom_expiry_format VARCHAR(200), " +
+                    "updated_by VARCHAR(255), " +
+                    "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+            log.info(">>>> [SYSTEM INIT] 'channel_note_categories' & 'channel_special_notes' schema check completed.");
+        } catch (Exception e) {
+            log.warn(">>>> [SYSTEM INIT] 'channel_note_tables' schema check warning: {}", e.getMessage());
         }
     }
 
