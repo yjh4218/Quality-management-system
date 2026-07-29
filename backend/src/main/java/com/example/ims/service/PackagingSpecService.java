@@ -411,6 +411,12 @@ public class PackagingSpecService {
         // 수치 및 필드 타입 안전 보정
         if (spec.getPalletHeightLimit() == null && spec.getOnePalletHeight() != null) {
             spec.setPalletHeightLimit(String.valueOf(spec.getOnePalletHeight().intValue()));
+        } else if (spec.getPalletHeightLimit() != null) {
+            // 숫자 외 문자가 있을 경우 정수형으로 정제
+            String cleanLimit = spec.getPalletHeightLimit().replaceAll("[^0-9]", "");
+            if (!cleanLimit.isEmpty()) {
+                spec.setPalletHeightLimit(cleanLimit);
+            }
         }
 
         // 버전 계산 및 개정 노트 세팅
