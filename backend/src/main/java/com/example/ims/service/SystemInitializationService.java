@@ -66,6 +66,7 @@ public class SystemInitializationService {
         }
 
         repairOtherTablesSchema(); // [추가] 소프트 델리트 및 기타 스키마 보정
+        repairDocumentRequirementsSchema(); // [추가] document_requirements 런타임 스키마 정렬
         repairRegulatoryIngredientsTableSchema(); // Drop unique constraints/indexes on regulatory_ingredients for full sync
         seedDummyProducts(); // Seed dummy products for testing
 
@@ -457,6 +458,18 @@ public class SystemInitializationService {
             } catch (Exception e) {
                 log.warn(">>>> [SYSTEM INIT] Could not add column '{}' to products: {}", name, e.getMessage());
             }
+        }
+    }
+
+    private void repairDocumentRequirementsSchema() {
+        try {
+            jdbcTemplate.execute("ALTER TABLE document_requirements ADD COLUMN IF NOT EXISTS security_token VARCHAR(255)");
+            jdbcTemplate.execute("ALTER TABLE document_requirements ADD COLUMN IF NOT EXISTS token_expires_at TIMESTAMP");
+            jdbcTemplate.execute("ALTER TABLE document_requirements ADD COLUMN IF NOT EXISTS last_uploaded_by VARCHAR(255)");
+            jdbcTemplate.execute("ALTER TABLE document_requirements ADD COLUMN IF NOT EXISTS last_uploaded_at TIMESTAMP");
+            log.info(">>>> [SYSTEM INIT] 'document_requirements' schema alignment check completed.");
+        } catch (Exception e) {
+            log.warn(">>>> [SYSTEM INIT] 'document_requirements' schema check warning: {}", e.getMessage());
         }
     }
 
