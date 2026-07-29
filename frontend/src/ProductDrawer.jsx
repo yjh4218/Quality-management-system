@@ -1387,7 +1387,22 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                             checked={(formData.channels || []).some(c => c.id === channel.id)}
                                             onChange={(e) => {
                                                 if (e.target.checked) {
-                                                    setFormData({ ...formData, channels: [channel] });
+                                                    const channelCode = channel.channelCode || '';
+                                                    let curName = formData.productName || '';
+                                                    
+                                                    // 기존 채널코드 접미사(_XXX)가 존재하면 제거 후 본래 제품명 추출
+                                                    let baseName = curName;
+                                                    const lastUnderscore = curName.lastIndexOf('_');
+                                                    if (lastUnderscore > 0 && curName.substring(lastUnderscore + 1).match(/^[A-Z0-9/_-]+$/)) {
+                                                        baseName = curName.substring(0, lastUnderscore);
+                                                    }
+                                                    
+                                                    const newName = channelCode ? `${baseName}_${channelCode}` : baseName;
+                                                    setFormData({
+                                                        ...formData,
+                                                        channels: [channel],
+                                                        productName: newName
+                                                    });
                                                 }
                                             }}
                                             disabled={!canEdit}

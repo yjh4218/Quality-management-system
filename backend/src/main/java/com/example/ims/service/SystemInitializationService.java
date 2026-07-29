@@ -147,9 +147,18 @@ public class SystemInitializationService {
     }
 
     private void appendChannelSuffixToProductNames() {
-        log.info(">>>> [SYSTEM INIT] Appending channel code suffix (_채널명) to product names...");
+        log.info(">>>> [SYSTEM INIT] Assigning random channels to unmapped products & appending channel code suffix (_채널명) to product names...");
         try {
-            // 매핑된 sales_channels가 있는 제품들에 대해서만 product_name에 '_채널코드' 접미사 결합 (없는 경우만)
+            // 0. 채널 연결이 전혀 없는 품목에 대해 등록된 유통채널(sales_channels) 중 1개를 자동으로 랜덤 할당
+            int unmappedSeeded = jdbcTemplate.update(
+                "INSERT INTO product_sales_channels (product_id, channel_id) " +
+                "SELECT p.id, (SELECT sc.id FROM sales_channels sc WHERE sc.active = true ORDER BY sc.id ASC LIMIT 1) " +
+                "FROM products p " +
+                "WHERE NOT EXISTS (SELECT 1 FROM product_sales_channels psc WHERE psc.product_id = p.id)"
+            );
+            log.info(">>>> [SYSTEM INIT] Assigned default channel to {} unmapped products.", unmappedSeeded);
+
+            // 1. 매핑된 sales_channels가 있는 제품들에 대해 product_name에 '_채널코드' 접미사 결합 (없는 경우만)
             int updatedMapped = jdbcTemplate.update(
                 "UPDATE products " +
                 "SET product_name = product_name || '_' || (" +
@@ -160,7 +169,7 @@ public class SystemInitializationService {
             );
             log.info(">>>> [SYSTEM INIT] Updated {} mapped products with channel suffix.", updatedMapped);
 
-            // 클레임 정보의 product_name도 동일하게 동기화 갱신
+            // 2. 클레임 정보의 product_name도 동일하게 동기화 갱신
             int updatedClaims = jdbcTemplate.update(
                 "UPDATE claims " +
                 "SET product_name = (SELECT p.product_name FROM products p WHERE p.item_code = claims.item_code AND (p.is_deleted = false OR p.is_deleted IS NULL) LIMIT 1) " +
