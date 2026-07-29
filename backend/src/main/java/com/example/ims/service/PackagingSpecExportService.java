@@ -132,9 +132,9 @@ public class PackagingSpecExportService {
         setBorders(wrapDataStyle);
 
         try (workbook; ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            // --- Sheet 1: 포장사양서 ---
             Sheet sheet0 = workbook.createSheet("포장사양서");
 
-            // 타이틀 행 (Row 0 ~ 1)
             Row titleRow = sheet0.createRow(0);
             titleRow.setHeightInPoints(35);
             org.apache.poi.ss.usermodel.Cell titleCell = titleRow.createCell(0);
@@ -142,7 +142,6 @@ public class PackagingSpecExportService {
             titleCell.setCellStyle(titleStyle);
             sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(0, 1, 0, 7));
 
-            // 기본 데이터 준비
             String capacityInfo = product.getCapacity() != null && !product.getCapacity().isEmpty() ? " " + product.getCapacity() : "";
             String weightInfo = product.getWeight() != null && !product.getWeight().isEmpty() ? " (" + product.getWeight() + ")" : "";
             String productNameWithSpecs = product.getProductName() + capacityInfo + weightInfo;
@@ -153,15 +152,14 @@ public class PackagingSpecExportService {
 
             PackagingSpecification spec = specs.isEmpty() ? PackagingSpecification.builder().product(product).build() : specs.get(0);
 
-            // [1. 제품 기본 정보 카드] (Row 3 ~ 8)
+            // [1. 제품 및 기본 정보]
             createSectionHeader(sheet0, 3, "1. 제품 및 기본 정보", headerStyle, 7);
-
             addRow(sheet0, 4, labelStyle, dataStyle, "품목코드", product.getItemCode(), "브랜드명", product.getBrand() != null ? product.getBrand().getName() : "-", "유통채널", channelNames, "버전", "v" + (spec.getVersion() != null ? spec.getVersion() : 1));
             addRow(sheet0, 5, labelStyle, dataStyle, "제품명(국문)", productNameWithSpecs, "제품명(영문)", englishProductNameWithSpecs, "제조사", product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-", "제품구분", product.getProductType() != null ? product.getProductType().toString() : "-");
-            addRow(sheet0, 6, labelStyle, dataStyle, "사용기한", (product.getShelfLifeMonths() != null ? "제조일로부터 " + product.getShelfLifeMonths() + "개월" : "-"), "개봉후기한", (product.getOpenedShelfLifeMonths() != null ? "개봉 후 " + product.getOpenedShelfLifeMonths() + "개월" : "-"), "바코드", (spec.getBarcode() != null ? spec.getBarcode() : "-"), "랩 넘버", (spec.getLabNumber() != null ? spec.getLabNumber() : "-"));
+            addRow(sheet0, 6, labelStyle, dataStyle, "사용기한", (product.getShelfLifeMonths() != null ? "제조일로부터 " + product.getShelfLifeMonths() + "개월" : "-"), "개봉후기한", (product.getOpenedShelfLifeMonths() != null ? "개봉 후 " + product.getOpenedShelfLifeMonths() + "개월" : "-"), "제품 바코드", (product.getProductBarcode() != null ? product.getProductBarcode() : "-"), "아웃박스 바코드", (product.getOutboxBarcode() != null ? product.getOutboxBarcode() : "-"));
             addRow(sheet0, 7, labelStyle, dataStyle, "기획 담당", (spec.getPlannerName() != null ? spec.getPlannerName() : "-"), "디자인 담당", (spec.getDesignerName() != null ? spec.getDesignerName() : "-"), "품질관리 담당", (spec.getQcName() != null ? spec.getQcName() : "-"), "바코드 담당자", (spec.getBarcodeManager() != null ? spec.getBarcodeManager() : "-"));
 
-            // [2. 개정 내역 테이블] (Row 9~)
+            // [2. 개정 이력]
             createSectionHeader(sheet0, 9, "2. 개정 이력 (Revision History)", headerStyle, 7);
             Row revHeader = sheet0.createRow(10);
             revHeader.setHeightInPoints(22);
@@ -196,7 +194,7 @@ public class PackagingSpecExportService {
                 }
             }
 
-            // [3. 구성품 리스트 BOM]
+            // [3. 구성품 리스트 (BOM)]
             currentRow++;
             createSectionHeader(sheet0, currentRow, "3. 제품 구성품 리스트 (BOM Components)", headerStyle, 7);
             currentRow++;
@@ -252,7 +250,7 @@ public class PackagingSpecExportService {
             sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 1, 7));
             currentRow++;
 
-            // [5. 적재 사양 및 중량/높이 검증]
+            // [5. 체적/적재 사양 및 검증 기준]
             currentRow++;
             createSectionHeader(sheet0, currentRow, "5. 체적/적재 사양 및 검증 기준 (Volume & Loading Spec)", headerStyle, 7);
             currentRow++;
@@ -261,7 +259,7 @@ public class PackagingSpecExportService {
             addRow(sheet0, currentRow++, labelStyle, dataStyle, "팔레트 종류", spec.getPalletTypeStr() != null ? spec.getPalletTypeStr() : "-", "적재 방법", spec.getPalletStackingMethod() != null ? spec.getPalletStackingMethod() : "-", "팔레트 규격", spec.getPalletSize() != null ? spec.getPalletSize() : "-", "높이 제한", spec.getPalletHeightLimit() != null ? spec.getPalletHeightLimit() : "-");
             addRow(sheet0, currentRow++, labelStyle, dataStyle, "1아웃박스 중량 [제한12kg]", (spec.getOneOutboxWeight() != null ? spec.getOneOutboxWeight() + " kg" : "-"), "1팔레트 중량 [제한630kg]", (spec.getOnePalletWeight() != null ? spec.getOnePalletWeight() + " kg" : "-"), "1팔레트 높이 [제한1500mm]", (spec.getOnePalletHeight() != null ? spec.getOnePalletHeight() + " mm" : "-"), "검증 상태", "정상 규격");
 
-            // [6. 특이사항 및 주의사항]
+            // [6. 사양서 특이사항]
             currentRow++;
             createSectionHeader(sheet0, currentRow, "6. 사양서 특이사항 (Remarks)", headerStyle, 7);
             currentRow++;
@@ -271,32 +269,80 @@ public class PackagingSpecExportService {
             createCell(remRow, 1, spec.getRemarks() != null ? spec.getRemarks() : "등록된 특이사항이 없습니다.", wrapDataStyle);
             sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 1, 7));
 
-            // 열 너비 자동 조정
-            sheet0.setColumnWidth(0, 5000);
-            sheet0.setColumnWidth(1, 8000);
-            sheet0.setColumnWidth(2, 5000);
-            sheet0.setColumnWidth(3, 8000);
-            sheet0.setColumnWidth(4, 5000);
-            sheet0.setColumnWidth(5, 8000);
-            sheet0.setColumnWidth(6, 5000);
-            sheet0.setColumnWidth(7, 8000);
+            sheet0.setColumnWidth(0, 5000); sheet0.setColumnWidth(1, 8000);
+            sheet0.setColumnWidth(2, 5000); sheet0.setColumnWidth(3, 8000);
+            sheet0.setColumnWidth(4, 5000); sheet0.setColumnWidth(5, 8000);
+            sheet0.setColumnWidth(6, 5000); sheet0.setColumnWidth(7, 8000);
 
-            // --- Sheet 1: 현품표_아웃박스 ---
-            Sheet sheet1 = workbook.createSheet("현품표_아웃박스");
-            createSectionHeader(sheet1, 0, "[ 아 웃 박 스 현 품 표 ]", headerStyle, 3);
-            addRow(sheet1, 1, labelStyle, dataStyle, "품목코드", product.getItemCode(), "입수량", (spec.getOutboxQty() != null ? spec.getOutboxQty() + " EA" : "-"));
-            addRow(sheet1, 2, labelStyle, dataStyle, "제품명", productNameWithSpecs, "박스 중량", (spec.getOneOutboxWeight() != null ? spec.getOneOutboxWeight() + " kg" : "-"));
-            addRow(sheet1, 3, labelStyle, dataStyle, "영문명", englishProductNameWithSpecs, "박스 규격", (spec.getOutboxSize() != null ? spec.getOutboxSize() : "-"));
-            addRow(sheet1, 4, labelStyle, dataStyle, "제조사", (product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-"), "바코드", (spec.getBarcode() != null ? spec.getBarcode() : "-"));
-            sheet1.setColumnWidth(0, 4000); sheet1.setColumnWidth(1, 10000); sheet1.setColumnWidth(2, 4000); sheet1.setColumnWidth(3, 10000);
+            // --- Sheet 2: 포장방법 사진 ---
+            Sheet sheet1 = workbook.createSheet("포장방법 사진");
+            createSectionHeader(sheet1, 0, "📸 순서별 포장 방법 이미지 지침", headerStyle, 3);
+            Row imgHeader = sheet1.createRow(1);
+            imgHeader.setHeightInPoints(22);
+            createCell(imgHeader, 0, "순서", subHeaderStyle);
+            createCell(imgHeader, 1, "포장 공정 단계 캡션 / 상세 지침", subHeaderStyle);
+            sheet1.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(1, 1, 1, 3));
 
-            // --- Sheet 2: 현품표_팔레트 ---
-            Sheet sheet2 = workbook.createSheet("현품표_팔레트");
-            createSectionHeader(sheet2, 0, "[ 팔 레 트 현 품 표 ]", headerStyle, 3);
-            addRow(sheet2, 1, labelStyle, dataStyle, "품목코드", product.getItemCode(), "적재수량", (product.getPalletInfo() != null && product.getPalletInfo().getPalletQuantity() != null ? product.getPalletInfo().getPalletQuantity() + " EA" : "-"));
-            addRow(sheet2, 2, labelStyle, dataStyle, "제품명", productNameWithSpecs, "팔레트중량", (spec.getOnePalletWeight() != null ? spec.getOnePalletWeight() + " kg" : "-"));
-            addRow(sheet2, 3, labelStyle, dataStyle, "제조사", (product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-"), "팔레트높이", (spec.getOnePalletHeight() != null ? spec.getOnePalletHeight() + " mm" : "-"));
-            sheet2.setColumnWidth(0, 4000); sheet2.setColumnWidth(1, 10000); sheet2.setColumnWidth(2, 4000); sheet2.setColumnWidth(3, 10000);
+            List<com.example.ims.entity.PackagingMethodImage> methodImages = methodImageRepository.findActiveBySpecId(spec.getId());
+            int imgRow = 2;
+            if (methodImages == null || methodImages.isEmpty()) {
+                Row r = sheet1.createRow(imgRow);
+                createCell(r, 0, "-", centerDataStyle);
+                createCell(r, 1, "등록된 포장방법 사진 지침이 없습니다.", dataStyle);
+                sheet1.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(imgRow, imgRow, 1, 3));
+            } else {
+                for (int i = 0; i < methodImages.size(); i++) {
+                    com.example.ims.entity.PackagingMethodImage imgEntity = methodImages.get(i);
+                    Row r = sheet1.createRow(imgRow);
+                    r.setHeightInPoints(25);
+                    createCell(r, 0, "NO." + (i + 1), centerDataStyle);
+                    createCell(r, 1, imgEntity.getCaptionText() != null ? imgEntity.getCaptionText() : "-", dataStyle);
+                    sheet1.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(imgRow, imgRow, 1, 3));
+                    imgRow++;
+                }
+            }
+            sheet1.setColumnWidth(0, 3000); sheet1.setColumnWidth(1, 12000); sheet1.setColumnWidth(2, 6000); sheet1.setColumnWidth(3, 6000);
+
+            // --- Sheet 3: 인박스 현품표 ---
+            Sheet sheet2 = workbook.createSheet("인박스 현품표");
+            createSectionHeader(sheet2, 0, "[ 인 박 스 현 품 표 / INBOX LABEL ]", headerStyle, 3);
+            addRow(sheet2, 1, labelStyle, dataStyle, "품목코드 (Product Code)", product.getItemCode(), "입수량 (Quantity)", (spec.getInboxQty() != null ? spec.getInboxQty() + " EA" : "0 EA"));
+            addRow(sheet2, 2, labelStyle, dataStyle, "국문 제품명 (Product Name KOR)", product.getProductName(), "제조사 (Manufacturer)", (product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-"));
+            addRow(sheet2, 3, labelStyle, dataStyle, "영문 제품명 (Product Name ENG)", (product.getEnglishProductName() != null ? product.getEnglishProductName() : "-"), "제조일자 (Mfg. Date)", "[ YYYY.MM.DD 표기 ]");
+            addRow(sheet2, 4, labelStyle, dataStyle, "제조번호 (Lot No.)", "[ 생산 배치번호 표기 ]", "사용기한 (Exp. Date)", "[ YYYY.MM.DD 까지 ]");
+            
+            Row inboxNoteRow = sheet2.createRow(5);
+            inboxNoteRow.setHeightInPoints(25);
+            createCell(inboxNoteRow, 0, "바코드 규정", labelStyle);
+            createCell(inboxNoteRow, 1, "⚠️ 인박스 현품표에는 바코드를 부착/표기하지 않습니다. (규정 준수)", wrapDataStyle);
+            sheet2.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(5, 5, 1, 3));
+            sheet2.setColumnWidth(0, 7000); sheet2.setColumnWidth(1, 10000); sheet2.setColumnWidth(2, 7000); sheet2.setColumnWidth(3, 10000);
+
+            // --- Sheet 4: 아웃박스 현품표 ---
+            Sheet sheet3 = workbook.createSheet("아웃박스 현품표");
+            createSectionHeader(sheet3, 0, "[ 아 웃 박 스 현 품 표 / OUTBOX LABEL ]", headerStyle, 3);
+            addRow(sheet3, 1, labelStyle, dataStyle, "품목코드 (Product Code)", product.getItemCode(), "입수량 (Quantity)", (spec.getOutboxQty() != null ? spec.getOutboxQty() + " EA" : "0 EA"));
+            addRow(sheet3, 2, labelStyle, dataStyle, "국문 제품명 (Product Name KOR)", product.getProductName(), "제품무게 (Gross Weight)", (spec.getOneOutboxWeight() != null ? spec.getOneOutboxWeight() + " kg" : "- kg"));
+            addRow(sheet3, 3, labelStyle, dataStyle, "영문 제품명 (Product Name ENG)", (product.getEnglishProductName() != null ? product.getEnglishProductName() : "-"), "제조일자 (Mfg. Date)", "[ YYYY.MM.DD 표기 ]");
+            addRow(sheet3, 4, labelStyle, dataStyle, "제조번호 (Lot No.)", "[ 생산 배치번호 표기 ]", "사용기한 (Exp. Date)", "[ YYYY.MM.DD 까지 ]");
+            addRow(sheet3, 5, labelStyle, dataStyle, "제조사 (Manufacturer)", (product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-"), "바코드 (Barcode)", (product.getOutboxBarcode() != null && !product.getOutboxBarcode().isEmpty() ? product.getOutboxBarcode() : (product.getProductBarcode() != null ? product.getProductBarcode() : (spec.getBarcode() != null ? spec.getBarcode() : "BARCODE-NOT-SET"))));
+            sheet3.setColumnWidth(0, 7000); sheet3.setColumnWidth(1, 10000); sheet3.setColumnWidth(2, 7000); sheet3.setColumnWidth(3, 10000);
+
+            // --- Sheet 5: 팔레트 현품표 ---
+            Sheet sheet4 = workbook.createSheet("팔레트 현품표");
+            createSectionHeader(sheet4, 0, "[ 팔 레 트 현 품 표 / PALLET LABEL ]", headerStyle, 3);
+            String palletBoxQtyStr = (product.getPalletInfo() != null && product.getPalletInfo().getPalletQuantity() != null) ? String.valueOf(product.getPalletInfo().getPalletQuantity()) : null;
+            Integer pBoxQty = parseIntSafe(palletBoxQtyStr);
+            String totalPcsStr = "- EA";
+            if (pBoxQty != null && spec.getOutboxQty() != null) {
+                totalPcsStr = String.valueOf(pBoxQty * spec.getOutboxQty()) + " EA";
+            }
+            addRow(sheet4, 1, labelStyle, dataStyle, "품목코드 (Product Code)", product.getItemCode(), "적재 박스 수량 (Box Qty/Pallet)", (palletBoxQtyStr != null ? palletBoxQtyStr + " Box" : "- Box"));
+            addRow(sheet4, 2, labelStyle, dataStyle, "국문 제품명 (Product Name KOR)", product.getProductName(), "적재 낱개 수량 (Total Pcs/Pallet)", totalPcsStr);
+            addRow(sheet4, 3, labelStyle, dataStyle, "영문 제품명 (Product Name ENG)", (product.getEnglishProductName() != null ? product.getEnglishProductName() : "-"), "제조일자 (Mfg. Date)", "[ YYYY.MM.DD 표기 ]");
+            addRow(sheet4, 4, labelStyle, dataStyle, "제조번호 (Lot No.)", "[ 생산 배치번호 표기 ]", "사용기한 (Exp. Date)", "[ YYYY.MM.DD 까지 ]");
+            addRow(sheet4, 5, labelStyle, dataStyle, "제조사 (Manufacturer)", (product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-"), "바코드 (Barcode)", (product.getProductBarcode() != null && !product.getProductBarcode().isEmpty() ? product.getProductBarcode() : (spec.getBarcode() != null ? spec.getBarcode() : "BARCODE-NOT-SET")));
+            sheet4.setColumnWidth(0, 7000); sheet4.setColumnWidth(1, 10000); sheet4.setColumnWidth(2, 7000); sheet4.setColumnWidth(3, 10000);
 
             workbook.write(out);
             return out.toByteArray();

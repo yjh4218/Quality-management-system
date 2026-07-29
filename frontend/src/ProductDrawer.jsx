@@ -1432,12 +1432,13 @@ const ProductDrawer = ({ product, onClose, user }) => {
                         </div>
 
                         {/* Shelf Life Field */}
-                        <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
+                        <div style={{ display: 'flex', gap: '20px', marginBottom: '15px' }}>
                             <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-                                <label>사용기한 (개월)</label>
+                                <label style={{ fontSize: '14px', fontWeight: 'bold' }}>사용기한 (개월)</label>
                                 <input
                                     type="text"
                                     name="shelfLifeMonths"
+                                    style={{ fontSize: '14px', padding: '8px 12px' }}
                                     value={formData.shelfLifeMonths || ''}
                                     onChange={(e) => {
                                         const val = e.target.value.replace(/\D/g, ''); // Remove non-digits
@@ -1450,10 +1451,11 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                 />
                             </div>
                             <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-                                <label>개봉 후 사용기한 (개월)</label>
+                                <label style={{ fontSize: '14px', fontWeight: 'bold' }}>개봉 후 사용기한 (개월)</label>
                                 <input
                                     type="text"
                                     name="openedShelfLifeMonths"
+                                    style={{ fontSize: '14px', padding: '8px 12px' }}
                                     value={formData.openedShelfLifeMonths || ''}
                                     onChange={(e) => {
                                         const val = e.target.value.replace(/\D/g, ''); // Remove non-digits
@@ -1465,31 +1467,33 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                     placeholder="단위: 개월 (예: 6, 12 등 최대 2자리 숫자)"
                                 />
                             </div>
-                            <div style={{ display: 'flex', gap: '15px', marginTop: '15px' }}>
-                                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-                                    <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b' }}>제품 바코드 (Product Barcode)</label>
-                                    <input
-                                        type="text"
-                                        name="productBarcode"
-                                        style={{ fontSize: '14px', padding: '8px 12px' }}
-                                        value={formData.productBarcode || ''}
-                                        onChange={handleChange}
-                                        disabled={!canEdit}
-                                        placeholder="예: 8809123456789 (13자리 스캔/입력)"
-                                    />
-                                </div>
-                                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-                                    <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b' }}>아웃박스 바코드 (Outbox Barcode)</label>
-                                    <input
-                                        type="text"
-                                        name="outboxBarcode"
-                                        style={{ fontSize: '14px', padding: '8px 12px' }}
-                                        value={formData.outboxBarcode || ''}
-                                        onChange={handleChange}
-                                        disabled={!canEdit}
-                                        placeholder="예: 18809123456786 (물류 박스 바코드)"
-                                    />
-                                </div>
+                        </div>
+
+                        {/* 바코드 전용 독립 행 */}
+                        <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
+                            <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                                <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b' }}>제품 바코드 (Product Barcode)</label>
+                                <input
+                                    type="text"
+                                    name="productBarcode"
+                                    style={{ fontSize: '14px', padding: '8px 12px' }}
+                                    value={formData.productBarcode || ''}
+                                    onChange={handleChange}
+                                    disabled={!canEdit}
+                                    placeholder="예: 8809123456789 (13자리 스캔/입력)"
+                                />
+                            </div>
+                            <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                                <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b' }}>아웃박스 바코드 (Outbox Barcode)</label>
+                                <input
+                                    type="text"
+                                    name="outboxBarcode"
+                                    style={{ fontSize: '14px', padding: '8px 12px' }}
+                                    value={formData.outboxBarcode || ''}
+                                    onChange={handleChange}
+                                    disabled={!canEdit}
+                                    placeholder="예: 18809123456786 (물류 박스 바코드)"
+                                />
                             </div>
                         </div>
 
