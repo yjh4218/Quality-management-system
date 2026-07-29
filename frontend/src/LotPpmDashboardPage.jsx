@@ -81,6 +81,7 @@ export default function LotPpmDashboardPage({ user, onNavigate }) {
             const summaryParams = {};
             if (startDate) summaryParams.startDate = startDate;
             if (endDate) summaryParams.endDate = endDate;
+            if (groupByMaster) summaryParams.groupByMaster = true;
 
             const [resData, resSummary, resClaims] = await Promise.all([
                 axios.get('/api/quality-analytics/lot-ppm', { params }),
@@ -147,19 +148,19 @@ export default function LotPpmDashboardPage({ user, onNavigate }) {
             },
             {
                 label: '통계적 이상 판정 (유의함)',
-                value: `${anomalyCount} 건`,
+                value: `${anomalyCount.toLocaleString()} 건`,
                 description: 'Z-Score ≥ 1.645 (95% 신뢰수준 이상 유의미한 불량)',
                 status: anomalyCount > 0 ? 'error' : 'success'
             },
             {
                 label: '샘플 부족 (판단 보류)',
-                value: `${sampleShortageCount} 건`,
+                value: `${sampleShortageCount.toLocaleString()} 건`,
                 description: '입고 수량 30개 미만으로 통계 검정 판단 보류',
                 status: 'warning'
             },
             {
                 label: '분석 대상 LOT 수',
-                value: `${totalLots} 개`,
+                value: `${totalLots.toLocaleString()} 개`,
                 description: 'LOT 미확인 제외, 기간 내 실시간 입고 고유 LOT 총합',
                 status: 'default'
             }
@@ -408,13 +409,29 @@ export default function LotPpmDashboardPage({ user, onNavigate }) {
                     data={summary.monthlyPpmList}
                     emptyThreshold={1}
                 >
-                    <div style={{ width: '100%', height: 250 }}>
+                    <div style={{ width: '100%', height: 260 }}>
                         <ResponsiveContainer>
-                            <ComposedChart data={summary.monthlyPpmList} margin={{ top: 20, right: 30, bottom: 0, left: 10 }}>
+                            <ComposedChart data={summary.monthlyPpmList} margin={{ top: 20, right: 65, bottom: 0, left: 20 }}>
                                 <CartesianGrid strokeDasharray="3 3" />
                                 <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                                <YAxis yAxisId="left" orientation="left" stroke="#3b82f6" label={{ value: '클레임(개)', angle: -90, position: 'insideLeft', fontSize: 11 }} />
-                                <YAxis yAxisId="right" orientation="right" stroke="#ef4444" label={{ value: 'PPM', angle: 90, position: 'insideRight', fontSize: 11 }} />
+                                <YAxis 
+                                    yAxisId="left" 
+                                    orientation="left" 
+                                    stroke="#3b82f6" 
+                                    tickFormatter={(val) => val.toLocaleString()}
+                                    label={{ value: '클레임(개)', angle: -90, position: 'insideLeft', fontSize: 11 }} 
+                                />
+                                <YAxis 
+                                    yAxisId="right" 
+                                    orientation="right" 
+                                    stroke="#ef4444" 
+                                    tickFormatter={(val) => {
+                                        if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
+                                        if (val >= 1000) return `${(val / 1000).toLocaleString()}k`;
+                                        return val.toLocaleString();
+                                    }}
+                                    label={{ value: 'PPM', angle: 90, position: 'insideRight', offset: 10, fontSize: 11 }} 
+                                />
                                 <Tooltip 
                                     formatter={(val, name) => [
                                         name === 'PPM 불량률' ? `${val.toLocaleString()} PPM` : `${val.toLocaleString()} 개`,
@@ -461,7 +478,7 @@ export default function LotPpmDashboardPage({ user, onNavigate }) {
                                         <td style={{ padding: '8px', fontWeight: 600, color: '#2563eb', textDecoration: 'underline' }}>{m.month}</td>
                                         <td style={{ padding: '8px' }}>{m.inboundQty.toLocaleString()}개</td>
                                         <td style={{ padding: '8px', color: '#ef4444', fontWeight: 600 }}>{m.claimQty.toLocaleString()}개</td>
-                                        <td style={{ padding: '8px' }}>{m.claimCount}건</td>
+                                        <td style={{ padding: '8px' }}>{m.claimCount.toLocaleString()}건</td>
                                         <td style={{ padding: '8px', fontWeight: 700, color: m.ppm > 50000 ? '#ef4444' : '#2563eb' }}>
                                             {m.ppm.toLocaleString()} PPM
                                         </td>
@@ -482,19 +499,40 @@ export default function LotPpmDashboardPage({ user, onNavigate }) {
                         data={summary.topProductPpmList}
                         emptyThreshold={1}
                     >
-                        <div style={{ width: '100%', height: 140 }}>
+                        <div style={{ width: '100%', height: 220 }}>
                             <ResponsiveContainer>
-                                <BarChart layout="vertical" data={summary.topProductPpmList} margin={{ top: 5, right: 30, bottom: 0, left: 30 }}>
+                                <BarChart layout="vertical" data={summary.topProductPpmList} margin={{ top: 5, right: 35, bottom: 5, left: 10 }}>
                                     <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis type="number" unit=" PPM" tick={{ fontSize: 11 }} />
-                                    <YAxis type="category" dataKey="productName" tick={{ fontSize: 11, width: 100 }} width={110} />
+                                    <XAxis 
+                                        type="number" 
+                                        tickFormatter={(val) => val >= 1000000 ? `${(val/1000000).toFixed(1)}M` : val.toLocaleString()} 
+                                        unit=" PPM" 
+                                        tick={{ fontSize: 11 }} 
+                                    />
+                                    <YAxis 
+                                        type="category" 
+                                        dataKey="productName" 
+                                        width={140} 
+                                        tick={({ x, y, payload }) => {
+                                            const name = payload.value || '';
+                                            const truncated = name.length > 12 ? name.substring(0, 11) + '...' : name;
+                                            return (
+                                                <g transform={`translate(${x},${y})`}>
+                                                    <text x={-5} y={4} textAnchor="end" fill="#475569" fontSize={11} fontWeight={500}>
+                                                        <title>{name}</title>
+                                                        {truncated}
+                                                    </text>
+                                                </g>
+                                            );
+                                        }} 
+                                    />
                                     <Tooltip formatter={(val) => [`${val.toLocaleString()} PPM`, 'PPM 불량률']} />
                                     <Bar 
                                         dataKey="ppm" 
                                         name="PPM 불량률" 
                                         fill="#f59e0b" 
                                         radius={[0, 4, 4, 0]} 
-                                        barSize={18} 
+                                        barSize={20} 
                                         onClick={(entry) => handleOpenClaimModal('product', entry.productName, `제품: ${entry.productName} 클레임 내역`)}
                                         style={{ cursor: 'pointer' }}
                                     />

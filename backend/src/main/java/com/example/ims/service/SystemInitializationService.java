@@ -92,6 +92,7 @@ public class SystemInitializationService {
 
         repairAllSequences();
         alignProductsAndClaimsData();
+        appendChannelSuffixToProductNames();
         seedNotificationSettings();
 
         log.info(">>>> [SYSTEM INIT] Data Seeding & Repair Completed.");
@@ -142,6 +143,41 @@ public class SystemInitializationService {
             log.info(">>>> [SYSTEM INIT] Claim alignment completed. Soft-deleted {} claims without valid product code.", deletedCount);
         } catch (Exception e) {
             log.error(">>>> [SYSTEM INIT] [ERROR] Failed to align products/claims: {}", e.getMessage(), e);
+        }
+    }
+
+    private void appendChannelSuffixToProductNames() {
+        log.info(">>>> [SYSTEM INIT] Appending channel code suffix (_채널명) to product names...");
+        try {
+            // 1. 매핑된 sales_channels가 있는 제품들에 대해 product_name에 '_채널코드' 접미사 결합 (없는 경우만)
+            int updatedMapped = jdbcTemplate.update(
+                "UPDATE products " +
+                "SET product_name = product_name || '_' || (" +
+                "  SELECT sc.channel_code FROM product_sales_channels psc JOIN sales_channels sc ON psc.channel_id = sc.id WHERE psc.product_id = products.id LIMIT 1" +
+                ") " +
+                "WHERE EXISTS (SELECT 1 FROM product_sales_channels psc JOIN sales_channels sc ON psc.channel_id = sc.id WHERE psc.product_id = products.id) " +
+                "  AND POSITION('_' IN product_name) = 0"
+            );
+            log.info(">>>> [SYSTEM INIT] Updated {} mapped products with channel suffix.", updatedMapped);
+
+            // 2. 미매핑 제품의 기본 채널 접미사 '_JP/OFF' 부여 (기존 제품명에 '_'가 없는 경우)
+            int updatedDefault = jdbcTemplate.update(
+                "UPDATE products " +
+                "SET product_name = product_name || '_JP/OFF' " +
+                "WHERE POSITION('_' IN product_name) = 0 AND product_name IS NOT NULL AND product_name <> ''"
+            );
+            log.info(">>>> [SYSTEM INIT] Updated {} unmapped products with default '_JP/OFF' channel suffix.", updatedDefault);
+
+            // 3. 클레임 정보의 product_name도 동일하게 동기화 갱신
+            int updatedClaims = jdbcTemplate.update(
+                "UPDATE claims " +
+                "SET product_name = (SELECT p.product_name FROM products p WHERE p.item_code = claims.item_code AND (p.is_deleted = false OR p.is_deleted IS NULL) LIMIT 1) " +
+                "WHERE EXISTS (SELECT 1 FROM products p WHERE p.item_code = claims.item_code AND (p.is_deleted = false OR p.is_deleted IS NULL)) " +
+                "  AND claims.product_name IS DISTINCT FROM (SELECT p.product_name FROM products p WHERE p.item_code = claims.item_code AND (p.is_deleted = false OR p.is_deleted IS NULL) LIMIT 1)"
+            );
+            log.info(">>>> [SYSTEM INIT] Synchronized {} claim product names with updated product names.", updatedClaims);
+        } catch (Exception e) {
+            log.error(">>>> [SYSTEM INIT] [ERROR] Failed to append channel suffix to product names: {}", e.getMessage(), e);
         }
     }
 
