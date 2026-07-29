@@ -2325,8 +2325,8 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                 </div>
                                             </div>
                                             <div className="form-group" style={{ marginBottom: '12px' }}>
-                                                <label style={{ fontSize: '11px', color: '#475569' }}>포장방법 (서술)</label>
-                                                <textarea value={currentSpec.packagingMethodText || ''} onChange={e => setCurrentSpec({...currentSpec, packagingMethodText: e.target.value})} disabled={!canEdit} style={{ width: '100%', height: '80px', fontSize: '12px' }} placeholder="서수형 포장 조립 순서 설명..." />
+                                                <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b', marginBottom: '8px', display: 'block' }}>📝 포장방법 (서술형)</label>
+                                                <textarea value={currentSpec.packagingMethodText || ''} onChange={e => setCurrentSpec({...currentSpec, packagingMethodText: e.target.value})} disabled={!canEdit} style={{ width: '100%', height: '160px', fontSize: '16px', fontWeight: '500', lineHeight: '1.6', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1' }} placeholder="서술형 포장 조립 순서 설명..." />
                                             </div>
                                         </div>
 
@@ -2438,8 +2438,8 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
                                         {/* 특이사항 */}
                                         <div className="card" style={{ padding: '20px', marginBottom: '20px', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
-                                            <h3 style={{ margin: '0 0 15px 0', fontSize: '15px', color: '#1e293b' }}>📝 특이사항</h3>
-                                            <textarea value={currentSpec.remarks || ''} onChange={e => setCurrentSpec({...currentSpec, remarks: e.target.value})} disabled={!canEdit} style={{ width: '100%', height: '80px', fontSize: '12px' }} placeholder="공장 출하 또는 적재 보관 시 특이 우려 사항 자유 서술..." />
+                                            <h3 style={{ margin: '0 0 15px 0', fontSize: '16px', fontWeight: 'bold', color: '#1e293b' }}>📝 사양서 특이사항 (기존 대비 2배 확대)</h3>
+                                            <textarea value={currentSpec.remarks || ''} onChange={e => setCurrentSpec({...currentSpec, remarks: e.target.value})} disabled={!canEdit} style={{ width: '100%', height: '160px', fontSize: '16px', fontWeight: '500', lineHeight: '1.6', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1' }} placeholder="공장 출하 또는 적재 보관 시 특이 우려 사항 자유 서술..." />
                                         </div>
                                     </div>
                                 )}
