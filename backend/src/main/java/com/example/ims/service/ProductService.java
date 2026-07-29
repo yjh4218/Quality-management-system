@@ -43,6 +43,7 @@ public class ProductService {
     private final ExcelParsingService excelParsingService;
     private final com.example.ims.repository.ProductionAuditRepository productionAuditRepository;
     private final PackagingSpecService packagingSpecService;
+    private final com.example.ims.repository.SalesChannelRepository salesChannelRepository;
 
     /**
      * Helper to initialize shelf life for existing products if missing.
@@ -167,18 +168,33 @@ public class ProductService {
         if (!isAuthorized) {
             throw new RuntimeException("등록 권한이 없습니다. (제품 마스터 관리 권한 필요)");
         }
+
+        // 유통 채널 미선택 시 저장 차단
+        if (product.getChannels() == null || product.getChannels().isEmpty()) {
+            throw new RuntimeException("유통 채널 정보는 필수입니다. 최소 1개 이상의 채널을 선택해 주세요.");
+        }
+
+        // 선택된 채널 정보를 기반으로 제품명 뒤에 _채널코드 접미사 자동 반영
+        formatProductNameWithChannel(product);
         
         // Handle Brand verification
-        if (product.getBrand() != null && product.getBrand().getName() != null && !product.getBrand().getName().isEmpty()) {
+        if (product.getBrand() != null && product.getBrand().getId() != null) {
+            product.setBrand(brandRepository.findById(product.getBrand().getId())
+                    .orElseGet(() -> brandRepository.findByName("아누아").orElse(null)));
+        } else if (product.getBrand() != null && product.getBrand().getName() != null && !product.getBrand().getName().isEmpty()) {
             String brandName = product.getBrand().getName();
             product.setBrand(brandRepository.findByName(brandName)
-                    .orElseThrow(() -> new RuntimeException("등록되지 않은 브랜드입니다: " + brandName + ". 먼저 브랜드를 등록해 주세요.")));
+                    .orElseGet(() -> brandRepository.findByName("아누아").orElse(null)));
         } else {
-            throw new RuntimeException("Brand information is required.");
+            // 기본 브랜드 지정 ('아누아')
+            product.setBrand(brandRepository.findByName("아누아").orElse(null));
         }
 
         // Handle Manufacturer verification
-        if (product.getManufacturerInfo() != null && product.getManufacturerInfo().getName() != null && !product.getManufacturerInfo().getName().isEmpty()) {
+        if (product.getManufacturerInfo() != null && product.getManufacturerInfo().getId() != null) {
+            product.setManufacturerInfo(manufacturerRepository.findById(product.getManufacturerInfo().getId())
+                    .orElseThrow(() -> new IllegalArgumentException("선택하신 제조사 정보(ID: " + product.getManufacturerInfo().getId() + ")를 찾을 수 없습니다.")));
+        } else if (product.getManufacturerInfo() != null && product.getManufacturerInfo().getName() != null && !product.getManufacturerInfo().getName().isEmpty()) {
             String mfrName = product.getManufacturerInfo().getName();
             product.setManufacturerInfo(manufacturerRepository.findByName(mfrName)
                     .orElseThrow(() -> new RuntimeException("등록되지 않은 제조사입니다: " + mfrName + ". 먼저 제조사를 등록해 주세요.")));
@@ -269,8 +285,28 @@ public class ProductService {
         String company = user.getCompanyName() != null ? user.getCompanyName() : "시스템";
         String modifierName = user.getName() + " (" + company + ")";
         
+        // 채널 정보 검증 및 _채널코드 자동 반영
+        if (updatedProduct.getChannels() != null && !updatedProduct.getChannels().isEmpty()) {
+            java.util.List<com.example.ims.entity.SalesChannel> persistentChannels = new java.util.ArrayList<>();
+            for (com.example.ims.entity.SalesChannel ch : updatedProduct.getChannels()) {
+                if (ch != null && ch.getId() != null) {
+                    salesChannelRepository.findById(ch.getId()).ifPresent(persistentChannels::add);
+                }
+            }
+            if (persistentChannels.isEmpty()) {
+                throw new IllegalArgumentException("선택하신 유통 채널 정보가 유효하지 않습니다.");
+            }
+            updatedProduct.setChannels(persistentChannels);
+            existingProduct.setChannels(persistentChannels);
+            formatProductNameWithChannel(updatedProduct);
+            existingProduct.setProductName(updatedProduct.getProductName());
+        } else if (existingProduct.getChannels() == null || existingProduct.getChannels().isEmpty()) {
+            throw new RuntimeException("유통 채널 정보는 필수입니다. 최소 1개 이상의 채널을 선택해 주세요.");
+        } else {
+            formatProductNameWithChannel(existingProduct);
+        }
+
         // 3. Begin modifications
-        existingProduct.setProductName(updatedProduct.getProductName());
         existingProduct.setEnglishProductName(updatedProduct.getEnglishProductName());
         existingProduct.setProductType(updatedProduct.getProductType());
         existingProduct.setCapacity(updatedProduct.getCapacity());
@@ -852,7 +888,29 @@ public class ProductService {
                 p.id(), p.itemCode(), p.productName(), p.englishProductName(), p.productType(), p.brandName(),
                 p.manufacturerName(),
                 p.shelfLifeMonths(), p.ingredients(), p.isMaster(), p.active(), p.isPlanningSet(), p.createdAt(),
-                p.width(), p.length(), p.height(), p.weight(), p.inboxQuantity(), p.outboxWeight(), p.palletQuantity()
+                p.width(), p.length(), p.height(), p.weight(), p.inboxQuantity(), p.outboxQuantity(), p.palletQuantity()
         });
+    }
+
+    private void formatProductNameWithChannel(Product product) {
+        if (product == null || product.getProductName() == null || product.getProductName().trim().isEmpty()) {
+            return;
+        }
+        if (product.getChannels() != null && !product.getChannels().isEmpty()) {
+            com.example.ims.entity.SalesChannel firstChannel = product.getChannels().get(0);
+            String channelCode = firstChannel.getChannelCode();
+            if (channelCode != null && !channelCode.trim().isEmpty()) {
+                String name = product.getProductName().trim();
+                // 기존에 이미 _채널코드가 안 붙어 있는 경우만 결합
+                if (!name.endsWith("_" + channelCode)) {
+                    // 다른 채널코드가 뒤에 붙어 있으면 교체, 아니면 결합
+                    int lastUnderscore = name.lastIndexOf('_');
+                    if (lastUnderscore > 0 && name.substring(lastUnderscore + 1).matches("^[A-Z0-9/_-]+$")) {
+                        name = name.substring(0, lastUnderscore);
+                    }
+                    product.setProductName(name + "_" + channelCode);
+                }
+            }
+        }
     }
 }

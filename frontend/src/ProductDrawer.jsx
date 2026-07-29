@@ -1040,6 +1040,13 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
     const handleSubmit = (e) => {
         if (e) e.preventDefault();
+
+        // 채널 정보가 선택되지 않은 경우 필수 안내 알림 및 진행 차단
+        if (!formData.channels || formData.channels.length === 0) {
+            alert("⚠️ 유통 채널 정보가 선택되지 않았습니다.\n제품 등록 및 수정 시 반드시 1개 이상의 유통 채널을 선택해야 합니다.");
+            return;
+        }
+
         setIsConfirmOpen(true);
     };
 
