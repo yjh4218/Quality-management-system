@@ -36,6 +36,7 @@ public class DocumentRequestScheduler {
     private final CustomDocumentTypeRepository customDocumentTypeRepository;
     private final ProductRepository productRepository;
     private final ManufacturerRepository manufacturerRepository;
+    private final com.example.ims.repository.UserRepository userRepository;
 
     public DocumentRequestScheduler(
             DocumentRequestService requestService,
@@ -43,13 +44,15 @@ public class DocumentRequestScheduler {
             DocumentRequestLogRepository requestLogRepository,
             CustomDocumentTypeRepository customDocumentTypeRepository,
             ProductRepository productRepository,
-            ManufacturerRepository manufacturerRepository) {
+            ManufacturerRepository manufacturerRepository,
+            com.example.ims.repository.UserRepository userRepository) {
         this.requestService = requestService;
         this.requirementRepository = requirementRepository;
         this.requestLogRepository = requestLogRepository;
         this.customDocumentTypeRepository = customDocumentTypeRepository;
         this.productRepository = productRepository;
         this.manufacturerRepository = manufacturerRepository;
+        this.userRepository = userRepository;
     }
 
     /**
@@ -170,21 +173,37 @@ public class DocumentRequestScheduler {
     }
 
     private String getRecipientEmail(DocumentRequirement req) {
+        String email = null;
+        Manufacturer mfr = null;
+
         if (req.getProduct() != null && req.getProduct().getManufacturerInfo() != null) {
-            return req.getProduct().getManufacturerInfo().getEmail();
+            mfr = req.getProduct().getManufacturerInfo();
         } else if (req.getManufacturer() != null) {
-            return req.getManufacturer().getEmail();
+            mfr = req.getManufacturer();
         } else if (req.getProductId() != null) {
             Product prod = productRepository.findById(req.getProductId()).orElse(null);
             if (prod != null && prod.getManufacturerInfo() != null) {
-                return prod.getManufacturerInfo().getEmail();
+                mfr = prod.getManufacturerInfo();
             }
         } else if (req.getManufacturerId() != null) {
-            Manufacturer m = manufacturerRepository.findById(req.getManufacturerId()).orElse(null);
-            if (m != null) {
-                return m.getEmail();
+            mfr = manufacturerRepository.findById(req.getManufacturerId()).orElse(null);
+        }
+
+        // 1차: 제조사의 email 필드 확인
+        if (mfr != null && mfr.getEmail() != null && !mfr.getEmail().trim().isEmpty()) {
+            return mfr.getEmail().trim();
+        }
+
+        // 2차: 제조사의 상호명(companyName)과 매칭되는 사용자 계정의 email 확인 (폴백 방어선)
+        if (mfr != null && mfr.getName() != null) {
+            List<User> users = userRepository.findByCompanyName(mfr.getName());
+            for (User u : users) {
+                if (u.getEmail() != null && !u.getEmail().trim().isEmpty() && u.isEnabled()) {
+                    return u.getEmail().trim();
+                }
             }
         }
+
         return null;
     }
 }
