@@ -3,6 +3,7 @@ import * as api from './api';
 import { toast } from 'react-toastify';
 import SaveConfirmModal from './components/SaveConfirmModal';
 import { usePermissions } from './usePermissions';
+import NumericFormattedInput from './components/common/NumericFormattedInput';
 
 const RULE_TYPES = [
     { value: 'MAX_BOX_HEIGHT', label: '최대 박스 높이' },
@@ -437,13 +438,24 @@ const RuleRegistrationDrawer = ({ initialChannel, onClose, user }) => {
                                         )}
                                     </div>
                                 ) : (
-                                    <input 
-                                        value={formData.ruleValue} 
-                                        onChange={e => setFormData({...formData, ruleValue: e.target.value})} 
-                                        placeholder="예: 규격을 입력하세요." 
-                                        style={{ fontSize: '14px', height: '44px' }}
-                                        disabled={!canEdit}
-                                    />
+                                    formData.ruleType === 'MAX_BOX_HEIGHT' ? (
+                                        <NumericFormattedInput
+                                            name="ruleValue"
+                                            value={formData.ruleValue}
+                                            onChange={e => setFormData({...formData, ruleValue: e.target.value})}
+                                            placeholder="높이 제한(mm) 수치를 입력하세요."
+                                            disabled={!canEdit}
+                                            style={{ fontSize: '14px', height: '44px' }}
+                                        />
+                                    ) : (
+                                        <input 
+                                            value={formData.ruleValue} 
+                                            onChange={e => setFormData({...formData, ruleValue: e.target.value})} 
+                                            placeholder="예: 규격을 입력하세요." 
+                                            style={{ fontSize: '14px', height: '44px' }}
+                                            disabled={!canEdit}
+                                        />
+                                    )
                                 )}
                             </div>
 

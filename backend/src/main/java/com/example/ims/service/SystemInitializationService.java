@@ -68,6 +68,7 @@ public class SystemInitializationService {
         repairOtherTablesSchema(); // [추가] 소프트 델리트 및 기타 스키마 보정
         repairDocumentRequirementsSchema(); // [추가] document_requirements 런타임 스키마 정렬
         repairChannelNoteTablesSchema(); // [추가] channel_note_categories / channel_special_notes 런타임 스키마 정렬
+        repairPackagingSpecTableSchema(); // [추가] packaging_specifications 런타임 스키마 보정
         repairRegulatoryIngredientsTableSchema(); // Drop unique constraints/indexes on regulatory_ingredients for full sync
         seedDummyProducts(); // Seed dummy products for testing
 
@@ -535,6 +536,39 @@ public class SystemInitializationService {
             log.info(">>>> [SYSTEM INIT] 'channel_note_categories' & 'channel_special_notes' schema check completed.");
         } catch (Exception e) {
             log.warn(">>>> [SYSTEM INIT] 'channel_note_tables' schema check warning: {}", e.getMessage());
+        }
+    }
+
+    private void repairPackagingSpecTableSchema() {
+        log.info(">>>> [SYSTEM INIT] Aligning 'packaging_specifications' table schema...");
+        String[] columns = {
+                "container_marking_display VARCHAR(255)",
+                "container_marking_location VARCHAR(255)",
+                "container_marking_text TEXT",
+                "container_marking_lot_format VARCHAR(255)",
+                "container_marking_expiry_format VARCHAR(255)",
+                "unit_box_marking_display VARCHAR(255)",
+                "unit_box_marking_location VARCHAR(255)",
+                "unit_box_marking_text TEXT",
+                "unit_box_marking_lot_format VARCHAR(255)",
+                "unit_box_marking_expiry_format VARCHAR(255)",
+                "inbox_packaging_type VARCHAR(255)",
+                "inbox_tape_method VARCHAR(255)",
+                "outbox_total_qty INTEGER",
+                "outbox_inbox_qty INTEGER",
+                "outbox_channel_sticker_standard VARCHAR(255)",
+                "outbox_cushioning_standard VARCHAR(255)",
+                "pop_required_standard VARCHAR(255)",
+                "pallet_spec VARCHAR(255)",
+                "pallet_total_product_qty INTEGER"
+        };
+        for (String col : columns) {
+            String name = col.split(" ")[0];
+            try {
+                jdbcTemplate.execute("ALTER TABLE packaging_specifications ADD COLUMN IF NOT EXISTS " + col);
+            } catch (Exception e) {
+                log.warn(">>>> [SYSTEM INIT] Could not add column '{}' to packaging_specifications: {}", name, e.getMessage());
+            }
         }
     }
 

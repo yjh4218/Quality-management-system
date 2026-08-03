@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { calculateSpaceRatio } from './api';
 import AnalyticsDashboardShell from './components/dashboard/AnalyticsDashboardShell';
+import NumericFormattedInput from './components/common/NumericFormattedInput';
 
 /**
  * 국가별 포장공간비율 독립 계산기 및 최적화 역산 피드백 페이지
@@ -383,11 +384,11 @@ const PackagingSpaceRatioCalculatorPage = ({ user, onNavigate }) => {
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
                                 <div>
                                     <label style={label}>제품 내용물 체적 (mL) <span style={{ color: '#ef4444' }}>*</span></label>
-                                    <input
-                                        type="number" step="any" value={contentVolumeMl}
+                                    <NumericFormattedInput
+                                        value={contentVolumeMl}
                                         onChange={e => setContentVolumeMl(e.target.value)}
                                         placeholder="예: 50"
-                                        style={inputStyle} required
+                                        style={inputStyle}
                                     />
                                 </div>
                                 <div>

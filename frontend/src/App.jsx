@@ -671,9 +671,6 @@ const App = () => {
             console.log(">>>> [DEBUG] Current User Data:", response.data);
             setUser(response.data);
             setIsLoggedIn(true);
-            if (window.location.pathname === '/channel-note-config') {
-                handleNavigate('channelNoteConfig');
-            }
         } catch (err) {
             setIsLoggedIn(false);
         }

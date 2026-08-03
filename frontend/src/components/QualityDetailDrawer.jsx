@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getProductByItemCode } from '../api';
 import SaveConfirmModal from './SaveConfirmModal';
 import { usePermissions } from '../usePermissions';
+import NumericFormattedInput from './common/NumericFormattedInput';
 import {
     Drawer,
     Box,
@@ -410,8 +411,8 @@ const QualityDetailDrawer = ({
                                                 </Grid>
                                                 <Grid item xs={6}>
                                                     <Box>
-                                                        <Typography sx={labelStyle}>입고 수량</Typography>
-                                                        <TextField type="number" size="small" fullWidth disabled={!isInternalQuality && !isAdmin} value={selectedInbound.quantity || 0} onChange={handleChange('quantity')} sx={inputSx} />
+                                                         <Typography sx={labelStyle}>입고 수량</Typography>
+                                                         <NumericFormattedInput name="quantity" disabled={!isInternalQuality && !isAdmin} value={selectedInbound.quantity || 0} onChange={handleChange('quantity')} placeholder="수량 입력" />
                                                     </Box>
                                                 </Grid>
                                                 <Grid item xs={6}>

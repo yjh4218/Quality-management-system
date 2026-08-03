@@ -21,4 +21,12 @@ public class PackagingSpecFullDto {
     private List<PackagingSpecRevision> revisions;
     private List<PackagingSpecComponent> components;
     private List<com.example.ims.entity.PackagingMethodImage> methodImages;
+    private List<com.example.ims.entity.SalesChannel> selectedChannels;
+
+    public PackagingSpecFullDto(PackagingSpecification spec, List<PackagingSpecRevision> revisions, List<PackagingSpecComponent> components, List<com.example.ims.entity.PackagingMethodImage> methodImages) {
+        this.spec = spec;
+        this.revisions = revisions;
+        this.components = components;
+        this.methodImages = methodImages;
+    }
 }

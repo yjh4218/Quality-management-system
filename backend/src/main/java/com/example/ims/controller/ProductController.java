@@ -77,10 +77,14 @@ public class ProductController {
         return ResponseEntity.ok(productService.checkItemCodeDuplicate(itemCode));
     }
 
-    @PutMapping("/{id}")
+    @RequestMapping(value = "/{id}", method = {RequestMethod.PUT, RequestMethod.POST})
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
     public ResponseEntity<Product> updateProduct(@PathVariable Long id, @jakarta.validation.Valid @RequestBody Product product,
             @AuthenticationPrincipal UserDetails userDetails) {
+        System.out.println(">>>> [CONTROLLER DEBUG] ID: " + id + ", Payload Product Name: " + product.getProductName() + ", Channels: " + (product.getChannels() != null ? product.getChannels().size() : "NULL"));
+        if (product.getChannels() != null) {
+            product.getChannels().forEach(c -> System.out.println(">>>> [CONTROLLER CHANNEL] id=" + c.getId() + ", name=" + c.getName()));
+        }
         return ResponseEntity.ok(productService.updateProduct(id, product, userDetails.getUsername()));
     }
 

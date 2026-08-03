@@ -193,9 +193,18 @@ public class PackagingSpecificationController {
             String username = userDetails != null ? userDetails.getUsername() : "system";
             PackagingSpecFullDto saved = specService.saveFullSpec(dto, username);
             return ResponseEntity.ok(saved);
+        } catch (RuntimeException e) {
+            e.printStackTrace();
+            throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.BAD_REQUEST, 
+                e.getMessage(), e
+            );
         } catch (Exception e) {
             e.printStackTrace();
-            return ResponseEntity.internalServerError().build();
+            throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR, 
+                "포장사양서 저장 중 오류 발생: " + e.getMessage(), e
+            );
         }
     }
 

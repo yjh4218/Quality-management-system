@@ -117,16 +117,37 @@ public class GlobalExceptionHandler {
     /**
      * 런타임 예외 처리.
      * 클라이언트 측 오류(IllegalArgument)와 서버 측 내부 오류를 구분합니다.
+    /**
+     * ResponseStatusException 전용 예외 처리기.
+     * 컨트롤러/서비스에서 직접 던진 HTTP 상태 코드와 명확한 메시지를 마스킹 없이 전달합니다.
+     */
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<Map<String, String>> handleResponseStatusException(org.springframework.web.server.ResponseStatusException ex) {
+        log.warn("ResponseStatusException ({}): {}", ex.getStatusCode(), ex.getReason());
+        Map<String, String> response = new HashMap<>();
+        response.put("message", ex.getReason() != null ? ex.getReason() : ex.getMessage());
+        return ResponseEntity.status(ex.getStatusCode()).body(response);
+    }
+
+    /**
+     * 런타임 예외 처리.
+     * 비즈니스 유효성 검사 메시지(채널 규격 오류 등)는 마스킹 없이 400 Bad Request로 반환합니다.
      */
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, String>> handleRuntimeException(RuntimeException ex, WebRequest request) {
         String message = ex.getMessage();
-        // [Task 14] Jackson, Hibernate 등 라이브러리 내부 예외는 500으로 전달하여 디버깅 용이성 확보
+        
+        // 명확한 비즈니스 안내 메시지가 있는 경우는 마스킹 우회 (400 Bad Request로 반환)
+        if (message != null && (message.contains("오류]") || message.contains("규칙") || message.contains("규정") || message.contains("필수") || message.contains("초과"))) {
+            log.warn("Business Runtime Exception (400): {}", message);
+            Map<String, String> response = new HashMap<>();
+            response.put("message", message);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+
+        // Jackson, Hibernate 등 프레임워크 내부 순수 예외만 500 마스킹으로 처리
         if (ex.getClass().getName().contains("jackson") || 
             ex.getClass().getName().contains("hibernate") ||
-            ex.getClass().getName().contains("spring") ||
-            ex.getClass().getName().contains("jpa") ||
-            ex.getClass().getName().contains("transaction") ||
             (message != null && (message.contains("Interceptor") || message.contains("ByteBuddy")))) {
             return handleGlobalException(ex, request);
         }

@@ -31,6 +31,7 @@ public class PackagingSpecService {
     private final PackagingMethodImageRepository methodImageRepository;
     private final AuditLogService auditLogService;
     private final com.example.ims.repository.ChannelSpecialNoteRepository specialNoteRepository;
+    private final com.example.ims.repository.SalesChannelRepository salesChannelRepository;
 
     @Transactional(readOnly = true)
     public List<PackagingSpecification> getSpecsByProductId(Long productId) {
@@ -346,52 +347,92 @@ public class PackagingSpecService {
                     .orElseThrow(() -> new RuntimeException("Product not found"));
             spec.setProduct(prod);
         }
+
+        // [자동 동기화] palletTypeStr 입력값을 기반으로 ENUM palletType 자동 매핑
+        if (spec.getPalletTypeStr() != null) {
+            String pStr = spec.getPalletTypeStr().toUpperCase();
+            if (pStr.contains("아주") || pStr.contains("AJU")) {
+                spec.setPalletType(PaletteType.AJU);
+            } else if (pStr.contains("일회용") || pStr.contains("DISPOSABLE") || pStr.contains("검은색")) {
+                spec.setPalletType(PaletteType.DISPOSABLE_EXPORT);
+            } else if (pStr.contains("목재") || pStr.contains("WOOD")) {
+                spec.setPalletType(PaletteType.WOODEN_FUMIGATED);
+            }
+        }
         
-        // [검증 로직] 각 채널별 포장 사양 규칙 동적 검사
-        if (spec.getProduct() != null && spec.getProduct().getChannels() != null) {
-            for (SalesChannel channel : spec.getProduct().getChannels()) {
-                // 1. 팔레트 종류 일치 검사
-                if (channel.getPalletType() != null && !channel.getPalletType().trim().isEmpty() && spec.getPalletType() != null) {
+        // [검증 로직] 각 채널별 포장 사양 규칙 동적 검사 (선택된 채널이 있으면 선택 채널 대상, 없으면 제품 연동 채널 전체)
+        List<SalesChannel> channelsToValidate = new java.util.ArrayList<>();
+        if (dto.getSelectedChannels() != null && !dto.getSelectedChannels().isEmpty()) {
+            for (SalesChannel ch : dto.getSelectedChannels()) {
+                if (ch.getId() != null) {
+                    salesChannelRepository.findById(ch.getId()).ifPresent(channelsToValidate::add);
+                } else if (ch.getName() != null) {
+                    salesChannelRepository.findByNameAndIsDeletedFalse(ch.getName()).ifPresent(channelsToValidate::add);
+                }
+            }
+        }
+        if (channelsToValidate.isEmpty() && spec.getProduct() != null && spec.getProduct().getChannels() != null) {
+            channelsToValidate.addAll(spec.getProduct().getChannels());
+        }
+
+        if (!channelsToValidate.isEmpty()) {
+            for (SalesChannel channel : channelsToValidate) {
+                // 1. 팔레트 종류 일치 검사 및 자동 보정
+                if (channel.getPalletType() != null && !channel.getPalletType().trim().isEmpty()) {
                     String reqPalette = channel.getPalletType();
                     PaletteType selectedPalette = spec.getPalletType();
                     boolean isMatch = false;
-                    if (reqPalette.contains("아주팔레트") && selectedPalette == PaletteType.AJU) {
-                        isMatch = true;
-                    } else if ((reqPalette.contains("일회용") || reqPalette.contains("검은색")) && selectedPalette == PaletteType.DISPOSABLE_EXPORT) {
-                        isMatch = true;
-                    } else if (reqPalette.contains("목재") && selectedPalette == PaletteType.WOODEN_FUMIGATED) {
-                        isMatch = true;
+                    
+                    if (selectedPalette != null) {
+                        if (reqPalette.contains("아주") && selectedPalette == PaletteType.AJU) {
+                            isMatch = true;
+                        } else if ((reqPalette.contains("일회용") || reqPalette.contains("검은색")) && selectedPalette == PaletteType.DISPOSABLE_EXPORT) {
+                            isMatch = true;
+                        } else if (reqPalette.contains("목재") && selectedPalette == PaletteType.WOODEN_FUMIGATED) {
+                            isMatch = true;
+                        }
                     }
+                    
+                    if (!isMatch && spec.getPalletTypeStr() != null) {
+                        String userPalStr = spec.getPalletTypeStr();
+                        if (reqPalette.contains("아주") && (userPalStr.contains("아주") || userPalStr.contains("AJU"))) {
+                            isMatch = true;
+                        } else if ((reqPalette.contains("일회용") || reqPalette.contains("검은색")) && (userPalStr.contains("일회용") || userPalStr.contains("검은색"))) {
+                            isMatch = true;
+                        } else if (reqPalette.contains("목재") && userPalStr.contains("목재")) {
+                            isMatch = true;
+                        }
+                    }
+
+                    // 불일치 시 채널 규격으로 자동 보정
                     if (!isMatch) {
-                        throw new RuntimeException(String.format("[%s 채널 오류] 규정상 %s를 사용해야 합니다. 현재 선택된 팔레트: %s", 
-                                channel.getName(), reqPalette, selectedPalette.getDescription()));
+                        spec.setPalletTypeStr(reqPalette);
+                        if (reqPalette.contains("아주")) spec.setPalletType(PaletteType.AJU);
+                        else if (reqPalette.contains("일회용") || reqPalette.contains("검은색")) spec.setPalletType(PaletteType.DISPOSABLE_EXPORT);
+                        else if (reqPalette.contains("목재")) spec.setPalletType(PaletteType.WOODEN_FUMIGATED);
                     }
                 }
 
-                // 2. 적재 높이 검사 (onePalletHeight 입력값 체크)
+                // 2. 적재 높이 검사
                 if (spec.getOnePalletHeight() != null && channel.getMaxStackHeightMm() != null) {
                     if (spec.getOnePalletHeight() > channel.getMaxStackHeightMm()) {
-                        throw new RuntimeException(String.format("[%s 채널 오류] 적재높이 %dmm를 초과할 수 없습니다. 현재 입력: %.1fmm",
-                                channel.getName(), channel.getMaxStackHeightMm(), spec.getOnePalletHeight()));
+                        spec.setOnePalletHeight(channel.getMaxStackHeightMm().doubleValue());
                     }
                 }
 
-                // 3. 물류 스티커 필수 여부 검사
-                if (Boolean.TRUE.equals(channel.getChannelStickerRequired()) && !spec.isApplyChannelSticker()) {
-                    throw new RuntimeException(String.format("[%s 채널 오류] 물류 스티커 부착이 필수입니다. 스티커 부착 옵션을 켜 주십시오.", channel.getName()));
+                // 3. 물류 스티커 필수 여부 검사 및 자동 반영
+                if (Boolean.TRUE.equals(channel.getChannelStickerRequired())) {
+                    spec.setApplyChannelSticker(true);
                 }
 
-                // 4. 사용기한 규격 형식 검사
+                // 4. 사용기한 규격 형식 검사 및 자동 반영
                 if ("표기금지".equals(channel.getExpDateFormat())) {
-                    if (spec.getLotAndExpiryFormat() != null && !spec.getLotAndExpiryFormat().trim().isEmpty() && !"표기금지".equals(spec.getLotAndExpiryFormat())) {
-                        throw new RuntimeException(String.format("[%s 채널 오류] 사용기한 표기가 금지되어 있습니다. '표기금지'로 설정해 주십시오.", channel.getName()));
-                    }
+                    spec.setLotAndExpiryFormat("표기금지");
                 } else if (channel.getExpDateFormat() != null && !channel.getExpDateFormat().trim().isEmpty() && !"(미정)".equals(channel.getExpDateFormat())) {
                     String reqFormat = channel.getExpDateFormat();
                     String userFormat = spec.getLotAndExpiryFormat();
                     if (userFormat == null || !userFormat.contains(reqFormat)) {
-                        throw new RuntimeException(String.format("[%s 채널 오류] 사용기한 형식으로 '%s'를 포함해야 합니다. 현재 입력: %s",
-                                channel.getName(), reqFormat, userFormat == null ? "없음" : userFormat));
+                        spec.setLotAndExpiryFormat(reqFormat);
                     }
                 }
             }
@@ -408,12 +449,23 @@ public class PackagingSpecService {
             throw new RuntimeException("사양서 저장을 위한 상품 ID가 전달되지 않았습니다.");
         }
 
-        // 수치 및 필드 타입 안전 보정
+        // 수치 및 필드 타입 안전 보정 (String으로 오인되거나 널이거나 비정상 수치일 경우 대비 2차 검증)
+        if (spec.getOnePalletWeight() != null) {
+            double curWeight = spec.getOnePalletWeight();
+            int totBoxes = spec.getPalletTotalOutboxQty() != null ? spec.getPalletTotalOutboxQty() : 0;
+            double boxWeight = spec.getOneOutboxWeight() != null ? spec.getOneOutboxWeight() : 0.0;
+            
+            if (curWeight >= 1000.0 || (totBoxes == 0 && curWeight > 0.0)) {
+                double calcWeight = totBoxes * boxWeight;
+                log.info(">>>> [SAFETY] Correcting abnormal onePalletWeight from {} to {}", curWeight, calcWeight);
+                spec.setOnePalletWeight(calcWeight > 0.0 ? calcWeight : null);
+            }
+        }
+
         if (spec.getPalletHeightLimit() == null && spec.getOnePalletHeight() != null) {
             spec.setPalletHeightLimit(String.valueOf(spec.getOnePalletHeight().intValue()));
         } else if (spec.getPalletHeightLimit() != null) {
-            // 숫자 외 문자가 있을 경우 정수형으로 정제
-            String cleanLimit = spec.getPalletHeightLimit().replaceAll("[^0-9]", "");
+            String cleanLimit = String.valueOf(spec.getPalletHeightLimit()).replaceAll("[^0-9]", "");
             if (!cleanLimit.isEmpty()) {
                 spec.setPalletHeightLimit(cleanLimit);
             }
@@ -442,13 +494,75 @@ public class PackagingSpecService {
             spec.setRevisionNotes("포장사양 업데이트");
         }
         
+        PackagingSpecification targetSpec = spec;
         if (spec.getId() != null) {
-            specRepository.findById(spec.getId()).ifPresent(existing -> {
-                spec.setBomItems(existing.getBomItems());
-            });
+            PackagingSpecification existing = specRepository.findById(spec.getId()).orElse(null);
+            if (existing != null) {
+                // Update managed entity fields
+                existing.setBarcode(spec.getBarcode());
+                existing.setLabNumber(spec.getLabNumber());
+                existing.setPlannerName(spec.getPlannerName());
+                existing.setDesignerName(spec.getDesignerName());
+                existing.setQcName(spec.getQcName());
+                existing.setManagementType(spec.getManagementType());
+                existing.setBarcodeManager(spec.getBarcodeManager());
+                existing.setApprovalChainJson(spec.getApprovalChainJson());
+                
+                existing.setMarkingMethod(spec.getMarkingMethod());
+                existing.setMarkingStandard(spec.getMarkingStandard());
+                existing.setContainerMarkingType(spec.getContainerMarkingType());
+                existing.setContainerMarkingStandard(spec.getContainerMarkingStandard());
+                existing.setUnitBoxMarkingType(spec.getUnitBoxMarkingType());
+                existing.setUnitBoxMarkingStandard(spec.getUnitBoxMarkingStandard());
+                existing.setOutboxLayoutImage(spec.getOutboxLayoutImage());
+                existing.setPackagingMethodText(spec.getPackagingMethodText());
+                existing.setMarkingLocationImage(spec.getMarkingLocationImage());
+                
+                existing.setInboxType(spec.getInboxType());
+                existing.setInboxQty(spec.getInboxQty());
+                existing.setInboxSize(spec.getInboxSize());
+                existing.setInboxTapeBanding(spec.getInboxTapeBanding());
+                existing.setInboxInterlayerSheet(spec.getInboxInterlayerSheet());
+                existing.setInboxMaterial(spec.getInboxMaterial());
+                existing.setInboxRemarks(spec.getInboxRemarks());
+                existing.setInboxUseYn(spec.getInboxUseYn());
+                existing.setInboxCategory(spec.getInboxCategory());
+                
+                existing.setOutboxType(spec.getOutboxType());
+                existing.setOutboxQty(spec.getOutboxQty());
+                existing.setOutboxSize(spec.getOutboxSize());
+                existing.setOutboxTapeBanding(spec.getOutboxTapeBanding());
+                existing.setOutboxInterlayerSheet(spec.getOutboxInterlayerSheet());
+                existing.setOutboxMaterial(spec.getOutboxMaterial());
+                existing.setOutboxRemarks(spec.getOutboxRemarks());
+                existing.setOutboxBarcodeStickerStandard(spec.getOutboxBarcodeStickerStandard());
+                existing.setOutboxCushioningStandard(spec.getOutboxCushioningStandard());
+                
+                existing.setPalletTypeStr(spec.getPalletTypeStr());
+                existing.setPalletStackingMethod(spec.getPalletStackingMethod());
+                existing.setPalletSize(spec.getPalletSize());
+                existing.setPalletHeightLimit(spec.getPalletHeightLimit());
+                existing.setPalletPrecautions(spec.getPalletPrecautions());
+                existing.setPalletTierQty(spec.getPalletTierQty());
+                existing.setPalletTierCount(spec.getPalletTierCount());
+                existing.setPalletTotalOutboxQty(spec.getPalletTotalOutboxQty());
+                existing.setPalletTotalQuantity(spec.getPalletTotalQuantity());
+                
+                existing.setOneOutboxWeight(spec.getOneOutboxWeight());
+                existing.setOnePalletWeight(spec.getOnePalletWeight());
+                existing.setOnePalletHeight(spec.getOnePalletHeight());
+                existing.setRemarks(spec.getRemarks());
+                
+                existing.setPalletType(spec.getPalletType());
+                existing.setLotAndExpiryFormat(spec.getLotAndExpiryFormat());
+                existing.setApplyChannelSticker(spec.isApplyChannelSticker());
+                existing.setLastModifiedBy(username);
+                
+                targetSpec = existing;
+            }
         }
         
-        PackagingSpecification savedSpec = specRepository.save(spec);
+        PackagingSpecification savedSpec = specRepository.save(targetSpec);
         Long specId = savedSpec.getId();
         
         // 1. 개정 이력 저장

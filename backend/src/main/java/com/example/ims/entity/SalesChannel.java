@@ -55,6 +55,10 @@ public class SalesChannel {
 
     private String expDateFormat;           // YYYYMMDD까지, MM-DD-YYYY 등
 
+    private Boolean popRequired;            // 제품 POP 부착/동봉 필요 여부
+
+    private String cushioningStandard;     // 빈공간 완충재(비닐 에어캡 등) 투입 기준
+
     @Column(columnDefinition = "TEXT")
     private String specialNotes;            // 채널별 핵심 특이사항 원문
 

@@ -271,12 +271,18 @@ public class ProductService {
         
         // 1. Fetch all master data FIRST to avoid mid-transaction flushes
         com.example.ims.entity.Manufacturer manufacturerInfo = null;
-        if (updatedProduct.getManufacturerInfo() != null && updatedProduct.getManufacturerInfo().getName() != null && !updatedProduct.getManufacturerInfo().getName().isEmpty()) {
-            String mfrName = updatedProduct.getManufacturerInfo().getName();
-            manufacturerInfo = manufacturerRepository.findByName(mfrName)
-                    .orElseThrow(() -> new RuntimeException("등록되지 않은 제조사입니다: " + mfrName + ". 먼저 제조사 정보를 등록해 주세요."));
-        } else {
-            throw new RuntimeException("제조사 정보는 필수입니다.");
+        if (updatedProduct.getManufacturerInfo() != null && updatedProduct.getManufacturerInfo().getId() != null) {
+            manufacturerInfo = manufacturerRepository.findById(updatedProduct.getManufacturerInfo().getId()).orElse(null);
+        }
+        if (manufacturerInfo == null && updatedProduct.getManufacturerInfo() != null && updatedProduct.getManufacturerInfo().getName() != null && !updatedProduct.getManufacturerInfo().getName().trim().isEmpty()) {
+            String mfrName = updatedProduct.getManufacturerInfo().getName().trim();
+            manufacturerInfo = manufacturerRepository.findByName(mfrName).orElse(null);
+        }
+        if (manufacturerInfo == null && existingProduct.getManufacturerInfo() != null) {
+            manufacturerInfo = existingProduct.getManufacturerInfo();
+        }
+        if (manufacturerInfo == null) {
+            throw new RuntimeException("제조사 정보는 필수입니다. 올바른 제조사를 선택해 주세요.");
         }
 
         // 2. Capture safe snapshot BEFORE modification
@@ -285,19 +291,37 @@ public class ProductService {
         String company = user.getCompanyName() != null ? user.getCompanyName() : "시스템";
         String modifierName = user.getName() + " (" + company + ")";
         
-        // 채널 정보 검증 및 _채널코드 자동 반영
+        // 채널 정보 검증 및 _채널코드 자동 반영 (ID 룩업 실패 시 Name 룩업 Fallback 적용)
         if (updatedProduct.getChannels() != null && !updatedProduct.getChannels().isEmpty()) {
             java.util.List<com.example.ims.entity.SalesChannel> persistentChannels = new java.util.ArrayList<>();
             for (com.example.ims.entity.SalesChannel ch : updatedProduct.getChannels()) {
-                if (ch != null && ch.getId() != null) {
-                    salesChannelRepository.findById(ch.getId()).ifPresent(persistentChannels::add);
+                if (ch != null) {
+                    com.example.ims.entity.SalesChannel matchedChannel = null;
+                    if (ch.getId() != null) {
+                        matchedChannel = salesChannelRepository.findById(ch.getId()).orElse(null);
+                    }
+                    if (matchedChannel == null && ch.getName() != null && !ch.getName().trim().isEmpty()) {
+                        matchedChannel = salesChannelRepository.findByNameAndIsDeletedFalse(ch.getName().trim()).orElse(null);
+                    }
+                    if (matchedChannel != null && !persistentChannels.contains(matchedChannel)) {
+                        persistentChannels.add(matchedChannel);
+                        System.out.println(">>>> [SERVICE DEBUG] Matched Channel: id=" + matchedChannel.getId() + ", name=" + matchedChannel.getName());
+                    } else {
+                        System.out.println(">>>> [SERVICE DEBUG] Failed to match channel input: id=" + ch.getId() + ", name=" + ch.getName());
+                    }
                 }
             }
+            System.out.println(">>>> [SERVICE DEBUG] Total persistentChannels matched count: " + persistentChannels.size());
             if (persistentChannels.isEmpty()) {
                 throw new IllegalArgumentException("선택하신 유통 채널 정보가 유효하지 않습니다.");
             }
             updatedProduct.setChannels(persistentChannels);
-            existingProduct.setChannels(persistentChannels);
+            if (existingProduct.getChannels() == null) {
+                existingProduct.setChannels(new java.util.ArrayList<>());
+            } else {
+                existingProduct.getChannels().clear();
+            }
+            existingProduct.getChannels().addAll(persistentChannels);
             formatProductNameWithChannel(updatedProduct);
             existingProduct.setProductName(updatedProduct.getProductName());
         } else if (existingProduct.getChannels() == null || existingProduct.getChannels().isEmpty()) {
@@ -430,7 +454,15 @@ public class ProductService {
             existingProduct.setPackagingCertificates(updatedProduct.getPackagingCertificates());
         }
 
-        Product saved = productRepository.save(existingProduct);
+        Product saved = productRepository.saveAndFlush(existingProduct);
+        
+        // [FIX] LAZY 단일 엔티티 및 컬렉션 강제 초기화 - JSON 직렬화 시 세션 종료로 인한 channels/brand 증발 방지
+        if (saved.getBrand() != null) org.hibernate.Hibernate.initialize(saved.getBrand());
+        if (saved.getManufacturerInfo() != null) org.hibernate.Hibernate.initialize(saved.getManufacturerInfo());
+        if (saved.getChannels() != null) saved.getChannels().size();
+        if (saved.getImagePaths() != null) saved.getImagePaths().size();
+        if (saved.getComponents() != null) saved.getComponents().size();
+        if (saved.getPackagingCertificates() != null) saved.getPackagingCertificates().size();
         
         // [유통채널 및 정보 변경 시 포장사양서 자동 동기화]
         try {

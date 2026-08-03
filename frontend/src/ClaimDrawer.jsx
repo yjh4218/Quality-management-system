@@ -6,6 +6,7 @@ import DOMPurify from 'dompurify';
 import ProductSearchPopup from './ProductSearchPopup';
 import SaveConfirmModal from './components/SaveConfirmModal';
 import { usePermissions } from './usePermissions';
+import NumericFormattedInput from './components/common/NumericFormattedInput';
 
 const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNavigateToEdit }) => {
     const [formData, setFormData] = useState({
@@ -702,7 +703,7 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                         </div>
                                         <div className="form-group" style={{ marginBottom: 0 }}>
                                             <label>발생수량</label>
-                                            <input type="number" name="occurrenceQty" value={formData.occurrenceQty} onChange={handleChange} disabled={!canEditCs} />
+                                            <NumericFormattedInput name="occurrenceQty" value={formData.occurrenceQty} onChange={handleChange} disabled={!canEditCs} placeholder="수량 입력" />
                                         </div>
                                     </div>
                                     <div className="form-group">

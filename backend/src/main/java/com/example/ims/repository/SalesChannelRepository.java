@@ -6,5 +6,6 @@ import java.util.Optional;
 
 public interface SalesChannelRepository extends JpaRepository<SalesChannel, Long> {
     Optional<SalesChannel> findByName(String name);
+    Optional<SalesChannel> findByNameAndIsDeletedFalse(String name);
     boolean existsByName(String name);
 }
