@@ -61,7 +61,10 @@ public class ProductController {
 
     @GetMapping("/{id}")
     public ResponseEntity<Product> getProduct(@PathVariable Long id, @AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(productService.getProductById(id, userDetails.getUsername()).orElse(null));
+        String username = userDetails != null ? userDetails.getUsername() : "anonymousUser";
+        return productService.getProductById(id, username)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PostMapping

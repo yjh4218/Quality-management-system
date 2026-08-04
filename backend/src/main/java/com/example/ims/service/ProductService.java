@@ -108,17 +108,17 @@ public class ProductService {
         Product product = productRepository.findById(id).orElse(null);
         if (product == null) return java.util.Optional.empty();
 
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        User user = username != null ? userRepository.findByUsername(username).orElse(null) : null;
+        if (user != null) {
+            String userCompany = user.getCompanyName() != null ? user.getCompanyName().trim() : "";
+            String productCompany = (product.getManufacturerInfo() != null && product.getManufacturerInfo().getName() != null) 
+                    ? product.getManufacturerInfo().getName().trim() : "";
 
-        String userCompany = user.getCompanyName() != null ? user.getCompanyName().trim() : "";
-        String productCompany = (product.getManufacturerInfo() != null && product.getManufacturerInfo().getName() != null) 
-                ? product.getManufacturerInfo().getName().trim() : "";
-
-        boolean isManufacturer = user.getRole().contains("ROLE_MANUFACTURER") || "제조사".equalsIgnoreCase(user.getDepartment());
-        if (isManufacturer && !userCompany.isEmpty() && !productCompany.isEmpty() && !userCompany.contains(productCompany) && !productCompany.contains(userCompany)) {
-            log.warn(">>>> [SECURITY] Manufacturer {} attempted to access product {} owned by {}", userCompany, product.getItemCode(), productCompany);
-            return java.util.Optional.empty();
+            boolean isManufacturer = (user.getRole() != null && user.getRole().contains("ROLE_MANUFACTURER")) || "제조사".equalsIgnoreCase(user.getDepartment());
+            if (isManufacturer && !userCompany.isEmpty() && !productCompany.isEmpty() && !userCompany.contains(productCompany) && !productCompany.contains(userCompany)) {
+                log.warn(">>>> [SECURITY] Manufacturer {} attempted to access product {} owned by {}", userCompany, product.getItemCode(), productCompany);
+                return java.util.Optional.empty();
+            }
         }
 
         // [FIX] LAZY 단일 엔티티 강제 초기화
