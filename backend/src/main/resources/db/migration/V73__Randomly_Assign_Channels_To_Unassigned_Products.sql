@@ -7,18 +7,33 @@ FROM products p
 WHERE NOT EXISTS (SELECT 1 FROM product_sales_channels psc WHERE psc.product_id = p.id);
 
 -- 2. 매핑된 sales_channels의 channel_code 기반으로 product_name 업데이트 (접미사 미포함 품목 대상)
---    NULL product_name 행은 NOT NULL 제약 위반 방지를 위해 제외
+-- NULL 결합으로 인한 NOT NULL 제약조건 위반 방지를 위해 COALESCE 및 엄격한 조건 추가
 UPDATE products p
-SET product_name = p.product_name || '_' || (
-    SELECT sc.channel_code 
-    FROM product_sales_channels psc 
-    JOIN sales_channels sc ON psc.channel_id = sc.id 
-    WHERE psc.product_id = p.id 
-    LIMIT 1
-)
+SET product_name = CASE 
+    WHEN (
+        SELECT sc.channel_code 
+        FROM product_sales_channels psc 
+        JOIN sales_channels sc ON psc.channel_id = sc.id 
+        WHERE psc.product_id = p.id AND sc.channel_code IS NOT NULL AND sc.channel_code <> ''
+        LIMIT 1
+    ) IS NOT NULL THEN
+        p.product_name || '_' || (
+            SELECT sc.channel_code 
+            FROM product_sales_channels psc 
+            JOIN sales_channels sc ON psc.channel_id = sc.id 
+            WHERE psc.product_id = p.id AND sc.channel_code IS NOT NULL AND sc.channel_code <> ''
+            LIMIT 1
+        )
+    ELSE p.product_name
+END
 WHERE p.product_name IS NOT NULL
-  AND EXISTS (SELECT 1 FROM product_sales_channels psc WHERE psc.product_id = p.id)
-  AND POSITION('_' IN p.product_name) = 0;
+  AND POSITION('_' IN p.product_name) = 0
+  AND EXISTS (
+      SELECT 1 
+      FROM product_sales_channels psc 
+      JOIN sales_channels sc ON psc.channel_id = sc.id 
+      WHERE psc.product_id = p.id AND sc.channel_code IS NOT NULL AND sc.channel_code <> ''
+  );
 
 -- 3. 클레임(claims) 테이블의 product_name 동기화
 UPDATE claims
