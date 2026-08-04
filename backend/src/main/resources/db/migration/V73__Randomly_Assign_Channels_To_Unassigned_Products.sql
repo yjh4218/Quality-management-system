@@ -7,6 +7,7 @@ FROM products p
 WHERE NOT EXISTS (SELECT 1 FROM product_sales_channels psc WHERE psc.product_id = p.id);
 
 -- 2. 매핑된 sales_channels의 channel_code 기반으로 product_name 업데이트 (접미사 미포함 품목 대상)
+--    NULL product_name 행은 NOT NULL 제약 위반 방지를 위해 제외
 UPDATE products p
 SET product_name = p.product_name || '_' || (
     SELECT sc.channel_code 
@@ -15,7 +16,8 @@ SET product_name = p.product_name || '_' || (
     WHERE psc.product_id = p.id 
     LIMIT 1
 )
-WHERE EXISTS (SELECT 1 FROM product_sales_channels psc WHERE psc.product_id = p.id)
+WHERE p.product_name IS NOT NULL
+  AND EXISTS (SELECT 1 FROM product_sales_channels psc WHERE psc.product_id = p.id)
   AND POSITION('_' IN p.product_name) = 0;
 
 -- 3. 클레임(claims) 테이블의 product_name 동기화
