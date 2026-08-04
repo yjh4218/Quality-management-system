@@ -85,9 +85,9 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/**").hasRole("ADMIN")
                         .requestMatchers("/api/auth/unlock/**", "/api/auth/reset-password/**").hasRole("ADMIN")
                         
-                        // 로그 및 보안 관련 경로 관리자 보호 (Controller에서 @PreAuthorize로 정밀 제어)
-                        .requestMatchers("/api/logs/access/page-move").authenticated()
-                        .requestMatchers("/api/logs/access/**").authenticated()
+                        // 로그 및 보안 관련 경로 (페이지 이동 로그 및 채널 정보는 익명/공통 접근 허용)
+                        .requestMatchers("/api/logs/access/**", "/api/logs/access/page-move").permitAll()
+                        .requestMatchers("/api/admin/master-data/sales-channels/**").permitAll()
                         // 버그 리포트 제출 (익명/오프라인 큐 전송 포함 무조건 허용)
                         .requestMatchers("/api/bug-reports", "/api/bug-reports/**").permitAll()
                         .requestMatchers("/api/admin/master-data/**").authenticated()

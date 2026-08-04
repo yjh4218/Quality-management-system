@@ -624,8 +624,10 @@ public class PackagingSpecService {
         List<PackagingSpecification> specs = specRepository.findByProductId(productId);
         
         if (specs.isEmpty()) {
-            Product prod = productRepository.findById(productId)
-                    .orElseThrow(() -> new RuntimeException("Product not found"));
+            Product prod = productRepository.findById(productId).orElse(null);
+            if (prod == null) {
+                return new PackagingSpecFullDto();
+            }
             
             PackagingSpecification newSpec = PackagingSpecification.builder()
                     .product(prod)
