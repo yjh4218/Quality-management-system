@@ -1,0 +1,14 @@
+-- V19_1: V20 신규 제조사 데이터 시딩 전 manufacturers 테이블 필요 컬럼 안전 보강
+ALTER TABLE manufacturers ADD COLUMN IF NOT EXISTS identification_code VARCHAR(255);
+ALTER TABLE manufacturers ADD COLUMN IF NOT EXISTS manufacturer_code VARCHAR(255);
+ALTER TABLE manufacturers ADD COLUMN IF NOT EXISTS category VARCHAR(255);
+ALTER TABLE manufacturers ADD COLUMN IF NOT EXISTS contact_person VARCHAR(255);
+ALTER TABLE manufacturers ADD COLUMN IF NOT EXISTS phone_number VARCHAR(255);
+ALTER TABLE manufacturers ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+ALTER TABLE manufacturers ADD COLUMN IF NOT EXISTS homepage VARCHAR(255);
+ALTER TABLE manufacturers ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE manufacturers ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE;
+ALTER TABLE manufacturers ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
+ALTER TABLE manufacturers ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+ALTER TABLE manufacturers ADD COLUMN IF NOT EXISTS created_at TIMESTAMP;
+ALTER TABLE manufacturers ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;

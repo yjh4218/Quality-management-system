@@ -11,7 +11,7 @@ CREATE INDEX IF NOT EXISTS idx_product_ingredients_product_id ON product_ingredi
 CREATE INDEX IF NOT EXISTS idx_claims_lot_number ON claims(lot_number);
 
 -- 3. PostgreSQL Partial Index for soft-delete active records
-CREATE INDEX IF NOT EXISTS idx_active_products ON products (id) WHERE is_deleted = false AND active = true;
+CREATE INDEX IF NOT EXISTS idx_active_products ON products (id);
 
 -- 4. Composite Index for Dashboard and Manufacturer Audit views
 CREATE INDEX IF NOT EXISTS idx_prod_audit_mfr_status ON production_audit(manufacturer_name, status, upload_date DESC);

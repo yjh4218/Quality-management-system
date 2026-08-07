@@ -1,0 +1,8 @@
+-- V39_1: V40 brands 컬럼 및 인덱스 추가 전 brands 테이블 안전 선작성
+CREATE TABLE IF NOT EXISTS brands (
+    id BIGSERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    type VARCHAR(100) DEFAULT '기타',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

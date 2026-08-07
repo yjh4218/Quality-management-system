@@ -20,8 +20,7 @@ CREATE TABLE IF NOT EXISTS notifications (
 
 -- 사용자별 읽지 않은 알림을 빠르게 조회하기 위한 결합 인덱스 생성
 CREATE INDEX IF NOT EXISTS idx_notifications_target_unread 
-ON notifications(target_username, is_read, is_deleted) 
-WHERE is_read = FALSE AND is_deleted = FALSE;
+ON notifications(target_username, is_read, is_deleted);
 
 -- 정렬용 인덱스
 CREATE INDEX IF NOT EXISTS idx_notifications_created_at 
