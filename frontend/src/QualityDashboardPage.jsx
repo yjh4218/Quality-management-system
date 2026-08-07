@@ -413,6 +413,7 @@ const QualityDashboardPage = ({ user, onNavigate }) => {
             <QualityDetailDrawer
                 isOpen={Boolean(selectedInboundDetail)}
                 onClose={() => setSelectedInboundDetail(null)}
+                user={user}
                 selectedInbound={selectedInboundDetail}
                 setSelectedInbound={setSelectedInboundDetail}
                 activeTab={activeDrawerTab}

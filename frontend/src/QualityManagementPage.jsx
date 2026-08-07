@@ -438,6 +438,7 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
             <QualityDetailDrawer
                 isOpen={isDrawerOpen}
                 onClose={() => setIsDrawerOpen(false)}
+                user={user}
                 selectedInbound={selectedInbound}
                 setSelectedInbound={setSelectedInbound}
                 activeTab={activeTab}

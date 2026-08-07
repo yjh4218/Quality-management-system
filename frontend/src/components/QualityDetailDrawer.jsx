@@ -24,6 +24,7 @@ import {
 const QualityDetailDrawer = ({
     isOpen,
     onClose,
+    user,
     selectedInbound,
     setSelectedInbound,
     activeTab,

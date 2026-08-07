@@ -51,7 +51,8 @@ public class SecurityConfig {
                                 "/api/admin/system/health",
                                 "/api/manufacturers/invite/**",
                                 "/api/bug-reports",
-                                "/api/bug-reports/**"
+                                "/api/bug-reports/**",
+                                "/api/logs/access/**"
                         )
                 )
                 .addFilterAfter(new org.springframework.web.filter.OncePerRequestFilter() {
@@ -74,6 +75,8 @@ public class SecurityConfig {
                         .requestMatchers("/error").permitAll()
                         .requestMatchers("/api/bug-reports", "/api/bug-reports/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/bug-reports", "/api/bug-reports/**").permitAll()
+                        .requestMatchers("/api/logs/access/**", "/api/logs/access/page-move").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/logs/access/**", "/api/logs/access/page-move").permitAll()
                         // [SECURITY PATCH] 관리자 전용 시스템 경로 권한 강화
                         .requestMatchers("/api/admin/system/health").permitAll() 
                         .requestMatchers("/api/debug/**").hasRole("ADMIN")
