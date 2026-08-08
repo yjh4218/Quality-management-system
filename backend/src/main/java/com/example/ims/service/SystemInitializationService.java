@@ -11,11 +11,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Service responsible for idempotent system initialization and data repair.
- * Extracted from SystemStartupRunner to ensure @Transactional works correctly.
+ * Extracted from SystemStartupRunner to ensure startup tasks complete safely with transaction isolation.
  */
 @Service
 @RequiredArgsConstructor
@@ -33,8 +33,16 @@ public class SystemInitializationService {
     private final DocumentRequestService documentRequestService;
     private final com.example.ims.repository.ChannelNoteCategoryRepository categoryRepository;
     private final com.example.ims.repository.ChannelSpecialNoteRepository noteRepository;
+    private final TransactionTemplate transactionTemplate;
 
-    @Transactional
+    private void runIsolated(String taskName, Runnable task) {
+        try {
+            transactionTemplate.executeWithoutResult(status -> task.run());
+        } catch (Exception e) {
+            log.error(">>>> [SYSTEM INIT] [ERROR] Failed during task '{}': {}", taskName, e.getMessage(), e);
+        }
+    }
+
     public void seedAndRepairData(String adminInitialPassword) {
         // Quick connection check to avoid log spam if env vars are missing
         try {
@@ -46,68 +54,47 @@ public class SystemInitializationService {
 
         log.info(">>>> [SYSTEM INIT] Starting Data Seeding & Repair...");
 
-        repairProductTableSchema();
-        repairUserTableSchema();
-        repairRolesTableSchema();
-        repairAdminAccount(adminInitialPassword);
-        seedTestUsers();
-        seedAndRepairRoles();
-        migrateProductImages();
-        seedAndRepairDashboardLayouts();
-        seedAndRepairPageGuides();
+        runIsolated("repairProductTableSchema", this::repairProductTableSchema);
+        runIsolated("repairUserTableSchema", this::repairUserTableSchema);
+        runIsolated("repairRolesTableSchema", this::repairRolesTableSchema);
+        runIsolated("repairAdminAccount", () -> repairAdminAccount(adminInitialPassword));
+        runIsolated("seedTestUsers", this::seedTestUsers);
+        runIsolated("seedAndRepairRoles", this::seedAndRepairRoles);
+        runIsolated("migrateProductImages", this::migrateProductImages);
+        runIsolated("seedAndRepairDashboardLayouts", this::seedAndRepairDashboardLayouts);
+        runIsolated("seedAndRepairPageGuides", this::seedAndRepairPageGuides);
         
-        // [추가] 메일 카테고리 및 템플릿의 안전한 초기화 (마이그레이션 적용 후 시점)
-        try {
+        runIsolated("seedMailCategoriesAndTemplates", () -> {
             mailCategoryService.initDefaultCategories();
             mailTemplateService.initDefaultTemplates();
             log.info(">>>> [SYSTEM INIT] Mail categories and templates seeded successfully.");
-        } catch (Exception e) {
-            log.error(">>>> [SYSTEM INIT] [ERROR] Failed to seed mail categories/templates: {}", e.getMessage(), e);
-        }
+        });
 
-        repairOtherTablesSchema(); // [추가] 소프트 델리트 및 기타 스키마 보정
-        repairDocumentRequirementsSchema(); // [추가] document_requirements 런타임 스키마 정렬
-        repairChannelNoteTablesSchema(); // [추가] channel_note_categories / channel_special_notes 런타임 스키마 정렬
-        repairPackagingSpecTableSchema(); // [추가] packaging_specifications 런타임 스키마 보정
-        repairRegulatoryIngredientsTableSchema(); // Drop unique constraints/indexes on regulatory_ingredients for full sync
-        seedDummyProducts(); // Seed dummy products for testing
+        runIsolated("repairOtherTablesSchema", this::repairOtherTablesSchema);
+        runIsolated("repairDocumentRequirementsSchema", this::repairDocumentRequirementsSchema);
+        runIsolated("repairChannelNoteTablesSchema", this::repairChannelNoteTablesSchema);
+        runIsolated("repairPackagingSpecTableSchema", this::repairPackagingSpecTableSchema);
+        runIsolated("repairRegulatoryIngredientsTableSchema", this::repairRegulatoryIngredientsTableSchema);
+        runIsolated("seedDummyProducts", this::seedDummyProducts);
 
-        try {
+        runIsolated("syncMasterProductRequirements", () -> {
             documentRequestService.syncAllMasterProductRequirements();
             log.info(">>>> [SYSTEM INIT] Master product document requirements synced successfully.");
-        } catch (Exception e) {
-            log.error(">>>> [SYSTEM INIT] [ERROR] Failed to sync master product requirements: {}", e.getMessage(), e);
-        }
+        });
 
-        // [추가] 유통 채널 및 포장 규칙 시딩
-        try {
+        runIsolated("seedSalesChannelsAndRules", () -> {
             seedSalesChannels();
             seedChannelPackagingRules();
             log.info(">>>> [SYSTEM INIT] Sales channels and packaging rules seeded successfully.");
-        } catch (Exception e) {
-            log.error(">>>> [SYSTEM INIT] [ERROR] Failed to seed sales channels/packaging rules: {}", e.getMessage(), e);
-        }
+        });
 
-        // Page guides are now handled entirely by Bulk Migration and use
-        // SystemPageGuide entity
-
-        repairAllSequences();
-        alignProductsAndClaimsData();
-
-        try {
-            appendChannelSuffixToProductNames();
-        } catch (Exception e) {
-            log.error(">>>> [SYSTEM INIT] [ERROR] Failed to append channel suffix to product names: {}", e.getMessage(), e);
-        }
-
-        try {
-            seedNotificationSettings();
-        } catch (Exception e) {
-            log.error(">>>> [SYSTEM INIT] [ERROR] Failed to seed notification settings: {}", e.getMessage(), e);
-        }
+        runIsolated("repairAllSequences", this::repairAllSequences);
+        runIsolated("alignProductsAndClaimsData", this::alignProductsAndClaimsData);
+        runIsolated("appendChannelSuffixToProductNames", this::appendChannelSuffixToProductNames);
+        runIsolated("seedNotificationSettings", this::seedNotificationSettings);
 
         log.info(">>>> [SYSTEM INIT] Data Seeding & Repair Completed.");
-        performDataAudit();
+        runIsolated("performDataAudit", this::performDataAudit);
     }
 
     private void alignProductsAndClaimsData() {
@@ -172,9 +159,9 @@ public class SystemInitializationService {
             // 1. 매핑된 sales_channels가 있는 제품들에 대해 product_name에 '_채널코드' 접미사 결합 (없는 경우만)
             int updatedMapped = jdbcTemplate.update(
                 "UPDATE products " +
-                "SET product_name = product_name || '_' || (" +
-                "  SELECT sc.channel_code FROM product_sales_channels psc JOIN sales_channels sc ON psc.channel_id = sc.id WHERE psc.product_id = products.id LIMIT 1" +
-                ") " +
+                "SET product_name = product_name || '_' || COALESCE((" +
+                "  SELECT sc.channel_code FROM product_sales_channels psc JOIN sales_channels sc ON psc.channel_id = sc.id WHERE psc.product_id = products.id AND sc.channel_code IS NOT NULL AND TRIM(sc.channel_code) != '' LIMIT 1" +
+                "), 'GENERAL') " +
                 "WHERE product_name IS NOT NULL AND TRIM(product_name) != '' " +
                 "  AND EXISTS (SELECT 1 FROM product_sales_channels psc JOIN sales_channels sc ON psc.channel_id = sc.id WHERE psc.product_id = products.id) " +
                 "  AND POSITION('_' IN product_name) = 0"
