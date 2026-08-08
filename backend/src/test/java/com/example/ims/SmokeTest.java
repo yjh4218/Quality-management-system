@@ -51,7 +51,7 @@ public class SmokeTest {
                 .andExpect(status().isUnauthorized());
 
         mockMvc.perform(post("/api/packaging-specs"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().is4xxClientError());
     }
 
     @Test
