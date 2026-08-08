@@ -93,8 +93,18 @@ public class SystemInitializationService {
 
         repairAllSequences();
         alignProductsAndClaimsData();
-        appendChannelSuffixToProductNames();
-        seedNotificationSettings();
+
+        try {
+            appendChannelSuffixToProductNames();
+        } catch (Exception e) {
+            log.error(">>>> [SYSTEM INIT] [ERROR] Failed to append channel suffix to product names: {}", e.getMessage(), e);
+        }
+
+        try {
+            seedNotificationSettings();
+        } catch (Exception e) {
+            log.error(">>>> [SYSTEM INIT] [ERROR] Failed to seed notification settings: {}", e.getMessage(), e);
+        }
 
         log.info(">>>> [SYSTEM INIT] Data Seeding & Repair Completed.");
         performDataAudit();
@@ -165,7 +175,8 @@ public class SystemInitializationService {
                 "SET product_name = product_name || '_' || (" +
                 "  SELECT sc.channel_code FROM product_sales_channels psc JOIN sales_channels sc ON psc.channel_id = sc.id WHERE psc.product_id = products.id LIMIT 1" +
                 ") " +
-                "WHERE EXISTS (SELECT 1 FROM product_sales_channels psc JOIN sales_channels sc ON psc.channel_id = sc.id WHERE psc.product_id = products.id) " +
+                "WHERE product_name IS NOT NULL AND TRIM(product_name) != '' " +
+                "  AND EXISTS (SELECT 1 FROM product_sales_channels psc JOIN sales_channels sc ON psc.channel_id = sc.id WHERE psc.product_id = products.id) " +
                 "  AND POSITION('_' IN product_name) = 0"
             );
             log.info(">>>> [SYSTEM INIT] Updated {} mapped products with channel suffix.", updatedMapped);
