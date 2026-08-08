@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { createClaim, updateClaim, uploadClaimResponse, uploadClaimPhoto, getClaimHistory, deleteClaim } from './api';
+import { createClaim, updateClaim, uploadClaimResponse, uploadClaimPhoto, getClaimHistory, deleteClaim, getFileUrl } from './api';
 import * as api from './api';
 import { toast } from 'react-toastify';
 import DOMPurify from 'dompurify';
@@ -716,10 +716,10 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                             {formData.claimPhotos.map((photo, idx) => (
                                                 <div key={idx} style={{ position: 'relative', width: '90px', height: '90px' }}>
                                                     <img 
-                                                        src={photo.startsWith('http') ? photo : `http://localhost:8080${photo}`} 
+                                                        src={getFileUrl(photo)} 
                                                         alt="Claim" 
                                                         style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px', border: '1px solid #e2e8f0', cursor: 'pointer' }} 
-                                                        onClick={() => window.open(photo.startsWith('http') ? photo : `http://localhost:8080${photo}`, '_blank')}
+                                                        onClick={() => window.open(getFileUrl(photo), '_blank')}
                                                     />
                                                     {canEditCs && (
                                                         <button 
@@ -984,7 +984,7 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                                 <span style={{ fontSize: '24px' }}>📄</span>
                                                                 <a 
-                                                                    href={formData.manufacturerResponsePdf.startsWith('http') ? formData.manufacturerResponsePdf : `http://localhost:8080${formData.manufacturerResponsePdf}`} 
+                                                                    href={getFileUrl(formData.manufacturerResponsePdf)} 
                                                                     target="_blank" 
                                                                     rel="noopener noreferrer"
                                                                     style={{ color: '#3182ce', fontWeight: 'bold', textDecoration: 'underline', fontSize: '13px' }}
@@ -995,10 +995,10 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                                         ) : (
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                                                 <img 
-                                                                    src={formData.manufacturerResponsePdf.startsWith('http') ? formData.manufacturerResponsePdf : `http://localhost:8080${formData.manufacturerResponsePdf}`} 
+                                                                    src={getFileUrl(formData.manufacturerResponsePdf)} 
                                                                     alt="대체 보고서" 
                                                                     style={{ maxWidth: '120px', maxHeight: '120px', objectFit: 'contain', borderRadius: '6px', border: '1px solid #cbd5e0', cursor: 'pointer' }}
-                                                                    onClick={() => window.open(formData.manufacturerResponsePdf.startsWith('http') ? formData.manufacturerResponsePdf : `http://localhost:8080${formData.manufacturerResponsePdf}`, '_blank')}
+                                                                    onClick={() => window.open(getFileUrl(formData.manufacturerResponsePdf), '_blank')}
                                                                 />
                                                                 <span style={{ fontSize: '11px', color: '#718096' }}>* 이미지 클릭 시 원본 보기</span>
                                                             </div>

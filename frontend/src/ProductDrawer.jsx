@@ -11,7 +11,8 @@ import {
     getPackagingSpecs,
     savePackagingSpec,
     downloadPackagingSpecExcel,
-    downloadPackagingSpecPdf
+    downloadPackagingSpecPdf,
+    getFileUrl
 } from './api';
 import * as api from './api';
 import { toast } from 'react-toastify';
@@ -1141,7 +1142,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
         }
     };
 
-    const getFileUrl = (path) => path?.startsWith('http') ? path : `http://localhost:8080${path}`;
+    // getFileUrl imported from ./api
 
     const getCleanFileName = (path) => {
         if (!path) return '';

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { createManufacturer, updateManufacturer, uploadFile, getManufacturerCategories } from './api';
+import { createManufacturer, updateManufacturer, uploadFile, getManufacturerCategories, getFileUrl } from './api';
 import SaveConfirmModal from './components/SaveConfirmModal';
 import { toast } from 'react-toastify';
 
@@ -115,7 +115,7 @@ const ManufacturerDrawer = ({ manufacturer, onClose, canEdit }) => {
         }
     };
 
-    const getFileUrl = (path) => path.startsWith('http') ? path : `http://localhost:8080${path}`;
+// getFileUrl imported from ./api
 
     return (
         <div className="drawer-overlay" style={{ backdropFilter: 'blur(4px)', background: 'rgba(0, 51, 102, 0.15)' }}>

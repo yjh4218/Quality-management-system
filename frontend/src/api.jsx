@@ -18,6 +18,17 @@ export const getBaseURL = () => {
     return "https://yjh332123-qms.hf.space";
 };
 
+/**
+ * [공통 유틸] 파일/이미지 경로를 백엔드 BaseURL 포함 풀 URL로 변환합니다.
+ */
+export const getFileUrl = (path) => {
+    if (!path) return '';
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    const baseURL = getBaseURL();
+    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    return `${baseURL}${cleanPath}`;
+};
+
 // [고도화 3] 전역 로딩 상태 (글로벌 스피너) 제어 함수
 let activeRequests = 0;
 let loadingTimeout = null;
