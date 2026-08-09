@@ -182,8 +182,11 @@ public class SystemInitializationService {
     }
 
     private void repairAdminAccount(String adminInitialPassword) {
-        boolean isLocal = java.util.Arrays.asList(env.getActiveProfiles()).contains("local") ||
-                java.util.Arrays.asList(env.getDefaultProfiles()).contains("local");
+        java.util.List<String> activeProfiles = java.util.Arrays.asList(env.getActiveProfiles());
+        java.util.List<String> defaultProfiles = java.util.Arrays.asList(env.getDefaultProfiles());
+        boolean isLocal = activeProfiles.contains("local") || activeProfiles.contains("dev") ||
+                activeProfiles.contains("default") ||
+                defaultProfiles.contains("local") || defaultProfiles.contains("dev");
 
         final String targetPassword;
         if (isLocal && (adminInitialPassword == null || adminInitialPassword.trim().isEmpty())) {
