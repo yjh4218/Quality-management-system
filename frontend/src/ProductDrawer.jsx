@@ -192,22 +192,31 @@ const ProductDrawer = ({ product, onClose, user }) => {
     }, [activeTab, product]);
 
     const packagingMethodSaveRef = useRef(null);
+    const packagingMethodReloadRef = useRef(null);
 
     const handleSaveFullSpec = async () => {
         try {
+            const specToSave = { ...currentSpec };
+            delete specToSave.methodImages;
+
             const payload = {
                 spec: {
-                    ...currentSpec,
+                    ...specToSave,
                     product: { id: product.id }
                 },
                 revisions: specRevisions,
-                components: specComponents
+                components: specComponents,
+                methodImages: null
             };
             const res = await api.saveFullPackagingSpec(payload);
-            if (res.data) {
+            const savedSpec = res.data?.spec || res.data;
+            const savedSpecId = savedSpec?.id || res.data?.id;
+
+            if (savedSpecId) {
+                setCurrentSpec(prev => ({ ...prev, ...savedSpec, id: savedSpecId }));
                 // 포장방법 사진/캡션/주석 변경사항이 있다면 함께 일괄 저장
                 if (packagingMethodSaveRef.current) {
-                    await packagingMethodSaveRef.current();
+                    await packagingMethodSaveRef.current(savedSpecId);
                 }
                 toast.success("포장사양서가 성공적으로 저장되었습니다.");
                 fetchPackagingSpecs(product.id);
@@ -529,7 +538,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
             // 통합 포장사양서 로드
             const fullRes = await api.getFullPackagingSpec(id);
             if (fullRes && fullRes.data) {
-                const { spec, revisions, components } = fullRes.data;
+                const { spec, revisions, components, methodImages } = fullRes.data;
                 setIsSpecLoaded(true);
                 if (spec) {
                     // Auto-fill empty spec fields using product details
@@ -576,6 +585,10 @@ const ProductDrawer = ({ product, onClose, user }) => {
                 }
                 setSpecRevisions(revisions || []);
                 setSpecComponents(components || []);
+                const targetSpecId = spec?.id || currentSpec?.id;
+                if (targetSpecId && packagingMethodReloadRef.current) {
+                    packagingMethodReloadRef.current(targetSpecId);
+                }
             }
         } catch (error) {
             console.error("포장사양서 상세 로드 실패 (신규 사양서 준비): ", error);
@@ -1095,17 +1108,27 @@ const ProductDrawer = ({ product, onClose, user }) => {
             if (product) {
                 const updatedRes = await updateProduct(product.id, payload);
                 if (isSpecLoaded) {
+                    const specToSave = { ...currentSpec };
+                    delete specToSave.methodImages;
+
                     const specPayload = {
                         spec: {
-                            ...currentSpec,
+                            ...specToSave,
                             product: { id: product.id }
                         },
                         revisions: specRevisions,
-                        components: specComponents
+                        components: specComponents,
+                        methodImages: null
                     };
-                    await api.saveFullPackagingSpec(specPayload);
+                    const res = await api.saveFullPackagingSpec(specPayload);
+                    const savedSpec = res.data?.spec || res.data;
+                    const savedSpecId = savedSpec?.id || res.data?.id || currentSpec?.id;
+
+                    if (savedSpecId && packagingMethodSaveRef.current) {
+                        await packagingMethodSaveRef.current(savedSpecId);
+                    }
                 }
-                alert("제품 기본정보, 유통채널 및 포장재 사양서가 일괄 저장되었습니다.");
+                alert("제품 기본정보, 유통채널 및 포장재 사양서/포장방법 사진이 일괄 저장되었습니다.");
             } else {
                 await createProduct(payload);
                 alert("신규 제품이 등록되었습니다.");
@@ -2748,28 +2771,36 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                     </div>
                                 )}
 
-                                {specSubTab === 'sheet2' && (
-                                    currentSpec && currentSpec.id ? (
-                                         <PackagingMethodTab 
-                                             specId={currentSpec.id} 
-                                             canEdit={canEdit} 
-                                             onRegisterSaveHandler={(fn) => { packagingMethodSaveRef.current = fn; }}
-                                         />
-                                    ) : (
-                                        <div style={{ textAlign: 'center', padding: '40px 20px', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
-                                            <div style={{ fontSize: '32px', marginBottom: '10px' }}>📸</div>
-                                            <div style={{ fontWeight: 'bold', fontSize: '15px', color: '#1e293b', marginBottom: '6px' }}>포장사양서 기본 정보를 먼저 저장해주세요</div>
-                                            <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>포장방법 사진 등록은 사양서 저장(생성) 완료 후 이용하실 수 있습니다.</div>
-                                            <button 
-                                                type="button" 
-                                                onClick={handleSaveFullSpec} 
-                                                style={{ backgroundColor: '#0f172a', color: '#fff', padding: '10px 20px', borderRadius: '8px', border: 'none', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' }}
-                                            >
-                                                💾 포장사양서 저장하기
-                                            </button>
-                                        </div>
-                                    )
-                                )}
+                                <div style={{ display: specSubTab === 'sheet2' ? 'block' : 'none' }}>
+                                    <PackagingMethodTab 
+                                        specId={currentSpec?.id} 
+                                        canEdit={canEdit} 
+                                        onRegisterSaveHandler={(fn) => { packagingMethodSaveRef.current = fn; }}
+                                        onRegisterReloadHandler={(fn) => { packagingMethodReloadRef.current = fn; }}
+                                        onEnsureSpecCreated={async () => {
+                                            const specToSave = { ...currentSpec };
+                                            delete specToSave.methodImages;
+
+                                            const payload = {
+                                                spec: {
+                                                    ...specToSave,
+                                                    product: { id: product.id }
+                                                },
+                                                revisions: specRevisions,
+                                                components: specComponents,
+                                                methodImages: null
+                                            };
+                                            const res = await api.saveFullPackagingSpec(payload);
+                                            const savedSpec = res.data?.spec || res.data;
+                                            const savedSpecId = savedSpec?.id || res.data?.id;
+                                            if (savedSpecId) {
+                                                setCurrentSpec(prev => ({ ...prev, ...savedSpec, id: savedSpecId }));
+                                                return savedSpecId;
+                                            }
+                                            return null;
+                                        }}
+                                    />
+                                </div>
 
                                 {specSubTab === 'sheet3' && (
                                     <div className="card" style={{ padding: '25px', border: '1px solid #e2e8f0', borderRadius: '12px', background: '#f8fafc' }}>

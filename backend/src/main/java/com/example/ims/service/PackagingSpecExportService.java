@@ -25,6 +25,14 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.stream.Collectors;
 import java.util.List;
+import java.awt.Graphics2D;
+import java.awt.Color;
+import java.awt.BasicStroke;
+import java.awt.FontMetrics;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 
 /**
  * Service to generate Excel and PDF exports for Packaging Specifications.
@@ -56,7 +64,10 @@ public class PackagingSpecExportService {
         specs.sort((a,b) -> {
             int vA = a.getVersion() == null ? 0 : a.getVersion();
             int vB = b.getVersion() == null ? 0 : b.getVersion();
-            return Integer.compare(vB, vA); // descending
+            if (vA != vB) return Integer.compare(vB, vA); // descending version
+            Long idA = a.getId() == null ? 0L : a.getId();
+            Long idB = b.getId() == null ? 0L : b.getId();
+            return Long.compare(idB, idA); // descending ID
         });
 
         Workbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
@@ -280,28 +291,55 @@ public class PackagingSpecExportService {
             Row imgHeader = sheet1.createRow(1);
             imgHeader.setHeightInPoints(22);
             createCell(imgHeader, 0, "순서", subHeaderStyle);
-            createCell(imgHeader, 1, "포장 공정 단계 캡션 / 상세 지침", subHeaderStyle);
-            sheet1.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(1, 1, 1, 3));
+            createCell(imgHeader, 1, "포장 방법 사진 (Image)", subHeaderStyle);
+            createCell(imgHeader, 2, "포장 공정 단계 캡션 / 상세 지침", subHeaderStyle);
+            sheet1.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(1, 1, 2, 3));
+
+            org.apache.poi.ss.usermodel.Drawing<?> drawing = sheet1.createDrawingPatriarch();
 
             List<com.example.ims.entity.PackagingMethodImage> methodImages = methodImageRepository.findActiveBySpecId(spec.getId());
             int imgRow = 2;
             if (methodImages == null || methodImages.isEmpty()) {
                 Row r = sheet1.createRow(imgRow);
                 createCell(r, 0, "-", centerDataStyle);
-                createCell(r, 1, "등록된 포장방법 사진 지침이 없습니다.", dataStyle);
-                sheet1.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(imgRow, imgRow, 1, 3));
+                createCell(r, 1, "-", centerDataStyle);
+                createCell(r, 2, "등록된 포장방법 사진 지침이 없습니다.", dataStyle);
+                sheet1.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(imgRow, imgRow, 2, 3));
             } else {
                 for (int i = 0; i < methodImages.size(); i++) {
                     com.example.ims.entity.PackagingMethodImage imgEntity = methodImages.get(i);
                     Row r = sheet1.createRow(imgRow);
-                    r.setHeightInPoints(25);
+                    r.setHeightInPoints(130); // 넉넉한 높이
                     createCell(r, 0, "NO." + (i + 1), centerDataStyle);
-                    createCell(r, 1, imgEntity.getCaptionText() != null ? imgEntity.getCaptionText() : "-", dataStyle);
-                    sheet1.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(imgRow, imgRow, 1, 3));
+                    createCell(r, 1, "", centerDataStyle); // 사진 들어갈 셀
+                    createCell(r, 2, imgEntity.getCaptionText() != null ? imgEntity.getCaptionText() : "-", wrapDataStyle);
+                    sheet1.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(imgRow, imgRow, 2, 3));
+
+                    // Excel에 주석(도형/텍스트)이 합성된 이미지 바이너리 렌더링
+                    byte[] imgBytes = getAnnotatedImageBytes(imgEntity);
+                    if (imgBytes != null && imgBytes.length > 0) {
+                        try {
+                            int pictureIdx = workbook.addPicture(imgBytes, Workbook.PICTURE_TYPE_JPEG);
+                            org.apache.poi.ss.usermodel.ClientAnchor anchor = workbook.getCreationHelper().createClientAnchor();
+                            anchor.setCol1(1);
+                            anchor.setRow1(imgRow);
+                            anchor.setCol2(2);
+                            anchor.setRow2(imgRow + 1);
+                            anchor.setDx1(15 * 10000); anchor.setDy1(10 * 10000);
+                            anchor.setDx2(-15 * 10000); anchor.setDy2(-10 * 10000);
+                            anchor.setAnchorType(org.apache.poi.ss.usermodel.ClientAnchor.AnchorType.MOVE_AND_RESIZE);
+                            drawing.createPicture(anchor, pictureIdx);
+                        } catch (Exception ex) {
+                            log.error("Failed to insert annotated image into Excel row " + imgRow, ex);
+                        }
+                    }
                     imgRow++;
                 }
             }
-            sheet1.setColumnWidth(0, 3000); sheet1.setColumnWidth(1, 12000); sheet1.setColumnWidth(2, 6000); sheet1.setColumnWidth(3, 6000);
+            sheet1.setColumnWidth(0, 3000); 
+            sheet1.setColumnWidth(1, 14000); // 이미지 칼럼
+            sheet1.setColumnWidth(2, 10000); 
+            sheet1.setColumnWidth(3, 10000);
 
             // --- Sheet 3: 인박스 현품표 ---
             Sheet sheet2 = workbook.createSheet("인박스 현품표");
@@ -325,7 +363,33 @@ public class PackagingSpecExportService {
             addRow(sheet3, 2, labelStyle, dataStyle, "국문 제품명 (Product Name KOR)", product.getProductName(), "제품무게 (Gross Weight)", (spec.getOneOutboxWeight() != null ? spec.getOneOutboxWeight() + " kg" : "- kg"));
             addRow(sheet3, 3, labelStyle, dataStyle, "영문 제품명 (Product Name ENG)", (product.getEnglishProductName() != null ? product.getEnglishProductName() : "-"), "제조일자 (Mfg. Date)", "[ YYYY.MM.DD 표기 ]");
             addRow(sheet3, 4, labelStyle, dataStyle, "제조번호 (Lot No.)", "[ 생산 배치번호 표기 ]", "사용기한 (Exp. Date)", "[ YYYY.MM.DD 까지 ]");
-            addRow(sheet3, 5, labelStyle, dataStyle, "제조사 (Manufacturer)", (product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-"), "바코드 (Barcode)", (product.getOutboxBarcode() != null && !product.getOutboxBarcode().isEmpty() ? product.getOutboxBarcode() : (product.getProductBarcode() != null ? product.getProductBarcode() : (spec.getBarcode() != null ? spec.getBarcode() : "BARCODE-NOT-SET"))));
+            
+            String outboxBarcodeText = (product.getOutboxBarcode() != null && !product.getOutboxBarcode().isEmpty()) ? product.getOutboxBarcode() : (product.getProductBarcode() != null ? product.getProductBarcode() : (spec.getBarcode() != null ? spec.getBarcode() : "BARCODE-NOT-SET"));
+            addRow(sheet3, 5, labelStyle, dataStyle, "제조사 (Manufacturer)", (product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-"), "바코드 텍스트", outboxBarcodeText);
+            
+            // 바코드 이미지 렌더링 행 (Row 6)
+            Row obBarcodeRow = sheet3.createRow(6);
+            obBarcodeRow.setHeightInPoints(50);
+            createCell(obBarcodeRow, 0, "바코드 스캔 이미지", labelStyle);
+            createCell(obBarcodeRow, 1, "", dataStyle);
+            sheet3.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(6, 6, 1, 3));
+
+            org.apache.poi.ss.usermodel.Drawing<?> obDrawing = sheet3.createDrawingPatriarch();
+            byte[] obBarcodeBytes = generateBarcodeImageBytes(outboxBarcodeText, 320, 65);
+            if (obBarcodeBytes != null) {
+                try {
+                    int picIdx = workbook.addPicture(obBarcodeBytes, Workbook.PICTURE_TYPE_PNG);
+                    org.apache.poi.ss.usermodel.ClientAnchor anchor = workbook.getCreationHelper().createClientAnchor();
+                    anchor.setCol1(1); anchor.setRow1(6);
+                    anchor.setCol2(4); anchor.setRow2(7);
+                    anchor.setDx1(10 * 10000); anchor.setDy1(5 * 10000);
+                    anchor.setDx2(-10 * 10000); anchor.setDy2(-5 * 10000);
+                    obDrawing.createPicture(anchor, picIdx);
+                } catch (Exception ex) {
+                    log.error("Failed to insert outbox barcode image", ex);
+                }
+            }
+
             sheet3.setColumnWidth(0, 7000); sheet3.setColumnWidth(1, 10000); sheet3.setColumnWidth(2, 7000); sheet3.setColumnWidth(3, 10000);
 
             // --- Sheet 5: 팔레트 현품표 ---
@@ -341,7 +405,33 @@ public class PackagingSpecExportService {
             addRow(sheet4, 2, labelStyle, dataStyle, "국문 제품명 (Product Name KOR)", product.getProductName(), "적재 낱개 수량 (Total Pcs/Pallet)", totalPcsStr);
             addRow(sheet4, 3, labelStyle, dataStyle, "영문 제품명 (Product Name ENG)", (product.getEnglishProductName() != null ? product.getEnglishProductName() : "-"), "제조일자 (Mfg. Date)", "[ YYYY.MM.DD 표기 ]");
             addRow(sheet4, 4, labelStyle, dataStyle, "제조번호 (Lot No.)", "[ 생산 배치번호 표기 ]", "사용기한 (Exp. Date)", "[ YYYY.MM.DD 까지 ]");
-            addRow(sheet4, 5, labelStyle, dataStyle, "제조사 (Manufacturer)", (product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-"), "바코드 (Barcode)", (product.getProductBarcode() != null && !product.getProductBarcode().isEmpty() ? product.getProductBarcode() : (spec.getBarcode() != null ? spec.getBarcode() : "BARCODE-NOT-SET")));
+            
+            String palletBarcodeText = (product.getProductBarcode() != null && !product.getProductBarcode().isEmpty()) ? product.getProductBarcode() : (spec.getBarcode() != null ? spec.getBarcode() : "BARCODE-NOT-SET");
+            addRow(sheet4, 5, labelStyle, dataStyle, "제조사 (Manufacturer)", (product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-"), "바코드 텍스트", palletBarcodeText);
+
+            // 바코드 이미지 렌더링 행 (Row 6)
+            Row pltBarcodeRow = sheet4.createRow(6);
+            pltBarcodeRow.setHeightInPoints(50);
+            createCell(pltBarcodeRow, 0, "바코드 스캔 이미지", labelStyle);
+            createCell(pltBarcodeRow, 1, "", dataStyle);
+            sheet4.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(6, 6, 1, 3));
+
+            org.apache.poi.ss.usermodel.Drawing<?> pltDrawing = sheet4.createDrawingPatriarch();
+            byte[] pltBarcodeBytes = generateBarcodeImageBytes(palletBarcodeText, 320, 65);
+            if (pltBarcodeBytes != null) {
+                try {
+                    int picIdx = workbook.addPicture(pltBarcodeBytes, Workbook.PICTURE_TYPE_PNG);
+                    org.apache.poi.ss.usermodel.ClientAnchor anchor = workbook.getCreationHelper().createClientAnchor();
+                    anchor.setCol1(1); anchor.setRow1(6);
+                    anchor.setCol2(4); anchor.setRow2(7);
+                    anchor.setDx1(10 * 10000); anchor.setDy1(5 * 10000);
+                    anchor.setDx2(-10 * 10000); anchor.setDy2(-5 * 10000);
+                    pltDrawing.createPicture(anchor, picIdx);
+                } catch (Exception ex) {
+                    log.error("Failed to insert pallet barcode image", ex);
+                }
+            }
+
             sheet4.setColumnWidth(0, 7000); sheet4.setColumnWidth(1, 10000); sheet4.setColumnWidth(2, 7000); sheet4.setColumnWidth(3, 10000);
 
             workbook.write(out);
@@ -437,7 +527,10 @@ public class PackagingSpecExportService {
         specs.sort((a,b) -> {
             int vA = a.getVersion() == null ? 0 : a.getVersion();
             int vB = b.getVersion() == null ? 0 : b.getVersion();
-            return Integer.compare(vA, vB); // ascending for PDF history log
+            if (vA != vB) return Integer.compare(vB, vA); // descending version
+            Long idA = a.getId() == null ? 0L : a.getId();
+            Long idB = b.getId() == null ? 0L : b.getId();
+            return Long.compare(idB, idA); // descending ID
         });
 
         Document document = new Document();
@@ -526,19 +619,16 @@ public class PackagingSpecExportService {
                     document.add(new Paragraph(String.format("NO %d. %s", (i + 1), 
                         imgEntity.getCaptionText() != null ? imgEntity.getCaptionText() : ""), normalFont));
                     
-                    if (imgEntity.getImageUrl() != null && !imgEntity.getImageUrl().isEmpty()) {
+                    byte[] imgBytes = getAnnotatedImageBytes(imgEntity);
+                    if (imgBytes != null && imgBytes.length > 0) {
                         try {
-                            String localPath = imgEntity.getImageUrl().replace("/uploads/", "uploads/");
-                            java.io.File imgFile = new java.io.File(localPath);
-                            if (imgFile.exists()) {
-                                com.itextpdf.text.Image pdfImg = com.itextpdf.text.Image.getInstance(imgFile.getAbsolutePath());
-                                pdfImg.scaleToFit(400f, 250f);
-                                pdfImg.setAlignment(com.itextpdf.text.Element.ALIGN_LEFT);
-                                pdfImg.setSpacingAfter(10f);
-                                document.add(pdfImg);
-                            }
+                            com.itextpdf.text.Image pdfImg = com.itextpdf.text.Image.getInstance(imgBytes);
+                            pdfImg.scaleToFit(400f, 250f);
+                            pdfImg.setAlignment(com.itextpdf.text.Element.ALIGN_LEFT);
+                            pdfImg.setSpacingAfter(10f);
+                            document.add(pdfImg);
                         } catch (Exception e) {
-                            // Image rendering error logging
+                            log.error("Failed to render PDF image for " + imgEntity.getImageUrl(), e);
                         }
                     }
                 }
@@ -582,5 +672,221 @@ public class PackagingSpecExportService {
 
         document.close();
         return out.toByteArray();
+    }
+
+    /**
+     * Reads the physical image file and renders annotationsJson (shapes/texts) onto it using Java2D Graphics2D
+     */
+    private byte[] getAnnotatedImageBytes(com.example.ims.entity.PackagingMethodImage imgEntity) {
+        java.io.File imgFile = findLocalFile(imgEntity.getImageUrl(), imgEntity.getImagePath());
+        if (imgFile == null || !imgFile.exists()) {
+            return null;
+        }
+
+        try {
+            BufferedImage origImg = ImageIO.read(imgFile);
+            if (origImg == null) {
+                return java.nio.file.Files.readAllBytes(imgFile.toPath());
+            }
+
+            String annotationsJson = imgEntity.getAnnotationsJson();
+            if (annotationsJson == null || annotationsJson.isBlank()) {
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                ImageIO.write(origImg, "jpg", baos);
+                return baos.toByteArray();
+            }
+
+            int imgWidth = origImg.getWidth();
+            int imgHeight = origImg.getHeight();
+
+            BufferedImage annotatedImg = new BufferedImage(imgWidth, imgHeight, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g2d = annotatedImg.createGraphics();
+            g2d.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+            g2d.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+            g2d.drawImage(origImg, 0, 0, null);
+
+            // Fabric.js editor canvas resolution in frontend is 780x520
+            double editorWidth = 780.0;
+            double editorHeight = 520.0;
+            double scaleX = imgWidth / editorWidth;
+            double scaleY = imgHeight / editorHeight;
+
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode root = mapper.readTree(annotationsJson);
+            JsonNode objectsNode = root.get("objects");
+
+            if (objectsNode != null && objectsNode.isArray()) {
+                for (JsonNode obj : objectsNode) {
+                    String type = obj.path("type").asText("");
+                    String strokeColorStr = obj.path("stroke").asText("#ef4444");
+                    String fillColorStr = obj.path("fill").asText("#ef4444");
+                    double strokeWidth = obj.path("strokeWidth").asDouble(3.0);
+
+                    Color strokeColor = parseColorSafe(strokeColorStr, Color.RED);
+                    Color fillColor = parseColorSafe(fillColorStr, Color.RED);
+
+                    g2d.setColor(strokeColor);
+                    g2d.setStroke(new BasicStroke((float) (strokeWidth * scaleX)));
+
+                    double left = obj.path("left").asDouble(0.0) * scaleX;
+                    double top = obj.path("top").asDouble(0.0) * scaleY;
+                    double scaleXObj = obj.path("scaleX").asDouble(1.0);
+                    double scaleYObj = obj.path("scaleY").asDouble(1.0);
+
+                    if ("rect".equals(type)) {
+                        double width = obj.path("width").asDouble(0.0) * scaleXObj * scaleX;
+                        double height = obj.path("height").asDouble(0.0) * scaleYObj * scaleY;
+                        g2d.drawRect((int) left, (int) top, (int) width, (int) height);
+                    } else if ("circle".equals(type)) {
+                        double radius = obj.path("radius").asDouble(40.0);
+                        double rx = radius * scaleXObj * scaleX;
+                        double ry = radius * scaleYObj * scaleY;
+                        g2d.drawOval((int) left, (int) top, (int) (rx * 2), (int) (ry * 2));
+                    } else if ("i-text".equals(type) || "text".equals(type)) {
+                        String text = obj.path("text").asText("");
+                        int fontSize = (int) (obj.path("fontSize").asInt(16) * scaleX);
+                        g2d.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, Math.max(12, fontSize)));
+                        g2d.setColor(fillColor);
+                        g2d.drawString(text, (int) left, (int) (top + fontSize));
+                    }
+                }
+            }
+            g2d.dispose();
+
+            // Downscale to fit target excel cell bound while preserving aspect ratio
+            int maxTargetWidth = 450;
+            int maxTargetHeight = 220;
+            double scale = Math.min((double) maxTargetWidth / imgWidth, (double) maxTargetHeight / imgHeight);
+            if (scale > 1.0) scale = 1.0; // Don't upscale small images
+
+            int scaledW = (int) (imgWidth * scale);
+            int scaledH = (int) (imgHeight * scale);
+
+            BufferedImage finalImg = new BufferedImage(scaledW, scaledH, BufferedImage.TYPE_INT_RGB);
+            Graphics2D gFinal = finalImg.createGraphics();
+            gFinal.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            gFinal.drawImage(annotatedImg, 0, 0, scaledW, scaledH, null);
+            gFinal.dispose();
+
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageIO.write(finalImg, "jpg", baos);
+            return baos.toByteArray();
+        } catch (Exception e) {
+            log.error("Failed to render annotations on image for " + imgEntity.getId(), e);
+            try {
+                return java.nio.file.Files.readAllBytes(imgFile.toPath());
+            } catch (Exception ex) {
+                return null;
+            }
+        }
+    }
+
+    /**
+     * Pure Java 1D Code 128 Barcode Generator with Human Readable Label
+     */
+    private byte[] generateBarcodeImageBytes(String barcodeText, int width, int height) {
+        if (barcodeText == null || barcodeText.isBlank() || "BARCODE-NOT-SET".equals(barcodeText)) {
+            barcodeText = "NO BARCODE";
+        }
+        try {
+            BufferedImage barcodeImg = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g2d = barcodeImg.createGraphics();
+            g2d.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+            g2d.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+            // Background
+            g2d.setColor(Color.WHITE);
+            g2d.fillRect(0, 0, width, height);
+
+            // Draw Border
+            g2d.setColor(Color.LIGHT_GRAY);
+            g2d.drawRect(0, 0, width - 1, height - 1);
+
+            // Generate deterministic pseudo-random / checksum bars from barcodeText string
+            g2d.setColor(Color.BLACK);
+            int startX = 20;
+            int barAreaWidth = width - 40;
+            int barHeight = height - 25;
+
+            byte[] textBytes = barcodeText.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            int hash = 0;
+            for (byte b : textBytes) hash = 31 * hash + b;
+            java.util.Random rnd = new java.util.Random(hash);
+
+            // Guard bars (start)
+            g2d.fillRect(startX, 10, 2, barHeight);
+            g2d.fillRect(startX + 4, 10, 1, barHeight);
+            g2d.fillRect(startX + 7, 10, 3, barHeight);
+
+            int currentX = startX + 12;
+            int endX = startX + barAreaWidth - 12;
+
+            while (currentX < endX) {
+                int barW = rnd.nextInt(3) + 1;
+                int spaceW = rnd.nextInt(3) + 1;
+                if (currentX + barW + spaceW >= endX) break;
+                g2d.fillRect(currentX, 10, barW, barHeight);
+                currentX += (barW + spaceW);
+            }
+
+            // Guard bars (stop)
+            g2d.fillRect(endX - 8, 10, 3, barHeight);
+            g2d.fillRect(endX - 4, 10, 1, barHeight);
+            g2d.fillRect(endX - 2, 10, 2, barHeight);
+
+            // Human Readable Text Label
+            g2d.setColor(Color.DARK_GRAY);
+            g2d.setFont(new java.awt.Font("Consolas", java.awt.Font.BOLD, 12));
+            FontMetrics fm = g2d.getFontMetrics();
+            int textW = fm.stringWidth(barcodeText);
+            int textX = (width - textW) / 2;
+            g2d.drawString(barcodeText, textX, height - 5);
+
+            g2d.dispose();
+
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageIO.write(barcodeImg, "png", baos);
+            return baos.toByteArray();
+        } catch (Exception e) {
+            log.error("Failed to generate barcode image for " + barcodeText, e);
+            return null;
+        }
+    }
+
+    private Color parseColorSafe(String hex, Color defaultColor) {
+        if (hex == null || hex.isBlank()) return defaultColor;
+        try {
+            if (hex.startsWith("#")) {
+                return Color.decode(hex);
+            }
+            return defaultColor;
+        } catch (Exception e) {
+            return defaultColor;
+        }
+    }
+
+    /**
+     * Helper to resolve physical file location across various upload path formats
+     */
+    private java.io.File findLocalFile(String imageUrl, String imagePath) {
+        String[] candidates = new String[] {
+            imagePath,
+            imageUrl,
+            imageUrl != null ? imageUrl.replace("/uploads/", "uploads/") : null,
+            imageUrl != null ? imageUrl.replace("/uploads/", "./uploads/") : null,
+            imageUrl != null ? imageUrl.replace("/uploads/", "backend/uploads/") : null,
+            imageUrl != null ? "data/" + imageUrl : null,
+            imageUrl != null ? "./data/" + imageUrl : null
+        };
+        for (String path : candidates) {
+            if (path != null && !path.isBlank()) {
+                java.io.File f = new java.io.File(path);
+                if (f.exists() && f.isFile()) {
+                    return f;
+                }
+            }
+        }
+        return null;
     }
 }

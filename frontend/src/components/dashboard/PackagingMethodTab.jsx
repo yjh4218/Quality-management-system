@@ -99,12 +99,25 @@ const AnnotatedCardImage = ({ imageUrl, annotationsJson, altText }) => {
  * - 3줄 전용 캡션 textarea
  * - 주석(도형/글씨) 카드 이미지 위 실시간 합성 표시
  */
-const PackagingMethodTab = ({ specId, canEdit, onRegisterSaveHandler }) => {
+const PackagingMethodTab = ({ specId, canEdit, onRegisterSaveHandler, onRegisterReloadHandler, onEnsureSpecCreated }) => {
     const [images, setImages] = useState([]);
     const [pendingFiles, setPendingFiles] = useState([]); // 업로드 대기 신규 파일
     const [deletedIds, setDeletedIds] = useState([]); // 삭제 대기 ID 목록
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [loading, setLoading] = useState(false);
+
+    // [Stale Closure 방지] 실시간 상태 동기화용 Ref
+    const imagesRef = useRef(images);
+    const pendingFilesRef = useRef(pendingFiles);
+    const deletedIdsRef = useRef(deletedIds);
+    const hasUnsavedChangesRef = useRef(hasUnsavedChanges);
+    const specIdRef = useRef(specId);
+
+    useEffect(() => { imagesRef.current = images; }, [images]);
+    useEffect(() => { pendingFilesRef.current = pendingFiles; }, [pendingFiles]);
+    useEffect(() => { deletedIdsRef.current = deletedIds; }, [deletedIds]);
+    useEffect(() => { hasUnsavedChangesRef.current = hasUnsavedChanges; }, [hasUnsavedChanges]);
+    useEffect(() => { specIdRef.current = specId; }, [specId]);
 
     // 캔버스 모달 에디터 상태
     const [editingImage, setEditingImage] = useState(null);
@@ -123,10 +136,11 @@ const PackagingMethodTab = ({ specId, canEdit, onRegisterSaveHandler }) => {
     }, []);
 
     // 이미지 목록 로드
-    const loadImages = async () => {
-        if (!specId) return;
+    const loadImages = async (targetSpecId = null) => {
+        const activeId = targetSpecId || specIdRef.current || specId;
+        if (!activeId) return;
         try {
-            const res = await apiDefault.get(`/api/packaging-specs/${specId}/method-images`);
+            const res = await apiDefault.get(`/api/packaging-specs/${activeId}/method-images`);
             const rawData = res.data;
             const list = Array.isArray(rawData) ? rawData : (rawData?.data && Array.isArray(rawData.data) ? rawData.data : []);
             setImages(list);
@@ -140,16 +154,19 @@ const PackagingMethodTab = ({ specId, canEdit, onRegisterSaveHandler }) => {
 
     useEffect(() => {
         if (specId) {
-            loadImages();
+            loadImages(specId);
         }
     }, [specId]);
 
-    // 부모 컴포넌트에 최종 [저장하기] 핸들러 바인딩
+    // 부모 컴포넌트에 최종 [저장하기] 및 [새로고침] 핸들러 단 1회 안정적 바인딩
     useEffect(() => {
         if (onRegisterSaveHandler) {
-            onRegisterSaveHandler(() => saveAllChanges());
+            onRegisterSaveHandler((overrideId) => saveAllChanges(overrideId));
         }
-    }, [specId, images, pendingFiles, deletedIds, hasUnsavedChanges]);
+        if (onRegisterReloadHandler) {
+            onRegisterReloadHandler((targetId) => loadImages(targetId));
+        }
+    }, []);
 
     // 로컬 파일 임시 추가 (서버 자동 전송 X ➔ 로컬 미리보기 생성)
     const handleFileChange = (e) => {
@@ -230,14 +247,39 @@ const PackagingMethodTab = ({ specId, canEdit, onRegisterSaveHandler }) => {
     };
 
     // 최종 [저장하기] 실행 (서버 배치 일괄 반영)
-    const saveAllChanges = async () => {
-        if (!specId) return;
+    const saveAllChanges = async (overrideSpecId) => {
+        const currentPendingFiles = pendingFilesRef.current;
+        const currentImages = imagesRef.current;
+        const currentDeletedIds = deletedIdsRef.current;
+        const currentHasUnsaved = hasUnsavedChangesRef.current;
+
+        let activeSpecId = (typeof overrideSpecId === 'number' || (typeof overrideSpecId === 'string' && overrideSpecId)) ? overrideSpecId : (specIdRef.current || specId);
+        console.log('[PMT-DEBUG] saveAllChanges called:', {
+            overrideSpecId, specId, activeSpecId,
+            pendingFilesCount: currentPendingFiles.length,
+            imagesCount: currentImages.length,
+            deletedIdsCount: currentDeletedIds.length,
+            hasUnsavedChanges: currentHasUnsaved
+        });
+        if (!activeSpecId && onEnsureSpecCreated) {
+            activeSpecId = await onEnsureSpecCreated();
+            console.log('[PMT-DEBUG] activeSpecId generated from onEnsureSpecCreated:', activeSpecId);
+        }
+
+        if (!activeSpecId) {
+            console.warn('[PMT-DEBUG] activeSpecId is missing, aborting photo save.');
+            if (currentPendingFiles.length > 0 || currentDeletedIds.length > 0 || currentHasUnsaved) {
+                toast.error('포장사양서를 생성할 수 없어 사진을 저장하지 못했습니다.');
+            }
+            return;
+        }
 
         setLoading(true);
         try {
             // 1. 삭제 예약 파일 삭제 API
-            for (const delId of deletedIds) {
+            for (const delId of currentDeletedIds) {
                 try {
+                    console.log('[PMT-DEBUG] deleting image id:', delId);
                     await apiDefault.delete(`/api/packaging-specs/method-images/${delId}`);
                 } catch (e) {
                     console.error('Delete failed for id:', delId, e);
@@ -246,28 +288,32 @@ const PackagingMethodTab = ({ specId, canEdit, onRegisterSaveHandler }) => {
 
             // 2. 신규 임시 파일 배치 업로드 API
             let uploadedImagesMap = {};
-            if (pendingFiles.length > 0) {
+            if (currentPendingFiles.length > 0) {
+                console.log('[PMT-DEBUG] uploading pendingFiles:', currentPendingFiles.length);
                 const formData = new FormData();
-                pendingFiles.forEach(p => formData.append('files', p.file));
+                currentPendingFiles.forEach(p => formData.append('files', p.file));
 
-                const baseUrl = api.getBaseURL ? api.getBaseURL() : 'http://localhost:8080';
-                const uploadRes = await apiDefault.post(`/api/packaging-specs/${specId}/method-images/batch-upload`, formData, {
+                const uploadRes = await apiDefault.post(`/api/packaging-specs/${activeSpecId}/method-images/batch-upload`, formData, {
                     headers: { 'Content-Type': 'multipart/form-data' }
                 });
+                console.log('[PMT-DEBUG] batch-upload response status:', uploadRes.status, 'data:', uploadRes.data);
 
                 if (uploadRes.data && Array.isArray(uploadRes.data)) {
                     uploadRes.data.forEach((serverImg, idx) => {
-                        if (pendingFiles[idx]) {
-                            uploadedImagesMap[pendingFiles[idx].tempId] = serverImg;
+                        if (currentPendingFiles[idx]) {
+                            uploadedImagesMap[currentPendingFiles[idx].tempId] = serverImg;
                         }
                     });
                 }
+            } else {
+                console.log('[PMT-DEBUG] pendingFiles is EMPTY. Skipping batch-upload.');
             }
 
             // 3. 기존 및 신규 이미지의 캡션/주석 업데이트
-            for (const img of images) {
+            for (const img of currentImages) {
                 const targetId = img.isTemp ? (uploadedImagesMap[img.id]?.id) : img.id;
                 if (targetId) {
+                    console.log('[PMT-DEBUG] updating caption/annotation for targetId:', targetId);
                     await apiDefault.put(`/api/packaging-specs/method-images/${targetId}`, {
                         captionText: img.captionText || '',
                         annotationsJson: img.annotationsJson || null
@@ -276,7 +322,19 @@ const PackagingMethodTab = ({ specId, canEdit, onRegisterSaveHandler }) => {
             }
 
             toast.success('포장방법 사진 및 주석 정보가 성공적으로 저장되었습니다!');
-            await loadImages();
+            try {
+                console.log('[PMT-DEBUG] reloading images for activeSpecId:', activeSpecId);
+                const res = await apiDefault.get(`/api/packaging-specs/${activeSpecId}/method-images`);
+                const rawData = res.data;
+                const list = Array.isArray(rawData) ? rawData : (rawData?.data && Array.isArray(rawData.data) ? rawData.data : []);
+                console.log('[PMT-DEBUG] reloaded list length:', list.length);
+                setImages(list);
+                setPendingFiles([]);
+                setDeletedIds([]);
+                setHasUnsavedChanges(false);
+            } catch (e) {
+                console.error('Failed to load packaging method images', e);
+            }
         } catch (err) {
             console.error('Failed to save method image changes', err);
             toast.error('포장방법 정보 저장 중 오류가 발생했습니다.');
@@ -396,20 +454,12 @@ const PackagingMethodTab = ({ specId, canEdit, onRegisterSaveHandler }) => {
     return (
         <div style={{ padding: '4px 0' }}>
             
-            {/* 변경 사항 저장 안내 바 */}
+            {/* 변경 사항 안내 바 */}
             {hasUnsavedChanges && (
-                <div style={{ marginBottom: '16px', padding: '12px 18px', background: '#fef3c7', border: '1.5px solid #f59e0b', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ marginBottom: '16px', padding: '12px 18px', background: '#fef3c7', border: '1.5px solid #f59e0b', borderRadius: '10px' }}>
                     <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#92400e' }}>
-                        ⚠️ 포장방법 사진/캡션/주석 변경 사항이 있습니다. 하단 [💾 저장하기] 버튼을 누르면 최종 적용됩니다.
+                        ⚠️ 포장방법 사진/캡션/주석 변경 사항이 있습니다. 최하단 남색 [💾 저장하기] 버튼을 누르면 사양서와 함께 일괄 저장됩니다.
                     </span>
-                    <button 
-                        type="button" 
-                        onClick={saveAllChanges} 
-                        disabled={loading}
-                        style={{ background: '#d97706', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}
-                    >
-                        {loading ? '저장 중...' : '💾 지금 바로 저장'}
-                    </button>
                 </div>
             )}
 
@@ -519,35 +569,7 @@ const PackagingMethodTab = ({ specId, canEdit, onRegisterSaveHandler }) => {
                 </div>
             )}
 
-            {/* ── 하단 일괄 저장하기 바 ── */}
-            {canEdit && (
-                <div style={{
-                    marginTop: '20px', padding: '16px 24px', background: hasUnsavedChanges ? '#fef3c7' : '#f8fafc',
-                    border: hasUnsavedChanges ? '2px solid #f59e0b' : '1px solid #e2e8f0', borderRadius: '12px',
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                }}>
-                    <div>
-                        <strong style={{ fontSize: '14px', color: '#1e293b', display: 'block' }}>
-                            {hasUnsavedChanges ? '⚠️ 변경사항이 있습니다!' : '💾 포장방법 사진 및 주석 저장'}
-                        </strong>
-                        <span style={{ fontSize: '12px', color: '#64748b' }}>
-                            사진 첨부, 3줄 캡션 작성, 주석(도형/글씨) 편집 후 [저장하기] 버튼을 누르면 최종 반영됩니다.
-                        </span>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={saveAllChanges}
-                        disabled={loading}
-                        style={{
-                            background: hasUnsavedChanges ? '#d97706' : '#10b981', color: '#fff', border: 'none',
-                            padding: '10px 24px', borderRadius: '8px', fontWeight: 'bold', fontSize: '13px',
-                            cursor: loading ? 'not-allowed' : 'pointer', transition: 'all 0.2s', boxShadow: '0 2px 6px rgba(0,0,0,0.1)'
-                        }}
-                    >
-                        {loading ? '저장 처리 중...' : '💾 포장방법 저장하기'}
-                    </button>
-                </div>
-            )}
+
 
             {/* ── Fabric.js 캔버스 주석 에디터 모달 ── */}
             {editingImage && (

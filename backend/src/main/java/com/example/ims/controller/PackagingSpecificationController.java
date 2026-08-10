@@ -8,6 +8,7 @@ import com.example.ims.service.PackagingSpecExportService;
 import com.example.ims.dto.PackagingSpecFullDto;
 import com.example.ims.service.PackagingSpecService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -21,6 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/packaging-specs")
 @RequiredArgsConstructor
@@ -225,7 +227,9 @@ public class PackagingSpecificationController {
 
     @GetMapping("/{specId}/method-images")
     public ResponseEntity<List<com.example.ims.entity.PackagingMethodImage>> getMethodImages(@PathVariable Long specId) {
-        return ResponseEntity.ok(methodImageRepository.findActiveBySpecId(specId));
+        List<com.example.ims.entity.PackagingMethodImage> activeList = methodImageRepository.findActiveBySpecId(specId);
+        log.info(">>>> [METHOD-IMAGES] GET specId={}, activeCount={}", specId, activeList.size());
+        return ResponseEntity.ok(activeList);
     }
 
     @PostMapping("/{specId}/method-images/batch-upload")
@@ -235,6 +239,7 @@ public class PackagingSpecificationController {
             @RequestParam("files") org.springframework.web.multipart.MultipartFile[] files,
             @RequestParam(value = "insertAfterId", required = false) Long insertAfterId) {
         
+        log.info(">>>> [METHOD-IMAGES] BATCH-UPLOAD START specId={}, filesCount={}", specId, files != null ? files.length : 0);
         if (files == null || files.length == 0) {
             return ResponseEntity.badRequest().build();
         }

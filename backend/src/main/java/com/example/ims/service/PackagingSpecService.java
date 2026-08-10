@@ -495,71 +495,77 @@ public class PackagingSpecService {
         }
         
         PackagingSpecification targetSpec = spec;
+        PackagingSpecification existingToUpdate = null;
         if (spec.getId() != null) {
-            PackagingSpecification existing = specRepository.findById(spec.getId()).orElse(null);
-            if (existing != null) {
-                // Update managed entity fields
-                existing.setBarcode(spec.getBarcode());
-                existing.setLabNumber(spec.getLabNumber());
-                existing.setPlannerName(spec.getPlannerName());
-                existing.setDesignerName(spec.getDesignerName());
-                existing.setQcName(spec.getQcName());
-                existing.setManagementType(spec.getManagementType());
-                existing.setBarcodeManager(spec.getBarcodeManager());
-                existing.setApprovalChainJson(spec.getApprovalChainJson());
-                
-                existing.setMarkingMethod(spec.getMarkingMethod());
-                existing.setMarkingStandard(spec.getMarkingStandard());
-                existing.setContainerMarkingType(spec.getContainerMarkingType());
-                existing.setContainerMarkingStandard(spec.getContainerMarkingStandard());
-                existing.setUnitBoxMarkingType(spec.getUnitBoxMarkingType());
-                existing.setUnitBoxMarkingStandard(spec.getUnitBoxMarkingStandard());
-                existing.setOutboxLayoutImage(spec.getOutboxLayoutImage());
-                existing.setPackagingMethodText(spec.getPackagingMethodText());
-                existing.setMarkingLocationImage(spec.getMarkingLocationImage());
-                
-                existing.setInboxType(spec.getInboxType());
-                existing.setInboxQty(spec.getInboxQty());
-                existing.setInboxSize(spec.getInboxSize());
-                existing.setInboxTapeBanding(spec.getInboxTapeBanding());
-                existing.setInboxInterlayerSheet(spec.getInboxInterlayerSheet());
-                existing.setInboxMaterial(spec.getInboxMaterial());
-                existing.setInboxRemarks(spec.getInboxRemarks());
-                existing.setInboxUseYn(spec.getInboxUseYn());
-                existing.setInboxCategory(spec.getInboxCategory());
-                
-                existing.setOutboxType(spec.getOutboxType());
-                existing.setOutboxQty(spec.getOutboxQty());
-                existing.setOutboxSize(spec.getOutboxSize());
-                existing.setOutboxTapeBanding(spec.getOutboxTapeBanding());
-                existing.setOutboxInterlayerSheet(spec.getOutboxInterlayerSheet());
-                existing.setOutboxMaterial(spec.getOutboxMaterial());
-                existing.setOutboxRemarks(spec.getOutboxRemarks());
-                existing.setOutboxBarcodeStickerStandard(spec.getOutboxBarcodeStickerStandard());
-                existing.setOutboxCushioningStandard(spec.getOutboxCushioningStandard());
-                
-                existing.setPalletTypeStr(spec.getPalletTypeStr());
-                existing.setPalletStackingMethod(spec.getPalletStackingMethod());
-                existing.setPalletSize(spec.getPalletSize());
-                existing.setPalletHeightLimit(spec.getPalletHeightLimit());
-                existing.setPalletPrecautions(spec.getPalletPrecautions());
-                existing.setPalletTierQty(spec.getPalletTierQty());
-                existing.setPalletTierCount(spec.getPalletTierCount());
-                existing.setPalletTotalOutboxQty(spec.getPalletTotalOutboxQty());
-                existing.setPalletTotalQuantity(spec.getPalletTotalQuantity());
-                
-                existing.setOneOutboxWeight(spec.getOneOutboxWeight());
-                existing.setOnePalletWeight(spec.getOnePalletWeight());
-                existing.setOnePalletHeight(spec.getOnePalletHeight());
-                existing.setRemarks(spec.getRemarks());
-                
-                existing.setPalletType(spec.getPalletType());
-                existing.setLotAndExpiryFormat(spec.getLotAndExpiryFormat());
-                existing.setApplyChannelSticker(spec.isApplyChannelSticker());
-                existing.setLastModifiedBy(username);
-                
-                targetSpec = existing;
-            }
+            existingToUpdate = specRepository.findById(spec.getId()).orElse(null);
+        } else if (!existingSpecs.isEmpty()) {
+            existingToUpdate = existingSpecs.stream()
+                    .max(Comparator.comparingInt(s -> s.getVersion() != null ? s.getVersion() : 0))
+                    .orElse(existingSpecs.get(0));
+        }
+
+        if (existingToUpdate != null) {
+            // Update managed entity fields
+            existingToUpdate.setBarcode(spec.getBarcode());
+            existingToUpdate.setLabNumber(spec.getLabNumber());
+            existingToUpdate.setPlannerName(spec.getPlannerName());
+            existingToUpdate.setDesignerName(spec.getDesignerName());
+            existingToUpdate.setQcName(spec.getQcName());
+            existingToUpdate.setManagementType(spec.getManagementType());
+            existingToUpdate.setBarcodeManager(spec.getBarcodeManager());
+            existingToUpdate.setApprovalChainJson(spec.getApprovalChainJson());
+            
+            existingToUpdate.setMarkingMethod(spec.getMarkingMethod());
+            existingToUpdate.setMarkingStandard(spec.getMarkingStandard());
+            existingToUpdate.setContainerMarkingType(spec.getContainerMarkingType());
+            existingToUpdate.setContainerMarkingStandard(spec.getContainerMarkingStandard());
+            existingToUpdate.setUnitBoxMarkingType(spec.getUnitBoxMarkingType());
+            existingToUpdate.setUnitBoxMarkingStandard(spec.getUnitBoxMarkingStandard());
+            existingToUpdate.setOutboxLayoutImage(spec.getOutboxLayoutImage());
+            existingToUpdate.setPackagingMethodText(spec.getPackagingMethodText());
+            existingToUpdate.setMarkingLocationImage(spec.getMarkingLocationImage());
+            
+            existingToUpdate.setInboxType(spec.getInboxType());
+            existingToUpdate.setInboxQty(spec.getInboxQty());
+            existingToUpdate.setInboxSize(spec.getInboxSize());
+            existingToUpdate.setInboxTapeBanding(spec.getInboxTapeBanding());
+            existingToUpdate.setInboxInterlayerSheet(spec.getInboxInterlayerSheet());
+            existingToUpdate.setInboxMaterial(spec.getInboxMaterial());
+            existingToUpdate.setInboxRemarks(spec.getInboxRemarks());
+            existingToUpdate.setInboxUseYn(spec.getInboxUseYn());
+            existingToUpdate.setInboxCategory(spec.getInboxCategory());
+            
+            existingToUpdate.setOutboxType(spec.getOutboxType());
+            existingToUpdate.setOutboxQty(spec.getOutboxQty());
+            existingToUpdate.setOutboxSize(spec.getOutboxSize());
+            existingToUpdate.setOutboxTapeBanding(spec.getOutboxTapeBanding());
+            existingToUpdate.setOutboxInterlayerSheet(spec.getOutboxInterlayerSheet());
+            existingToUpdate.setOutboxMaterial(spec.getOutboxMaterial());
+            existingToUpdate.setOutboxRemarks(spec.getOutboxRemarks());
+            existingToUpdate.setOutboxBarcodeStickerStandard(spec.getOutboxBarcodeStickerStandard());
+            existingToUpdate.setOutboxCushioningStandard(spec.getOutboxCushioningStandard());
+            
+            existingToUpdate.setPalletTypeStr(spec.getPalletTypeStr());
+            existingToUpdate.setPalletStackingMethod(spec.getPalletStackingMethod());
+            existingToUpdate.setPalletSize(spec.getPalletSize());
+            existingToUpdate.setPalletHeightLimit(spec.getPalletHeightLimit());
+            existingToUpdate.setPalletPrecautions(spec.getPalletPrecautions());
+            existingToUpdate.setPalletTierQty(spec.getPalletTierQty());
+            existingToUpdate.setPalletTierCount(spec.getPalletTierCount());
+            existingToUpdate.setPalletTotalOutboxQty(spec.getPalletTotalOutboxQty());
+            existingToUpdate.setPalletTotalQuantity(spec.getPalletTotalQuantity());
+            
+            existingToUpdate.setOneOutboxWeight(spec.getOneOutboxWeight());
+            existingToUpdate.setOnePalletWeight(spec.getOnePalletWeight());
+            existingToUpdate.setOnePalletHeight(spec.getOnePalletHeight());
+            existingToUpdate.setRemarks(spec.getRemarks());
+            
+            existingToUpdate.setPalletType(spec.getPalletType());
+            existingToUpdate.setLotAndExpiryFormat(spec.getLotAndExpiryFormat());
+            existingToUpdate.setApplyChannelSticker(spec.isApplyChannelSticker());
+            existingToUpdate.setLastModifiedBy(username);
+            
+            targetSpec = existingToUpdate;
         }
         
         PackagingSpecification savedSpec = specRepository.save(targetSpec);
@@ -586,16 +592,16 @@ public class PackagingSpecService {
             componentRepository.saveAll(components);
         }
 
-        // 3. 포장 이미지/주석 정보 복원/저장
-        List<com.example.ims.entity.PackagingMethodImage> currentImages = methodImageRepository.findActiveBySpecId(specId);
-        if (currentImages != null && !currentImages.isEmpty()) {
-            currentImages.forEach(img -> {
-                img.setDeletedAt(LocalDateTime.now());
-            });
-            methodImageRepository.saveAll(currentImages);
-        }
+        // 3. 포장 이미지/주석 정보 복원/저장 (dto.getMethodImages()가 명시적으로 전달된 경우에만 처리)
         List<com.example.ims.entity.PackagingMethodImage> methodImages = dto.getMethodImages();
         if (methodImages != null) {
+            List<com.example.ims.entity.PackagingMethodImage> currentImages = methodImageRepository.findActiveBySpecId(specId);
+            if (currentImages != null && !currentImages.isEmpty()) {
+                currentImages.forEach(img -> {
+                    img.setDeletedAt(LocalDateTime.now());
+                });
+                methodImageRepository.saveAll(currentImages);
+            }
             methodImages.forEach(img -> {
                 img.setPackagingSpecId(specId);
                 img.setDeletedAt(null);
@@ -680,6 +686,15 @@ public class PackagingSpecService {
         List<PackagingSpecRevision> revisions = revisionRepository.findBySpecId(latestSpec.getId());
         List<PackagingSpecComponent> components = componentRepository.findBySpecId(latestSpec.getId());
         List<com.example.ims.entity.PackagingMethodImage> activeImages = methodImageRepository.findActiveBySpecId(latestSpec.getId());
+        if (activeImages.isEmpty() && !specs.isEmpty()) {
+            List<Long> allSpecIds = specs.stream()
+                    .map(PackagingSpecification::getId)
+                    .filter(java.util.Objects::nonNull)
+                    .collect(java.util.stream.Collectors.toList());
+            if (!allSpecIds.isEmpty()) {
+                activeImages = methodImageRepository.findActiveBySpecIds(allSpecIds);
+            }
+        }
         
         return new PackagingSpecFullDto(latestSpec, revisions, components, activeImages);
     }
