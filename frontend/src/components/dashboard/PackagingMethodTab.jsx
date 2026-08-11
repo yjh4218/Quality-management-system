@@ -106,6 +106,10 @@ const PackagingMethodTab = ({ specId, canEdit, onRegisterSaveHandler, onRegister
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [loading, setLoading] = useState(false);
 
+    // 드래그 앤 드롭 순서 변경 상태
+    const [draggedIndex, setDraggedIndex] = useState(null);
+    const [dragOverIndex, setDragOverIndex] = useState(null);
+
     // [Stale Closure 방지] 실시간 상태 동기화용 Ref
     const imagesRef = useRef(images);
     const pendingFilesRef = useRef(pendingFiles);
@@ -134,6 +138,70 @@ const PackagingMethodTab = ({ specId, canEdit, onRegisterSaveHandler, onRegister
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
+
+    // ── 드래그 앤 드롭 핸들러 ──
+    const handleDragStart = (e, index) => {
+        if (!canEdit) return;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(index));
+        setDraggedIndex(index);
+    };
+
+    const handleDragOver = (e, index) => {
+        if (!canEdit) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (dragOverIndex !== index) {
+            setDragOverIndex(index);
+        }
+    };
+
+    const handleDragLeave = (e, index) => {
+        if (dragOverIndex === index) {
+            setDragOverIndex(null);
+        }
+    };
+
+    const handleDrop = (e, targetIndex) => {
+        if (!canEdit) return;
+        e.preventDefault();
+        if (draggedIndex === null || draggedIndex === targetIndex) {
+            setDraggedIndex(null);
+            setDragOverIndex(null);
+            return;
+        }
+
+        reorderImages(draggedIndex, targetIndex);
+        setDraggedIndex(null);
+        setDragOverIndex(null);
+    };
+
+    const handleDragEnd = () => {
+        setDraggedIndex(null);
+        setDragOverIndex(null);
+    };
+
+    // 이미지 순서 교환/재배치 공통 함수
+    const reorderImages = (fromIndex, toIndex) => {
+        if (fromIndex < 0 || fromIndex >= images.length || toIndex < 0 || toIndex >= images.length) return;
+
+        setImages(prev => {
+            const nextList = [...prev];
+            const [movedItem] = nextList.splice(fromIndex, 1);
+            nextList.splice(toIndex, 0, movedItem);
+            return nextList;
+        });
+        setHasUnsavedChanges(true);
+        toast.info('사진 순서가 변경되었습니다. 하단 [💾 저장하기]를 클릭하면 최종 저장됩니다.');
+    };
+
+    // 순서 조정 버튼 (◀ ▶)
+    const moveImageStep = (index, direction) => {
+        const targetIndex = index + direction;
+        if (targetIndex >= 0 && targetIndex < images.length) {
+            reorderImages(index, targetIndex);
+        }
+    };
 
     // 이미지 목록 로드
     const loadImages = async (targetSpecId = null) => {
@@ -309,19 +377,22 @@ const PackagingMethodTab = ({ specId, canEdit, onRegisterSaveHandler, onRegister
                 console.log('[PMT-DEBUG] pendingFiles is EMPTY. Skipping batch-upload.');
             }
 
-            // 3. 기존 및 신규 이미지의 캡션/주석 업데이트
-            for (const img of currentImages) {
+            // 3. 기존 및 신규 이미지의 캡션/주석 및 순서(displayOrder) 업데이트
+            for (let i = 0; i < currentImages.length; i++) {
+                const img = currentImages[i];
                 const targetId = img.isTemp ? (uploadedImagesMap[img.id]?.id) : img.id;
                 if (targetId) {
-                    console.log('[PMT-DEBUG] updating caption/annotation for targetId:', targetId);
+                    const displayOrderVal = (i + 1) * 1000.0;
+                    console.log('[PMT-DEBUG] updating caption/annotation/order for targetId:', targetId, 'displayOrder:', displayOrderVal);
                     await apiDefault.put(`/api/packaging-specs/method-images/${targetId}`, {
                         captionText: img.captionText || '',
-                        annotationsJson: img.annotationsJson || null
+                        annotationsJson: img.annotationsJson || null,
+                        displayOrder: displayOrderVal
                     });
                 }
             }
 
-            toast.success('포장방법 사진 및 주석 정보가 성공적으로 저장되었습니다!');
+            toast.success('포장방법 사진, 순서 및 주석 정보가 성공적으로 저장되었습니다!');
             try {
                 console.log('[PMT-DEBUG] reloading images for activeSpecId:', activeSpecId);
                 const res = await apiDefault.get(`/api/packaging-specs/${activeSpecId}/method-images`);
@@ -493,62 +564,137 @@ const PackagingMethodTab = ({ specId, canEdit, onRegisterSaveHandler, onRegister
                 </div>
             )}
 
-            {/* ── 이미지 목록 카드 그리드 (주석 실시간 합성 & 3줄 캡션) ── */}
+            {/* ── 이미지 목록 카드 그리드 (드래그 앤 드롭 순서 변경 지원) ── */}
             {images.length > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '20px', marginBottom: '24px' }}>
-                    {images.map((img, idx) => (
-                        <div key={img.id} style={{
-                            border: img.isTemp ? '2px dashed #3b82f6' : '1.5px solid #cbd5e1',
-                            borderRadius: '14px', background: '#fff', overflow: 'hidden',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column'
-                        }}>
-                            {/* 이미지 및 주석 합성 렌더링 컨테이너 */}
-                            <div style={{ position: 'relative', height: '260px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <AnnotatedCardImage imageUrl={img.imageUrl} annotationsJson={img.annotationsJson} altText={`포장방법 ${idx + 1}`} />
-                                
-                                <span style={{ position: 'absolute', top: '10px', left: '10px', background: img.isTemp ? '#2563eb' : 'rgba(15,23,42,0.75)', color: '#fff', fontSize: '12px', fontWeight: 'bold', padding: '4px 10px', borderRadius: '6px' }}>
-                                    NO. {idx + 1} {img.isTemp ? '(미저장)' : ''}
-                                </span>
-
-                                {canEdit && (
-                                    <button 
-                                        type="button" onClick={() => handleDeleteImage(img)}
-                                        style={{ position: 'absolute', top: '10px', right: '10px', background: '#fff', border: '1px solid #fee2e2', color: '#ef4444', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.12)', fontSize: '14px' }}
-                                        title="사진 삭제"
-                                    >
-                                        🗑️
-                                    </button>
-                                )}
-                            </div>
-
-                            <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
-                                {/* 캡션 3줄 전용 textarea */}
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>
-                                        📝 캡션 (세부 설명 - 3줄 작성)
-                                    </label>
-                                    <textarea 
-                                        rows={3}
-                                        value={img.captionText || ''} 
-                                        onChange={(e) => handleCaptionChange(img.id, e.target.value)}
-                                        placeholder="포장방법, 착인 규정, 파렛트 적재 시 주의사항을 3줄로 자유롭게 기재하세요..." 
-                                        disabled={!canEdit}
-                                        style={{ width: '100%', fontSize: '14px', fontWeight: '600', padding: '10px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', background: canEdit ? '#fff' : '#f8fafc', color: '#0f172a', resize: 'vertical', lineHeight: '1.5' }}
-                                    />
-                                </div>
-
-                                <div style={{ display: 'flex', gap: '8px' }}>
-                                    <button 
-                                        type="button" onClick={() => openCanvasEditor(img)}
-                                        style={{ flex: 1, padding: '10px', fontSize: '13px', background: '#0f172a', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                                    >
-                                        ✏️ 주석 편집 (도형/글씨 추가)
-                                    </button>
-                                </div>
-                            </div>
+                <div style={{ marginBottom: '24px' }}>
+                    {canEdit && (
+                        <div style={{ marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f1f5f9', padding: '10px 16px', borderRadius: '10px', border: '1px solid #cbd5e1' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                🖐️ <strong>순서 변경:</strong> 카드를 마우스로 드래그 앤 드롭하여 배치하거나, ◀ ▶ 버튼으로 순서를 조정하세요.
+                            </span>
+                            <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569' }}>
+                                총 {images.length}장 등록됨
+                            </span>
                         </div>
-                    ))}
-                    
+                    )}
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '20px' }}>
+                        {images.map((img, idx) => {
+                            const isDragging = draggedIndex === idx;
+                            const isDragOver = dragOverIndex === idx;
+
+                            return (
+                                <div 
+                                    key={img.id}
+                                    draggable={canEdit}
+                                    onDragStart={(e) => handleDragStart(e, idx)}
+                                    onDragOver={(e) => handleDragOver(e, idx)}
+                                    onDragLeave={(e) => handleDragLeave(e, idx)}
+                                    onDrop={(e) => handleDrop(e, idx)}
+                                    onDragEnd={handleDragEnd}
+                                    style={{
+                                        border: isDragOver
+                                            ? '2.5px solid #2563eb'
+                                            : (img.isTemp ? '2px dashed #3b82f6' : '1.5px solid #cbd5e1'),
+                                        borderRadius: '14px',
+                                        background: isDragOver ? '#eff6ff' : '#fff',
+                                        overflow: 'hidden',
+                                        boxShadow: isDragOver 
+                                            ? '0 0 16px rgba(37,99,235,0.35)' 
+                                            : (isDragging ? '0 2px 4px rgba(0,0,0,0.1)' : '0 2px 8px rgba(0,0,0,0.06)'),
+                                        opacity: isDragging ? 0.4 : 1,
+                                        transform: isDragging ? 'scale(0.98)' : (isDragOver ? 'scale(1.02)' : 'none'),
+                                        transition: 'all 0.15s ease',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        cursor: canEdit ? 'grab' : 'default',
+                                        position: 'relative'
+                                    }}
+                                >
+                                    {/* 드래그 오버 상태 타겟 안내 Overlay */}
+                                    {isDragOver && (
+                                        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 10, background: 'rgba(37, 99, 235, 0.08)', pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <span style={{ background: '#2563eb', color: '#fff', fontSize: '13px', fontWeight: 'bold', padding: '8px 16px', borderRadius: '20px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+                                                📍 이 위치로 이동
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    {/* 이미지 및 주석 합성 렌더링 컨테이너 */}
+                                    <div style={{ position: 'relative', height: '260px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <AnnotatedCardImage imageUrl={img.imageUrl} annotationsJson={img.annotationsJson} altText={`포장방법 ${idx + 1}`} />
+                                        
+                                        <div style={{ position: 'absolute', top: '10px', left: '10px', display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                            <span style={{ background: img.isTemp ? '#2563eb' : 'rgba(15,23,42,0.85)', color: '#fff', fontSize: '12px', fontWeight: 'bold', padding: '4px 10px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                ☰ NO. {idx + 1} {img.isTemp ? '(미저장)' : ''}
+                                            </span>
+
+                                            {/* 순서 조정 빠른 이동 버튼 (◀ ▶) */}
+                                            {canEdit && (
+                                                <div style={{ display: 'flex', gap: '2px', background: 'rgba(255,255,255,0.95)', padding: '2px 4px', borderRadius: '6px', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }}>
+                                                    <button 
+                                                        type="button" 
+                                                        disabled={idx === 0}
+                                                        onClick={(e) => { e.stopPropagation(); moveImageStep(idx, -1); }}
+                                                        style={{ border: 'none', background: idx === 0 ? '#e2e8f0' : '#fff', color: idx === 0 ? '#94a3b8' : '#1e293b', borderRadius: '4px', padding: '2px 6px', fontSize: '11px', cursor: idx === 0 ? 'not-allowed' : 'pointer', fontWeight: 'bold' }}
+                                                        title="앞으로 이동"
+                                                    >
+                                                        ◀
+                                                    </button>
+                                                    <button 
+                                                        type="button" 
+                                                        disabled={idx === images.length - 1}
+                                                        onClick={(e) => { e.stopPropagation(); moveImageStep(idx, 1); }}
+                                                        style={{ border: 'none', background: idx === images.length - 1 ? '#e2e8f0' : '#fff', color: idx === images.length - 1 ? '#94a3b8' : '#1e293b', borderRadius: '4px', padding: '2px 6px', fontSize: '11px', cursor: idx === images.length - 1 ? 'not-allowed' : 'pointer', fontWeight: 'bold' }}
+                                                        title="뒤로 이동"
+                                                    >
+                                                        ▶
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {canEdit && (
+                                            <button 
+                                                type="button" onClick={() => handleDeleteImage(img)}
+                                                style={{ position: 'absolute', top: '10px', right: '10px', background: '#fff', border: '1px solid #fee2e2', color: '#ef4444', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.12)', fontSize: '14px' }}
+                                                title="사진 삭제"
+                                            >
+                                                🗑️
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
+                                        {/* 캡션 3줄 전용 textarea */}
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: '#475569', marginBottom: '6px' }}>
+                                                📝 캡션 (세부 설명 - 3줄 작성)
+                                            </label>
+                                            <textarea 
+                                                rows={3}
+                                                value={img.captionText || ''} 
+                                                onChange={(e) => handleCaptionChange(img.id, e.target.value)}
+                                                placeholder="포장방법, 착인 규정, 파렛트 적재 시 주의사항을 3줄로 자유롭게 기재하세요..." 
+                                                disabled={!canEdit}
+                                                style={{ width: '100%', fontSize: '14px', fontWeight: '600', padding: '10px 12px', border: '1.5px solid #cbd5e1', borderRadius: '8px', background: canEdit ? '#fff' : '#f8fafc', color: '#0f172a', resize: 'vertical', lineHeight: '1.5' }}
+                                            />
+                                        </div>
+
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <button 
+                                                type="button" onClick={() => openCanvasEditor(img)}
+                                                style={{ flex: 1, padding: '10px', fontSize: '13px', background: '#0f172a', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                                            >
+                                                ✏️ 주석 편집 (도형/글씨 추가)
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
                     {/* 사진 추가 카드 영역 */}
                     {canEdit && images.length < 20 && (
                         <div style={{

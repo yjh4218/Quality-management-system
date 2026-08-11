@@ -102,7 +102,7 @@ public class PackagingSpecExportService {
         subHeaderFont.setFontHeightInPoints((short) 10);
         subHeaderFont.setBold(true);
         subHeaderStyle.setFont(subHeaderFont);
-        subHeaderStyle.setFillForegroundColor(org.apache.poi.ss.usermodel.IndexedColors.GREY_25_PERCENT.getIndex());
+        subHeaderStyle.setFillForegroundColor(org.apache.poi.ss.usermodel.IndexedColors.PALE_BLUE.getIndex());
         subHeaderStyle.setFillPattern(org.apache.poi.ss.usermodel.FillPatternType.SOLID_FOREGROUND);
         subHeaderStyle.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
         subHeaderStyle.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
@@ -114,7 +114,7 @@ public class PackagingSpecExportService {
         labelFont.setFontHeightInPoints((short) 10);
         labelFont.setBold(true);
         labelStyle.setFont(labelFont);
-        labelStyle.setFillForegroundColor(org.apache.poi.ss.usermodel.IndexedColors.LIGHT_TURQUOISE.getIndex());
+        labelStyle.setFillForegroundColor(org.apache.poi.ss.usermodel.IndexedColors.LIGHT_CORNFLOWER_BLUE.getIndex());
         labelStyle.setFillPattern(org.apache.poi.ss.usermodel.FillPatternType.SOLID_FOREGROUND);
         labelStyle.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
         labelStyle.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
@@ -147,10 +147,15 @@ public class PackagingSpecExportService {
             Sheet sheet0 = workbook.createSheet("포장사양서");
 
             Row titleRow = sheet0.createRow(0);
-            titleRow.setHeightInPoints(35);
-            org.apache.poi.ss.usermodel.Cell titleCell = titleRow.createCell(0);
-            titleCell.setCellValue("📦 제품 포장 사양서 (Packaging Specification)");
-            titleCell.setCellStyle(titleStyle);
+            titleRow.setHeightInPoints(40);
+            Row titleRowSub = sheet0.createRow(1); // Row 1 생성으로 병합 테두리 보정
+            for (int col = 0; col <= 7; col++) {
+                org.apache.poi.ss.usermodel.Cell c0 = titleRow.createCell(col);
+                c0.setCellStyle(titleStyle);
+                org.apache.poi.ss.usermodel.Cell c1 = titleRowSub.createCell(col);
+                c1.setCellStyle(titleStyle);
+            }
+            titleRow.getCell(0).setCellValue("📦 제품 포장 사양서 (Packaging Specification)");
             sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(0, 1, 0, 7));
 
             String capacityInfo = product.getCapacity() != null && !product.getCapacity().isEmpty() ? " " + product.getCapacity() : "";
@@ -164,135 +169,167 @@ public class PackagingSpecExportService {
             PackagingSpecification spec = specs.isEmpty() ? PackagingSpecification.builder().product(product).build() : specs.get(0);
 
             // [1. 제품 및 기본 정보]
-            createSectionHeader(sheet0, 3, "1. 제품 및 기본 정보", headerStyle, 7);
+            createSectionHeader(sheet0, 3, "1. 📌 제품 및 기본 정보", headerStyle, 7);
             addRow(sheet0, 4, labelStyle, dataStyle, "품목코드", product.getItemCode(), "브랜드명", product.getBrand() != null ? product.getBrand().getName() : "-", "유통채널", channelNames, "버전", "v" + (spec.getVersion() != null ? spec.getVersion() : 1));
             addRow(sheet0, 5, labelStyle, dataStyle, "제품명(국문)", productNameWithSpecs, "제품명(영문)", englishProductNameWithSpecs, "제조사", product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-", "제품구분", product.getProductType() != null ? product.getProductType().toString() : "-");
             addRow(sheet0, 6, labelStyle, dataStyle, "사용기한", (product.getShelfLifeMonths() != null ? "제조일로부터 " + product.getShelfLifeMonths() + "개월" : "-"), "개봉후기한", (product.getOpenedShelfLifeMonths() != null ? "개봉 후 " + product.getOpenedShelfLifeMonths() + "개월" : "-"), "제품 바코드", (product.getProductBarcode() != null ? product.getProductBarcode() : "-"), "아웃박스 바코드", (product.getOutboxBarcode() != null ? product.getOutboxBarcode() : "-"));
             addRow(sheet0, 7, labelStyle, dataStyle, "기획 담당", (spec.getPlannerName() != null ? spec.getPlannerName() : "-"), "디자인 담당", (spec.getDesignerName() != null ? spec.getDesignerName() : "-"), "품질관리 담당", (spec.getQcName() != null ? spec.getQcName() : "-"), "바코드 담당자", (spec.getBarcodeManager() != null ? spec.getBarcodeManager() : "-"));
 
+            // 여백 행 (Row 8)
+            createMarginRow(sheet0, 8, 10);
+
             // [2. 개정 이력]
-            createSectionHeader(sheet0, 9, "2. 개정 이력 (Revision History)", headerStyle, 7);
+            createSectionHeader(sheet0, 9, "2. 🔄 개정 이력 (Revision History)", headerStyle, 7);
             Row revHeader = sheet0.createRow(10);
-            revHeader.setHeightInPoints(22);
+            revHeader.setHeightInPoints(24);
             createCell(revHeader, 0, "No.", subHeaderStyle);
             createCell(revHeader, 1, "개정 내용", subHeaderStyle);
             sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(10, 10, 1, 4));
+            for (int col = 2; col <= 4; col++) createCell(revHeader, col, "", subHeaderStyle);
             createCell(revHeader, 5, "개정일", subHeaderStyle);
             createCell(revHeader, 6, "개정자", subHeaderStyle);
+            createCell(revHeader, 7, "", subHeaderStyle);
             sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(10, 10, 6, 7));
 
             List<PackagingSpecRevision> revisions = revisionRepository.findBySpecId(spec.getId());
             int currentRow = 11;
             if (revisions.isEmpty()) {
                 Row r = sheet0.createRow(currentRow);
+                r.setHeightInPoints(24);
                 createCell(r, 0, "-", centerDataStyle);
                 createCell(r, 1, "등록된 개정이력이 없습니다.", dataStyle);
                 sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 1, 4));
+                for (int c = 2; c <= 4; c++) createCell(r, c, "", dataStyle);
                 createCell(r, 5, "-", centerDataStyle);
                 createCell(r, 6, "-", centerDataStyle);
+                createCell(r, 7, "", centerDataStyle);
                 sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 6, 7));
                 currentRow++;
             } else {
                 for (PackagingSpecRevision rev : revisions) {
                     Row r = sheet0.createRow(currentRow);
+                    r.setHeightInPoints(24);
                     createCell(r, 0, String.valueOf(rev.getRevisionNo()), centerDataStyle);
                     createCell(r, 1, rev.getContent() != null ? rev.getContent() : "-", dataStyle);
                     sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 1, 4));
+                    for (int c = 2; c <= 4; c++) createCell(r, c, "", dataStyle);
                     createCell(r, 5, rev.getRevisionDate() != null ? rev.getRevisionDate().toString() : "-", centerDataStyle);
                     createCell(r, 6, rev.getRevisionAuthor() != null ? rev.getRevisionAuthor() : "-", centerDataStyle);
+                    createCell(r, 7, "", centerDataStyle);
                     sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 6, 7));
                     currentRow++;
                 }
             }
 
+            // 여백 행
+            createMarginRow(sheet0, currentRow++, 10);
+
             // [3. 구성품 리스트 (BOM)]
-            currentRow++;
-            createSectionHeader(sheet0, currentRow, "3. 제품 구성품 리스트 (BOM Components)", headerStyle, 7);
+            createSectionHeader(sheet0, currentRow, "3. 🧩 제품 구성품 리스트 (BOM Components)", headerStyle, 7);
             currentRow++;
             Row compHeader = sheet0.createRow(currentRow);
-            compHeader.setHeightInPoints(22);
+            compHeader.setHeightInPoints(24);
             createCell(compHeader, 0, "구성품명", subHeaderStyle);
             createCell(compHeader, 1, "재질 및 세부사양", subHeaderStyle);
+            createCell(compHeader, 2, "", subHeaderStyle);
             sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 1, 2));
             createCell(compHeader, 3, "규격 및 사이즈", subHeaderStyle);
             createCell(compHeader, 4, "입수량", subHeaderStyle);
             createCell(compHeader, 5, "공급업체", subHeaderStyle);
             createCell(compHeader, 6, "비고", subHeaderStyle);
+            createCell(compHeader, 7, "", subHeaderStyle);
             sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 6, 7));
             currentRow++;
 
             List<PackagingSpecComponent> components = componentRepository.findBySpecId(spec.getId());
             if (components.isEmpty()) {
                 Row r = sheet0.createRow(currentRow);
+                r.setHeightInPoints(24);
                 createCell(r, 0, "-", centerDataStyle);
                 createCell(r, 1, "등록된 구성품이 없습니다.", dataStyle);
+                createCell(r, 2, "", dataStyle);
                 sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 1, 2));
                 createCell(r, 3, "-", centerDataStyle);
                 createCell(r, 4, "1", centerDataStyle);
                 createCell(r, 5, "-", centerDataStyle);
                 createCell(r, 6, "-", dataStyle);
+                createCell(r, 7, "", dataStyle);
                 sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 6, 7));
                 currentRow++;
             } else {
                 for (PackagingSpecComponent comp : components) {
                     Row r = sheet0.createRow(currentRow);
+                    r.setHeightInPoints(24);
                     createCell(r, 0, comp.getComponentName() != null ? comp.getComponentName() : "-", centerDataStyle);
                     createCell(r, 1, comp.getSpecDetails() != null ? comp.getSpecDetails() : "-", dataStyle);
+                    createCell(r, 2, "", dataStyle);
                     sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 1, 2));
                     createCell(r, 3, comp.getSizeDimension() != null ? comp.getSizeDimension() : "-", centerDataStyle);
                     createCell(r, 4, comp.getQuantity() != null ? String.valueOf(comp.getQuantity()) : "1", centerDataStyle);
                     createCell(r, 5, comp.getSupplier() != null ? comp.getSupplier() : "-", centerDataStyle);
                     createCell(r, 6, comp.getRemarks() != null ? comp.getRemarks() : "-", dataStyle);
+                    createCell(r, 7, "", dataStyle);
                     sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 6, 7));
                     currentRow++;
                 }
             }
 
+            // 여백 행
+            createMarginRow(sheet0, currentRow++, 10);
+
             // [4. 아웃박스 & 착인 기준 및 포장방법 서술]
-            currentRow++;
-            createSectionHeader(sheet0, currentRow, "4. 아웃박스 & 착인 기준 및 포장방법", headerStyle, 7);
+            createSectionHeader(sheet0, currentRow, "4. 📦 아웃박스 & 착인 기준 및 포장방법", headerStyle, 7);
             currentRow++;
             addRow(sheet0, currentRow++, labelStyle, dataStyle, "제품 착인 - 표기방법", spec.getMarkingMethod() != null ? spec.getMarkingMethod() : "-", "제품 착인 - 표기기준", spec.getMarkingStandard() != null ? spec.getMarkingStandard() : "-", "포장방법 타입", "서술형 지침", "-", "-");
 
             Row methodRow = sheet0.createRow(currentRow);
-            methodRow.setHeightInPoints(80);
+            methodRow.setHeightInPoints(90);
             createCell(methodRow, 0, "포장방법 (서술)", labelStyle);
             createCell(methodRow, 1, spec.getPackagingMethodText() != null ? spec.getPackagingMethodText() : "등록된 포장방법 설명이 없습니다.", wrapDataStyle);
+            for (int col = 2; col <= 7; col++) createCell(methodRow, col, "", wrapDataStyle);
             sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 1, 7));
             currentRow++;
 
+            // 여백 행
+            createMarginRow(sheet0, currentRow++, 10);
+
             // [5. 체적/적재 사양 및 검증 기준]
-            currentRow++;
-            createSectionHeader(sheet0, currentRow, "5. 체적/적재 사양 및 검증 기준 (Volume & Loading Spec)", headerStyle, 7);
+            createSectionHeader(sheet0, currentRow, "5. 🚚 체적/적재 사양 및 검증 기준 (Volume & Loading Spec)", headerStyle, 7);
             currentRow++;
             addRow(sheet0, currentRow++, labelStyle, dataStyle, "인박스 구분", spec.getInboxType() != null ? spec.getInboxType() : "인박스", "인박스 입수량", spec.getInboxQty() != null ? spec.getInboxQty() + " ea" : "-", "인박스 규격", spec.getInboxSize() != null ? spec.getInboxSize() : "-", "인박스 재질", spec.getInboxMaterial() != null ? spec.getInboxMaterial() : "-");
             addRow(sheet0, currentRow++, labelStyle, dataStyle, "아웃박스 구분", spec.getOutboxType() != null ? spec.getOutboxType() : "아웃박스", "아웃박스 입수량", spec.getOutboxQty() != null ? spec.getOutboxQty() + " ea" : "-", "아웃박스 규격", spec.getOutboxSize() != null ? spec.getOutboxSize() : "-", "아웃박스 재질", spec.getOutboxMaterial() != null ? spec.getOutboxMaterial() : "-");
             addRow(sheet0, currentRow++, labelStyle, dataStyle, "팔레트 종류", spec.getPalletTypeStr() != null ? spec.getPalletTypeStr() : "-", "적재 방법", spec.getPalletStackingMethod() != null ? spec.getPalletStackingMethod() : "-", "팔레트 규격", spec.getPalletSize() != null ? spec.getPalletSize() : "-", "높이 제한", spec.getPalletHeightLimit() != null ? spec.getPalletHeightLimit() : "-");
             addRow(sheet0, currentRow++, labelStyle, dataStyle, "1아웃박스 중량 [제한12kg]", (spec.getOneOutboxWeight() != null ? spec.getOneOutboxWeight() + " kg" : "-"), "1팔레트 중량 [제한630kg]", (spec.getOnePalletWeight() != null ? spec.getOnePalletWeight() + " kg" : "-"), "1팔레트 높이 [제한1500mm]", (spec.getOnePalletHeight() != null ? spec.getOnePalletHeight() + " mm" : "-"), "검증 상태", "정상 규격");
 
+            // 여백 행
+            createMarginRow(sheet0, currentRow++, 10);
+
             // [6. 사양서 특이사항]
-            currentRow++;
-            createSectionHeader(sheet0, currentRow, "6. 사양서 특이사항 (Remarks)", headerStyle, 7);
+            createSectionHeader(sheet0, currentRow, "6. 📝 사양서 특이사항 (Remarks)", headerStyle, 7);
             currentRow++;
             Row remRow = sheet0.createRow(currentRow);
-            remRow.setHeightInPoints(80);
+            remRow.setHeightInPoints(90);
             createCell(remRow, 0, "특이사항", labelStyle);
             createCell(remRow, 1, spec.getRemarks() != null ? spec.getRemarks() : "등록된 특이사항이 없습니다.", wrapDataStyle);
+            for (int col = 2; col <= 7; col++) createCell(remRow, col, "", wrapDataStyle);
             sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 1, 7));
 
-            sheet0.setColumnWidth(0, 5000); sheet0.setColumnWidth(1, 8000);
-            sheet0.setColumnWidth(2, 5000); sheet0.setColumnWidth(3, 8000);
-            sheet0.setColumnWidth(4, 5000); sheet0.setColumnWidth(5, 8000);
-            sheet0.setColumnWidth(6, 5000); sheet0.setColumnWidth(7, 8000);
+            // 컬럼 너비 밸런스 최적화 (레이블: 5500, 데이터: 7500)
+            sheet0.setColumnWidth(0, 5500); sheet0.setColumnWidth(1, 7500);
+            sheet0.setColumnWidth(2, 5500); sheet0.setColumnWidth(3, 7500);
+            sheet0.setColumnWidth(4, 5500); sheet0.setColumnWidth(5, 7500);
+            sheet0.setColumnWidth(6, 5500); sheet0.setColumnWidth(7, 7500);
+            applyPrintSetup(sheet0);
 
             // --- Sheet 2: 포장방법 사진 ---
             Sheet sheet1 = workbook.createSheet("포장방법 사진");
             createSectionHeader(sheet1, 0, "📸 순서별 포장 방법 이미지 지침", headerStyle, 3);
             Row imgHeader = sheet1.createRow(1);
-            imgHeader.setHeightInPoints(22);
+            imgHeader.setHeightInPoints(24);
             createCell(imgHeader, 0, "순서", subHeaderStyle);
             createCell(imgHeader, 1, "포장 방법 사진 (Image)", subHeaderStyle);
             createCell(imgHeader, 2, "포장 공정 단계 캡션 / 상세 지침", subHeaderStyle);
+            createCell(imgHeader, 3, "", subHeaderStyle);
             sheet1.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(1, 1, 2, 3));
 
             org.apache.poi.ss.usermodel.Drawing<?> drawing = sheet1.createDrawingPatriarch();
@@ -301,18 +338,21 @@ public class PackagingSpecExportService {
             int imgRow = 2;
             if (methodImages == null || methodImages.isEmpty()) {
                 Row r = sheet1.createRow(imgRow);
+                r.setHeightInPoints(24);
                 createCell(r, 0, "-", centerDataStyle);
                 createCell(r, 1, "-", centerDataStyle);
                 createCell(r, 2, "등록된 포장방법 사진 지침이 없습니다.", dataStyle);
+                createCell(r, 3, "", dataStyle);
                 sheet1.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(imgRow, imgRow, 2, 3));
             } else {
                 for (int i = 0; i < methodImages.size(); i++) {
                     com.example.ims.entity.PackagingMethodImage imgEntity = methodImages.get(i);
                     Row r = sheet1.createRow(imgRow);
-                    r.setHeightInPoints(130); // 넉넉한 높이
+                    r.setHeightInPoints(320); // [요청 반영] 기존 160pt에서 2배로 확대 (320pt)
                     createCell(r, 0, "NO." + (i + 1), centerDataStyle);
                     createCell(r, 1, "", centerDataStyle); // 사진 들어갈 셀
                     createCell(r, 2, imgEntity.getCaptionText() != null ? imgEntity.getCaptionText() : "-", wrapDataStyle);
+                    createCell(r, 3, "", wrapDataStyle);
                     sheet1.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(imgRow, imgRow, 2, 3));
 
                     // Excel에 주석(도형/텍스트)이 합성된 이미지 바이너리 렌더링
@@ -337,28 +377,32 @@ public class PackagingSpecExportService {
                 }
             }
             sheet1.setColumnWidth(0, 3000); 
-            sheet1.setColumnWidth(1, 14000); // 이미지 칼럼
-            sheet1.setColumnWidth(2, 10000); 
-            sheet1.setColumnWidth(3, 10000);
+            sheet1.setColumnWidth(1, 6000); // [요청 반영] 사진 컬럼 너비 기존 18000의 1/3으로 축소 (6000)
+            sheet1.setColumnWidth(2, 8000); 
+            sheet1.setColumnWidth(3, 8000);
+            applyPrintSetup(sheet1);
 
             // --- Sheet 3: 인박스 현품표 ---
             Sheet sheet2 = workbook.createSheet("인박스 현품표");
-            createSectionHeader(sheet2, 0, "[ 인 박 스 현 품 표 / INBOX LABEL ]", headerStyle, 3);
+            createSectionHeader(sheet2, 0, "[ 인 박 스 현 품 표 / INBOX LABEL ]", headerStyle, 3, 30);
             addRow(sheet2, 1, labelStyle, dataStyle, "품목코드 (Product Code)", product.getItemCode(), "입수량 (Quantity)", (spec.getInboxQty() != null ? spec.getInboxQty() + " EA" : "0 EA"));
             addRow(sheet2, 2, labelStyle, dataStyle, "국문 제품명 (Product Name KOR)", product.getProductName(), "제조사 (Manufacturer)", (product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-"));
             addRow(sheet2, 3, labelStyle, dataStyle, "영문 제품명 (Product Name ENG)", (product.getEnglishProductName() != null ? product.getEnglishProductName() : "-"), "제조일자 (Mfg. Date)", "[ YYYY.MM.DD 표기 ]");
             addRow(sheet2, 4, labelStyle, dataStyle, "제조번호 (Lot No.)", "[ 생산 배치번호 표기 ]", "사용기한 (Exp. Date)", "[ YYYY.MM.DD 까지 ]");
             
             Row inboxNoteRow = sheet2.createRow(5);
-            inboxNoteRow.setHeightInPoints(25);
+            inboxNoteRow.setHeightInPoints(28);
             createCell(inboxNoteRow, 0, "바코드 규정", labelStyle);
             createCell(inboxNoteRow, 1, "⚠️ 인박스 현품표에는 바코드를 부착/표기하지 않습니다. (규정 준수)", wrapDataStyle);
+            for (int col = 2; col <= 3; col++) createCell(inboxNoteRow, col, "", wrapDataStyle);
             sheet2.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(5, 5, 1, 3));
             sheet2.setColumnWidth(0, 7000); sheet2.setColumnWidth(1, 10000); sheet2.setColumnWidth(2, 7000); sheet2.setColumnWidth(3, 10000);
+            setOuterBorders(sheet2, 0, 5, 0, 3);
+            applyPrintSetup(sheet2);
 
             // --- Sheet 4: 아웃박스 현품표 ---
             Sheet sheet3 = workbook.createSheet("아웃박스 현품표");
-            createSectionHeader(sheet3, 0, "[ 아 웃 박 스 현 품 표 / OUTBOX LABEL ]", headerStyle, 3);
+            createSectionHeader(sheet3, 0, "[ 아 웃 박 스 현 품 표 / OUTBOX LABEL ]", headerStyle, 3, 30);
             addRow(sheet3, 1, labelStyle, dataStyle, "품목코드 (Product Code)", product.getItemCode(), "입수량 (Quantity)", (spec.getOutboxQty() != null ? spec.getOutboxQty() + " EA" : "0 EA"));
             addRow(sheet3, 2, labelStyle, dataStyle, "국문 제품명 (Product Name KOR)", product.getProductName(), "제품무게 (Gross Weight)", (spec.getOneOutboxWeight() != null ? spec.getOneOutboxWeight() + " kg" : "- kg"));
             addRow(sheet3, 3, labelStyle, dataStyle, "영문 제품명 (Product Name ENG)", (product.getEnglishProductName() != null ? product.getEnglishProductName() : "-"), "제조일자 (Mfg. Date)", "[ YYYY.MM.DD 표기 ]");
@@ -369,13 +413,14 @@ public class PackagingSpecExportService {
             
             // 바코드 이미지 렌더링 행 (Row 6)
             Row obBarcodeRow = sheet3.createRow(6);
-            obBarcodeRow.setHeightInPoints(50);
+            obBarcodeRow.setHeightInPoints(60); // 60pt 상향
             createCell(obBarcodeRow, 0, "바코드 스캔 이미지", labelStyle);
             createCell(obBarcodeRow, 1, "", dataStyle);
+            for (int col = 2; col <= 3; col++) createCell(obBarcodeRow, col, "", dataStyle);
             sheet3.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(6, 6, 1, 3));
 
             org.apache.poi.ss.usermodel.Drawing<?> obDrawing = sheet3.createDrawingPatriarch();
-            byte[] obBarcodeBytes = generateBarcodeImageBytes(outboxBarcodeText, 320, 65);
+            byte[] obBarcodeBytes = generateBarcodeImageBytes(outboxBarcodeText, 380, 80); // 380x80 상향
             if (obBarcodeBytes != null) {
                 try {
                     int picIdx = workbook.addPicture(obBarcodeBytes, Workbook.PICTURE_TYPE_PNG);
@@ -391,10 +436,12 @@ public class PackagingSpecExportService {
             }
 
             sheet3.setColumnWidth(0, 7000); sheet3.setColumnWidth(1, 10000); sheet3.setColumnWidth(2, 7000); sheet3.setColumnWidth(3, 10000);
+            setOuterBorders(sheet3, 0, 6, 0, 3);
+            applyPrintSetup(sheet3);
 
             // --- Sheet 5: 팔레트 현품표 ---
             Sheet sheet4 = workbook.createSheet("팔레트 현품표");
-            createSectionHeader(sheet4, 0, "[ 팔 레 트 현 품 표 / PALLET LABEL ]", headerStyle, 3);
+            createSectionHeader(sheet4, 0, "[ 팔 레 트 현 품 표 / PALLET LABEL ]", headerStyle, 3, 30);
             String palletBoxQtyStr = (product.getPalletInfo() != null && product.getPalletInfo().getPalletQuantity() != null) ? String.valueOf(product.getPalletInfo().getPalletQuantity()) : null;
             Integer pBoxQty = parseIntSafe(palletBoxQtyStr);
             String totalPcsStr = "- EA";
@@ -411,13 +458,14 @@ public class PackagingSpecExportService {
 
             // 바코드 이미지 렌더링 행 (Row 6)
             Row pltBarcodeRow = sheet4.createRow(6);
-            pltBarcodeRow.setHeightInPoints(50);
+            pltBarcodeRow.setHeightInPoints(60); // 60pt 상향
             createCell(pltBarcodeRow, 0, "바코드 스캔 이미지", labelStyle);
             createCell(pltBarcodeRow, 1, "", dataStyle);
+            for (int col = 2; col <= 3; col++) createCell(pltBarcodeRow, col, "", dataStyle);
             sheet4.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(6, 6, 1, 3));
 
             org.apache.poi.ss.usermodel.Drawing<?> pltDrawing = sheet4.createDrawingPatriarch();
-            byte[] pltBarcodeBytes = generateBarcodeImageBytes(palletBarcodeText, 320, 65);
+            byte[] pltBarcodeBytes = generateBarcodeImageBytes(palletBarcodeText, 380, 80); // 380x80 상향
             if (pltBarcodeBytes != null) {
                 try {
                     int picIdx = workbook.addPicture(pltBarcodeBytes, Workbook.PICTURE_TYPE_PNG);
@@ -433,6 +481,8 @@ public class PackagingSpecExportService {
             }
 
             sheet4.setColumnWidth(0, 7000); sheet4.setColumnWidth(1, 10000); sheet4.setColumnWidth(2, 7000); sheet4.setColumnWidth(3, 10000);
+            setOuterBorders(sheet4, 0, 6, 0, 3);
+            applyPrintSetup(sheet4);
 
             workbook.write(out);
             return out.toByteArray();
@@ -440,8 +490,12 @@ public class PackagingSpecExportService {
     }
 
     private void createSectionHeader(Sheet sheet, int rowIdx, String title, org.apache.poi.ss.usermodel.CellStyle style, int maxCol) {
+        createSectionHeader(sheet, rowIdx, title, style, maxCol, 28);
+    }
+
+    private void createSectionHeader(Sheet sheet, int rowIdx, String title, org.apache.poi.ss.usermodel.CellStyle style, int maxCol, int heightInPoints) {
         Row row = sheet.createRow(rowIdx);
-        row.setHeightInPoints(24);
+        row.setHeightInPoints(heightInPoints);
         createCell(row, 0, title, style);
         for (int i = 1; i <= maxCol; i++) {
             createCell(row, i, "", style);
@@ -449,9 +503,14 @@ public class PackagingSpecExportService {
         sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(rowIdx, rowIdx, 0, maxCol));
     }
 
+    private void createMarginRow(Sheet sheet, int rowIdx, int heightInPoints) {
+        Row row = sheet.createRow(rowIdx);
+        row.setHeightInPoints(heightInPoints);
+    }
+
     private void addRow(Sheet sheet, int rowIdx, org.apache.poi.ss.usermodel.CellStyle labelStyle, org.apache.poi.ss.usermodel.CellStyle dataStyle, String l1, String v1, String l2, String v2, String l3, String v3, String l4, String v4) {
         Row row = sheet.createRow(rowIdx);
-        row.setHeightInPoints(20);
+        row.setHeightInPoints(24);
         createCell(row, 0, l1, labelStyle);
         createCell(row, 1, v1, dataStyle);
         createCell(row, 2, l2, labelStyle);
@@ -464,7 +523,7 @@ public class PackagingSpecExportService {
 
     private void addRow(Sheet sheet, int rowIdx, org.apache.poi.ss.usermodel.CellStyle labelStyle, org.apache.poi.ss.usermodel.CellStyle dataStyle, String l1, String v1, String l2, String v2) {
         Row row = sheet.createRow(rowIdx);
-        row.setHeightInPoints(20);
+        row.setHeightInPoints(24);
         createCell(row, 0, l1, labelStyle);
         createCell(row, 1, v1, dataStyle);
         createCell(row, 2, l2, labelStyle);
@@ -484,10 +543,50 @@ public class PackagingSpecExportService {
         style.setBorderBottom(org.apache.poi.ss.usermodel.BorderStyle.THIN);
         style.setBorderLeft(org.apache.poi.ss.usermodel.BorderStyle.THIN);
         style.setBorderRight(org.apache.poi.ss.usermodel.BorderStyle.THIN);
-        style.setTopBorderColor(org.apache.poi.ss.usermodel.IndexedColors.GREY_40_PERCENT.getIndex());
-        style.setBottomBorderColor(org.apache.poi.ss.usermodel.IndexedColors.GREY_40_PERCENT.getIndex());
-        style.setLeftBorderColor(org.apache.poi.ss.usermodel.IndexedColors.GREY_40_PERCENT.getIndex());
-        style.setRightBorderColor(org.apache.poi.ss.usermodel.IndexedColors.GREY_40_PERCENT.getIndex());
+        style.setTopBorderColor(org.apache.poi.ss.usermodel.IndexedColors.GREY_50_PERCENT.getIndex());
+        style.setBottomBorderColor(org.apache.poi.ss.usermodel.IndexedColors.GREY_50_PERCENT.getIndex());
+        style.setLeftBorderColor(org.apache.poi.ss.usermodel.IndexedColors.GREY_50_PERCENT.getIndex());
+        style.setRightBorderColor(org.apache.poi.ss.usermodel.IndexedColors.GREY_50_PERCENT.getIndex());
+    }
+
+    private void setOuterBorders(Sheet sheet, int startRow, int endRow, int startCol, int endCol) {
+        Workbook wb = sheet.getWorkbook();
+        for (int r = startRow; r <= endRow; r++) {
+            Row row = sheet.getRow(r);
+            if (row == null) row = sheet.createRow(r);
+            for (int c = startCol; c <= endCol; c++) {
+                org.apache.poi.ss.usermodel.Cell cell = row.getCell(c);
+                if (cell == null) cell = row.createCell(c);
+                
+                org.apache.poi.ss.usermodel.CellStyle newStyle = wb.createCellStyle();
+                if (cell.getCellStyle() != null) {
+                    newStyle.cloneStyleFrom(cell.getCellStyle());
+                }
+                
+                if (r == startRow) newStyle.setBorderTop(org.apache.poi.ss.usermodel.BorderStyle.MEDIUM);
+                if (r == endRow) newStyle.setBorderBottom(org.apache.poi.ss.usermodel.BorderStyle.MEDIUM);
+                if (c == startCol) newStyle.setBorderLeft(org.apache.poi.ss.usermodel.BorderStyle.MEDIUM);
+                if (c == endCol) newStyle.setBorderRight(org.apache.poi.ss.usermodel.BorderStyle.MEDIUM);
+                
+                newStyle.setTopBorderColor(org.apache.poi.ss.usermodel.IndexedColors.GREY_50_PERCENT.getIndex());
+                newStyle.setBottomBorderColor(org.apache.poi.ss.usermodel.IndexedColors.GREY_50_PERCENT.getIndex());
+                newStyle.setLeftBorderColor(org.apache.poi.ss.usermodel.IndexedColors.GREY_50_PERCENT.getIndex());
+                newStyle.setRightBorderColor(org.apache.poi.ss.usermodel.IndexedColors.GREY_50_PERCENT.getIndex());
+                
+                cell.setCellStyle(newStyle);
+            }
+        }
+    }
+
+    private void applyPrintSetup(Sheet sheet) {
+        sheet.setAutobreaks(true);
+        sheet.getPrintSetup().setFitWidth((short) 1);
+        sheet.getPrintSetup().setFitHeight((short) 0);
+        sheet.getPrintSetup().setLandscape(false);
+        sheet.setMargin(Sheet.TopMargin, 0.5);
+        sheet.setMargin(Sheet.BottomMargin, 0.5);
+        sheet.setMargin(Sheet.LeftMargin, 0.5);
+        sheet.setMargin(Sheet.RightMargin, 0.5);
     }
 
     private void setCellValue(Sheet sheet, int rowIndex, int colIndex, String value) {
@@ -623,7 +722,7 @@ public class PackagingSpecExportService {
                     if (imgBytes != null && imgBytes.length > 0) {
                         try {
                             com.itextpdf.text.Image pdfImg = com.itextpdf.text.Image.getInstance(imgBytes);
-                            pdfImg.scaleToFit(400f, 250f);
+                            pdfImg.scaleToFit(450f, 280f); // 450f, 280f로 스케일 향상
                             pdfImg.setAlignment(com.itextpdf.text.Element.ALIGN_LEFT);
                             pdfImg.setSpacingAfter(10f);
                             document.add(pdfImg);
@@ -679,16 +778,30 @@ public class PackagingSpecExportService {
      */
     private byte[] getAnnotatedImageBytes(com.example.ims.entity.PackagingMethodImage imgEntity) {
         java.io.File imgFile = findLocalFile(imgEntity.getImageUrl(), imgEntity.getImagePath());
-        if (imgFile == null || !imgFile.exists()) {
+        BufferedImage origImg = null;
+
+        if (imgFile != null && imgFile.exists()) {
+            try {
+                origImg = ImageIO.read(imgFile);
+            } catch (Exception e) {
+                log.warn("Failed to read image from file: " + imgFile.getAbsolutePath(), e);
+            }
+        }
+
+        // 로컬 파일에서 읽지 못한 경우 URL 네트워크 통신으로 Fallback 다운로드 시도
+        if (origImg == null && imgEntity.getImageUrl() != null && imgEntity.getImageUrl().startsWith("http")) {
+            try {
+                origImg = ImageIO.read(new java.net.URL(imgEntity.getImageUrl()));
+            } catch (Exception e) {
+                log.warn("Failed to read image from URL: " + imgEntity.getImageUrl(), e);
+            }
+        }
+
+        if (origImg == null) {
             return null;
         }
 
         try {
-            BufferedImage origImg = ImageIO.read(imgFile);
-            if (origImg == null) {
-                return java.nio.file.Files.readAllBytes(imgFile.toPath());
-            }
-
             String annotationsJson = imgEntity.getAnnotationsJson();
             if (annotationsJson == null || annotationsJson.isBlank()) {
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -754,9 +867,9 @@ public class PackagingSpecExportService {
             }
             g2d.dispose();
 
-            // Downscale to fit target excel cell bound while preserving aspect ratio
-            int maxTargetWidth = 450;
-            int maxTargetHeight = 220;
+            // Downscale to fit target excel cell bound while preserving aspect ratio (Max 550x300)
+            int maxTargetWidth = 550;
+            int maxTargetHeight = 300;
             double scale = Math.min((double) maxTargetWidth / imgWidth, (double) maxTargetHeight / imgHeight);
             if (scale > 1.0) scale = 1.0; // Don't upscale small images
 
@@ -870,12 +983,24 @@ public class PackagingSpecExportService {
      * Helper to resolve physical file location across various upload path formats
      */
     private java.io.File findLocalFile(String imageUrl, String imagePath) {
+        String cleanFileName = null;
+        if (imageUrl != null && imageUrl.contains("/")) {
+            cleanFileName = imageUrl.substring(imageUrl.lastIndexOf('/') + 1);
+        } else if (imagePath != null && imagePath.contains("/")) {
+            cleanFileName = imagePath.substring(imagePath.lastIndexOf('/') + 1);
+        }
+
         String[] candidates = new String[] {
             imagePath,
             imageUrl,
             imageUrl != null ? imageUrl.replace("/uploads/", "uploads/") : null,
             imageUrl != null ? imageUrl.replace("/uploads/", "./uploads/") : null,
             imageUrl != null ? imageUrl.replace("/uploads/", "backend/uploads/") : null,
+            imageUrl != null ? imageUrl.replace("http://localhost:8080/uploads/", "uploads/") : null,
+            imageUrl != null ? imageUrl.replace("http://localhost:8080/uploads/", "./uploads/") : null,
+            cleanFileName != null ? "uploads/" + cleanFileName : null,
+            cleanFileName != null ? "./uploads/" + cleanFileName : null,
+            cleanFileName != null ? "backend/uploads/" + cleanFileName : null,
             imageUrl != null ? "data/" + imageUrl : null,
             imageUrl != null ? "./data/" + imageUrl : null
         };

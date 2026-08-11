@@ -801,6 +801,68 @@ public class SystemInitializationService {
                 log.info(">>>> [SYSTEM INIT] Seeded 'PARENT-001' parent product.");
             }
 
+            // [마스터 시딩] PARENT-001 품목 데이터 및 포장사양서를 비어있는 필드 없이 완벽한 표준 마스터 데이터로 채움
+            try {
+                jdbcTemplate.update(
+                    "UPDATE products SET " +
+                    "product_name = '[기준 마스터] 프리미엄 센텔라 수분 크림', " +
+                    "english_product_name = 'Premium Centella Moisture Cream', " +
+                    "capacity = '100ml', weight = '120g', " +
+                    "shelf_life_months = 36, opened_shelf_life_months = 12, " +
+                    "product_barcode = '8809123456789', inbox_barcode = '18809123456783', outbox_barcode = '18809123456786', " +
+                    "recycle_grade = '우수', recycle_eval_no = '2026-RE-101', recycle_material = 'PET-G/PP', " +
+                    "has_inbox = true, inbox_quantity = 10, inbox_width = 200, inbox_length = 300, inbox_height = 120, inbox_weight = 1.5, " +
+                    "outbox_quantity = 40, outbox_width = 420, outbox_length = 320, outbox_height = 260, outbox_weight = 6.8, " +
+                    "pallet_quantity = 1200, pallet_width = 1100, pallet_length = 1100, pallet_height = 1200 " +
+                    "WHERE item_code = 'PARENT-001'"
+                );
+
+                Long parentProdId = jdbcTemplate.queryForObject("SELECT id FROM products WHERE item_code = 'PARENT-001' LIMIT 1", Long.class);
+                if (parentProdId != null) {
+                    Integer specCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM packaging_specifications WHERE product_id = ?", Integer.class, parentProdId);
+                    if (specCount == null || specCount == 0) {
+                        jdbcTemplate.update(
+                            "INSERT INTO packaging_specifications (" +
+                            "product_id, barcode, lab_number, planner_name, designer_name, qc_name, management_type, barcode_manager, " +
+                            "marking_method, marking_standard, container_marking_display, container_marking_location, container_marking_text, container_marking_expiry_format, " +
+                            "unit_box_marking_display, unit_box_marking_location, unit_box_marking_text, unit_box_marking_expiry_format, " +
+                            "inbox_use_yn, inbox_packaging_type, inbox_tape_method, inbox_qty, inbox_size, inbox_tape_banding, inbox_interlayer_sheet, inbox_material, " +
+                            "outbox_type, outbox_qty, outbox_size, outbox_tape_banding, outbox_interlayer_sheet, outbox_material, " +
+                            "outbox_channel_sticker_standard, outbox_cushioning_standard, pop_required_standard, outbox_remarks, " +
+                            "pallet_type_str, pallet_spec, pallet_height_limit, one_pallet_height, pallet_precautions, remarks, " +
+                            "is_deleted, created_at, last_modified_at, version) " +
+                            "VALUES (?, '8809123456789', 'LAB-2026-001', '김개발', '이디자인', '박품질', '러닝', '최바코드', " +
+                            "'인쇄', '표준 2줄 착인', '인쇄', '용기 하단 2줄 착인', 'LOT 20260801\nEXP 20290731', 'YYYYMMDD', " +
+                            "'인쇄', '단상자 하단 2줄 착인', 'LOT 20260801\nEXP 20290731', 'YYYYMMDD', " +
+                            "'O', 'A형 박스', '일자 테이핑(H)', 10, '200x300x120', 'N', 'N', 'SK.S.S.K.K', " +
+                            "'A형 박스', 40, '420x320x260', 'N', 'N', 'KLB.S.S.K.K', " +
+                            "'채널 전용 스티커 부착 필수', '박스 상단 빈공간 비닐 에어캡 완충재 투입', 'POP 부착/동봉 필수', '상습 찌그러짐 주의', " +
+                            "'AJU 11형 플라스틱', '1100x1100x150', '1200', 1200.0, '패드 및 각대 부착 필수 / 랩핑 4회 밀봉', '기준 마스터 표준 사양서', " +
+                            "false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
+                            parentProdId
+                        );
+                        log.info(">>>> [SYSTEM INIT] Created complete master packaging specification for PARENT-001.");
+                    } else {
+                        jdbcTemplate.update(
+                            "UPDATE packaging_specifications SET " +
+                            "barcode = '8809123456789', lab_number = 'LAB-2026-001', planner_name = '김개발', designer_name = '이디자인', qc_name = '박품질', barcode_manager = '최바코드', " +
+                            "container_marking_display = '인쇄', container_marking_location = '용기 하단 2줄 착인', container_marking_text = 'LOT 20260801\nEXP 20290731', container_marking_expiry_format = 'YYYYMMDD', " +
+                            "unit_box_marking_display = '인쇄', unit_box_marking_location = '단상자 하단 2줄 착인', unit_box_marking_text = 'LOT 20260801\nEXP 20290731', unit_box_marking_expiry_format = 'YYYYMMDD', " +
+                            "inbox_use_yn = 'O', inbox_packaging_type = 'A형 박스', inbox_tape_method = '일자 테이핑(H)', inbox_qty = 10, inbox_size = '200x300x120', inbox_material = 'SK.S.S.K.K', " +
+                            "outbox_type = 'A형 박스', outbox_qty = 40, outbox_size = '420x320x260', outbox_material = 'KLB.S.S.K.K', " +
+                            "outbox_channel_sticker_standard = '채널 전용 스티커 부착 필수', outbox_cushioning_standard = '박스 상단 빈공간 비닐 에어캡 완충재 투입', pop_required_standard = 'POP 부착/동봉 필수', " +
+                            "pallet_type_str = 'AJU 11형 플라스틱', pallet_spec = '1100x1100x150', pallet_height_limit = '1200', one_pallet_height = 1200.0, " +
+                            "pallet_precautions = '패드 및 각대 부착 필수 / 랩핑 4회 밀봉', remarks = '기준 마스터 표준 사양서' " +
+                            "WHERE product_id = ?",
+                            parentProdId
+                        );
+                        log.info(">>>> [SYSTEM INIT] Updated packaging specification of PARENT-001 with full master data.");
+                    }
+                }
+            } catch (Exception e) {
+                log.warn(">>>> [SYSTEM INIT] Could not update full master data for PARENT-001: {}", e.getMessage());
+            }
+
             // [보정] 기존에 오등록된 PRD-2026-001, PRD-2026-002, PARENT-001 품목의 제조사를 한국콜마로 강제 업데이트
             try {
                 int updatedDummyProducts = jdbcTemplate.update(

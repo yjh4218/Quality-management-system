@@ -110,6 +110,7 @@ const LoginPage = ({ onLoginSuccess }) => {
                             placeholder="아이디를 입력하세요"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
+                            autoComplete="username"
                             required
                         />
                     </div>
@@ -120,6 +121,7 @@ const LoginPage = ({ onLoginSuccess }) => {
                             placeholder="비밀번호를 입력하세요"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
+                            autoComplete="current-password"
                             required
                         />
                     </div>

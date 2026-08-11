@@ -5,6 +5,39 @@ import './DashboardPage.css';
 import { usePermissions } from './usePermissions';
 import EmptyState from './components/EmptyState';
 
+const SafeResponsiveContainer = ({ children, height = 220, minHeight = 150 }) => {
+    const containerRef = useRef(null);
+    const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+
+    useEffect(() => {
+        if (!containerRef.current) return;
+        const updateSize = () => {
+            if (containerRef.current) {
+                const rect = containerRef.current.getBoundingClientRect();
+                if (rect.width > 0) {
+                    const targetH = rect.height > 0 ? rect.height : (typeof height === 'number' ? height : 220);
+                    setDimensions({ width: Math.floor(rect.width), height: Math.floor(targetH) });
+                }
+            }
+        };
+
+        updateSize();
+        const observer = new ResizeObserver(() => updateSize());
+        observer.observe(containerRef.current);
+        return () => observer.disconnect();
+    }, [height]);
+
+    return (
+        <div ref={containerRef} style={{ width: '100%', height: typeof height === 'number' ? `${height}px` : height, minHeight, position: 'relative' }}>
+            {dimensions.width > 0 && dimensions.height > 0 && (
+                <ResponsiveContainer width={dimensions.width} height={dimensions.height}>
+                    {children}
+                </ResponsiveContainer>
+            )}
+        </div>
+    );
+};
+
 /**
  * 전역 대시보드 화면 컴포넌트입니다.
  * 서버로부터 전달받은 위젯 설정(widgetConfig)에 따라 위젯들을 동적으로 렌더링합니다.
@@ -78,8 +111,8 @@ const DashboardPage = ({ user, onNavigate }) => {
                         <h2>입고 품질 합격률 (최근 1개월)</h2>
                         <span className="count">{total}건</span>
                     </div>
-                    <div style={{ height: '240px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                        <ResponsiveContainer width="100%" height="80%">
+                    <div style={{ height: '240px', width: '100%', minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                        <SafeResponsiveContainer height={190}>
                             <PieChart>
                                 <Pie data={dataPie} cx="50%" cy="50%" innerRadius={58} outerRadius={78} paddingAngle={5} dataKey="value">
                                     {dataPie.map((entry, index) => (
@@ -88,7 +121,7 @@ const DashboardPage = ({ user, onNavigate }) => {
                                 </Pie>
                                 <Tooltip formatter={(value) => `${value}%`} />
                             </PieChart>
-                        </ResponsiveContainer>
+                        </SafeResponsiveContainer>
                         <div style={{ position: 'absolute', top: '40%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
                             <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#1e293b' }}>{passRate}%</span>
                             <div style={{ fontSize: '12px', color: '#64748b' }}>합격률</div>
@@ -116,11 +149,11 @@ const DashboardPage = ({ user, onNavigate }) => {
                         <h2>당월 CX 클레임 유형 분포</h2>
                         <span className="count">{total}건</span>
                     </div>
-                    <div style={{ height: '240px', padding: '10px 0' }}>
+                    <div style={{ height: '240px', width: '100%', minWidth: 0, padding: '10px 0' }}>
                         {chartData.length === 0 ? (
                             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '13px' }}>접수된 클레임이 없습니다.</div>
                         ) : (
-                            <ResponsiveContainer width="100%" height="100%">
+                            <SafeResponsiveContainer height={220}>
                                 <BarChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                     <XAxis dataKey="name" tick={{ fontSize: 11 }} />
@@ -128,7 +161,7 @@ const DashboardPage = ({ user, onNavigate }) => {
                                     <Tooltip />
                                     <Bar dataKey="건수" fill="#0284c7" radius={[4, 4, 0, 0]} />
                                 </BarChart>
-                            </ResponsiveContainer>
+                            </SafeResponsiveContainer>
                         )}
                     </div>
                 </section>
@@ -147,11 +180,11 @@ const DashboardPage = ({ user, onNavigate }) => {
                         <span className="icon">📂</span>
                         <h2>제조사 현장 Audit 등급 분포</h2>
                     </div>
-                    <div style={{ height: '240px', padding: '10px 0' }}>
+                    <div style={{ height: '240px', width: '100%', minWidth: 0, padding: '10px 0' }}>
                         {chartData.length === 0 ? (
                             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '13px' }}>평가 등급 이력이 없습니다.</div>
                         ) : (
-                            <ResponsiveContainer width="100%" height="100%">
+                            <SafeResponsiveContainer height={220}>
                                 <BarChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                     <XAxis dataKey="name" tick={{ fontSize: 11 }} />
@@ -159,7 +192,7 @@ const DashboardPage = ({ user, onNavigate }) => {
                                     <Tooltip />
                                     <Bar dataKey="제조사수" fill="#10b981" radius={[4, 4, 0, 0]} />
                                 </BarChart>
-                            </ResponsiveContainer>
+                            </SafeResponsiveContainer>
                         )}
                     </div>
                 </section>

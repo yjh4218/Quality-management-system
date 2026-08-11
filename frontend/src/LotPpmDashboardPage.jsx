@@ -16,6 +16,39 @@ import {
 import { getActiveSalesChannels } from './api';
 import useDateRangePreset from './hooks/useDateRangePreset';
 
+const SafeResponsiveContainer = ({ children, height = 220, minHeight = 150 }) => {
+    const containerRef = React.useRef(null);
+    const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+
+    useEffect(() => {
+        if (!containerRef.current) return;
+        const updateSize = () => {
+            if (containerRef.current) {
+                const rect = containerRef.current.getBoundingClientRect();
+                if (rect.width > 0) {
+                    const targetH = rect.height > 0 ? rect.height : (typeof height === 'number' ? height : 220);
+                    setDimensions({ width: Math.floor(rect.width), height: Math.floor(targetH) });
+                }
+            }
+        };
+
+        updateSize();
+        const observer = new ResizeObserver(() => updateSize());
+        observer.observe(containerRef.current);
+        return () => observer.disconnect();
+    }, [height]);
+
+    return (
+        <div ref={containerRef} style={{ width: '100%', height: typeof height === 'number' ? `${height}px` : height, minHeight, position: 'relative' }}>
+            {dimensions.width > 0 && dimensions.height > 0 && (
+                <ResponsiveContainer width={dimensions.width} height={dimensions.height}>
+                    {children}
+                </ResponsiveContainer>
+            )}
+        </div>
+    );
+};
+
 const PIE_COLORS = ['#ef4444', '#f59e0b', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899', '#06b6d4'];
 
 export default function LotPpmDashboardPage({ user, onNavigate }) {
@@ -409,8 +442,8 @@ export default function LotPpmDashboardPage({ user, onNavigate }) {
                     data={summary.monthlyPpmList}
                     emptyThreshold={1}
                 >
-                    <div style={{ width: '100%', height: 260 }}>
-                        <ResponsiveContainer>
+                    <div style={{ width: '100%', height: 260, minWidth: 0 }}>
+                        <SafeResponsiveContainer height={260}>
                             <ComposedChart data={summary.monthlyPpmList} margin={{ top: 20, right: 65, bottom: 0, left: 20 }}>
                                 <CartesianGrid strokeDasharray="3 3" />
                                 <XAxis dataKey="month" tick={{ fontSize: 12 }} />
@@ -451,7 +484,7 @@ export default function LotPpmDashboardPage({ user, onNavigate }) {
                                 />
                                 <Line yAxisId="right" type="monotone" dataKey="ppm" name="PPM 불량률" stroke="#ef4444" strokeWidth={3} dot={{ r: 5 }} />
                             </ComposedChart>
-                        </ResponsiveContainer>
+                        </SafeResponsiveContainer>
                     </div>
 
                     {/* 월별 요약 표 */}
@@ -499,8 +532,8 @@ export default function LotPpmDashboardPage({ user, onNavigate }) {
                         data={summary.topProductPpmList}
                         emptyThreshold={1}
                     >
-                        <div style={{ width: '100%', height: 220 }}>
-                            <ResponsiveContainer>
+                        <div style={{ width: '100%', height: 220, minWidth: 0 }}>
+                            <SafeResponsiveContainer height={220}>
                                 <BarChart layout="vertical" data={summary.topProductPpmList} margin={{ top: 5, right: 35, bottom: 5, left: 10 }}>
                                     <CartesianGrid strokeDasharray="3 3" />
                                     <XAxis 
@@ -537,7 +570,7 @@ export default function LotPpmDashboardPage({ user, onNavigate }) {
                                         style={{ cursor: 'pointer' }}
                                     />
                                 </BarChart>
-                            </ResponsiveContainer>
+                            </SafeResponsiveContainer>
                         </div>
                     </ChartCard>
 
@@ -549,8 +582,8 @@ export default function LotPpmDashboardPage({ user, onNavigate }) {
                         emptyThreshold={1}
                     >
                         <div style={{ display: 'flex', alignItems: 'center', height: 140 }}>
-                            <div style={{ width: '50%', height: '100%' }}>
-                                <ResponsiveContainer>
+                            <div style={{ width: '50%', height: '100%', minWidth: 0 }}>
+                                <SafeResponsiveContainer height={140}>
                                     <PieChart>
                                         <Pie 
                                             data={summary.claimCategoryList} 
@@ -570,7 +603,7 @@ export default function LotPpmDashboardPage({ user, onNavigate }) {
                                         </Pie>
                                         <Tooltip formatter={(val, name, entry) => [`${val.toLocaleString()}개 (${entry.payload.percentage}%)`, name]} />
                                     </PieChart>
-                                </ResponsiveContainer>
+                                </SafeResponsiveContainer>
                             </div>
                             <div style={{ width: '50%', paddingLeft: '8px', overflowY: 'auto', maxHeight: '130px' }}>
                                 {summary.claimCategoryList.map((cat, idx) => (
@@ -600,8 +633,8 @@ export default function LotPpmDashboardPage({ user, onNavigate }) {
                         emptyThreshold={1}
                     >
                         <div style={{ display: 'flex', alignItems: 'center', height: 140 }}>
-                            <div style={{ width: '50%', height: '100%' }}>
-                                <ResponsiveContainer>
+                            <div style={{ width: '50%', height: '100%', minWidth: 0 }}>
+                                <SafeResponsiveContainer height={140}>
                                     <PieChart>
                                         <Pie 
                                             data={summary.channelClaimList || []} 
@@ -621,7 +654,7 @@ export default function LotPpmDashboardPage({ user, onNavigate }) {
                                         </Pie>
                                         <Tooltip formatter={(val, name, entry) => [`${val.toLocaleString()}개 (${entry.payload.percentage}%)`, name]} />
                                     </PieChart>
-                                </ResponsiveContainer>
+                                </SafeResponsiveContainer>
                             </div>
                             <div style={{ width: '50%', paddingLeft: '8px', overflowY: 'auto', maxHeight: '130px' }}>
                                 {(summary.channelClaimList || []).map((ch, idx) => (

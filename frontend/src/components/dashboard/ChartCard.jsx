@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
      ResponsiveContainer, 
      BarChart, 
@@ -14,6 +14,39 @@ import {
      LineChart, 
      Line 
 } from 'recharts';
+
+const SafeResponsiveContainer = ({ children, height = 220, minHeight = 150 }) => {
+    const containerRef = React.useRef(null);
+    const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+
+    useEffect(() => {
+        if (!containerRef.current) return;
+        const updateSize = () => {
+            if (containerRef.current) {
+                const rect = containerRef.current.getBoundingClientRect();
+                if (rect.width > 0) {
+                    const targetH = rect.height > 0 ? rect.height : (typeof height === 'number' ? height : 220);
+                    setDimensions({ width: Math.floor(rect.width), height: Math.floor(targetH) });
+                }
+            }
+        };
+
+        updateSize();
+        const observer = new ResizeObserver(() => updateSize());
+        observer.observe(containerRef.current);
+        return () => observer.disconnect();
+    }, [height]);
+
+    return (
+        <div ref={containerRef} style={{ width: '100%', height: typeof height === 'number' ? `${height}px` : height, minHeight, position: 'relative' }}>
+            {dimensions.width > 0 && dimensions.height > 0 && (
+                <ResponsiveContainer width={dimensions.width} height={dimensions.height}>
+                    {children}
+                </ResponsiveContainer>
+            )}
+        </div>
+    );
+};
 
 /**
  * 데이터를 기반으로 둥근 모서리의 카드 틀 내부에 Recharts 그래프를 안전하게 렌더링하는 공용 컴포넌트입니다.
@@ -143,8 +176,8 @@ const ChartCard = ({
                 };
 
                 return (
-                    <div style={{ height: '270px' }}>
-                        <ResponsiveContainer width="100%" height={220}>
+                    <div style={{ height: '270px', width: '100%', minWidth: 0 }}>
+                        <SafeResponsiveContainer width="100%" height={220} minWidth={0} minHeight={150}>
                             <PieChart>
                                 <Pie
                                     data={sortedActiveData.length > 0 ? sortedActiveData : [{ [nameKey]: '데이터 없음', [dataKey]: 1 }]}
@@ -170,7 +203,7 @@ const ChartCard = ({
                                 </Pie>
                                 <Tooltip {...commonTooltipStyle} formatter={(value, name) => name === '데이터 없음' ? ['0건', '현황'] : [`${value}건`, name]} />
                             </PieChart>
-                        </ResponsiveContainer>
+                        </SafeResponsiveContainer>
                         {renderCustomLegend()}
                     </div>
                 );
@@ -178,8 +211,8 @@ const ChartCard = ({
             case 'line': {
                 const niceTicks = getNiceTicks(data, dataKey);
                 return (
-                    <div style={{ height: '240px' }}>
-                        <ResponsiveContainer width="100%" height="100%">
+                    <div style={{ height: '240px', width: '100%', minWidth: 0 }}>
+                        <SafeResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={150}>
                             <LineChart data={data} margin={{ top: 10, right: 20, left: -10, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                                 <XAxis dataKey={nameKey} tick={{ fontSize: 13, fill: '#64748b' }} />
@@ -188,7 +221,7 @@ const ChartCard = ({
                                 <Legend wrapperStyle={{ fontSize: '13px', paddingTop: '10px' }} />
                                 <Line type="monotone" dataKey={dataKey} stroke="#6366f1" strokeWidth={3} activeDot={{ r: 6 }} />
                             </LineChart>
-                        </ResponsiveContainer>
+                        </SafeResponsiveContainer>
                     </div>
                 );
             }
@@ -196,8 +229,8 @@ const ChartCard = ({
             default: {
                 const niceTicks = getNiceTicks(data, dataKey);
                 return (
-                    <div style={{ height: '240px' }}>
-                        <ResponsiveContainer width="100%" height="100%">
+                    <div style={{ height: '240px', width: '100%', minWidth: 0 }}>
+                        <SafeResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={150}>
                             <BarChart data={data} margin={{ top: 10, right: 20, left: -10, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                                 <XAxis dataKey={nameKey} tick={{ fontSize: 13, fill: '#64748b' }} />
@@ -216,7 +249,7 @@ const ChartCard = ({
                                     ))}
                                 </Bar>
                             </BarChart>
-                        </ResponsiveContainer>
+                        </SafeResponsiveContainer>
                     </div>
                 );
             }

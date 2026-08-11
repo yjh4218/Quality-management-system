@@ -32,6 +32,9 @@ const ProductDrawer = ({ product, onClose, user }) => {
         manufacturerInfo: { id: null },
         shelfLifeMonths: '',
         openedShelfLifeMonths: '',
+        productBarcode: '',
+        inboxBarcode: '',
+        outboxBarcode: '',
         productType: '단품',
         capacity: '',
         capacityFlOz: '',
@@ -193,6 +196,85 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
     const packagingMethodSaveRef = useRef(null);
     const packagingMethodReloadRef = useRef(null);
+
+    // 📢 유통채널 규격 포장사양서 자동 매핑 함수
+    const syncChannelRulesToSpec = (channel, force = false) => {
+        if (!channel) {
+            setCurrentSpec(prev => ({
+                ...prev,
+                palletTypeStr: '',
+                palletSpec: '',
+                palletHeightLimit: '',
+                containerMarkingExpiryFormat: '',
+                unitBoxMarkingExpiryFormat: '',
+                containerMarkingText: '',
+                unitBoxMarkingText: '',
+                containerMarkingDisplay: '',
+                outboxChannelStickerStandard: '',
+                outboxCushioningStandard: '',
+                popRequiredStandard: '',
+                palletPrecautions: '',
+                inboxUseYn: 'X',
+                inboxTapeMethod: '별도 테이핑 X (테이프 박스 미부착)',
+                inboxTapeBanding: 'N'
+            }));
+            return;
+        }
+
+        // 덮어쓰기 방지 체크: 사양서 주요 필드에 이미 값이 존재하는 경우 확인 다이얼로그
+        if (!force) {
+            const hasExistingValue = !!(
+                currentSpec.palletTypeStr ||
+                currentSpec.outboxChannelStickerStandard ||
+                currentSpec.outboxCushioningStandard ||
+                currentSpec.containerMarkingText
+            );
+            if (hasExistingValue) {
+                const confirmed = window.confirm(`[${channel.name}] 유통채널 포장 규격으로 기존 사양서 입력값을 덮어쓰시겠습니까?`);
+                if (!confirmed) return false;
+            }
+        }
+
+        const stickerLabel = channel.channelStickerRequired
+            ? `${channel.channelCode || channel.name} 스티커 부착`
+            : '해당 없음';
+        const popLabel = channel.popRequired
+            ? `${channel.channelCode || channel.name} POP 부착/동봉 필수`
+            : '해당 없음';
+        const cushioningLabel = channel.cushioningStandard || '박스 상단 빈공간 비닐 에어캡 완충재 투입';
+        const expText = channel.expDateFormat ? `LOT 번호\nEXP ${channel.expDateFormat}` : '';
+
+        let precautions = [];
+        if (channel.padAndFrameRequired) precautions.push('패드 및 각대 부착 필수');
+        if (channel.specialNotes) precautions.push(`채널특이사항: ${channel.specialNotes}`);
+
+        const inboxRequired = channel.inboxRequired !== undefined ? channel.inboxRequired : true;
+        const inboxTape = !inboxRequired ? '별도 테이핑 X (테이프 박스 미부착)' : (currentSpec.inboxTapeMethod || '별도 테이핑 X');
+
+        setCurrentSpec(prev => ({
+            ...prev,
+            palletTypeStr: channel.palletType || prev.palletTypeStr,
+            palletSpec: channel.palletSpec || prev.palletSpec,
+            palletHeightLimit: channel.maxStackHeightMm ? String(channel.maxStackHeightMm) : prev.palletHeightLimit,
+            onePalletHeight: channel.maxStackHeightMm ? String(channel.maxStackHeightMm) : prev.onePalletHeight,
+            containerMarkingExpiryFormat: channel.expDateFormat || prev.containerMarkingExpiryFormat,
+            unitBoxMarkingExpiryFormat: channel.expDateFormat || prev.containerMarkingExpiryFormat,
+            containerMarkingText: expText || prev.containerMarkingText,
+            unitBoxMarkingText: expText || prev.unitBoxMarkingText,
+            containerMarkingDisplay: channel.expDateFormat ? '인쇄' : (prev.containerMarkingDisplay || '인쇄'),
+            outboxChannelStickerStandard: stickerLabel,
+            applyChannelSticker: !!channel.channelStickerRequired,
+            outboxCushioningStandard: cushioningLabel,
+            popRequiredStandard: popLabel,
+            palletPrecautions: precautions.length > 0 ? precautions.join(' / ') : prev.palletPrecautions,
+            inboxUseYn: inboxRequired ? 'O' : 'X',
+            inboxTapeMethod: inboxTape,
+            inboxTapeBanding: 'N'
+        }));
+
+        toast.success(`[${channel.name}] 유통채널 포장재 규격, 착인기준, 인박스/적재 조건이 동기화되었습니다.`);
+        return true;
+    };
 
     const handleSaveFullSpec = async () => {
         try {
@@ -380,6 +462,9 @@ const ProductDrawer = ({ product, onClose, user }) => {
                         manufacturerInfo: fullProduct.manufacturerInfo || { id: null },
                         shelfLifeMonths: fullProduct.shelfLifeMonths || '',
                         openedShelfLifeMonths: fullProduct.openedShelfLifeMonths || '',
+                        productBarcode: fullProduct.productBarcode || fullProduct.barcode || '',
+                        inboxBarcode: fullProduct.inboxBarcode || '',
+                        outboxBarcode: fullProduct.outboxBarcode || '',
                         capacity: fullProduct.capacity ? String(fullProduct.capacity).replace(/[^0-9.]/g, '') : '',
                         capacityFlOz: fullProduct.capacityFlOz || '',
                         weight: fullProduct.weight ? String(fullProduct.weight).replace(/[^0-9.]/g, '') : '',
@@ -917,6 +1002,10 @@ const ProductDrawer = ({ product, onClose, user }) => {
     };
 
     const handleMasterLoad = () => {
+        if (formData.isMaster) {
+            toast.warn("해당 제품이 마스터 제품으로 설정된 경우 타 마스터 정보를 불러올 수 없습니다.");
+            return;
+        }
         setIsMasterSearchOpen(true);
     };
 
@@ -927,13 +1016,26 @@ const ProductDrawer = ({ product, onClose, user }) => {
         try {
             const res = await loadMasterProduct(p.itemCode);
             if (res.data) {
+                // 바코드 3종(제품/인박스/아웃박스 바코드) 및 사양서 바코드는 승계 대상에서 제외하고 기존값 보존
+                const {
+                    productBarcode,
+                    inboxBarcode,
+                    outboxBarcode,
+                    barcode,
+                    ...masterDataToInherit
+                } = res.data;
+
                 setFormData(prev => enrichWithCalculations({
                     ...prev,
-                    ...res.data,
+                    ...masterDataToInherit,
                     itemCode: prev.itemCode, // 현재 입력 중인 코드는 유지
                     id: prev.id, // 기존 ID 유지
                     isMaster: false, // 불러온 데이터는 마스터가 아님 (템플릿 용도)
                     parentItemCode: res.data.itemCode, // 마스터 코드를 부모 코드로 설정
+                    // 바코드 3종은 기존 자식 제품의 입력값을 그대로 유지 (승계 제외)
+                    productBarcode: prev.productBarcode || '',
+                    inboxBarcode: prev.inboxBarcode || '',
+                    outboxBarcode: prev.outboxBarcode || '',
                     capacity: res.data.capacity ? String(res.data.capacity).replace(/[^0-9.]/g, '') : '',
                     weight: res.data.weight ? String(res.data.weight).replace(/[^0-9.]/g, '') : '',
                     ingredients: res.data.ingredients || '',
@@ -944,10 +1046,32 @@ const ProductDrawer = ({ product, onClose, user }) => {
                     productIngredients: res.data.productIngredients ? res.data.productIngredients.map(i => ({ ...i, id: undefined, product: undefined })) : [],
                     imagePaths: res.data.imagePaths || []
                 }));
-                alert(`마스터 제품[${p.productName}] 정보를 성공적으로 불러왔습니다.`);
+
+                // 마스터 포장사양서도 자동으로 함께 조회하여 사양서 탭에 승계 (바코드는 제외)
+                const masterProductId = res.data?.id || p?.id;
+                if (masterProductId) {
+                    try {
+                        const masterSpecRes = await api.getPackagingSpecs(masterProductId);
+                        const masterSpecData = masterSpecRes.data?.spec || (Array.isArray(masterSpecRes.data) ? masterSpecRes.data[0] : masterSpecRes.data);
+                        if (masterSpecData) {
+                            const { barcode: masterBar, ...specFieldsToInherit } = masterSpecData;
+                            setCurrentSpec(prevSpec => ({
+                                ...prevSpec,
+                                ...specFieldsToInherit,
+                                id: prevSpec.id || undefined,
+                                barcode: prevSpec.barcode || '', // 사양서 바코드 제외/유지
+                                bomItems: masterSpecData.bomItems || prevSpec.bomItems || []
+                            }));
+                        }
+                    } catch (specErr) {
+                        console.log("마스터 포장사양서 승계 생략:", specErr);
+                    }
+                }
+
+                toast.success(`마스터 제품[${p.productName}]의 규격/사양 정보를 성공적으로 승계했습니다. (바코드 3종 제외)`);
             }
         } catch (error) {
-            alert("마스터 정보를 가져오는데 실패했습니다.");
+            toast.error("마스터 정보를 가져오는데 실패했습니다.");
         }
     };
 
@@ -1002,20 +1126,22 @@ const ProductDrawer = ({ product, onClose, user }) => {
                 return;
             }
 
-            if (window.confirm("마스터 상품의 포장사양서를 복사하시겠습니까? (현재 데이터가 덮어씌워질 수 있습니다)")) {
+            if (window.confirm("마스터 상품의 포장사양서를 복사하시겠습니까? (바코드를 제외한 규격/사양 데이터가 승계됩니다)")) {
                 const res = await api.copyMasterPackagingSpec(product.id, masterRes.data.id);
-                alert("마스터 포장사양서를 성공적으로 복제했습니다.");
                 fetchPackagingSpecs(product.id);
                 if (res.data) {
+                    const { barcode: copiedBarcode, ...copiedFields } = res.data;
                     setCurrentSpec(prev => ({
                         ...prev,
-                        ...res.data,
+                        ...copiedFields,
+                        barcode: prev.barcode || '', // 바코드 제외/기존값 유지
                         bomItems: res.data.bomItems || []
                     }));
                 }
+                toast.success("마스터 포장사양서를 성공적으로 승계했습니다. (바코드 제외)");
             }
         } catch (error) {
-            alert("포장사양서 복제에 실패했습니다.");
+            toast.error("포장사양서 복제에 실패했습니다.");
         }
     };
 
@@ -1380,7 +1506,23 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                 <div style={{ padding: '15px', background: '#f8fafc', borderRadius: '12px', marginBottom: '20px', border: '1px solid #e2e8f0' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '10px' }}>
                                 <label style={{ fontWeight: 'bold' }}>🔗 품목코드(Product Num) 및 중복 확인</label>
-                                {canEdit && <button type="button" onClick={handleMasterLoad} className="secondary" style={{ padding: '2px 10px', fontSize: '12px' }}>마스터 제품 불러오기</button>}
+                                {canEdit && (
+                                    <button 
+                                        type="button" 
+                                        onClick={handleMasterLoad} 
+                                        className="secondary" 
+                                        disabled={formData.isMaster}
+                                        style={{ 
+                                            padding: '2px 10px', 
+                                            fontSize: '12px',
+                                            opacity: formData.isMaster ? 0.45 : 1,
+                                            cursor: formData.isMaster ? 'not-allowed' : 'pointer'
+                                        }}
+                                        title={formData.isMaster ? '마스터 제품으로 설정된 경우 타 마스터 제품 정보를 불러올 수 없습니다.' : '마스터 제품 불러오기'}
+                                    >
+                                        마스터 제품 불러오기
+                                    </button>
+                                )}
                             </div>
                             <div className="form-group" style={{ marginBottom: 0 }}>
                                 <div style={{ display: 'flex', gap: '10px' }}>
@@ -1390,8 +1532,21 @@ const ProductDrawer = ({ product, onClose, user }) => {
                             </div>
 
                             <div style={{ marginTop: '10px' }}>
-                                <label style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                    <input type="checkbox" name="isMaster" checked={formData.isMaster} onChange={(e) => setFormData(prev => ({ ...prev, isMaster: e.target.checked }))} disabled={!canEdit} />
+                                <label style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px', cursor: canEdit ? 'pointer' : 'default' }}>
+                                    <input 
+                                        type="checkbox" 
+                                        name="isMaster" 
+                                        checked={formData.isMaster || false} 
+                                        onChange={(e) => {
+                                            const checked = e.target.checked;
+                                            setFormData(prev => ({ 
+                                                ...prev, 
+                                                isMaster: checked,
+                                                parentItemCode: checked ? '' : prev.parentItemCode
+                                            }));
+                                        }} 
+                                        disabled={!canEdit} 
+                                    />
                                     이 제품을 마스터 제품으로 등록
                                 </label>
                             </div>
@@ -1435,67 +1590,43 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                 borderRadius: '6px',
                                 border: '1px solid #dee2e6'
                             }}>
-                                {salesChannels.map(channel => (
-                                    <label key={channel.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
-                                        <input
-                                            type="radio"
-                                            name="productChannel"
-                                            checked={(formData.channels || []).some(c => c.id === channel.id)}
-                                            onChange={(e) => {
-                                                if (e.target.checked) {
-                                                    const channelCode = channel.channelCode || '';
-                                                    let curName = formData.productName || '';
-                                                    
-                                                    // 기존 채널코드 접미사(_XXX)가 존재하면 제거 후 본래 제품명 추출
-                                                    let baseName = curName;
-                                                    const lastUnderscore = curName.lastIndexOf('_');
-                                                    if (lastUnderscore > 0 && curName.substring(lastUnderscore + 1).match(/^[A-Z0-9/_-]+$/)) {
-                                                        baseName = curName.substring(0, lastUnderscore);
+                                {salesChannels.map(channel => {
+                                    const isSelected = (formData.channels || []).some(c => c.id === channel.id);
+                                    return (
+                                        <label key={channel.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                                            <input
+                                                type="radio"
+                                                name="productChannel"
+                                                checked={isSelected}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        const channelCode = channel.channelCode || '';
+                                                        let curName = formData.productName || '';
+                                                        
+                                                        // 기존 채널코드 접미사(_XXX)가 존재하면 제거 후 본래 제품명 추출
+                                                        let baseName = curName;
+                                                        const lastUnderscore = curName.lastIndexOf('_');
+                                                        if (lastUnderscore > 0 && curName.substring(lastUnderscore + 1).match(/^[A-Z0-9/_-]+$/)) {
+                                                            baseName = curName.substring(0, lastUnderscore);
+                                                        }
+                                                        
+                                                        const newName = channelCode ? `${baseName}_${channelCode}` : baseName;
+                                                        setFormData(prev => ({
+                                                            ...prev,
+                                                            channels: [channel],
+                                                            productName: newName
+                                                        }));
+
+                                                        // 유통채널 포장 가이드라인 자동 매칭 (덮어쓰기 검증 및 인박스/착인표시 보완)
+                                                        syncChannelRulesToSpec(channel);
                                                     }
-                                                    
-                                                    const newName = channelCode ? `${baseName}_${channelCode}` : baseName;
-                                                    setFormData({
-                                                        ...formData,
-                                                        channels: [channel],
-                                                        productName: newName
-                                                    });
-
-                                                    // 유통채널 포장 가이드라인 완전 자동 매칭
-                                                    const stickerLabel = channel.channelStickerRequired
-                                                        ? `${channel.channelCode || channel.name} 스티커 부착`
-                                                        : '해당 없음';
-                                                    const popLabel = channel.popRequired
-                                                        ? `${channel.channelCode || channel.name} POP 부착/동봉 필수`
-                                                        : '해당 없음';
-                                                    const cushioningLabel = channel.cushioningStandard || '박스 상단 빈공간 비닐 에어캡 완충재 투입';
-                                                    const expText = channel.expDateFormat ? `LOT 번호\nEXP ${channel.expDateFormat}` : '';
-
-                                                    let precautions = [];
-                                                    if (channel.padAndFrameRequired) precautions.push('패드 및 각대 부착 필수');
-                                                    if (channel.specialNotes) precautions.push(`채널특이사항: ${channel.specialNotes}`);
-
-                                                    setCurrentSpec(prev => ({
-                                                        ...prev,
-                                                        palletTypeStr: channel.palletType || prev.palletTypeStr,
-                                                        palletSpec: channel.palletSpec || prev.palletSpec,
-                                                        palletHeightLimit: channel.maxStackHeightMm ? String(channel.maxStackHeightMm) : prev.palletHeightLimit,
-                                                        containerMarkingExpiryFormat: channel.expDateFormat || prev.containerMarkingExpiryFormat,
-                                                        unitBoxMarkingExpiryFormat: channel.expDateFormat || prev.unitBoxMarkingExpiryFormat,
-                                                        containerMarkingText: expText || prev.containerMarkingText,
-                                                        unitBoxMarkingText: expText || prev.unitBoxMarkingText,
-                                                        outboxChannelStickerStandard: stickerLabel,
-                                                        outboxCushioningStandard: cushioningLabel,
-                                                        popRequiredStandard: popLabel,
-                                                        palletPrecautions: precautions.length > 0 ? precautions.join(' / ') : prev.palletPrecautions
-                                                    }));
-                                                    toast.success(`[${channel.name}] 유통채널 포장재 규격, 착인기준 및 적재조건이 동기화되었습니다.`);
-                                                }
-                                            }}
-                                            disabled={!canEdit}
-                                        />
-                                        {channel.name}
-                                    </label>
-                                ))}
+                                                }}
+                                                disabled={!canEdit}
+                                            />
+                                            {channel.name}
+                                        </label>
+                                    );
+                                })}
                             </div>
                         </div>
 
@@ -1517,7 +1648,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                         </div>
 
                         {/* Shelf Life Field */}
-                        <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
+                        <div style={{ display: 'flex', gap: '20px', marginBottom: '15px' }}>
                             <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
                                 <label>사용기한 (개월)</label>
                                 <input
@@ -1550,35 +1681,48 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                     placeholder="단위: 개월 (예: 6, 12 등 최대 2자리 숫자)"
                                 />
                             </div>
-                            <div style={{ display: 'flex', gap: '15px', marginTop: '15px' }}>
-                                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-                                    <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b' }}>제품 바코드 (Product Barcode)</label>
-                                    <input
-                                        type="text"
-                                        name="productBarcode"
-                                        style={{ fontSize: '14px', padding: '8px 12px' }}
-                                        value={formData.productBarcode || ''}
-                                        onChange={handleChange}
-                                        disabled={!canEdit}
-                                        placeholder="예: 8809123456789 (13자리 스캔/입력)"
-                                    />
-                                </div>
-                                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-                                    <label style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b' }}>아웃박스 바코드 (Outbox Barcode)</label>
-                                    <input
-                                        type="text"
-                                        name="outboxBarcode"
-                                        style={{ fontSize: '14px', padding: '8px 12px' }}
-                                        value={formData.outboxBarcode || ''}
-                                        onChange={handleChange}
-                                        disabled={!canEdit}
-                                        placeholder="예: 18809123456786 (물류 박스 바코드)"
-                                    />
-                                </div>
-                            </div>
                         </div>
 
+                        {/* Barcode Section: 사용기한 하단에 제품 / 인박스 / 아웃박스 바코드 3종 배치 */}
+                        <div style={{ display: 'flex', gap: '15px', marginBottom: '20px' }}>
+                            <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e293b' }}>제품 바코드 (Product Barcode)</label>
+                                <input
+                                    type="text"
+                                    name="productBarcode"
+                                    style={{ fontSize: '13px', padding: '8px 12px' }}
+                                    value={formData.productBarcode || ''}
+                                    onChange={handleChange}
+                                    disabled={!canEdit}
+                                    placeholder="예: 8809123456789 (단품/본품 바코드)"
+                                />
                             </div>
+                            <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e293b' }}>인박스 바코드 (Inbox Barcode)</label>
+                                <input
+                                    type="text"
+                                    name="inboxBarcode"
+                                    style={{ fontSize: '13px', padding: '8px 12px' }}
+                                    value={formData.inboxBarcode || ''}
+                                    onChange={handleChange}
+                                    disabled={!canEdit}
+                                    placeholder="예: 18809123456783 (인박스 바코드)"
+                                />
+                            </div>
+                            <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e293b' }}>아웃박스 바코드 (Outbox Barcode)</label>
+                                <input
+                                    type="text"
+                                    name="outboxBarcode"
+                                    style={{ fontSize: '13px', padding: '8px 12px' }}
+                                    value={formData.outboxBarcode || ''}
+                                    onChange={handleChange}
+                                    disabled={!canEdit}
+                                    placeholder="예: 18809123456786 (물류 아웃박스 바코드)"
+                                />
+                            </div>
+                        </div>
+                    </div>
 
                             {/* 카드 2: 기획세트 구성품 관리 (기획세트일 때만 표시) */}
                             <div style={{ display: formData.productType === '기획세트' ? 'block' : 'none' }}>
@@ -2224,20 +2368,57 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                     </div>
                                 </div>
 
-                                {/* 📢 채널별 준수 규칙 배너 */}
+                                {/* 📢 채널별 준수 규칙 배너 & 포장 규격 재동기화 버튼 */}
                                 <div style={{ padding: '15px 20px', marginBottom: '20px', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '12px' }}>
-                                    <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#b45309', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                        📢 채널별 포장 규격 자동 연동 규칙
-                                    </h4>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                        <h4 style={{ margin: 0, fontSize: '14px', color: '#b45309', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            📢 선택된 유통채널 포장 규격 자동 연동
+                                        </h4>
+                                        {(formData.channels || []).length > 0 && canEdit && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const ch = formData.channels[0];
+                                                    if (ch) syncChannelRulesToSpec(ch, true);
+                                                }}
+                                                style={{
+                                                    background: '#d97706',
+                                                    color: '#fff',
+                                                    border: 'none',
+                                                    padding: '4px 10px',
+                                                    borderRadius: '6px',
+                                                    fontSize: '11px',
+                                                    fontWeight: 'bold',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                🔄 포장규격 강제 재동기화
+                                            </button>
+                                        )}
+                                    </div>
                                     <div style={{ fontSize: '12px', color: '#78350f' }}>
                                         {(formData.channels || []).length === 0 ? (
-                                            <span>선택된 유통 채널이 없습니다. [상세 정보] 탭에서 채널을 지정하세요.</span>
+                                            <span>선택된 유통 채널이 없습니다. [상세 정보] 탭에서 유통 채널을 지정하면 포장재 사양서에 포장 규격이 자동 동기화됩니다.</span>
                                         ) : (
                                             formData.channels.map(ch => {
                                                 const rules = (masterRules || []).filter(r => r.channel?.id === ch.id);
                                                 return (
-                                                    <div key={ch.id} style={{ marginBottom: '4px' }}>
-                                                        <strong>{ch.name}:</strong> {rules.length > 0 ? rules.map(r => r.warningMessage).join(' / ') : '지정된 전용 규칙 없음'}
+                                                    <div key={ch.id} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                        <div>
+                                                            <strong>선택 채널:</strong> [{ch.name}] (채널코드: {ch.channelCode || '미지정'})
+                                                        </div>
+                                                        <div style={{ fontSize: '11px', color: '#92400e', display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '4px' }}>
+                                                            <span>• 팔레트: {ch.palletType || '미지정'} ({ch.palletSpec || '기본'})</span>
+                                                            <span>• 최대 적재: {ch.maxStackHeightMm ? `${ch.maxStackHeightMm}mm` : '제한없음'}</span>
+                                                            <span>• 착인: {ch.expDateFormat || '미지정'}</span>
+                                                            <span>• 완충재: {ch.cushioningStandard || '기본 투입'}</span>
+                                                            <span>• 인박스 테이프: {ch.inboxRequired === false ? '별도 테이핑 X (미부착)' : '표준'}</span>
+                                                        </div>
+                                                        {rules.length > 0 && (
+                                                            <div style={{ marginTop: '4px', fontWeight: 'bold' }}>
+                                                                <strong>특이 규칙:</strong> {rules.map(r => r.warningMessage).join(' / ')}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 );
                                             })
@@ -3120,6 +3301,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                 <ProductSearchPopup
                     onClose={() => setIsMasterSearchOpen(false)}
                     onSelect={handleMasterSelect}
+                    initialIsMasterOnly={true}
                     title="기존 마스터 제품 검색 (복제용)"
                 />
             )}

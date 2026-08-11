@@ -488,6 +488,7 @@ export const searchProducts = (params) => {
     if (params.brand) queryParams.append('brand', params.brand);
     if (params.manufacturer) queryParams.append('manufacturer', params.manufacturer);
     if (params.ingredients) queryParams.append('ingredients', params.ingredients);
+    if (params.isMaster !== undefined) queryParams.append('isMaster', params.isMaster);
     if (params.channelNames && params.channelNames.length > 0) {
         params.channelNames.forEach(ch => queryParams.append('channelNames', ch));
     }

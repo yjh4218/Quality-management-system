@@ -792,7 +792,7 @@ public class ProductService {
     }
 
     public org.springframework.data.domain.Page<com.example.ims.dto.ProductSummaryRecord> searchProducts(String username, String itemCode, String productName, String englishProductName, String brand, String manufacturer,
-            String ingredients, java.util.List<String> channelNames, org.springframework.data.domain.Pageable pageable) {
+            String ingredients, Boolean isMaster, java.util.List<String> channelNames, org.springframework.data.domain.Pageable pageable) {
         
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
@@ -813,11 +813,17 @@ public class ProductService {
         // 채널 필터: 빈 리스트이면 null로 처리하여 전체 조회
         java.util.List<String> pChannelNames = (channelNames == null || channelNames.isEmpty()) ? null : channelNames;
 
-        log.info(">>>> [DEBUG] Searching products - user={}, role={}, companyFilter={}, itemCode={}, productName={}, brand={}, manufacturer={}, ingredients={}, channels={}",
-                username, user.getRole(), companyFilter, pItemCode, pProductName, pBrand, pMfr, pIngredients, pChannelNames);
+        log.info(">>>> [DEBUG] Searching products - user={}, role={}, companyFilter={}, itemCode={}, productName={}, brand={}, manufacturer={}, ingredients={}, isMaster={}, channels={}",
+                username, user.getRole(), companyFilter, pItemCode, pProductName, pBrand, pMfr, pIngredients, isMaster, pChannelNames);
         
         try {
             var result = productRepository.searchProductsSummary(companyFilter, pItemCode, pProductName, pEngName, pBrand, pMfr, pIngredients, pChannelNames, pageable);
+            if (Boolean.TRUE.equals(isMaster)) {
+                java.util.List<com.example.ims.dto.ProductSummaryRecord> filtered = result.getContent().stream()
+                        .filter(p -> Boolean.TRUE.equals(p.isMaster()))
+                        .collect(java.util.stream.Collectors.toList());
+                return new org.springframework.data.domain.PageImpl<>(filtered, pageable, filtered.size());
+            }
             log.info(">>>> [DEBUG] Search result: {} items found (totalElements={})", result.getContent().size(), result.getTotalElements());
             return result;
         } catch (Exception e) {
@@ -879,7 +885,7 @@ public class ProductService {
         // 검색 필터 적용 (페이지네이션 없이 전체 조회를 위해 큰 사이즈 지정)
         org.springframework.data.domain.Page<com.example.ims.dto.ProductSummaryRecord> pageResult = searchProducts(
                 username, itemCode, productName, englishProductName, brand, manufacturer, ingredients,
-                null,
+                null, null,
                 org.springframework.data.domain.PageRequest.of(0, 100000));
 
         java.util.List<com.example.ims.dto.ProductSummaryRecord> data = pageResult.getContent();

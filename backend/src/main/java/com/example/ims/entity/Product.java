@@ -113,6 +113,12 @@ public class Product {
     private String productBarcode;
 
     /**
+     * Inbox Barcode (인박스 바코드)
+     */
+    @Column(name = "inbox_barcode")
+    private String inboxBarcode;
+
+    /**
      * Outbox Barcode (아웃박스 바코드)
      */
     @Column(name = "outbox_barcode")

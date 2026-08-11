@@ -668,10 +668,12 @@ const App = () => {
     const fetchUser = async () => {
         try {
             const response = await getCurrentUser({ skipLoading: true, silentAuthCheck: true });
-            console.log(">>>> [DEBUG] Current User Data:", response.data);
-            setUser(response.data);
-            setIsLoggedIn(true);
+            if (response && response.data) {
+                setUser(response.data);
+                setIsLoggedIn(true);
+            }
         } catch (err) {
+            setUser(null);
             setIsLoggedIn(false);
         }
     };
