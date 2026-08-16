@@ -161,132 +161,124 @@ const QualitySearchFilter = ({
                 </div>
             </div>
 
-            <Paper elevation={0} sx={{ p: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', background: '#fff' }}>
-                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '20px', alignItems: 'start' }}>
+            {/* 검색 필터 그리드 (제품코드 마스터 표준 규격) */}
+            <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
                     {/* 1. 입고 기간 (날짜 + ⚡빠른선택) */}
-                    <Box sx={{ gridColumn: { xs: 'span 1', md: 'span 2' }, minWidth: '420px' }}>
+                    <div style={{ gridColumn: 'span 2', minWidth: '420px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                            <label style={{ ...labelStyle, marginBottom: 0 }}>🗓️ 입고 기간</label>
+                            <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'flex', alignItems: 'center', gap: '4px', margin: 0 }}>🗓️ 입고 기간</label>
                             {renderPresetButtons()}
                         </div>
-                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                            <DatePicker
-                                value={searchParams.startDate ? dayjs(searchParams.startDate) : null}
-                                onChange={handleDateChange('startDate')}
-                                slotProps={{ textField: { size: 'small', fullWidth: true } }}
-                                format="YYYY-MM-DD"
+                        <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+                            <input 
+                                type="date" 
+                                value={searchParams.startDate || ''} 
+                                onChange={e => setSearchParams(prev => ({ ...prev, startDate: e.target.value }))} 
+                                style={{ flex: 1, padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} 
                             />
-                            <Typography color="textSecondary">~</Typography>
-                            <DatePicker
-                                value={searchParams.endDate ? dayjs(searchParams.endDate) : null}
-                                onChange={handleDateChange('endDate')}
-                                slotProps={{ textField: { size: 'small', fullWidth: true } }}
-                                format="YYYY-MM-DD"
+                            <span style={{ color: '#94a3b8' }}>~</span>
+                            <input 
+                                type="date" 
+                                value={searchParams.endDate || ''} 
+                                onChange={e => setSearchParams(prev => ({ ...prev, endDate: e.target.value }))} 
+                                style={{ flex: 1, padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} 
                             />
-                        </Box>
-                    </Box>
+                        </div>
+                    </div>
 
                     {/* 2. 품목코드 + 🔍 돋보기 */}
-                    <Box>
-                        <label style={labelStyle}>🏷️ 품목코드</label>
-                        <TextField
-                            size="small"
-                            fullWidth
-                            placeholder="품목코드 입력"
-                            value={searchParams.itemCode || ''}
-                            onChange={handleChange('itemCode')}
-                            InputProps={{
-                                endAdornment: (
-                                    <InputAdornment position="end">
-                                        <IconButton size="small" onClick={() => setShowSearchPopup(true)}>
-                                            <span style={{ fontSize: '14px' }}>🔍</span>
-                                        </IconButton>
-                                    </InputAdornment>
-                                ),
-                            }}
-                        />
-                    </Box>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏷️ 품목코드</label>
+                        <div style={{ display: 'flex', gap: '5px' }}>
+                            <input
+                                type="text"
+                                placeholder="코드 검색"
+                                value={searchParams.itemCode || ''}
+                                onChange={handleChange('itemCode')}
+                                onKeyDown={(e) => e.key === 'Enter' && onSearch()}
+                                style={{ flex: 1, padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
+                            />
+                            <button 
+                                type="button" 
+                                onClick={() => setShowSearchPopup(true)} 
+                                style={{ padding: '0 10px', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer' }} 
+                                title="품목 상세 검색"
+                            >
+                                🔍
+                            </button>
+                        </div>
+                    </div>
 
                     {/* 3. 제품명 */}
-                    <Box>
-                        <label style={labelStyle}>📦 제품명</label>
-                        <TextField
-                            size="small"
-                            fullWidth
-                            placeholder="제품명 입력"
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>📦 제품명</label>
+                        <input
+                            type="text"
+                            placeholder="제품명 검색"
                             value={searchParams.productName || ''}
                             onChange={handleChange('productName')}
+                            onKeyDown={(e) => e.key === 'Enter' && onSearch()}
+                            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                         />
-                    </Box>
+                    </div>
 
                     {/* 4. 제조사명 */}
-                    <Box>
-                        <label style={labelStyle}>🏭 제조사명</label>
-                        <Autocomplete
-                            size="small"
-                            options={manufacturers || []}
-                            getOptionLabel={(option) => typeof option === 'string' ? option : option.name}
-                            value={searchParams.manufacturer || null}
-                            onChange={(event, newValue) => {
-                                setSearchParams(prev => ({
-                                    ...prev,
-                                    manufacturer: newValue ? (typeof newValue === 'string' ? newValue : newValue.name) : ''
-                                }));
-                            }}
-                            freeSolo
-                            renderInput={(params) => (
-                                <TextField 
-                                    {...params} 
-                                    fullWidth 
-                                    placeholder="제조사 검색"
-                                    onChange={handleChange('manufacturer')}
-                                />
-                            )}
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏭 제조사명</label>
+                        <input
+                            type="text"
+                            placeholder="제조사 검색"
+                            value={searchParams.manufacturer || ''}
+                            onChange={handleChange('manufacturer')}
+                            onKeyDown={(e) => e.key === 'Enter' && onSearch()}
+                            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                         />
-                    </Box>
+                    </div>
 
                     {/* 5. LOT 번호 */}
-                    <Box>
-                        <label style={labelStyle}>🔢 LOT 번호</label>
-                        <TextField
-                            size="small"
-                            fullWidth
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🔢 LOT 번호</label>
+                        <input
+                            type="text"
                             placeholder="LOT 번호"
                             value={searchParams.lotNumber || ''}
                             onChange={handleChange('lotNumber')}
+                            onKeyDown={(e) => e.key === 'Enter' && onSearch()}
+                            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                         />
-                    </Box>
+                    </div>
 
                     {/* 6. 입고번호 */}
-                    <Box>
-                        <label style={labelStyle}>🆔 입고번호</label>
-                        <TextField
-                            size="small"
-                            fullWidth
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🆔 입고번호</label>
+                        <input
+                            type="text"
                             placeholder="GRN-YYYYMMDD-XXX"
                             value={searchParams.grnNumber || ''}
                             onChange={handleChange('grnNumber')}
+                            onKeyDown={(e) => e.key === 'Enter' && onSearch()}
+                            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                         />
-                    </Box>
+                    </div>
 
                     {/* 7. 입고검사 상태 필터 */}
-                    <Box>
-                        <label style={labelStyle}>🚩 입고검사 상태</label>
-                        <FormControl size="small" fullWidth>
-                            <Select
-                                value={searchParams.excludeStatus || ''}
-                                onChange={handleChange('excludeStatus')}
-                            >
-                                <MenuItem value="">전체 보기</MenuItem>
-                                <MenuItem value="검사 대기">검사 대기</MenuItem>
-                                <MenuItem value="검사 중">검사 중</MenuItem>
-                                <MenuItem value="검사 완료">검사 완료</MenuItem>
-                                <MenuItem value="STEP5_FINAL_COMPLETE">진행 중인 것만 (5단계 제외)</MenuItem>
-                            </Select>
-                        </FormControl>
-                    </Box>
-                </Box>
-            </Paper>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🚩 입고검사 상태</label>
+                        <select
+                            value={searchParams.excludeStatus || ''}
+                            onChange={handleChange('excludeStatus')}
+                            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', backgroundColor: '#fff', height: '37px' }}
+                        >
+                            <option value="">전체 보기</option>
+                            <option value="검사 대기">검사 대기</option>
+                            <option value="검사 중">검사 중</option>
+                            <option value="검사 완료">검사 완료</option>
+                            <option value="STEP5_FINAL_COMPLETE">진행 중인 것만 (5단계 제외)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
 
             {showSearchPopup && (
                 <ProductSearchPopup 

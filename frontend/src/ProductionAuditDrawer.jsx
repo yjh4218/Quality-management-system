@@ -708,25 +708,29 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
             )}
                 </div>
 
-                <div className="modal-footer" style={{ padding: '20px 25px' }}>
-                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', width: '100%' }}>
+                <div className="drawer-footer">
+                    <div className="footer-left">
+                        <span>상태: <strong style={{ color: '#0f172a' }}>{formData.status === 'APPROVED' ? '✅ 승인됨' : formData.status === 'REJECTED' ? '🚫 반려됨' : '📝 작성/제출'}</strong></span>
+                        {formData.createdAt && <span>📅 등록: <strong>{formData.createdAt.substring(0, 10)}</strong></span>}
+                    </div>
+                    <div className="footer-actions">
                         {audit && canDelete('qualityPhotoAudit') && (
                             <button 
                                 onClick={handleAuditDelete} 
                                 className="outline" 
-                                style={{ padding: '10px 25px', color: '#e53e3e', borderColor: '#e53e3e' }}
+                                style={{ padding: '8px 16px', color: '#c53030', borderColor: '#feb2b2', marginRight: 'auto' }}
                             >
                                 🗑️ 삭제
                             </button>
                         )}
-                        <button onClick={onClose} className="secondary" style={{ padding: '10px 25px' }}>닫기</button>
+                        <button onClick={onClose} className="secondary" style={{ minWidth: '80px' }}>닫기</button>
                         
                         {/* Manufacturer Save Button */}
                         {isManufacturer && (
                             <button 
                                 onClick={() => setIsConfirmOpen(true)} 
                                 className="primary" 
-                                style={{ padding: '10px 30px', fontWeight: '800', opacity: (canRegister && canEditForm) ? 1 : 0.5, cursor: (canRegister && canEditForm) ? 'pointer' : 'not-allowed' }} 
+                                style={{ minWidth: '120px', background: '#003366', color: '#fff', fontWeight: '800', opacity: (canRegister && canEditForm) ? 1 : 0.5, cursor: (canRegister && canEditForm) ? 'pointer' : 'not-allowed' }} 
                                 disabled={!canRegister || !canEditForm}
                             >
                                 💾 저장/제출하기
@@ -736,13 +740,12 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
                         {/* Quality Team Actions */}
                         {isQualityUser && (
                             <>
-
                                 {/* Case: Edit Approved Item (Only Save button) */}
                                 {isEditMode && isApproved && permissions.canEditApproved ? (
                                     <button 
                                         onClick={() => setIsConfirmOpen(true)} 
                                         className="primary" 
-                                        style={{ padding: '10px 35px', fontWeight: '800' }}
+                                        style={{ minWidth: '120px', background: '#003366', color: '#fff', fontWeight: '800' }}
                                     >
                                         💾 내역 저장 (승인됨)
                                     </button>
@@ -752,7 +755,7 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
                                         <button 
                                             onClick={() => setIsConfirmOpen(true)} 
                                             className="outline" 
-                                            style={{ padding: '10px 25px', borderColor: '#4a5568', color: '#4a5568', opacity: canEditForm ? 1 : 0.5, cursor: canEditForm ? 'pointer' : 'not-allowed' }} 
+                                            style={{ padding: '8px 16px', borderColor: '#cbd5e1', color: '#334155', opacity: canEditForm ? 1 : 0.5, cursor: canEditForm ? 'pointer' : 'not-allowed' }} 
                                             disabled={!canEditForm}
                                         >
                                             💾 내역 저장
@@ -762,7 +765,7 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
                                                 <button 
                                                     onClick={() => handleStatusUpdate('REJECTED')} 
                                                     className="outline" 
-                                                    style={{ borderColor: '#e53e3e', color: '#e53e3e', padding: '10px 25px', opacity: canRegister ? 1 : 0.5, cursor: canRegister ? 'pointer' : 'not-allowed' }} 
+                                                    style={{ borderColor: '#ef4444', color: '#ef4444', padding: '8px 16px', opacity: canRegister ? 1 : 0.5, cursor: canRegister ? 'pointer' : 'not-allowed' }} 
                                                     disabled={!canRegister}
                                                 >
                                                     🚫 반려 처리
@@ -770,7 +773,7 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
                                                 <button 
                                                     onClick={() => handleStatusUpdate('APPROVED')} 
                                                     className="primary" 
-                                                    style={{ padding: '10px 30px', fontWeight: '800', opacity: canRegister ? 1 : 0.5, cursor: canRegister ? 'pointer' : 'not-allowed' }} 
+                                                    style={{ minWidth: '100px', background: '#16a34a', color: '#fff', fontWeight: '800', opacity: canRegister ? 1 : 0.5, cursor: canRegister ? 'pointer' : 'not-allowed' }} 
                                                     disabled={!canRegister}
                                                 >
                                                     ✅ 최종 승인

@@ -217,30 +217,38 @@ const TemplateRegistrationDrawer = ({ template, onClose, user }) => {
                             ))}
                         </div>
 
-                        <div style={{ marginTop: '30px', padding: '20px', background: '#fff', borderRadius: '12px', border: '1px solid #edf2f7', textAlign: 'center' }}>
-                            <button 
-                            type="submit" 
-                            className="primary" 
-                            style={{ 
-                                minWidth: '300px', 
-                                padding: '12px 40px', 
-                                fontSize: '15px', 
-                                opacity: (isUploading || !canEdit) ? 0.5 : 1,
-                                cursor: (isUploading || !canEdit) ? 'not-allowed' : 'pointer'
-                            }} 
-                            disabled={isUploading || !canEdit}
-                        >
-                            {isUploading ? '📤 이미지 업로드 중...' : (canEdit ? '💾 공정 템플릿 저장 완료' : '🚫 수정 권한 없음')}
-                        </button>
-                        </div>
                     </form>
                 </div>
 
                 {/* 3. Fixed Footer Area */}
                 <div className="drawer-footer">
-                    <div style={{ display: 'flex', gap: '20px' }}>
+                    <div className="footer-left">
                         <span>📅 등록일: <strong>{formData.createdAt ? formData.createdAt.substring(0, 16).replace('T', ' ') : '-'}</strong></span>
                         <span>🔄 마지막 수정: <strong>{formData.updatedAt ? formData.updatedAt.substring(0, 16).replace('T', ' ') : '-'}</strong></span>
+                    </div>
+                    <div className="footer-actions">
+                        <button type="button" className="secondary" onClick={onClose} style={{ minWidth: '80px' }}>
+                            닫기
+                        </button>
+                        <button 
+                            type="submit" 
+                            form="template-registration-form"
+                            className="primary" 
+                            style={{ 
+                                minWidth: '120px', 
+                                background: '#003366', 
+                                color: '#fff', 
+                                border: 'none', 
+                                borderRadius: '4px', 
+                                fontWeight: 'bold', 
+                                padding: '10px 20px',
+                                opacity: (isUploading || !canEdit) ? 0.5 : 1,
+                                cursor: (isUploading || !canEdit) ? 'not-allowed' : 'pointer'
+                            }} 
+                            disabled={isUploading || !canEdit}
+                        >
+                            {isUploading ? '📤 업로드 중...' : (canEdit ? '💾 공정 템플릿 저장' : '🚫 수정 권한 없음')}
+                        </button>
                     </div>
                 </div>
             </div>

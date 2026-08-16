@@ -104,27 +104,27 @@ const ChangePasswordModal = ({ isOpen, onClose, isForced = false }) => {
                 </div>
 
                 {/* 3. Fixed Footer Area */}
-                <div className="modal-footer" style={{ padding: '20px' }}>
-                    <div style={{ display: 'flex', gap: '12px', width: '100%', justifyContent: 'center' }}>
-                        <button 
-                            type="submit" 
-                            form="change-password-form"
-                            disabled={loading}
-                            className="primary"
-                            style={{ padding: '10px 30px', fontWeight: '800' }}
-                        >
-                            {loading ? '🔄 처리 중...' : '비밀번호 변경 완료'}
-                        </button>
+                <div className="modal-footer" style={{ padding: '16px 24px' }}>
+                    <div className="footer-actions" style={{ width: '100%', justifyContent: 'flex-end' }}>
                         {!isForced && (
                             <button 
                                 type="button" 
                                 onClick={onClose}
                                 className="secondary"
-                                style={{ padding: '10px 20px' }}
+                                style={{ minWidth: '80px' }}
                             >
-                                취소
+                                닫기
                             </button>
                         )}
+                        <button 
+                            type="submit" 
+                            form="change-password-form"
+                            disabled={loading}
+                            className="primary"
+                            style={{ minWidth: '120px', background: '#003366', color: '#fff', fontWeight: '800', border: 'none', borderRadius: '4px', padding: '10px 20px' }}
+                        >
+                            {loading ? '🔄 처리 중...' : '💾 비밀번호 변경 완료'}
+                        </button>
                     </div>
                 </div>
             </div>

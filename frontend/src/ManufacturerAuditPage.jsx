@@ -672,64 +672,79 @@ const ManufacturerAuditPage = ({ user }) => {
                                         <textarea value={formData.finalEvaluation || ''} onChange={e => setFormData({ ...formData, finalEvaluation: e.target.value })} rows={4} style={{ width: '100%', padding: '12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px' }} placeholder="전반적인 총평과 부적합 항목에 대한 조치 필요사항을 입력하세요." />
                                     </div>
                                 </div>
-                                <div style={{ padding: '20px', borderTop: '1px solid #e5e7eb', display: 'flex', gap: '10px', justifyContent: 'flex-end', background: '#f8fafc' }}>
-                                    {selectedAudit && canDelete('manufacturerAudits') && (
-                                        <button
-                                            className="outline"
-                                            onClick={() => handleDelete(selectedAudit.id)}
-                                            style={{ padding: '10px 25px', color: '#c53030', borderColor: '#feb2b2', marginRight: 'auto' }}
-                                        >
-                                            🗑️ 삭제
-                                        </button>
-                                    )}
-                                    <button className="secondary" onClick={() => setIsModalOpen(false)} style={{ padding: '10px 25px' }}>취소</button>
-                                    <button className="primary" onClick={handleSave} style={{ padding: '10px 35px', fontWeight: 'bold' }}>데이터 저장 및 결과 분석</button>
+                                <div className="modal-footer" style={{ padding: '16px 25px', borderTop: '1px solid #e5e7eb', background: '#f8fafc' }}>
+                                    <div className="footer-left">
+                                        {selectedAudit && <span>📅 점검일: <strong>{formData.auditDate || '-'}</strong></span>}
+                                    </div>
+                                    <div className="footer-actions">
+                                        {selectedAudit && canDelete('manufacturerAudits') && (
+                                            <button
+                                                className="outline"
+                                                onClick={() => handleDelete(selectedAudit.id)}
+                                                style={{ padding: '8px 16px', color: '#c53030', borderColor: '#feb2b2', marginRight: 'auto' }}
+                                            >
+                                                🗑️ 삭제
+                                            </button>
+                                        )}
+                                        <button className="secondary" onClick={() => setIsModalOpen(false)} style={{ minWidth: '80px' }}>닫기</button>
+                                        <button className="primary" onClick={handleSave} style={{ minWidth: '150px', background: '#003366', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 'bold', padding: '10px 20px' }}>💾 데이터 저장 및 분석</button>
+                                    </div>
                                 </div>
                             </>
                         ) : (
-                            <div style={{ flex: 1, overflowY: 'auto', padding: '25px' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                                    {(() => {
-                                        const groups = [];
-                                        auditHistory.forEach(rec => {
-                                            const time = rec.modifiedAt?.substring(0, 19);
-                                            const modifier = rec.modifier;
-                                            let g = groups.find(x => x.time === time && x.modifier === modifier);
-                                            if (!g) {
-                                                g = { time, modifier, records: [] };
-                                                groups.push(g);
-                                            }
-                                            g.records.push(rec);
-                                        });
-                                        if (groups.length === 0) return <div style={{ textAlign: 'center', padding: '100px 0', color: '#94a3b8' }}>변경 이력이 없습니다.</div>;
-                                        return groups.map((g, idx) => (
-                                            <div key={idx} className="card" style={{ padding: '20px', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px', borderBottom: '1px solid #f1f5f9', paddingBottom: '10px' }}>
-                                                    <span style={{ fontSize: '16px' }}>🕒</span>
-                                                    <span style={{ fontWeight: 'bold', color: '#1e293b', fontSize: '14px' }}>{g.modifier}</span>
-                                                    <span style={{ color: '#94a3b8', fontSize: '13px' }}>| {g.time?.replace('T', ' ')}</span>
-                                                </div>
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                    {g.records.map(rec => {
-                                                        const formatVal = (v, field) => { if (!v) return '없음'; if (field.startsWith('GroupFeedback')) return v.replace(/\[그룹 점수: \d+ \/ \d+\]/g, '').trim() || '점수만 입력됨'; return v; };
-                                                        const fieldName = rec.fieldName.startsWith('GroupFeedback:') ? `[그룹총평] ${rec.fieldName.split(':')[1]}` : (fieldTranslations[rec.fieldName] || rec.fieldName);
-                                                        return (
-                                                            <div key={rec.id} style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '20px', alignItems: 'start', fontSize: '13px' }}>
-                                                                <div style={{ color: '#64748b', fontWeight: '500' }}>{fieldName}</div>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                                                                    <span style={{ color: '#94a3b8', textDecoration: 'line-through', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatVal(rec.oldValue, rec.fieldName)}</span>
-                                                                    <span style={{ color: '#3b82f6' }}>→</span>
-                                                                    <span style={{ color: '#1e293b', fontWeight: '600', maxWidth: '400px' }}>{formatVal(rec.newValue, rec.fieldName)}</span>
+                            <>
+                                <div style={{ flex: 1, overflowY: 'auto', padding: '25px' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                        {(() => {
+                                            const groups = [];
+                                            auditHistory.forEach(rec => {
+                                                const time = rec.modifiedAt?.substring(0, 19);
+                                                const modifier = rec.modifier;
+                                                let g = groups.find(x => x.time === time && x.modifier === modifier);
+                                                if (!g) {
+                                                    g = { time, modifier, records: [] };
+                                                    groups.push(g);
+                                                }
+                                                g.records.push(rec);
+                                            });
+                                            if (groups.length === 0) return <div style={{ textAlign: 'center', padding: '100px 0', color: '#94a3b8' }}>변경 이력이 없습니다.</div>;
+                                            return groups.map((g, idx) => (
+                                                <div key={idx} className="card" style={{ padding: '20px', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px', borderBottom: '1px solid #f1f5f9', paddingBottom: '10px' }}>
+                                                        <span style={{ fontSize: '16px' }}>🕒</span>
+                                                        <span style={{ fontWeight: 'bold', color: '#1e293b', fontSize: '14px' }}>{g.modifier}</span>
+                                                        <span style={{ color: '#94a3b8', fontSize: '13px' }}>| {g.time?.replace('T', ' ')}</span>
+                                                    </div>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                        {g.records.map(rec => {
+                                                            const formatVal = (v, field) => { if (!v) return '없음'; if (field.startsWith('GroupFeedback')) return v.replace(/\[그룹 점수: \d+ \/ \d+\]/g, '').trim() || '점수만 입력됨'; return v; };
+                                                            const fieldName = rec.fieldName.startsWith('GroupFeedback:') ? `[그룹총평] ${rec.fieldName.split(':')[1]}` : (fieldTranslations[rec.fieldName] || rec.fieldName);
+                                                            return (
+                                                                <div key={rec.id} style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '20px', alignItems: 'start', fontSize: '13px' }}>
+                                                                    <div style={{ color: '#64748b', fontWeight: '500' }}>{fieldName}</div>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                                                        <span style={{ color: '#94a3b8', textDecoration: 'line-through', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatVal(rec.oldValue, rec.fieldName)}</span>
+                                                                        <span style={{ color: '#3b82f6' }}>→</span>
+                                                                        <span style={{ color: '#1e293b', fontWeight: '600', maxWidth: '400px' }}>{formatVal(rec.newValue, rec.fieldName)}</span>
+                                                                    </div>
                                                                 </div>
-                                                            </div>
-                                                        );
-                                                    })}
+                                                            );
+                                                        })}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ));
-                                    })()}
+                                            ));
+                                        })()}
+                                    </div>
                                 </div>
-                            </div>
+                                <div className="modal-footer" style={{ padding: '16px 25px', borderTop: '1px solid #e5e7eb', background: '#f8fafc' }}>
+                                    <div className="footer-left">
+                                        <span>총 <strong>{auditHistory.length}</strong>건의 변경 이력</span>
+                                    </div>
+                                    <div className="footer-actions">
+                                        <button className="secondary" onClick={() => setIsModalOpen(false)} style={{ minWidth: '80px' }}>닫기</button>
+                                    </div>
+                                </div>
+                            </>
                         )}
                     </div>
                 </div>

@@ -649,9 +649,9 @@ const MailTemplatePage = ({ user }) => {
                                 </div>
                             </div>
 
-                            <div style={{ padding: '20px 30px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '12px', backgroundColor: '#f8fafc' }}>
-                                <button type="button" onClick={() => setIsTemplateModalOpen(false)} style={{ padding: '10px 20px', border: '1px solid #cbd5e1', borderRadius: '8px', backgroundColor: '#fff', color: '#475569', fontWeight: 'bold', cursor: 'pointer' }}>취소</button>
-                                <button type="submit" style={{ padding: '10px 24px', border: 'none', borderRadius: '8px', backgroundColor: '#4f46e5', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>저장하기</button>
+                            <div className="modal-footer" style={{ padding: '16px 30px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '10px', backgroundColor: '#f8fafc' }}>
+                                <button type="button" onClick={() => setIsTemplateModalOpen(false)} style={{ padding: '10px 20px', border: '1px solid #cbd5e1', borderRadius: '8px', backgroundColor: '#fff', color: '#475569', fontWeight: 'bold', cursor: 'pointer', minWidth: '80px' }}>닫기</button>
+                                <button type="submit" style={{ padding: '10px 24px', border: 'none', borderRadius: '8px', backgroundColor: '#003366', color: '#fff', fontWeight: 'bold', cursor: 'pointer', minWidth: '120px' }}>💾 템플릿 저장</button>
                             </div>
                         </form>
                     </div>
@@ -727,9 +727,9 @@ const MailTemplatePage = ({ user }) => {
                                 </div>
                             </div>
 
-                            <div style={{ padding: '20px 30px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '12px', backgroundColor: '#f8fafc' }}>
-                                <button type="button" onClick={() => setIsCategoryModalOpen(false)} style={{ padding: '10px 20px', border: '1px solid #cbd5e1', borderRadius: '8px', backgroundColor: '#fff', color: '#475569', fontWeight: 'bold', cursor: 'pointer' }}>취소</button>
-                                <button type="submit" style={{ padding: '10px 24px', border: 'none', borderRadius: '8px', backgroundColor: '#0284c7', color: '#fff', fontWeight: 'bold', cursor: 'pointer' }}>저장하기</button>
+                            <div className="modal-footer" style={{ padding: '16px 30px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '10px', backgroundColor: '#f8fafc' }}>
+                                <button type="button" onClick={() => setIsCategoryModalOpen(false)} style={{ padding: '10px 20px', border: '1px solid #cbd5e1', borderRadius: '8px', backgroundColor: '#fff', color: '#475569', fontWeight: 'bold', cursor: 'pointer', minWidth: '80px' }}>닫기</button>
+                                <button type="submit" style={{ padding: '10px 24px', border: 'none', borderRadius: '8px', backgroundColor: '#003366', color: '#fff', fontWeight: 'bold', cursor: 'pointer', minWidth: '120px' }}>💾 카테고리 저장</button>
                             </div>
                         </form>
                     </div>

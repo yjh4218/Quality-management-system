@@ -575,20 +575,38 @@ const BomRegistrationDrawer = ({ material, onClose, user }) => {
                             </div>
                         </div>
 
-                        {/* 저장 버튼 영역 */}
-                        <div style={{ marginTop: '20px', padding: '20px', background: '#fff', borderRadius: '12px', border: '1px solid #edf2f7', textAlign: 'center' }}>
-                            <button type="submit" className="primary" style={{ minWidth: '240px', padding: '12px 40px', fontSize: '15px', opacity: canEdit ? 1 : 0.5 }} disabled={!canEdit}>
-                                {canEdit ? '💾 구성품 정보 저장하기' : '🚫 수정 권한 없음'}
-                            </button>
-                        </div>
                     </form>
                 </div>
 
                 {/* 3. Footer Area */}
                 <div className="drawer-footer">
-                    <div style={{ display: 'flex', gap: '20px' }}>
+                    <div className="footer-left">
                         <span>📅 등록일: <strong>{formData.createdAt ? formData.createdAt.substring(0, 16).replace('T', ' ') : '-'}</strong></span>
                         <span>🔄 마지막 수정: <strong>{formData.updatedAt ? formData.updatedAt.substring(0, 16).replace('T', ' ') : '-'}</strong></span>
+                    </div>
+                    <div className="footer-actions">
+                        <button type="button" className="secondary" onClick={onClose} style={{ minWidth: '80px' }}>
+                            닫기
+                        </button>
+                        <button 
+                            type="submit" 
+                            form="bom-registration-form" 
+                            className="primary" 
+                            style={{ 
+                                minWidth: '120px', 
+                                background: '#003366', 
+                                color: '#fff', 
+                                border: 'none', 
+                                borderRadius: '4px', 
+                                fontWeight: 'bold', 
+                                padding: '10px 20px',
+                                opacity: canEdit ? 1 : 0.5,
+                                cursor: canEdit ? 'pointer' : 'not-allowed'
+                            }} 
+                            disabled={!canEdit}
+                        >
+                            {canEdit ? (material ? '💾 변경 사항 저장' : '💾 신규 등록하기') : '🚫 수정 권한 없음'}
+                        </button>
                     </div>
                 </div>
             </div>

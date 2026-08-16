@@ -509,22 +509,22 @@ const NotificationSettingsPage = ({ user }) => {
                                 </div>
                             </div>
 
-                            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '10px' }}>
+                            <div className="modal-footer" style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px', paddingTop: '15px', borderTop: '1px solid #edf2f7' }}>
                                 <button 
                                     type="button" 
                                     className="secondary"
                                     onClick={() => setIsModalOpen(false)}
-                                    style={{ padding: '10px 20px', borderRadius: '8px' }}
+                                    style={{ minWidth: '80px' }}
                                 >
-                                    취소
+                                    닫기
                                 </button>
                                 <button 
                                     type="submit" 
                                     className="primary"
                                     disabled={isSavingNew}
-                                    style={{ padding: '10px 20px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                    style={{ minWidth: '120px', background: '#003366', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 'bold', padding: '10px 20px', cursor: isSavingNew ? 'not-allowed' : 'pointer' }}
                                 >
-                                    {isSavingNew ? '등록 중...' : '확인'}
+                                    {isSavingNew ? '등록 중...' : '💾 이벤트 등록'}
                                 </button>
                             </div>
                         </form>

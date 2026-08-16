@@ -567,8 +567,10 @@ public class SystemInitializationService {
             }
         }
         try {
-            jdbcTemplate.execute("UPDATE packaging_specifications SET container_marking_text = REPLACE(REPLACE(container_marking_text, 'LOT 20260801', 'LOT [생산배치번호]'), 'EXP 20290731', 'EXP YYYYMMDD 까지') WHERE container_marking_text LIKE '%20260801%' OR container_marking_text LIKE '%20290731%'");
-            jdbcTemplate.execute("UPDATE packaging_specifications SET unit_box_marking_text = REPLACE(REPLACE(unit_box_marking_text, 'LOT 20260801', 'LOT [생산배치번호]'), 'EXP 20290731', 'EXP YYYYMMDD 까지') WHERE unit_box_marking_text LIKE '%20260801%' OR unit_box_marking_text LIKE '%20290731%'");
+            jdbcTemplate.execute("UPDATE packaging_specifications SET container_marking_text = REPLACE(REPLACE(container_marking_text, 'LOT 20260801', 'LOT(제조번호)'), 'EXP 20290731', 'EXP YYYYMMDD 까지') WHERE container_marking_text LIKE '%20260801%' OR container_marking_text LIKE '%20290731%'");
+            jdbcTemplate.execute("UPDATE packaging_specifications SET unit_box_marking_text = REPLACE(REPLACE(unit_box_marking_text, 'LOT 20260801', 'LOT(제조번호)'), 'EXP 20290731', 'EXP YYYYMMDD 까지') WHERE unit_box_marking_text LIKE '%20260801%' OR unit_box_marking_text LIKE '%20290731%'");
+            jdbcTemplate.execute("UPDATE packaging_specifications SET container_marking_text = REPLACE(REPLACE(container_marking_text, 'LOT [생산배치번호]', 'LOT(제조번호)'), '[생산배치번호]', 'LOT(제조번호)') WHERE container_marking_text LIKE '%생산배치번호%'");
+            jdbcTemplate.execute("UPDATE packaging_specifications SET unit_box_marking_text = REPLACE(REPLACE(unit_box_marking_text, 'LOT [생산배치번호]', 'LOT(제조번호)'), '[생산배치번호]', 'LOT(제조번호)') WHERE unit_box_marking_text LIKE '%생산배치번호%'");
         } catch (Exception e) {
             log.warn(">>>> [SYSTEM INIT] Legacy date cleanup warning: {}", e.getMessage());
         }
@@ -808,7 +810,11 @@ public class SystemInitializationService {
                     "UPDATE products SET " +
                     "product_name = '[기준 마스터] 프리미엄 센텔라 수분 크림', " +
                     "english_product_name = 'Premium Centella Moisture Cream', " +
-                    "capacity = '100ml', weight = '120g', " +
+                    "capacity = '100ml', capacity_fl_oz = 3.38, weight = '120g', weight_oz = 4.23, " +
+                    "width = 48.0, length = 48.0, height = 140.0, width_inch = 1.89, length_inch = 1.89, height_inch = 5.51, " +
+                    "material_body = 'PET-G', material_cap = 'PP 원터치', material_outer_box = '종이(FSC 350g/m²)', " +
+                    "material_label = 'PP 유포지', material_sealing = '알루미늄 씰', material_remarks = '친환경 FSC 인증 지류 및 단일재질 적용', " +
+                    "manufacturer_container = '연우', manufacturer_outer_box = '태양당인쇄', " +
                     "shelf_life_months = 36, opened_shelf_life_months = 12, " +
                     "product_barcode = '8809123456789', inbox_barcode = '18809123456783', outbox_barcode = '18809123456786', " +
                     "recycle_grade = '우수', recycle_eval_no = '2026-RE-101', recycle_material = 'PET-G/PP', " +
@@ -833,8 +839,8 @@ public class SystemInitializationService {
                             "pallet_type_str, pallet_spec, pallet_height_limit, one_pallet_height, one_pallet_weight, pallet_precautions, remarks, " +
                             "is_deleted, created_at, last_modified_at, version) " +
                             "VALUES (?, '8809123456789', 'LAB-2026-001', '김개발', '이디자인', '박품질', '러닝', '최바코드', " +
-                            "'인쇄', '표준 2줄 착인', '인쇄', '용기 하단 2줄 착인', 'LOT [생산배치번호]\nEXP YYYYMMDD 까지', 'YYYYMMDD', " +
-                            "'인쇄', '단상자 하단 2줄 착인', 'LOT [생산배치번호]\nEXP YYYYMMDD 까지', 'YYYYMMDD', " +
+                            "'인쇄', '표준 2줄 착인', '인쇄', '용기 하단 2줄 착인', 'LOT(제조번호)\nEXP YYYYMMDD 까지', 'YYYYMMDD', " +
+                            "'인쇄', '단상자 하단 2줄 착인', 'LOT(제조번호)\nEXP YYYYMMDD 까지', 'YYYYMMDD', " +
                             "'O', 'A형 박스', '일자 테이핑(H)', 10, '200x300x120', 'N', 'N', 'SK.S.S.K.K', " +
                             "'A형 박스', 40, '420x320x260', 'N', 'N', 'KLB.S.S.K.K', " +
                             "'채널 전용 스티커 부착 필수', '박스 상단 빈공간 비닐 에어캡 완충재 투입', 'POP 부착/동봉 필수', '상습 찌그러짐 주의', " +
@@ -847,8 +853,8 @@ public class SystemInitializationService {
                         jdbcTemplate.update(
                             "UPDATE packaging_specifications SET " +
                             "barcode = '8809123456789', lab_number = 'LAB-2026-001', planner_name = '김개발', designer_name = '이디자인', qc_name = '박품질', barcode_manager = '최바코드', " +
-                            "container_marking_display = '인쇄', container_marking_location = '용기 하단 2줄 착인', container_marking_text = 'LOT [생산배치번호]\nEXP YYYYMMDD 까지', container_marking_expiry_format = 'YYYYMMDD', " +
-                            "unit_box_marking_display = '인쇄', unit_box_marking_location = '단상자 하단 2줄 착인', unit_box_marking_text = 'LOT [생산배치번호]\nEXP YYYYMMDD 까지', unit_box_marking_expiry_format = 'YYYYMMDD', " +
+                            "container_marking_display = '인쇄', container_marking_location = '용기 하단 2줄 착인', container_marking_text = 'LOT(제조번호)\nEXP YYYYMMDD 까지', container_marking_expiry_format = 'YYYYMMDD', " +
+                            "unit_box_marking_display = '인쇄', unit_box_marking_location = '단상자 하단 2줄 착인', unit_box_marking_text = 'LOT(제조번호)\nEXP YYYYMMDD 까지', unit_box_marking_expiry_format = 'YYYYMMDD', " +
                             "inbox_use_yn = 'O', inbox_packaging_type = 'A형 박스', inbox_tape_method = '일자 테이핑(H)', inbox_qty = 10, inbox_size = '200x300x120', inbox_material = 'SK.S.S.K.K', " +
                             "outbox_type = 'A형 박스', outbox_qty = 40, outbox_size = '420x320x260', outbox_material = 'KLB.S.S.K.K', " +
                             "outbox_channel_sticker_standard = '채널 전용 스티커 부착 필수', outbox_cushioning_standard = '박스 상단 빈공간 비닐 에어캡 완충재 투입', pop_required_standard = 'POP 부착/동봉 필수', " +
@@ -921,6 +927,20 @@ public class SystemInitializationService {
 
             // [추가] 마스터 품목 및 채널별 품목 데이터 시딩 (제조사: 한국콜마, 세부 정보 일괄 적용)
             try {
+                // KOLMAR-MASTER-001 마스터 품목 업데이트/보정
+                jdbcTemplate.update(
+                    "UPDATE products SET " +
+                    "product_name = '[마스터] 한국콜마 에센스', " +
+                    "english_product_name = '[Master] Kolmar Essence', " +
+                    "capacity = '50ml', capacity_fl_oz = 1.69, weight = '95g', weight_oz = 3.35, " +
+                    "width = 38.0, length = 38.0, height = 125.0, width_inch = 1.50, length_inch = 1.50, height_inch = 4.92, " +
+                    "material_body = '유리(초자)', material_cap = '스포이드(PP+고무)', material_outer_box = 'CCP 종이(300g)', " +
+                    "material_label = '투명 PET', material_sealing = '수축필름', material_remarks = '유리 용기 완충을 위한 단상자 내벽 설계', " +
+                    "manufacturer_container = '삼화', manufacturer_outer_box = '두원팩', " +
+                    "recycle_grade = '우수', recycle_eval_no = '2026-RE-102', recycle_material = '유리/PP' " +
+                    "WHERE item_code = 'KOLMAR-MASTER-001'"
+                );
+
                 Integer kolmarMasterExists = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM products WHERE item_code = 'KOLMAR-MASTER-001'", Integer.class);
                 if (kolmarMasterExists == null || kolmarMasterExists == 0) {
                     Long brandId = jdbcTemplate.queryForObject("SELECT id FROM brands LIMIT 1", Long.class);
@@ -929,18 +949,23 @@ public class SystemInitializationService {
                     // 1. 마스터 품목 생성 (모든 규격/물류/재활용 정보 입력)
                     jdbcTemplate.update(
                         "INSERT INTO products (item_code, product_name, english_product_name, brand_id, manufacturer_id, " +
-                        "capacity, weight, status, active, is_deleted, created_at, updated_at, is_master, is_parent, " +
+                        "capacity, capacity_fl_oz, weight, weight_oz, width, length, height, width_inch, length_inch, height_inch, " +
+                        "material_body, material_cap, material_outer_box, material_label, material_sealing, material_remarks, manufacturer_container, manufacturer_outer_box, " +
+                        "status, active, is_deleted, created_at, updated_at, is_master, is_parent, " +
                         "is_planning_set, photo_audit_disclosed, version, opened_shelf_life_months, shelf_life_months, " +
                         "recycle_grade, recycle_eval_no, recycle_material, has_inbox, " +
                         "inbox_quantity, inbox_width, inbox_length, inbox_height, inbox_weight, " +
                         "outbox_quantity, outbox_width, outbox_length, outbox_height, outbox_weight, " +
                         "pallet_quantity, pallet_width, pallet_length, pallet_height) " +
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, true, true, " +
-                        "false, true, 1, 12, 36, '우수', '2026-RE-101', 'PET-G/PP', true, " +
-                        "10, 200, 300, 120, 1.5, " +
-                        "40, 420, 320, 260, 6.8, " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, true, true, " +
+                        "false, true, 1, 12, 36, '우수', '2026-RE-102', '유리/PP', true, " +
+                        "10, 200, 300, 120, 1.2, " +
+                        "40, 420, 320, 260, 5.5, " +
                         "1200, 1100, 1100, 1200)",
-                        "KOLMAR-MASTER-001", "[마스터] 한국콜마 에센스", "[Master] Kolmar Essence", brandId, mfrId, "100ml", "120g", "양산", true, false
+                        "KOLMAR-MASTER-001", "[마스터] 한국콜마 에센스", "[Master] Kolmar Essence", brandId, mfrId,
+                        "50ml", 1.69, "95g", 3.35, 38.0, 38.0, 125.0, 1.50, 1.50, 4.92,
+                        "유리(초자)", "스포이드(PP+고무)", "CCP 종이(300g)", "투명 PET", "수축필름", "유리 용기 완충을 위한 단상자 내벽 설계", "삼화", "두원팩",
+                        "양산", true, false
                     );
                     log.info(">>>> [SYSTEM INIT] Seeded 'KOLMAR-MASTER-001' master parent product with full details.");
                     
@@ -1190,6 +1215,29 @@ public class SystemInitializationService {
             String expFormat = (String) ch[8];
             String notes = (String) ch[9];
 
+            String inboxFmt = null;
+            String outboxFmt = null;
+            String palletFmt = null;
+
+            if (!code.equalsIgnoreCase("JP-OFF") && !name.contains("오프라인")) {
+                if (code.equalsIgnoreCase("EU") || code.equalsIgnoreCase("EU-AMZ") || name.contains("유럽")) {
+                    inboxFmt = "제조일자 (Mfg. Date): DD.MM.YYYY\n사용기한 (Exp. Date): DD.MM.YYYY까지";
+                    outboxFmt = "제조일자 (Mfg. Date): DD.MM.YYYY\n사용기한 (Exp. Date): DD.MM.YYYY까지";
+                    palletFmt = "제조일자 (Mfg. Date): DD.MM.YYYY\n사용기한 (Exp. Date): DD.MM.YYYY까지";
+                    expFormat = "DD.MM.YYYY까지";
+                } else if (code.equalsIgnoreCase("JP-ON") || code.equalsIgnoreCase("JP-AMZ") || code.equalsIgnoreCase("GLB") || code.equalsIgnoreCase("US-AMZ") || code.equalsIgnoreCase("OTC") || name.contains("온라인") || name.contains("글로벌") || name.contains("미국") || name.contains("OTC")) {
+                    inboxFmt = "제조일자 (Mfg. Date): MM-DD-YYYY\n사용기한 (Exp. Date): MM-DD-YYYY까지";
+                    outboxFmt = "제조일자 (Mfg. Date): MM-DD-YYYY\n사용기한 (Exp. Date): MM-DD-YYYY까지";
+                    palletFmt = "제조일자 (Mfg. Date): MM-DD-YYYY\n사용기한 (Exp. Date): MM-DD-YYYY까지";
+                    expFormat = "MM-DD-YYYY까지";
+                } else {
+                    inboxFmt = "제조일자 (Mfg. Date): YYYY.MM.DD\n사용기한 (Exp. Date): YYYY.MM.DD까지";
+                    outboxFmt = "제조일자 (Mfg. Date): YYYY.MM.DD\n사용기한 (Exp. Date): YYYY.MM.DD까지";
+                    palletFmt = "제조일자 (Mfg. Date): YYYY.MM.DD\n사용기한 (Exp. Date): YYYY.MM.DD까지";
+                    expFormat = "YYYY.MM.DD까지";
+                }
+            }
+
             SalesChannel channel = salesChannelRepository.findByName(name).orElse(null);
             if (channel == null) {
                 channel = SalesChannel.builder()
@@ -1202,12 +1250,23 @@ public class SystemInitializationService {
                     .maxStackHeightMm(heightLimit)
                     .padAndFrameRequired(padReq)
                     .expDateFormat(expFormat)
+                    .inboxDateFormat(inboxFmt)
+                    .outboxDateFormat(outboxFmt)
+                    .palletDateFormat(palletFmt)
                     .specialNotes(notes)
                     .active(true)
                     .updatedBy("system")
                     .build();
                 salesChannelRepository.save(channel);
                 log.info(">>>> [SYSTEM INIT] Seeded New Sales Channel: {}", name);
+            } else {
+                if (inboxFmt != null) {
+                    channel.setInboxDateFormat(inboxFmt);
+                    channel.setOutboxDateFormat(outboxFmt);
+                    channel.setPalletDateFormat(palletFmt);
+                    channel.setExpDateFormat(expFormat);
+                    salesChannelRepository.save(channel);
+                }
             }
         }
     }

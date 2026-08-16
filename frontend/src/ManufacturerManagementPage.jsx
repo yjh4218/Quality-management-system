@@ -205,18 +205,19 @@ const ManufacturerManagementPage = ({ user }) => {
 
             {/* 검색 필터 그리드 */}
             <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
                     <div>
-                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🔍 제조사 검색</label>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏭 제조사 검색</label>
                         <div style={{ position: 'relative' }}>
                             <input
                                 type="text"
                                 placeholder="명칭, 코드 등으로 빠른 검색..."
                                 value={quickFilterText}
                                 onChange={(e) => setQuickFilterText(e.target.value)}
-                                style={{ width: '100%', padding: '10px 40px 10px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', fontWeight: '600' }}
+                                onKeyDown={(e) => e.key === 'Enter' && fetchManufacturers()}
+                                style={{ width: '100%', padding: '8px 36px 8px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', height: '38px' }}
                             />
-                            <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>🔍</span>
+                            <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '14px' }}>🔍</span>
                         </div>
                     </div>
                 </div>

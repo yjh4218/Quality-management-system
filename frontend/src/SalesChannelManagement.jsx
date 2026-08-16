@@ -62,6 +62,52 @@ const SalesChannelManagement = ({ user }) => {
         return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
     };
 
+    // 날짜 표기양식 프리셋 스마트 교체/추가 헬퍼
+    const applyDateFormatPreset = (currentVal, type, presetVal) => {
+        if (!presetVal) return currentVal || '';
+        const prefix = type === 'mfg' ? '제조일자 (Mfg. Date):' : '사용기한 (Exp. Date):';
+        const newEntry = `${prefix} ${presetVal}`;
+        if (!currentVal || !currentVal.trim()) return newEntry;
+
+        const lines = currentVal.split('\n');
+        let replaced = false;
+        const updatedLines = lines.map(line => {
+            if (type === 'mfg' && (line.includes('제조일자') || line.includes('Mfg. Date') || line.includes('Mfg'))) {
+                replaced = true;
+                return newEntry;
+            }
+            if (type === 'exp' && (line.includes('사용기한') || line.includes('Exp. Date') || line.includes('EXP') || line.includes('Exp'))) {
+                replaced = true;
+                return newEntry;
+            }
+            return line;
+        });
+
+        if (!replaced) {
+            updatedLines.push(newEntry);
+        }
+        return updatedLines.filter(Boolean).join('\n');
+    };
+
+    // 현품표 제조일자 / 사용기한 개별 추출 헬퍼
+    const extractDateFormatPart = (fullText, type) => {
+        if (!fullText) return '';
+        const lines = fullText.split('\n');
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            if (type === 'mfg' && (trimmed.includes('제조일자') || trimmed.includes('Mfg. Date') || trimmed.includes('Mfg'))) {
+                const clean = trimmed.replace(/^.*?:\s*/, '').trim();
+                return clean || trimmed;
+            }
+            if (type === 'exp' && (trimmed.includes('사용기한') || trimmed.includes('Exp. Date') || trimmed.includes('EXP') || trimmed.includes('Exp'))) {
+                const clean = trimmed.replace(/^.*?:\s*/, '').trim();
+                return clean || trimmed;
+            }
+        }
+        return '';
+    };
+
     useEffect(() => {
         fetchChannels();
     }, []);
@@ -232,8 +278,16 @@ const SalesChannelManagement = ({ user }) => {
             const res = await api.saveSalesChannel(channelData);
             const savedChannelId = editingChannel ? editingChannel.id : res.data?.id;
 
-            if (savedChannelId && categorizedNotes.length > 0) {
-                await apiDefault.post(`/api/sales-channels/${savedChannelId}/special-notes`, categorizedNotes);
+            // 단상자/용기 착인 기준 통합 값을 EXPIRY_MARKING 노트에 자동 동기화하여 저장
+            const syncedNotes = categorizedNotes.map(n => {
+                if (n.categoryKey === 'EXPIRY_MARKING' || n.categoryLabel?.includes('사용기한 착인')) {
+                    return { ...n, noteContent: formData.unitBoxMarkingRule || n.noteContent || '' };
+                }
+                return n;
+            });
+
+            if (savedChannelId && syncedNotes.length > 0) {
+                await apiDefault.post(`/api/sales-channels/${savedChannelId}/special-notes`, syncedNotes);
             }
 
             toast.success(editingChannel ? "채널 포장 규칙 및 항목별 특이사항이 수정되었습니다." : "새 채널 및 특이사항이 등록되었습니다.");
@@ -438,17 +492,32 @@ const SalesChannelManagement = ({ user }) => {
 
             {showDrawer && (
                 <div className="modal-overlay" style={{ zIndex: 1000, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <div className="modal-content" onClick={e => e.stopPropagation()} style={{ width: '1100px', maxWidth: '95vw', maxHeight: '92vh', padding: '35px', borderRadius: '20px', backgroundColor: 'white', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', border: '1px solid #e2e8f0', overflowY: 'auto' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px', borderBottom: '1px solid #f1f5f9', paddingBottom: '15px' }}>
-                            <h3 style={{ fontSize: '20px', fontWeight: '800', margin: 0, color: '#0f172a' }}>{editingChannel ? '📝 유통 채널 포장 규격 수정' : '✨ 신규 유통 채널 등록'}</h3>
-                            <button className="secondary" onClick={() => setShowDrawer(false)} style={{ borderRadius: '50%', width: '32px', height: '32px', padding: 0, border: 'none', background: '#f1f5f9', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>✕</button>
+                    <div className="modal-content" onClick={e => e.stopPropagation()} style={{ width: '1100px', maxWidth: '95vw', maxHeight: '92vh', borderRadius: '20px', backgroundColor: 'white', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                        
+                        {/* 1. Fixed Modal Header */}
+                        <div className="modal-header" style={{ padding: '20px 30px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <h3 style={{ fontSize: '20px', fontWeight: '800', margin: 0, color: '#0f172a' }}>
+                                    {editingChannel ? '📝 유통 채널 포장 규격 수정' : '✨ 신규 유통 채널 등록'}
+                                </h3>
+                                {formData.channelCode && (
+                                    <span className="badge" style={{ background: '#e2e8f0', padding: '4px 12px', borderRadius: '20px', fontSize: '13px', fontWeight: 'bold', color: '#475569', border: '1px solid #cbd5e1' }}>
+                                        🏷️ {formData.channelCode}
+                                    </span>
+                                )}
+                            </div>
+                            <button className="secondary close-button" onClick={() => setShowDrawer(false)}>
+                                <span className="icon">×</span> 닫기
+                            </button>
                         </div>
-                        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '2px solid #e2e8f0', paddingBottom: '0px' }}>
+
+                        {/* 2. Fixed Tabs */}
+                        <div className="drawer-tabs-wrapper" style={{ padding: '0 30px', borderBottom: '2px solid #e2e8f0', display: 'flex', gap: '8px' }}>
                             <button
                                 type="button"
                                 onClick={() => setActiveDrawerTab('unit')}
                                 style={{
-                                    padding: '10px 20px',
+                                    padding: '12px 20px',
                                     fontWeight: '800',
                                     fontSize: '14px',
                                     border: 'none',
@@ -465,7 +534,7 @@ const SalesChannelManagement = ({ user }) => {
                                 type="button"
                                 onClick={() => setActiveDrawerTab('set')}
                                 style={{
-                                    padding: '10px 20px',
+                                    padding: '12px 20px',
                                     fontWeight: '800',
                                     fontSize: '14px',
                                     border: 'none',
@@ -480,7 +549,9 @@ const SalesChannelManagement = ({ user }) => {
                             </button>
                         </div>
 
-                        <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                        {/* 3. Scrollable Modal Body */}
+                        <div className="modal-body" style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '30px' }}>
+                            <form id="sales-channel-form" onSubmit={handleSave} className="drawer-body-form" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                             
                             {/* 공통 기본 정보 */}
                             <div style={{ display: 'flex', gap: '15px' }}>
@@ -614,23 +685,33 @@ const SalesChannelManagement = ({ user }) => {
                                                          const val = e.target.value;
                                                          if (val && val !== '그 외') {
                                                              const current = formData.unitBoxMarkingRule ? formData.unitBoxMarkingRule + '\n' : '';
-                                                             setFormData({ ...formData, unitBoxMarkingRule: current + `1. 사용기한 착인 또는 압인 시 '${val}' 기재` });
+                                                             let expPart = '';
+                                                             if (val.includes('EXP')) {
+                                                                 expPart = val.replace(/^.*?EXP\s*/, '').trim();
+                                                             } else if (val.includes('표기금지')) {
+                                                                 expPart = '표기금지';
+                                                             }
+                                                             setFormData({ 
+                                                                 ...formData, 
+                                                                 unitBoxMarkingRule: current + `1. 사용기한 착인 또는 압인 시 '${val}' 기재`,
+                                                                 expDateFormat: expPart || formData.expDateFormat
+                                                             });
                                                          }
                                                      }}
                                                      disabled={!canEdit}
                                                      style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #93c5fd', fontSize: '12.5px', fontWeight: 'bold', backgroundColor: '#f8fafc' }}
                                                  >
                                                      <option value="">-- 📦 단상자/용기 착인 기준 프리셋 선택 --</option>
-                                                     <option value="LOT EXP YYYYMMDD까지">LOT EXP YYYYMMDD까지</option>
-                                                     <option value="LOT EXP DDMMYYYY">LOT EXP DDMMYYYY</option>
-                                                     <option value="LOT EXP MM-DD-YYYY">LOT EXP MM-DD-YYYY</option>
+                                                     <option value="LOT(제조번호) EXP YYYYMMDD까지">LOT(제조번호) EXP YYYYMMDD까지</option>
+                                                     <option value="LOT(제조번호) EXP DDMMYYYY">LOT(제조번호) EXP DDMMYYYY</option>
+                                                     <option value="LOT(제조번호) EXP MM-DD-YYYY">LOT(제조번호) EXP MM-DD-YYYY</option>
                                                      <option value="표기금지(제조번호만 허용)">표기금지(제조번호만 허용)</option>
                                                      <option value="그 외">그 외 (직접 별도 유형/목록 입력)</option>
                                                  </select>
                                                  <textarea
                                                      value={formData.unitBoxMarkingRule || ''}
                                                      onChange={e => setFormData({ ...formData, unitBoxMarkingRule: e.target.value })}
-                                                     placeholder="예: 1. 단상자 후면 하단 잉크젯 착인 (LOT: XXX / EXP: YYYYMMDD)"
+                                                     placeholder="예: 1. 단상자 후면 하단 잉크젯 착인 (LOT(제조번호) / EXP: YYYYMMDD 까지)"
                                                      rows={3}
                                                      disabled={!canEdit}
                                                      style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', lineHeight: 1.4 }}
@@ -670,38 +751,36 @@ const SalesChannelManagement = ({ user }) => {
                                                      <label style={{ fontSize: '12px', fontWeight: '700', color: '#1d4ed8' }}>📥 인박스 날짜 표기양식 (제조일자 & 사용기한 각각 선택):</label>
                                                      <div style={{ display: 'flex', gap: '6px' }}>
                                                          <select
+                                                             value={extractDateFormatPart(formData.inboxDateFormat, 'mfg')}
                                                              onChange={(e) => {
                                                                  const val = e.target.value;
                                                                  if (val) {
-                                                                     const current = formData.inboxDateFormat ? formData.inboxDateFormat + '\n' : '';
-                                                                     setFormData({ ...formData, inboxDateFormat: current + `제조일자 (Mfg. Date): ${val}` });
+                                                                     setFormData({ ...formData, inboxDateFormat: applyDateFormatPreset(formData.inboxDateFormat, 'mfg', val) });
                                                                  }
                                                              }}
                                                              disabled={!canEdit}
                                                              style={{ flex: 1, borderRadius: '4px', padding: '4px 6px', border: '1px solid #93c5fd', fontSize: '11.5px', backgroundColor: '#fff' }}
                                                          >
                                                              <option value="">-- Mfg Date 프리셋 --</option>
-                                                             <option value="YYYYMMDD">YYYYMMDD</option>
                                                              <option value="YYYY.MM.DD">YYYY.MM.DD</option>
                                                              <option value="MM-DD-YYYY">MM-DD-YYYY</option>
-                                                             <option value="DDMMYYYY">DDMMYYYY</option>
+                                                             <option value="DD.MM.YYYY">DD.MM.YYYY</option>
                                                          </select>
                                                          <select
+                                                             value={extractDateFormatPart(formData.inboxDateFormat, 'exp')}
                                                              onChange={(e) => {
                                                                  const val = e.target.value;
                                                                  if (val) {
-                                                                     const current = formData.inboxDateFormat ? formData.inboxDateFormat + '\n' : '';
-                                                                     setFormData({ ...formData, inboxDateFormat: current + `사용기한 (Exp. Date): ${val}` });
+                                                                     setFormData({ ...formData, inboxDateFormat: applyDateFormatPreset(formData.inboxDateFormat, 'exp', val) });
                                                                  }
                                                              }}
                                                              disabled={!canEdit}
                                                              style={{ flex: 1, borderRadius: '4px', padding: '4px 6px', border: '1px solid #93c5fd', fontSize: '11.5px', backgroundColor: '#fff' }}
                                                          >
                                                              <option value="">-- Exp Date 프리셋 --</option>
-                                                             <option value="YYYYMMDD까지">YYYYMMDD까지</option>
                                                              <option value="YYYY.MM.DD까지">YYYY.MM.DD까지</option>
                                                              <option value="MM-DD-YYYY까지">MM-DD-YYYY까지</option>
-                                                             <option value="DDMMYYYY까지">DDMMYYYY까지</option>
+                                                             <option value="DD.MM.YYYY까지">DD.MM.YYYY까지</option>
                                                              <option value="현품표 사용기한(Exp. Date) 항목 표기 안함">현품표 사용기한(Exp. Date) 항목 표기 안함</option>
                                                          </select>
                                                      </div>
@@ -749,38 +828,36 @@ const SalesChannelManagement = ({ user }) => {
                                                      <label style={{ fontSize: '12px', fontWeight: '700', color: '#1d4ed8' }}>📦 아웃박스 날짜 표기양식 (제조일자 & 사용기한 각각 선택):</label>
                                                      <div style={{ display: 'flex', gap: '6px' }}>
                                                          <select
+                                                             value={extractDateFormatPart(formData.outboxDateFormat, 'mfg')}
                                                              onChange={(e) => {
                                                                  const val = e.target.value;
                                                                  if (val) {
-                                                                     const current = formData.outboxDateFormat ? formData.outboxDateFormat + '\n' : '';
-                                                                     setFormData({ ...formData, outboxDateFormat: current + `제조일자 (Mfg. Date): ${val}` });
+                                                                     setFormData({ ...formData, outboxDateFormat: applyDateFormatPreset(formData.outboxDateFormat, 'mfg', val) });
                                                                  }
                                                              }}
                                                              disabled={!canEdit}
                                                              style={{ flex: 1, borderRadius: '4px', padding: '4px 6px', border: '1px solid #93c5fd', fontSize: '11.5px', backgroundColor: '#fff' }}
                                                          >
                                                              <option value="">-- Mfg Date 프리셋 --</option>
-                                                             <option value="YYYYMMDD">YYYYMMDD</option>
                                                              <option value="YYYY.MM.DD">YYYY.MM.DD</option>
                                                              <option value="MM-DD-YYYY">MM-DD-YYYY</option>
-                                                             <option value="DDMMYYYY">DDMMYYYY</option>
+                                                             <option value="DD.MM.YYYY">DD.MM.YYYY</option>
                                                          </select>
                                                          <select
+                                                             value={extractDateFormatPart(formData.outboxDateFormat, 'exp')}
                                                              onChange={(e) => {
                                                                  const val = e.target.value;
                                                                  if (val) {
-                                                                     const current = formData.outboxDateFormat ? formData.outboxDateFormat + '\n' : '';
-                                                                     setFormData({ ...formData, outboxDateFormat: current + `사용기한 (Exp. Date): ${val}` });
+                                                                     setFormData({ ...formData, outboxDateFormat: applyDateFormatPreset(formData.outboxDateFormat, 'exp', val) });
                                                                  }
                                                              }}
                                                              disabled={!canEdit}
                                                              style={{ flex: 1, borderRadius: '4px', padding: '4px 6px', border: '1px solid #93c5fd', fontSize: '11.5px', backgroundColor: '#fff' }}
                                                          >
                                                              <option value="">-- Exp Date 프리셋 --</option>
-                                                             <option value="YYYYMMDD까지">YYYYMMDD까지</option>
                                                              <option value="YYYY.MM.DD까지">YYYY.MM.DD까지</option>
                                                              <option value="MM-DD-YYYY까지">MM-DD-YYYY까지</option>
-                                                             <option value="DDMMYYYY까지">DDMMYYYY까지</option>
+                                                             <option value="DD.MM.YYYY까지">DD.MM.YYYY까지</option>
                                                              <option value="현품표 사용기한(Exp. Date) 항목 표기 안함">현품표 사용기한(Exp. Date) 항목 표기 안함</option>
                                                          </select>
                                                      </div>
@@ -811,6 +888,7 @@ const SalesChannelManagement = ({ user }) => {
                                                  >
                                                      <option value="">-- 🏷️ 팔레트 현품표 기재 사항 프리셋 선택 --</option>
                                                      <option value="팔레트 랩핑 후 전면/측면 2면 현품표 부착 (제조일자, 사용기한 필수)">팔레트 랩핑 후 전면/측면 2면 현품표 부착 (제조일자, 사용기한 필수)</option>
+                                                      <option value="팔레트 랩핑 후 전면 1면 현품표 부착 (제조일자, 사용기한 필수)">팔레트 랩핑 후 전면 1면 현품표 부착 (제조일자, 사용기한 필수)</option>
                                                      <option value="현품표 사용기한(Exp. Date) 항목 표기 안함">현품표 사용기한(Exp. Date) 항목 표기 안함</option>
                                                      <option value="그 외">그 외 (직접 별도 유형/목록 입력)</option>
                                                  </select>
@@ -827,39 +905,37 @@ const SalesChannelManagement = ({ user }) => {
                                                  <div style={{ marginTop: '4px', paddingTop: '8px', borderTop: '1px dashed #bfdbfe', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                                      <label style={{ fontSize: '12px', fontWeight: '700', color: '#1d4ed8' }}>🏷️ 팔레트 날짜 표기양식 (제조일자 & 사용기한 각각 선택):</label>
                                                      <div style={{ display: 'flex', gap: '6px' }}>
-                                                         <select
-                                                             onChange={(e) => {
-                                                                 const val = e.target.value;
-                                                                 if (val) {
-                                                                     const current = formData.palletDateFormat ? formData.palletDateFormat + '\n' : '';
-                                                                     setFormData({ ...formData, palletDateFormat: current + `제조일자 (Mfg. Date): ${val}` });
-                                                                 }
-                                                             }}
-                                                             disabled={!canEdit}
-                                                             style={{ flex: 1, borderRadius: '4px', padding: '4px 6px', border: '1px solid #93c5fd', fontSize: '11.5px', backgroundColor: '#fff' }}
-                                                         >
+                                                          <select
+                                                              value={extractDateFormatPart(formData.palletDateFormat, 'mfg')}
+                                                              onChange={(e) => {
+                                                                  const val = e.target.value;
+                                                                  if (val) {
+                                                                      setFormData({ ...formData, palletDateFormat: applyDateFormatPreset(formData.palletDateFormat, 'mfg', val) });
+                                                                  }
+                                                              }}
+                                                              disabled={!canEdit}
+                                                              style={{ flex: 1, borderRadius: '4px', padding: '4px 6px', border: '1px solid #93c5fd', fontSize: '11.5px', backgroundColor: '#fff' }}
+                                                          >
                                                              <option value="">-- Mfg Date 프리셋 --</option>
-                                                             <option value="YYYYMMDD">YYYYMMDD</option>
                                                              <option value="YYYY.MM.DD">YYYY.MM.DD</option>
                                                              <option value="MM-DD-YYYY">MM-DD-YYYY</option>
-                                                             <option value="DDMMYYYY">DDMMYYYY</option>
+                                                             <option value="DD.MM.YYYY">DD.MM.YYYY</option>
                                                          </select>
-                                                         <select
-                                                             onChange={(e) => {
-                                                                 const val = e.target.value;
-                                                                 if (val) {
-                                                                     const current = formData.palletDateFormat ? formData.palletDateFormat + '\n' : '';
-                                                                     setFormData({ ...formData, palletDateFormat: current + `사용기한 (Exp. Date): ${val}` });
-                                                                 }
-                                                             }}
-                                                             disabled={!canEdit}
-                                                             style={{ flex: 1, borderRadius: '4px', padding: '4px 6px', border: '1px solid #93c5fd', fontSize: '11.5px', backgroundColor: '#fff' }}
-                                                         >
+                                                          <select
+                                                              value={extractDateFormatPart(formData.palletDateFormat, 'exp')}
+                                                              onChange={(e) => {
+                                                                  const val = e.target.value;
+                                                                  if (val) {
+                                                                      setFormData({ ...formData, palletDateFormat: applyDateFormatPreset(formData.palletDateFormat, 'exp', val) });
+                                                                  }
+                                                              }}
+                                                              disabled={!canEdit}
+                                                              style={{ flex: 1, borderRadius: '4px', padding: '4px 6px', border: '1px solid #93c5fd', fontSize: '11.5px', backgroundColor: '#fff' }}
+                                                          >
                                                              <option value="">-- Exp Date 프리셋 --</option>
-                                                             <option value="YYYYMMDD까지">YYYYMMDD까지</option>
                                                              <option value="YYYY.MM.DD까지">YYYY.MM.DD까지</option>
                                                              <option value="MM-DD-YYYY까지">MM-DD-YYYY까지</option>
-                                                             <option value="DDMMYYYY까지">DDMMYYYY까지</option>
+                                                             <option value="DD.MM.YYYY까지">DD.MM.YYYY까지</option>
                                                              <option value="현품표 사용기한(Exp. Date) 항목 표기 안함">현품표 사용기한(Exp. Date) 항목 표기 안함</option>
                                                          </select>
                                                      </div>
@@ -902,7 +978,8 @@ const SalesChannelManagement = ({ user }) => {
                                                 categorizedNotes
                                                 .filter(item => {
                                                     const isSetCat = item.categoryKey?.startsWith('SET_') || item.categoryLabel?.includes('기획세트');
-                                                    return !isSetCat;
+                                                    const isExpiry = item.categoryKey === 'EXPIRY_MARKING' || item.categoryLabel?.includes('사용기한 착인');
+                                                    return !isSetCat && !isExpiry;
                                                 })
                                                 .map((item, idx) => {
                                                     const isSticker = item.categoryKey === 'CHANNEL_STICKER';
@@ -1216,13 +1293,39 @@ const SalesChannelManagement = ({ user }) => {
                                 />
                             </div>
 
-                            <div style={{ display: 'flex', gap: '15px', paddingTop: '10px' }}>
-                                <button type="submit" className="primary" style={{ flex: 2, padding: '12px', borderRadius: '10px', fontWeight: '800', backgroundColor: '#0f172a', color: 'white', border: 'none', cursor: 'pointer', opacity: canEdit ? 1 : 0.5 }} disabled={!canEdit}>
-                                    {canEdit ? (editingChannel ? '채널 정보 수정' : '채널 등록 완료') : '조회 전용'}
-                                </button>
-                                <button type="button" className="secondary" onClick={() => setShowDrawer(false)} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid #cbd5e1', backgroundColor: '#fff', cursor: 'pointer' }}>취소</button>
+                            </form>
+                        </div>
+
+                        {/* 4. Fixed Modal Footer */}
+                        <div className="modal-footer" style={{ padding: '16px 30px', borderTop: '1px solid #edf2f7' }}>
+                            <div className="footer-left">
+                                <span>🏷️ 채널: <strong>{formData.name || formData.channelCode || '신규'}</strong></span>
                             </div>
-                        </form>
+                            <div className="footer-actions">
+                                <button type="button" className="secondary" onClick={() => setShowDrawer(false)} style={{ minWidth: '80px' }}>
+                                    닫기
+                                </button>
+                                <button 
+                                    type="submit" 
+                                    form="sales-channel-form"
+                                    className="primary" 
+                                    style={{ 
+                                        minWidth: '120px', 
+                                        background: '#003366', 
+                                        color: '#fff', 
+                                        border: 'none', 
+                                        borderRadius: '4px', 
+                                        fontWeight: 'bold', 
+                                        padding: '10px 20px',
+                                        opacity: canEdit ? 1 : 0.5,
+                                        cursor: canEdit ? 'pointer' : 'not-allowed'
+                                    }} 
+                                    disabled={!canEdit}
+                                >
+                                    {canEdit ? (editingChannel ? '💾 채널 정보 수정' : '🆕 채널 등록 완료') : '🚫 조회 전용'}
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

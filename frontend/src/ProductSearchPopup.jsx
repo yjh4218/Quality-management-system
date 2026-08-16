@@ -216,11 +216,15 @@ const ProductSearchPopup = ({ onClose, onSelect, initialIsMasterOnly = false }) 
                 </div>
 
                 {/* 3. Modal Footer */}
-                <div className="modal-footer" style={{ padding: '12px 24px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '13px', color: '#475569' }}>
-                        검색 결과: <strong style={{ color: '#2563eb' }}>{results.length}</strong> 건
-                    </span>
-                    <button onClick={onClose} className="secondary" style={{ padding: '6px 16px' }}>취소</button>
+                <div className="modal-footer" style={{ padding: '14px 24px', borderTop: '1px solid #e2e8f0' }}>
+                    <div className="footer-left">
+                        <span style={{ fontSize: '13px', color: '#475569' }}>
+                            검색 결과: <strong style={{ color: '#003366' }}>{results.length}</strong> 건
+                        </span>
+                    </div>
+                    <div className="footer-actions">
+                        <button onClick={onClose} className="secondary" style={{ minWidth: '80px' }}>닫기</button>
+                    </div>
                 </div>
             </div>
         </div>

@@ -277,32 +277,37 @@ const ManufacturerDrawer = ({ manufacturer, onClose, canEdit }) => {
                                 ))}
                             </div>
                         </div>
-
-                        <div style={{ marginTop: '50px', padding: '30px', background: '#ffffff', borderRadius: '20px', border: '1px solid #edf2f7', textAlign: 'center', boxShadow: '0 10px 25px rgba(0,0,0,0.05)' }}>
-                            <button 
-                                type="submit" 
-                                className="primary" 
-                                style={{ 
-                                    minWidth: '300px', 
-                                    padding: '16px 50px', 
-                                    fontSize: '16px',
-                                    fontWeight: '800',
-                                    borderRadius: '14px',
-                                    boxShadow: '0 8px 20px rgba(0, 51, 102, 0.2)',
-                                    opacity: canEdit ? 1 : 0.5 
-                                }}
-                                disabled={!canEdit}
-                            >
-                                {canEdit ? (manufacturer ? '💾 변경 사항 저장 및 업데이트' : '🚀 신규 협력사 등록 완료') : '수정 권한이 제한되었습니다'}
-                            </button>
-                        </div>
                     </form>
                 </div>
 
-                <div className="drawer-footer" style={{ padding: '20px 40px', background: '#fff', fontSize: '12px', color: '#a0aec0' }}>
-                    <div style={{ display: 'flex', gap: '30px', justifyContent: 'center' }}>
-                        <span>최초 등록일: <strong>{formData.createdAt ? new Date(formData.createdAt).toLocaleString() : '-'}</strong></span>
-                        <span>최종 수정일: <strong>{formData.updatedAt ? new Date(formData.updatedAt).toLocaleString() : '-'}</strong></span>
+                <div className="drawer-footer">
+                    <div className="footer-left">
+                        <span>📅 최초 등록일: <strong>{formData.createdAt ? new Date(formData.createdAt).toLocaleString() : '-'}</strong></span>
+                        <span>🔄 최종 수정일: <strong>{formData.updatedAt ? new Date(formData.updatedAt).toLocaleString() : '-'}</strong></span>
+                    </div>
+                    <div className="footer-actions">
+                        <button type="button" className="secondary" onClick={onClose} style={{ minWidth: '80px' }}>
+                            닫기
+                        </button>
+                        <button 
+                            type="submit" 
+                            form="manufacturer-form"
+                            className="primary" 
+                            style={{ 
+                                minWidth: '120px', 
+                                background: '#003366', 
+                                color: '#fff', 
+                                border: 'none', 
+                                borderRadius: '4px', 
+                                fontWeight: 'bold', 
+                                padding: '10px 20px',
+                                opacity: canEdit ? 1 : 0.5,
+                                cursor: canEdit ? 'pointer' : 'not-allowed'
+                            }} 
+                            disabled={!canEdit}
+                        >
+                            {canEdit ? (manufacturer ? '💾 변경 사항 저장' : '🚀 신규 협력사 등록') : '🚫 권한 없음'}
+                        </button>
                     </div>
                 </div>
             </div>

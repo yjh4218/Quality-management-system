@@ -257,9 +257,9 @@ const DashboardManagementPage = ({ user }) => {
                                 </div>
                             </div>
 
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                                <button type="button" onClick={() => setIsModalOpen(false)} style={{ padding: '10px 20px', borderRadius: '6px', border: '1px solid #cbd5e1', cursor: 'pointer' }}>취소</button>
-                                <button type="submit" style={{ padding: '10px 20px', borderRadius: '6px', backgroundColor: '#4f46e5', color: 'white', border: 'none', cursor: 'pointer', fontWeight: '600' }}>저장하기</button>
+                            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', paddingTop: '15px', borderTop: '1px solid #edf2f7' }}>
+                                <button type="button" className="secondary" onClick={() => setIsModalOpen(false)} style={{ minWidth: '80px' }}>닫기</button>
+                                <button type="submit" className="primary" style={{ minWidth: '120px', backgroundColor: '#003366', color: 'white', border: 'none', borderRadius: '4px', padding: '10px 20px', cursor: 'pointer', fontWeight: 'bold' }}>💾 저장하기</button>
                             </div>
                         </form>
                     </div>

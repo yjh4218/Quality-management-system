@@ -48,6 +48,7 @@ public class PackagingSpecExportService {
     private final PackagingSpecRevisionRepository revisionRepository;
     private final PackagingSpecComponentRepository componentRepository;
     private final com.example.ims.repository.PackagingMethodImageRepository methodImageRepository;
+    private final com.example.ims.repository.ChannelSpecialNoteRepository specialNoteRepository;
 
     /**
      * Generates a comprehensive and professional Excel export for the given product's packaging specs.
@@ -176,6 +177,24 @@ public class PackagingSpecExportService {
             String outboxDateFormatStr = (spec.getOutboxDateFormat() != null && !spec.getOutboxDateFormat().trim().isEmpty()) ? spec.getOutboxDateFormat() : (firstChannel != null && firstChannel.getOutboxDateFormat() != null ? firstChannel.getOutboxDateFormat() : "[ YYYY.MM.DD 표기 ]");
             String palletDateFormatStr = (spec.getPalletDateFormat() != null && !spec.getPalletDateFormat().trim().isEmpty()) ? spec.getPalletDateFormat() : (firstChannel != null && firstChannel.getPalletDateFormat() != null ? firstChannel.getPalletDateFormat() : "[ YYYY.MM.DD 표기 ]");
 
+            com.example.ims.entity.ChannelSpecialNote stickerNote = null;
+            if (firstChannel != null) {
+                try {
+                    List<com.example.ims.entity.ChannelSpecialNote> notes = specialNoteRepository.findByChannelId(firstChannel.getId());
+                    if (notes != null) {
+                        for (com.example.ims.entity.ChannelSpecialNote n : notes) {
+                            if (n.getCategory() != null && ("CHANNEL_STICKER".equals(n.getCategory().getCategoryKey()) || 
+                                (n.getCategory().getCategoryLabel() != null && n.getCategory().getCategoryLabel().contains("스티커")))) {
+                                stickerNote = n;
+                                break;
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to find channel sticker note for channel " + firstChannel.getId(), e);
+                }
+            }
+
             // [1. 제품 및 기본 정보]
             createSectionHeader(sheet0, 3, "1. 📌 제품 및 기본 정보", headerStyle, 7);
             addRow(sheet0, 4, labelStyle, dataStyle, "품목코드", product.getItemCode(), "브랜드명", product.getBrand() != null ? product.getBrand().getName() : "-", "유통채널", channelNames, "버전", "v" + (spec.getVersion() != null ? spec.getVersion() : 1));
@@ -291,8 +310,12 @@ public class PackagingSpecExportService {
             currentRow++;
             addRow(sheet0, currentRow++, labelStyle, dataStyle, "용기 표기방법", spec.getContainerMarkingDisplay() != null ? spec.getContainerMarkingDisplay() : "-", "용기 착인위치", spec.getContainerMarkingLocation() != null ? spec.getContainerMarkingLocation() : "-", "단상자 표기방법", spec.getUnitBoxMarkingDisplay() != null ? spec.getUnitBoxMarkingDisplay() : "-", "단상자 착인위치", spec.getUnitBoxMarkingLocation() != null ? spec.getUnitBoxMarkingLocation() : "-");
             
-            String containerText = spec.getContainerMarkingText() != null && !spec.getContainerMarkingText().trim().isEmpty() ? spec.getContainerMarkingText() : "-";
-            String unitBoxText = spec.getUnitBoxMarkingText() != null && !spec.getUnitBoxMarkingText().trim().isEmpty() ? spec.getUnitBoxMarkingText() : "-";
+            String containerText = spec.getContainerMarkingText() != null && !spec.getContainerMarkingText().trim().isEmpty() 
+                    ? spec.getContainerMarkingText().replace("LOT [생산배치번호]", "LOT(제조번호)").replace("[생산배치번호]", "LOT(제조번호)").replace("생산배치번호", "LOT(제조번호)") 
+                    : "-";
+            String unitBoxText = spec.getUnitBoxMarkingText() != null && !spec.getUnitBoxMarkingText().trim().isEmpty() 
+                    ? spec.getUnitBoxMarkingText().replace("LOT [생산배치번호]", "LOT(제조번호)").replace("[생산배치번호]", "LOT(제조번호)").replace("생산배치번호", "LOT(제조번호)") 
+                    : "-";
             addRow(sheet0, currentRow++, labelStyle, wrapDataStyle, "용기 착인기준(3줄)", containerText, "단상자 착인기준(3줄)", unitBoxText, "포장방법 타입", "서술형 지침", "-", "-");
 
             Row methodRow = sheet0.createRow(currentRow);
@@ -302,6 +325,61 @@ public class PackagingSpecExportService {
             for (int col = 2; col <= 7; col++) createCell(methodRow, col, "", wrapDataStyle);
             sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 1, 7));
             currentRow++;
+
+            // 여백 행
+            createMarginRow(sheet0, currentRow++, 10);
+
+            // [4-1. 유통 채널 포장 규정 및 스티커/완충재 기준]
+            createSectionHeader(sheet0, currentRow, "4-1. 🏷️ 유통 채널 전용 포장 규정 및 스티커 / 완충재 / 현품표 기준", headerStyle, 7);
+            currentRow++;
+            String stickerStr = spec.getOutboxChannelStickerStandard() != null && !spec.getOutboxChannelStickerStandard().isEmpty()
+                    ? spec.getOutboxChannelStickerStandard()
+                    : (firstChannel != null && Boolean.TRUE.equals(firstChannel.getChannelStickerRequired()) ? (firstChannel.getName() + " 채널 스티커 부착 필수") : "해당 없음");
+            String cushionStr = spec.getOutboxCushioningStandard() != null && !spec.getOutboxCushioningStandard().isEmpty()
+                    ? spec.getOutboxCushioningStandard()
+                    : (firstChannel != null && firstChannel.getCushioningStandard() != null ? firstChannel.getCushioningStandard() : "-");
+            String popStr = spec.getPopRequiredStandard() != null && !spec.getPopRequiredStandard().isEmpty()
+                    ? spec.getPopRequiredStandard()
+                    : (firstChannel != null && Boolean.TRUE.equals(firstChannel.getPopRequired()) ? (firstChannel.getName() + " POP 부착/동봉 필수") : "해당 없음");
+
+            addRow(sheet0, currentRow++, labelStyle, dataStyle, "채널스티커 기준", stickerStr, "완충재 처리기준", cushionStr, "제품 POP 기준", popStr, "적용 유통채널", firstChannel != null ? firstChannel.getName() : "-");
+            addRow(sheet0, currentRow++, labelStyle, wrapDataStyle, "인박스 현품표", inboxMarkingRule, "아웃박스 현품표", outboxMarkingRule, "팔레트 현품표", palletMarkingRule, "-", "-");
+            addRow(sheet0, currentRow++, labelStyle, dataStyle, "인박스 날짜양식", inboxDateFormatStr, "아웃박스 날짜양식", outboxDateFormatStr, "팔레트 날짜양식", palletDateFormatStr, "-", "-");
+
+            if (stickerNote != null && stickerNote.getFileUrl() != null) {
+                byte[] stickerBytes = getImageBytesFromFileOrUrl(stickerNote.getFileUrl());
+                if (stickerBytes != null && stickerBytes.length > 0) {
+                    Row stRow = sheet0.createRow(currentRow);
+                    stRow.setHeightInPoints(200);
+                    createCell(stRow, 0, "채널스티커 규정사진", labelStyle);
+                    createCell(stRow, 1, stickerNote.getNoteContent() != null && !stickerNote.getNoteContent().isEmpty() ? stickerNote.getNoteContent() : "채널 스티커 부착 규정 사진", wrapDataStyle);
+                    for (int col = 2; col <= 7; col++) createCell(stRow, col, "", wrapDataStyle);
+                    sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 1, 7));
+
+                    try {
+                        org.apache.poi.ss.usermodel.Drawing<?> sheet0Drawing = sheet0.getDrawingPatriarch() != null ? sheet0.getDrawingPatriarch() : sheet0.createDrawingPatriarch();
+                        int picIdx = workbook.addPicture(stickerBytes, Workbook.PICTURE_TYPE_JPEG);
+                        org.apache.poi.ss.usermodel.ClientAnchor anchor = workbook.getCreationHelper().createClientAnchor();
+                        anchor.setCol1(1); anchor.setRow1(currentRow);
+                        anchor.setCol2(4); anchor.setRow2(currentRow + 1);
+                        anchor.setDx1(10 * 10000); anchor.setDy1(10 * 10000);
+                        anchor.setDx2(-10 * 10000); anchor.setDy2(-10 * 10000);
+                        anchor.setAnchorType(org.apache.poi.ss.usermodel.ClientAnchor.AnchorType.MOVE_AND_RESIZE);
+                        sheet0Drawing.createPicture(anchor, picIdx);
+                    } catch (Exception ex) {
+                        log.error("Failed to insert channel sticker image into Excel sheet0", ex);
+                    }
+                    currentRow++;
+                } else if (stickerNote.getFileType() != null && stickerNote.getFileType().equalsIgnoreCase("PDF")) {
+                    Row stRow = sheet0.createRow(currentRow);
+                    stRow.setHeightInPoints(30);
+                    createCell(stRow, 0, "채널스티커 규정문서", labelStyle);
+                    createCell(stRow, 1, "📄 [PDF 첨부] " + (stickerNote.getNoteContent() != null ? stickerNote.getNoteContent() : "채널 스티커 부착 규정 문서 첨부됨"), wrapDataStyle);
+                    for (int col = 2; col <= 7; col++) createCell(stRow, col, "", wrapDataStyle);
+                    sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 1, 7));
+                    currentRow++;
+                }
+            }
 
             // 여백 행
             createMarginRow(sheet0, currentRow++, 10);
@@ -400,8 +478,8 @@ public class PackagingSpecExportService {
             createSectionHeader(sheet2, 0, "[ 인 박 스 현 품 표 / INBOX LABEL ]", headerStyle, 3, 30);
             addRow(sheet2, 1, labelStyle, dataStyle, "품목코드 (Product Code)", product.getItemCode(), "입수량 (Quantity)", (spec.getInboxQty() != null ? spec.getInboxQty() + " EA" : "0 EA"));
             addRow(sheet2, 2, labelStyle, dataStyle, "국문 제품명 (Product Name KOR)", product.getProductName(), "제조사 (Manufacturer)", (product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-"));
-            addRow(sheet2, 3, labelStyle, dataStyle, "영문 제품명 (Product Name ENG)", (product.getEnglishProductName() != null ? product.getEnglishProductName() : "-"), "제조일자 (Mfg. Date)", inboxDateFormatStr);
-            addRow(sheet2, 4, labelStyle, dataStyle, "제조번호 (Lot No.)", "[ 생산 배치번호 표기 ]", "사용기한 (Exp. Date)", inboxDateFormatStr);
+            addRow(sheet2, 3, labelStyle, dataStyle, "영문 제품명 (Product Name ENG)", (product.getEnglishProductName() != null ? product.getEnglishProductName() : "-"), "제조일자 (Mfg. Date)", extractMfgDateDisplay(inboxDateFormatStr, firstChannel));
+            addRow(sheet2, 4, labelStyle, dataStyle, "제조번호 (Lot No.)", "LOT(제조번호)", "사용기한 (Exp. Date)", extractExpDateDisplay(inboxDateFormatStr, firstChannel));
             
             Row inboxMarkingRow = sheet2.createRow(5);
             inboxMarkingRow.setHeightInPoints(28);
@@ -425,8 +503,8 @@ public class PackagingSpecExportService {
             createSectionHeader(sheet3, 0, "[ 아 웃 박 스 현 품 표 / OUTBOX LABEL ]", headerStyle, 3, 30);
             addRow(sheet3, 1, labelStyle, dataStyle, "품목코드 (Product Code)", product.getItemCode(), "입수량 (Quantity)", (spec.getOutboxQty() != null ? spec.getOutboxQty() + " EA" : "0 EA"));
             addRow(sheet3, 2, labelStyle, dataStyle, "국문 제품명 (Product Name KOR)", product.getProductName(), "제품무게 (Gross Weight)", (spec.getOneOutboxWeight() != null ? spec.getOneOutboxWeight() + " kg" : "- kg"));
-            addRow(sheet3, 3, labelStyle, dataStyle, "영문 제품명 (Product Name ENG)", (product.getEnglishProductName() != null ? product.getEnglishProductName() : "-"), "제조일자 (Mfg. Date)", outboxDateFormatStr);
-            addRow(sheet3, 4, labelStyle, dataStyle, "제조번호 (Lot No.)", "[ 생산 배치번호 표기 ]", "사용기한 (Exp. Date)", outboxDateFormatStr);
+            addRow(sheet3, 3, labelStyle, dataStyle, "영문 제품명 (Product Name ENG)", (product.getEnglishProductName() != null ? product.getEnglishProductName() : "-"), "제조일자 (Mfg. Date)", extractMfgDateDisplay(outboxDateFormatStr, firstChannel));
+            addRow(sheet3, 4, labelStyle, dataStyle, "제조번호 (Lot No.)", "LOT(제조번호)", "사용기한 (Exp. Date)", extractExpDateDisplay(outboxDateFormatStr, firstChannel));
             
             String outboxBarcodeText = (product.getOutboxBarcode() != null && !product.getOutboxBarcode().isEmpty()) ? product.getOutboxBarcode() : (product.getProductBarcode() != null ? product.getProductBarcode() : (spec.getBarcode() != null ? spec.getBarcode() : "BARCODE-NOT-SET"));
             addRow(sheet3, 5, labelStyle, dataStyle, "제조사 (Manufacturer)", (product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-"), "바코드 텍스트", outboxBarcodeText);
@@ -477,8 +555,8 @@ public class PackagingSpecExportService {
             }
             addRow(sheet4, 1, labelStyle, dataStyle, "품목코드 (Product Code)", product.getItemCode(), "적재 박스 수량 (Box Qty/Pallet)", (palletBoxQtyStr != null ? palletBoxQtyStr + " Box" : "- Box"));
             addRow(sheet4, 2, labelStyle, dataStyle, "국문 제품명 (Product Name KOR)", product.getProductName(), "적재 낱개 수량 (Total Pcs/Pallet)", totalPcsStr);
-            addRow(sheet4, 3, labelStyle, dataStyle, "영문 제품명 (Product Name ENG)", (product.getEnglishProductName() != null ? product.getEnglishProductName() : "-"), "제조일자 (Mfg. Date)", palletDateFormatStr);
-            addRow(sheet4, 4, labelStyle, dataStyle, "제조번호 (Lot No.)", "[ 생산 배치번호 표기 ]", "사용기한 (Exp. Date)", palletDateFormatStr);
+            addRow(sheet4, 3, labelStyle, dataStyle, "영문 제품명 (Product Name ENG)", (product.getEnglishProductName() != null ? product.getEnglishProductName() : "-"), "제조일자 (Mfg. Date)", extractMfgDateDisplay(palletDateFormatStr, firstChannel));
+            addRow(sheet4, 4, labelStyle, dataStyle, "제조번호 (Lot No.)", "LOT(제조번호)", "사용기한 (Exp. Date)", extractExpDateDisplay(palletDateFormatStr, firstChannel));
             
             String palletBarcodeText = (product.getProductBarcode() != null && !product.getProductBarcode().isEmpty()) ? product.getProductBarcode() : (spec.getBarcode() != null ? spec.getBarcode() : "BARCODE-NOT-SET");
             addRow(sheet4, 5, labelStyle, dataStyle, "제조사 (Manufacturer)", (product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-"), "바코드 텍스트", palletBarcodeText);
@@ -686,8 +764,8 @@ public class PackagingSpecExportService {
 
         // 제품 특징 반영
         String capacityInfo = product.getCapacity() != null && !product.getCapacity().isEmpty() ? " " + product.getCapacity() : "";
-        String weightInfo = product.getWeight() != null && !product.getWeight().isEmpty() ? " (" + product.getWeight() + ")" : "";
-        String productNameWithSpecs = product.getProductName() + capacityInfo + weightInfo;
+        String prodWeightInfo = product.getWeight() != null && !product.getWeight().isEmpty() ? " (" + product.getWeight() + ")" : "";
+        String productNameWithSpecs = product.getProductName() + capacityInfo + prodWeightInfo;
         String englishProductNameWithSpecs = (product.getEnglishProductName() != null ? product.getEnglishProductName() : "") + capacityInfo;
 
         document.add(new Paragraph("포장사양서 (Packaging Specification Report)", titleFont));
@@ -732,14 +810,14 @@ public class PackagingSpecExportService {
                     String bomCodePrefix = comp.getBomCode() != null && !comp.getBomCode().isEmpty() ? "[" + comp.getBomCode() + "] " : "";
                     double w = comp.getWeight() != null ? comp.getWeight() : 0.0;
                     int q = comp.getQuantity() != null ? comp.getQuantity() : 1;
-                    String weightInfo = w > 0 ? String.format(" | 중량: %.2fg (합계: %.2fg)", w, w * q) : "";
+                    String compWeightInfo = w > 0 ? String.format(" | 중량: %.2fg (합계: %.2fg)", w, w * q) : "";
                     document.add(new Paragraph(String.format(" - %s%s (%s) | 규격: %s | 수량: %sea%s | 업체: %s | 비고: %s",
                         bomCodePrefix,
                         comp.getComponentName() != null ? comp.getComponentName() : "-",
                         comp.getSpecDetails() != null ? comp.getSpecDetails() : "-",
                         comp.getSizeDimension() != null ? comp.getSizeDimension() : "-",
                         q,
-                        weightInfo,
+                        compWeightInfo,
                         comp.getSupplier() != null ? comp.getSupplier() : "-",
                         comp.getRemarks() != null ? comp.getRemarks() : "-"
                     ), normalFont));
@@ -781,6 +859,74 @@ public class PackagingSpecExportService {
             document.add(new Paragraph("포장방법 (서술):\n" + (spec.getPackagingMethodText() != null ? spec.getPackagingMethodText() : "-"), normalFont));
             document.add(new Paragraph("----------------------------------------------------------------------------------------------------------------", normalFont));
 
+            // 5-1. 유통 채널 포장 규정 및 스티커/완충재/현품표 기준
+            com.example.ims.entity.SalesChannel pdfFirstChannel = (product.getChannels() != null && !product.getChannels().isEmpty()) ? product.getChannels().get(0) : null;
+            String pdfInboxMarkingRule = (pdfFirstChannel != null && pdfFirstChannel.getInboxLabelMarkingRule() != null) ? pdfFirstChannel.getInboxLabelMarkingRule() : "인박스 현품표 표준 규격 적용";
+            String pdfOutboxMarkingRule = (pdfFirstChannel != null && pdfFirstChannel.getOutboxLabelMarkingRule() != null) ? pdfFirstChannel.getOutboxLabelMarkingRule() : "아웃박스 현품표 표준 규격 적용";
+            String pdfPalletMarkingRule = (pdfFirstChannel != null && pdfFirstChannel.getPalletLabelMarkingRule() != null) ? pdfFirstChannel.getPalletLabelMarkingRule() : "팔레트 현품표 표준 규격 적용";
+            String pdfInboxDateFormatStr = (spec.getInboxDateFormat() != null && !spec.getInboxDateFormat().trim().isEmpty()) ? spec.getInboxDateFormat() : (pdfFirstChannel != null && pdfFirstChannel.getInboxDateFormat() != null ? pdfFirstChannel.getInboxDateFormat() : "[ YYYY.MM.DD 표기 ]");
+            String pdfOutboxDateFormatStr = (spec.getOutboxDateFormat() != null && !spec.getOutboxDateFormat().trim().isEmpty()) ? spec.getOutboxDateFormat() : (pdfFirstChannel != null && pdfFirstChannel.getOutboxDateFormat() != null ? pdfFirstChannel.getOutboxDateFormat() : "[ YYYY.MM.DD 표기 ]");
+            String pdfPalletDateFormatStr = (spec.getPalletDateFormat() != null && !spec.getPalletDateFormat().trim().isEmpty()) ? spec.getPalletDateFormat() : (pdfFirstChannel != null && pdfFirstChannel.getPalletDateFormat() != null ? pdfFirstChannel.getPalletDateFormat() : "[ YYYY.MM.DD 표기 ]");
+
+            String pdfStickerStr = spec.getOutboxChannelStickerStandard() != null && !spec.getOutboxChannelStickerStandard().isEmpty()
+                    ? spec.getOutboxChannelStickerStandard()
+                    : (pdfFirstChannel != null && Boolean.TRUE.equals(pdfFirstChannel.getChannelStickerRequired()) ? (pdfFirstChannel.getName() + " 채널 스티커 부착 필수") : "해당 없음");
+            String pdfCushionStr = spec.getOutboxCushioningStandard() != null && !spec.getOutboxCushioningStandard().isEmpty()
+                    ? spec.getOutboxCushioningStandard()
+                    : (pdfFirstChannel != null && pdfFirstChannel.getCushioningStandard() != null ? pdfFirstChannel.getCushioningStandard() : "-");
+            String pdfPopStr = spec.getPopRequiredStandard() != null && !spec.getPopRequiredStandard().isEmpty()
+                    ? spec.getPopRequiredStandard()
+                    : (pdfFirstChannel != null && Boolean.TRUE.equals(pdfFirstChannel.getPopRequired()) ? (pdfFirstChannel.getName() + " POP 부착/동봉 필수") : "해당 없음");
+
+            document.add(new Paragraph("[유통 채널 전용 포장 규정 및 스티커 / 완충재 / 현품표 기준]", sectionFont));
+            document.add(new Paragraph("🏷️ 채널 스티커 부착 규정: " + pdfStickerStr, normalFont));
+            document.add(new Paragraph("🎈 빈공간 완충재 처리 기준: " + pdfCushionStr, normalFont));
+            document.add(new Paragraph("📣 제품 POP 부착/동봉 여부: " + pdfPopStr, normalFont));
+            document.add(new Paragraph("📥 인박스 현품표 착인기준: " + pdfInboxMarkingRule + " | 날짜표기: " + pdfInboxDateFormatStr, normalFont));
+            document.add(new Paragraph("📦 아웃박스 현품표 착인기준: " + pdfOutboxMarkingRule + " | 날짜표기: " + pdfOutboxDateFormatStr, normalFont));
+            document.add(new Paragraph("🏷️ 팔레트 현품표 착인기준: " + pdfPalletMarkingRule + " | 날짜표기: " + pdfPalletDateFormatStr, normalFont));
+
+            com.example.ims.entity.ChannelSpecialNote pdfStickerNote = null;
+            if (pdfFirstChannel != null) {
+                try {
+                    List<com.example.ims.entity.ChannelSpecialNote> notes = specialNoteRepository.findByChannelId(pdfFirstChannel.getId());
+                    if (notes != null) {
+                        for (com.example.ims.entity.ChannelSpecialNote n : notes) {
+                            if (n.getCategory() != null && ("CHANNEL_STICKER".equals(n.getCategory().getCategoryKey()) || 
+                                (n.getCategory().getCategoryLabel() != null && n.getCategory().getCategoryLabel().contains("스티커")))) {
+                                pdfStickerNote = n;
+                                break;
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to find channel sticker note for PDF", e);
+                }
+            }
+
+            if (pdfStickerNote != null) {
+                if (pdfStickerNote.getNoteContent() != null && !pdfStickerNote.getNoteContent().isBlank()) {
+                    document.add(new Paragraph("💡 채널 스티커 규정 메모: " + pdfStickerNote.getNoteContent(), normalFont));
+                }
+                if (pdfStickerNote.getFileUrl() != null) {
+                    byte[] stickerImgBytes = getImageBytesFromFileOrUrl(pdfStickerNote.getFileUrl());
+                    if (stickerImgBytes != null && stickerImgBytes.length > 0) {
+                        try {
+                            com.itextpdf.text.Image pdfStickerImg = com.itextpdf.text.Image.getInstance(stickerImgBytes);
+                            pdfStickerImg.scaleToFit(380f, 220f);
+                            pdfStickerImg.setAlignment(com.itextpdf.text.Element.ALIGN_LEFT);
+                            pdfStickerImg.setSpacingAfter(8f);
+                            document.add(pdfStickerImg);
+                        } catch (Exception e) {
+                            log.error("Failed to render channel sticker image in PDF for " + pdfStickerNote.getFileUrl(), e);
+                        }
+                    } else if (pdfStickerNote.getFileType() != null && pdfStickerNote.getFileType().equalsIgnoreCase("PDF")) {
+                        document.add(new Paragraph("📄 채널 스티커 규정 문서 (PDF 첨부됨): " + (pdfStickerNote.getNoteContent() != null ? pdfStickerNote.getNoteContent() : ""), normalFont));
+                    }
+                }
+            }
+            document.add(new Paragraph("----------------------------------------------------------------------------------------------------------------", normalFont));
+
             // 5. 적재사항 및 검증 (Loading Specifications & Verification)
             document.add(new Paragraph("[적재 사양 및 검증 / Loading Specs & Verification]", sectionFont));
             document.add(new Paragraph("인박스 구분: " + (spec.getInboxType() != null ? spec.getInboxType() : "-") + 
@@ -811,6 +957,35 @@ public class PackagingSpecExportService {
 
         document.close();
         return out.toByteArray();
+    }
+
+    /**
+     * Helper to read image bytes directly from local disk path or remote URL.
+     */
+    private byte[] getImageBytesFromFileOrUrl(String fileUrl) {
+        if (fileUrl == null || fileUrl.isBlank()) return null;
+        java.io.File file = findLocalFile(fileUrl, null);
+        if (file != null && file.exists()) {
+            try {
+                return java.nio.file.Files.readAllBytes(file.toPath());
+            } catch (Exception e) {
+                log.warn("Failed to read bytes from file: " + file.getAbsolutePath(), e);
+            }
+        }
+        if (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")) {
+            try (java.io.InputStream in = new java.net.URL(fileUrl).openStream();
+                 ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) != -1) {
+                    baos.write(buf, 0, n);
+                }
+                return baos.toByteArray();
+            } catch (Exception e) {
+                log.warn("Failed to download image from URL: " + fileUrl, e);
+            }
+        }
+        return null;
     }
 
     /**
@@ -1053,5 +1228,47 @@ public class PackagingSpecExportService {
             }
         }
         return null;
+    }
+
+    private String extractMfgDateDisplay(String fullFormat, com.example.ims.entity.SalesChannel channel) {
+        if (fullFormat != null && !fullFormat.trim().isEmpty()) {
+            String[] lines = fullFormat.split("\\r?\\n");
+            for (String l : lines) {
+                String t = l.trim();
+                if (t.contains("제조일자") || t.contains("Mfg") || t.contains("MFD") || t.contains("PROD")) {
+                    return t.replaceFirst("^.*?:\\s*", "").trim();
+                }
+            }
+            if (lines.length == 1 && !lines[0].contains("사용기한") && !lines[0].contains("EXP") && !lines[0].contains("Exp")) {
+                String single = lines[0].trim();
+                if (!single.contains(":") && (single.contains("YYYY") || single.contains("MM") || single.contains("DD"))) {
+                    return single + " (제조)";
+                }
+                return single;
+            }
+        }
+        return "[ YYYY.MM.DD (제조) ]";
+    }
+
+    private String extractExpDateDisplay(String fullFormat, com.example.ims.entity.SalesChannel channel) {
+        if (fullFormat != null && !fullFormat.trim().isEmpty()) {
+            String[] lines = fullFormat.split("\\r?\\n");
+            for (String l : lines) {
+                String t = l.trim();
+                if (t.contains("사용기한") || t.contains("EXP") || t.contains("Exp")) {
+                    return t.replaceFirst("^.*?:\\s*", "").trim();
+                }
+            }
+            if (lines.length == 1 && (lines[0].contains("사용기한") || lines[0].contains("EXP") || lines[0].contains("Exp"))) {
+                return lines[0].trim();
+            }
+        }
+        if (channel != null && channel.getExpDateFormat() != null && !channel.getExpDateFormat().trim().isEmpty()) {
+            if ("표기금지".equals(channel.getExpDateFormat()) || "(미정)".equals(channel.getExpDateFormat())) {
+                return "-";
+            }
+            return channel.getExpDateFormat().startsWith("EXP") ? channel.getExpDateFormat() : "EXP " + channel.getExpDateFormat();
+        }
+        return "[ YYYY.MM.DD 까지 ]";
     }
 }

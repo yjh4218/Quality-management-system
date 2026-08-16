@@ -151,13 +151,17 @@ const BomMasterSearchModal = ({ onClose, onSelect }) => {
                 </div>
 
                 {/* 3. Modal Footer */}
-                <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 24px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
-                    <span style={{ fontSize: '12px', color: '#64748b' }}>
-                        총 <strong>{filteredMaterials.length}</strong>개의 BOM 구성품이 검색되었습니다.
-                    </span>
-                    <button type="button" onClick={onClose} className="secondary" style={{ padding: '6px 16px', fontSize: '13px' }}>
-                        닫기
-                    </button>
+                <div className="modal-footer" style={{ padding: '14px 24px', background: '#ffffff', borderTop: '1px solid #e2e8f0' }}>
+                    <div className="footer-left">
+                        <span style={{ fontSize: '12px', color: '#64748b' }}>
+                            총 <strong>{filteredMaterials.length}</strong>개의 BOM 구성품이 검색되었습니다.
+                        </span>
+                    </div>
+                    <div className="footer-actions">
+                        <button type="button" onClick={onClose} className="secondary" style={{ minWidth: '80px' }}>
+                            닫기
+                        </button>
+                    </div>
                 </div>
             </div>
 

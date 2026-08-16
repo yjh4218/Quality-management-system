@@ -673,11 +673,11 @@ const IngredientCompliancePage = ({ user }) => {
 
                     {activeTab === 'lookup' && (
                         <div className="lookup-container animate-fade-in" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                            {/* 검색 필터 영역 */}
-                            <div className="filter-card">
-                                <div className="filter-grid">
-                                    <div className="filter-item">
-                                        <label>🧪 성분명 (INCI / 한글)</label>
+                            {/* 검색 필터 그리드 (제품코드 마스터 표준 규격) */}
+                            <div className="card" style={{ marginBottom: '15px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
+                                    <div>
+                                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🧪 성분명 (INCI / 한글)</label>
                                         <input
                                             type="text"
                                             placeholder="영문명 또는 한글명 검색..."
@@ -690,13 +690,15 @@ const IngredientCompliancePage = ({ user }) => {
                                                     fetchDbIngredients(0, searchFields.inciName);
                                                 }
                                             }}
+                                            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                                         />
                                     </div>
-                                    <div className="filter-item">
-                                        <label>🚩 규제 유형</label>
+                                    <div>
+                                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🚩 규제 유형</label>
                                         <select
                                             value={searchFields.status}
                                             onChange={(e) => setSearchFields({ ...searchFields, status: e.target.value })}
+                                            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', backgroundColor: '#fff', height: '38px' }}
                                         >
                                             <option value="">전체 보기</option>
                                             <option value="ALLOWED">사용 가능 (ALLOWED)</option>
@@ -704,20 +706,28 @@ const IngredientCompliancePage = ({ user }) => {
                                             <option value="PROHIBITED">사용 불가 (PROHIBITED)</option>
                                         </select>
                                     </div>
-                                    <div className="filter-actions">
-                                        <button className="btn-outline" onClick={() => {
-                                            setSearchFields({ inciName: '', status: '' });
-                                            setSearchKeyword('');
-                                            setPage(0);
-                                            fetchDbIngredients(0, '');
-                                        }}>
-                                            ♻️ 검색 초기화
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        <button 
+                                            className="outline" 
+                                            onClick={() => {
+                                                setSearchFields({ inciName: '', status: '' });
+                                                setSearchKeyword('');
+                                                setPage(0);
+                                                fetchDbIngredients(0, '');
+                                            }}
+                                            style={{ padding: '10px 16px', fontSize: '14px', flex: 1 }}
+                                        >
+                                            ♻️ 초기화
                                         </button>
-                                        <button className="btn-primary" onClick={() => {
-                                            setPage(0);
-                                            setSearchKeyword(searchFields.inciName);
-                                            fetchDbIngredients(0, searchFields.inciName);
-                                        }}>
+                                        <button 
+                                            className="primary" 
+                                            onClick={() => {
+                                                setPage(0);
+                                                setSearchKeyword(searchFields.inciName);
+                                                fetchDbIngredients(0, searchFields.inciName);
+                                            }}
+                                            style={{ backgroundColor: '#2563eb', padding: '10px 24px', fontWeight: 'bold', fontSize: '14px', flex: 1.2 }}
+                                        >
                                             🔍 검색
                                         </button>
                                     </div>

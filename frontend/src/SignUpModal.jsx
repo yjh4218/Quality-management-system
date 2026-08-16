@@ -249,24 +249,24 @@ const SignUpModal = ({ isOpen, onClose }) => {
                 </div>
 
                 {/* 3. Fixed Footer Area */}
-                <div className="modal-footer" style={{ padding: '20px' }}>
-                    <div style={{ display: 'flex', gap: '12px', width: '100%', justifyContent: 'center' }}>
+                <div className="modal-footer" style={{ padding: '16px 24px' }}>
+                    <div className="footer-actions" style={{ width: '100%', justifyContent: 'flex-end' }}>
+                        <button 
+                            type="button" 
+                            onClick={onClose}
+                            className="secondary"
+                            style={{ minWidth: '80px' }}
+                        >
+                            닫기
+                        </button>
                         <button 
                             type="submit" 
                             form="signup-form"
                             disabled={loading}
                             className="primary"
-                            style={{ padding: '10px 30px', fontWeight: '800' }}
+                            style={{ minWidth: '140px', background: '#003366', color: '#fff', fontWeight: '800', border: 'none', borderRadius: '4px', padding: '10px 20px' }}
                         >
                             {loading ? '🚀 가입 신청 중...' : '🎉 회원가입 신청 완료'}
-                        </button>
-                        <button 
-                            type="button" 
-                            onClick={onClose}
-                            className="secondary"
-                            style={{ padding: '10px 20px' }}
-                        >
-                            취소
                         </button>
                     </div>
                 </div>

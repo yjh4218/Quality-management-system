@@ -298,6 +298,7 @@ const BomMasterPage = ({ user }) => {
                                 type="text"
                                 value={filters.bomCode}
                                 onChange={e => setFilters({...filters, bomCode: e.target.value})}
+                                onKeyDown={e => e.key === 'Enter' && fetchBomList()}
                                 placeholder="코드 검색"
                                 style={{ flex: 1, padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                             />
@@ -319,6 +320,7 @@ const BomMasterPage = ({ user }) => {
                             type="text"
                             value={filters.componentName}
                             onChange={e => setFilters({...filters, componentName: e.target.value})}
+                            onKeyDown={e => e.key === 'Enter' && fetchBomList()}
                             placeholder="구성품명 검색"
                             style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                         />
@@ -331,6 +333,7 @@ const BomMasterPage = ({ user }) => {
                             type="text"
                             value={filters.manufacturer}
                             onChange={e => setFilters({...filters, manufacturer: e.target.value})}
+                            onKeyDown={e => e.key === 'Enter' && fetchBomList()}
                             placeholder="제조사 검색"
                             style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                         />

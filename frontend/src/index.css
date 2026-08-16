@@ -789,6 +789,7 @@ body:has(.modal-overlay) {
 .modal-body {
   flex: 1;
   overflow-y: auto;
+  min-height: 0;
   padding: 30px 40px;
   background-color: #f8fafc;
   /* Light gray background for the scrollable area */
@@ -809,6 +810,27 @@ body:has(.modal-overlay) {
   align-items: center;
   font-size: 12px;
   color: #a0aec0;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.drawer-footer .footer-actions,
+.modal-footer .footer-actions,
+.drawer-footer .footer-right,
+.modal-footer .footer-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.drawer-footer .footer-left,
+.modal-footer .footer-left {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  color: #94a3b8;
+  font-size: 12px;
 }
 
 .drawer-body-form {

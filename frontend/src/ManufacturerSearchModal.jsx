@@ -111,8 +111,12 @@ const ManufacturerSearchModal = ({ onClose, onSelect }) => {
 
                 {/* 3. Modal Footer */}
                 <div className="modal-footer">
-                    <span style={{ fontSize: '13px' }}>총 <strong>{filteredManufacturers.length}</strong>개의 제조사</span>
-                    <button onClick={onClose} className="secondary">취소</button>
+                    <div className="footer-left">
+                        <span style={{ fontSize: '13px' }}>총 <strong>{filteredManufacturers.length}</strong>개의 협력사</span>
+                    </div>
+                    <div className="footer-actions">
+                        <button onClick={onClose} className="secondary" style={{ minWidth: '80px' }}>닫기</button>
+                    </div>
                 </div>
             </div>
         </div>

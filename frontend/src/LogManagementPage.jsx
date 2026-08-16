@@ -387,11 +387,48 @@ const LogManagementPage = ({ user }) => {
 
             {/* 검색 필터 그리드 */}
             <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
                     
-                    {/* 1. 기간 (날짜) - 넓게 배치 */}
-                    <div style={{ gridColumn: 'span 2', minWidth: '400px' }}>
-                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '6px' }}>🗓️ 변경 기간</label>
+                    {/* 1. 기간 (날짜 + ⚡빠른선택) */}
+                    <div style={{ gridColumn: 'span 2', minWidth: '420px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'flex', alignItems: 'center', gap: '4px', margin: 0 }}>🗓️ 변경 기간</label>
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                                {[
+                                    { label: '오늘', days: 0 },
+                                    { label: '1주일', days: 7 },
+                                    { label: '1개월', months: 1 },
+                                    { label: '3개월', months: 3 },
+                                    { label: '1년', years: 1 }
+                                ].map((p, idx) => (
+                                    <button
+                                        key={idx}
+                                        type="button"
+                                        onClick={() => {
+                                            const end = new Date();
+                                            const start = new Date();
+                                            if (p.days !== undefined) start.setDate(end.getDate() - p.days);
+                                            else if (p.months !== undefined) start.setMonth(end.getMonth() - p.months);
+                                            else if (p.years !== undefined) start.setFullYear(end.getFullYear() - p.years);
+                                            const formatDate = d => d.toISOString().split('T')[0];
+                                            setFilters(prev => ({ ...prev, startDate: formatDate(start), endDate: formatDate(end) }));
+                                        }}
+                                        style={{
+                                            padding: '2px 8px',
+                                            fontSize: '11px',
+                                            fontWeight: '600',
+                                            borderRadius: '4px',
+                                            border: '1px solid #cbd5e1',
+                                            backgroundColor: '#f8fafc',
+                                            color: '#475569',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        {p.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                         <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
                             <input type="date" value={filters.startDate} onChange={e => setFilters({...filters, startDate: e.target.value})} style={{ flex: 1, padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
                             <span style={{ color: '#94a3b8' }}>~</span>
@@ -421,7 +458,13 @@ const LogManagementPage = ({ user }) => {
                     {/* 3. 검색어/ID */}
                     <div>
                         <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🔍 대상 ID/검색</label>
-                        <input placeholder="ID 또는 품목코드" value={filters.entityId} onChange={e => setFilters({...filters, entityId: e.target.value})} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
+                        <input 
+                            placeholder="ID 또는 품목코드 검색" 
+                            value={filters.entityId} 
+                            onChange={e => setFilters({...filters, entityId: e.target.value})} 
+                            onKeyDown={e => e.key === 'Enter' && fetchLogs()}
+                            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} 
+                        />
                     </div>
                 </div>
             </div>
@@ -492,26 +535,28 @@ const LogManagementPage = ({ user }) => {
                             )}
                         </div>
 
-                        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px', gap: '15px' }}>
+                        <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #edf2f7', gap: '10px' }}>
+                            <button onClick={() => setIsModalOpen(false)} className="secondary" style={{ minWidth: '80px' }}>닫기</button>
                             {['PRODUCT', 'CLAIM', 'INBOUND'].includes(selectedLog.entityType) && selectedLog.oldValue !== '-' && selectedLog.oldValue !== 'HARD_DELETED' && !selectedLog.oldValue?.startsWith('{"warning"') && (
                                 <button 
                                     onClick={() => handleRollback(selectedLog.id)} 
                                     disabled={!canEdit('logs')}
+                                    className="primary"
                                     style={{ 
-                                        padding: '8px 40px', 
-                                        backgroundColor: '#f39c12', 
+                                        padding: '10px 20px', 
+                                        backgroundColor: '#d97706', 
                                         color: 'white', 
                                         border: 'none', 
                                         borderRadius: '4px', 
                                         cursor: canEdit('logs') ? 'pointer' : 'not-allowed', 
                                         fontWeight: 'bold',
-                                        opacity: canEdit('logs') ? 1 : 0.5
+                                        opacity: canEdit('logs') ? 1 : 0.5,
+                                        minWidth: '150px'
                                     }}
                                 >
-                                    🔄 이 시점으로 데이터 복원(롤백)
+                                    🔄 이 시점으로 복원(롤백)
                                 </button>
                             )}
-                            <button onClick={() => setIsModalOpen(false)} className="secondary" style={{ padding: '8px 40px' }}>닫기</button>
                         </div>
                     </div>
                 </div>

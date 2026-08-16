@@ -603,11 +603,13 @@ const RoleManagementPage = ({ user }) => {
                             </div>
                         </div>
 
-                        <div className="drawer-footer" style={{ padding: '25px 45px' }}>
-                            <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: '600' }}>* 시스템 계정 보호 설정은 최고 관리자 권한이 필요합니다.</span>
-                            <div style={{ display: 'flex', gap: '15px' }}>
-                                <button className="secondary" onClick={() => setIsModalOpen(false)} style={{ padding: '12px 35px', borderRadius: '12px', fontWeight: '700' }}>닫기</button>
-                                <button className="primary" onClick={handleSaveTrigger} style={{ padding: '12px 60px', borderRadius: '12px', fontWeight: '900', boxShadow: '0 4px 15px rgba(0, 51, 102, 0.2)' }} disabled={!canEdit}>권한 설정 저장</button>
+                        <div className="drawer-footer" style={{ padding: '16px 30px' }}>
+                            <div className="footer-left">
+                                <span>* 시스템 계정 보호 설정은 최고 관리자 권한이 필요합니다.</span>
+                            </div>
+                            <div className="footer-actions">
+                                <button className="secondary" onClick={() => setIsModalOpen(false)} style={{ minWidth: '80px' }}>닫기</button>
+                                <button className="primary" onClick={handleSaveTrigger} style={{ minWidth: '130px', background: '#003366', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 'bold', padding: '10px 20px' }} disabled={!canEdit}>💾 권한 설정 저장</button>
                             </div>
                         </div>
                     </div>
@@ -618,11 +620,13 @@ const RoleManagementPage = ({ user }) => {
             {isHistoryModalOpen && (
                 <div className="drawer-overlay">
                     <div className="drawer" style={{ width: '1000px', height: '80vh', borderRadius: '28px' }} onClick={e => e.stopPropagation()}>
-                        <div className="drawer-header" style={{ padding: '30px 45px' }}>
+                        <div className="drawer-header" style={{ padding: '20px 30px' }}>
                             <h3 style={{ margin: 0, fontWeight: '900', fontSize: '20px' }}>⌛ [{targetRoleName}] 변경 히스토리 요약</h3>
-                            <button onClick={() => setIsHistoryModalOpen(false)} className="secondary close-button" style={{ borderRadius: '50%', width: '40px', height: '40px', padding: 0 }}>✕</button>
+                            <button onClick={() => setIsHistoryModalOpen(false)} className="secondary close-button">
+                                <span className="icon">×</span> 닫기
+                            </button>
                         </div>
-                        <div className="drawer-body" style={{ padding: '40px' }}>
+                        <div className="drawer-body" style={{ padding: '30px', flex: 1, overflowY: 'auto' }}>
                             <table className="qms-table">
                                 <thead style={{ position: 'sticky', top: 0, background: '#fff' }}>
                                     <tr>
@@ -647,6 +651,14 @@ const RoleManagementPage = ({ user }) => {
                                     )}
                                 </tbody>
                             </table>
+                        </div>
+                        <div className="drawer-footer" style={{ padding: '16px 30px' }}>
+                            <div className="footer-left">
+                                <span>총 <strong>{historyLogs.length}</strong>건의 변경 이력</span>
+                            </div>
+                            <div className="footer-actions">
+                                <button className="secondary" onClick={() => setIsHistoryModalOpen(false)} style={{ minWidth: '80px' }}>닫기</button>
+                            </div>
                         </div>
                     </div>
                 </div>

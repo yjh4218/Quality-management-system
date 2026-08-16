@@ -34,17 +34,19 @@ const SaveConfirmModal = ({ isOpen, onClose, onConfirm, title = "저장 확인",
                 <div style={{ fontSize: '15px', color: '#666', marginBottom: '24px' }}>
                     {message}
                 </div>
-                <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
                     <button 
                         onClick={onClose}
                         style={{
                             padding: '10px 20px',
-                            borderRadius: '4px',
-                            border: '1px solid #ddd',
+                            borderRadius: '6px',
+                            border: '1px solid #cbd5e1',
                             backgroundColor: '#fff',
+                            color: '#475569',
                             cursor: 'pointer',
                             fontSize: '14px',
-                            fontWeight: 'bold'
+                            fontWeight: 'bold',
+                            minWidth: '80px'
                         }}
                     >
                         취소
@@ -53,16 +55,17 @@ const SaveConfirmModal = ({ isOpen, onClose, onConfirm, title = "저장 확인",
                         onClick={onConfirm}
                         style={{
                             padding: '10px 20px',
-                            borderRadius: '4px',
+                            borderRadius: '6px',
                             border: 'none',
-                            backgroundColor: '#1890ff',
+                            backgroundColor: '#003366',
                             color: '#fff',
                             cursor: 'pointer',
                             fontSize: '14px',
-                            fontWeight: 'bold'
+                            fontWeight: 'bold',
+                            minWidth: '90px'
                         }}
                     >
-                        저장
+                        💾 저장
                     </button>
                 </div>
             </div>

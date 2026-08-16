@@ -420,6 +420,7 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
                                     placeholder="성명 검색"
                                     value={searchFields.name}
                                     onChange={(e) => setSearchFields({ ...searchFields, name: e.target.value })}
+                                    onKeyDown={(e) => e.key === 'Enter' && fetchUsers()}
                                     style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                                 />
                             </div>
@@ -430,6 +431,7 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
                                     placeholder="업체명 검색"
                                     value={searchFields.companyName}
                                     onChange={(e) => setSearchFields({ ...searchFields, companyName: e.target.value })}
+                                    onKeyDown={(e) => e.key === 'Enter' && fetchUsers()}
                                     style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                                 />
                             </div>
@@ -440,6 +442,7 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
                                     placeholder="부서 검색"
                                     value={searchFields.department}
                                     onChange={(e) => setSearchFields({ ...searchFields, department: e.target.value })}
+                                    onKeyDown={(e) => e.key === 'Enter' && fetchUsers()}
                                     style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                                 />
                             </div>
@@ -537,11 +540,11 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
                     <div style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '8px', minWidth: '320px', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
                         <p style={{ fontSize: '16px', marginBottom: '24px', color: '#333', fontWeight: '500' }}>{confirmModal.message}</p>
                         <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+                            <button onClick={() => setConfirmModal({ isOpen: false, message: '', onConfirm: null })} style={{ padding: '8px 24px', backgroundColor: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '14px', minWidth: '80px' }}>취소</button>
                             <button onClick={() => {
                                 setConfirmModal({ isOpen: false, message: '', onConfirm: null });
                                 if (confirmModal.onConfirm) confirmModal.onConfirm();
-                            }} style={{ padding: '8px 24px', backgroundColor: '#0056b3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>확인</button>
-                            <button onClick={() => setConfirmModal({ isOpen: false, message: '', onConfirm: null })} style={{ padding: '8px 24px', backgroundColor: '#e0e0e0', color: '#333', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '14px' }}>취소</button>
+                            }} style={{ padding: '8px 24px', backgroundColor: '#003366', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold', minWidth: '80px' }}>확인</button>
                         </div>
                     </div>
                 </div>

@@ -817,18 +817,19 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
                 <>
                     {/* 검색 필터 */}
                     <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
                             <div>
-                                <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🔍 공지 내용 검색</label>
+                                <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>📢 공지 내용 검색</label>
                                 <div style={{ position: 'relative' }}>
                                     <input
                                         type="text"
                                         placeholder="제목, 내용 또는 작성자 검색..."
                                         value={quickFilterText}
                                         onChange={(e) => setQuickFilterText(e.target.value)}
-                                        style={{ width: '100%', padding: '10px 40px 10px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px' }}
+                                        onKeyDown={(e) => e.key === 'Enter' && fetchAnnouncements()}
+                                        style={{ width: '100%', padding: '8px 36px 8px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', height: '38px' }}
                                     />
-                                    <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>🔍</span>
+                                    <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '14px' }}>🔍</span>
                                 </div>
                             </div>
                         </div>
@@ -897,18 +898,19 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
                 <>
                     {/* 검색 필터 */}
                     <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
                             <div>
-                                <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🔍 분류 검색</label>
+                                <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏷️ 분류 검색</label>
                                 <div style={{ position: 'relative' }}>
                                     <input
                                         type="text"
                                         placeholder="분류명 검색..."
                                         value={categoryQuickFilterText}
                                         onChange={(e) => setCategoryQuickFilterText(e.target.value)}
-                                        style={{ width: '100%', padding: '10px 40px 10px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px' }}
+                                        onKeyDown={(e) => e.key === 'Enter' && fetchCategories()}
+                                        style={{ width: '100%', padding: '8px 36px 8px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', height: '38px' }}
                                     />
-                                    <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>🔍</span>
+                                    <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '14px' }}>🔍</span>
                                 </div>
                             </div>
                         </div>

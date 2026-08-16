@@ -22,6 +22,7 @@ import BomMasterSearchModal from './BomMasterSearchModal';
 import SaveConfirmModal from './components/SaveConfirmModal';
 import { usePermissions } from './usePermissions';
 import PackagingMethodTab from './components/dashboard/PackagingMethodTab';
+import { calculateAllCountrySpaceRatios, generateOptimizationSuggestions } from './utils/packagingRatioCalculator';
 
 const ProductDrawer = ({ product, onClose, user }) => {
     const isMobile = window.innerWidth <= 768; // Simple check for mobile
@@ -96,6 +97,8 @@ const ProductDrawer = ({ product, onClose, user }) => {
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
     const [testReports, setTestReports] = useState([]);
     const [testReportPreview, setTestReportPreview] = useState({ open: false, url: '', type: '', name: '' });
+    const [channelStickerInfo, setChannelStickerInfo] = useState(null); // { fileUrl, fileType, noteContent }
+    const [previewStickerFile, setPreviewStickerFile] = useState(null); // { url, type }
     const [packagingSpecs, setPackagingSpecs] = useState([]);
     const [specRevisions, setSpecRevisions] = useState([]);
     const [specComponents, setSpecComponents] = useState([]);
@@ -178,28 +181,318 @@ const ProductDrawer = ({ product, onClose, user }) => {
     const [spaceRatioResults, setSpaceRatioResults] = useState(null);
     const [spaceRatioLoading, setSpaceRatioLoading] = useState(false);
 
-    // 실시간 공간비율 계산 검증 API 연계
-    useEffect(() => {
-        if (activeTab === 'spaceRatio' && product && product.id) {
-            setSpaceRatioLoading(true);
-            api.checkProductSpaceRatio(product.id)
-            .then(res => {
-                // api.jsx는 이미 응답 포장(unwrap)이 되어있으므로 res.data 또는 res를 그대로 사용
-                setSpaceRatioResults(res.data || res);
-            })
-            .catch(err => {
-                console.error("Space ratio calculation error:", err);
-            })
-            .finally(() => {
-                setSpaceRatioLoading(false);
+    // 1차 본체 용기 제원 상태 (공간비율 정밀 산출용)
+    const [primaryContainer, setPrimaryContainer] = useState({
+        shape: 'cylinder', // 'cylinder' | 'rect' | 'custom_volume'
+        diameter: '',
+        width: '',
+        depth: '',
+        height: '',
+        capacity_ml: ''
+    });
+
+    // 6개국 실시간 공간비율 계산 함수
+    const calculateRealtimeSpaceRatio = (overrideParams = null) => {
+        setSpaceRatioLoading(true);
+        try {
+            let width = overrideParams?.width !== undefined 
+                ? parseFloat(overrideParams.width) 
+                : (parseFloat(String(formData.dimensions?.width || '').replace(/[^0-9.]/g, '')) || 0);
+            let length = overrideParams?.length !== undefined 
+                ? parseFloat(overrideParams.length) 
+                : (parseFloat(String(formData.dimensions?.length || '').replace(/[^0-9.]/g, '')) || 0);
+            let height = overrideParams?.height !== undefined 
+                ? parseFloat(overrideParams.height) 
+                : (parseFloat(String(formData.dimensions?.height || '').replace(/[^0-9.]/g, '')) || 0);
+
+            // Fallback 1: specComponents에서 단상자 규격 검색 (예: 45*45*135)
+            if (width === 0 && length === 0 && height === 0 && specComponents && specComponents.length > 0) {
+                const boxItem = specComponents.find(c => 
+                    (c.componentName && (c.componentName.includes('단상자') || c.componentName.includes('세트박스') || c.componentName.includes('아웃박스') || c.componentName.includes('박스'))) ||
+                    (c.bomCode && (c.bomCode.includes('BOX') || c.bomCode.includes('UBX')))
+                );
+                if (boxItem && boxItem.sizeDimension) {
+                    const parsed = String(boxItem.sizeDimension).split(/[*xX×/]/).map(s => parseFloat(s.replace(/[^0-9.]/g, '')) || 0);
+                    if (parsed.length >= 3 && parsed[0] > 0 && parsed[1] > 0 && parsed[2] > 0) {
+                        width = parsed[0];
+                        length = parsed[1];
+                        height = parsed[2];
+                    }
+                }
+            }
+
+            // Fallback 2: inboxInfo
+            if (width === 0 && length === 0 && height === 0 && formData.inboxInfo) {
+                width = parseFloat(String(formData.inboxInfo.inboxWidth || '').replace(/[^0-9.]/g, '')) || 0;
+                length = parseFloat(String(formData.inboxInfo.inboxLength || '').replace(/[^0-9.]/g, '')) || 0;
+                height = parseFloat(String(formData.inboxInfo.inboxHeight || '').replace(/[^0-9.]/g, '')) || 0;
+            }
+
+            const box = {
+                width: !isNaN(width) && width > 0 ? width : 0,
+                depth: !isNaN(length) && length > 0 ? length : 0,
+                height: !isNaN(height) && height > 0 ? height : 0
+            };
+
+            const containers = [];
+            if (formData.components && formData.components.length > 0) {
+                formData.components.forEach((c, idx) => {
+                    const ml = parseFloat(String(c.capacity || '').replace(/[^0-9.]/g, '')) || 0;
+                    containers.push({
+                        id: idx + 1,
+                        name: c.productName || `구성품 ${idx + 1}`,
+                        shape: c.shape || 'custom_volume',
+                        width: c.width || '',
+                        depth: c.length || c.depth || '',
+                        height: c.height || '',
+                        diameter: c.diameter || '',
+                        capacity_ml: ml > 0 ? ml : 0,
+                        quantity: parseInt(c.quantity, 10) || 1
+                    });
+                });
+            } else {
+                let ml = overrideParams?.capacity !== undefined 
+                    ? parseFloat(overrideParams.capacity) 
+                    : (parseFloat(String(primaryContainer.capacity_ml || formData.capacity || '').replace(/[^0-9.]/g, '')) || 0);
+
+                const shape = overrideParams?.containerShape || primaryContainer.shape || 'cylinder';
+                const diameter = overrideParams?.containerDiameter !== undefined ? overrideParams.containerDiameter : primaryContainer.diameter;
+                const cWidth = overrideParams?.containerWidth !== undefined ? overrideParams.containerWidth : primaryContainer.width;
+                const cDepth = overrideParams?.containerDepth !== undefined ? overrideParams.containerDepth : primaryContainer.depth;
+                const cHeight = overrideParams?.containerHeight !== undefined ? overrideParams.containerHeight : primaryContainer.height;
+
+                containers.push({
+                    id: 1,
+                    name: formData.productName || '본품 1차 용기',
+                    shape: shape,
+                    diameter: diameter,
+                    width: cWidth,
+                    depth: cDepth,
+                    height: cHeight,
+                    capacity_ml: !isNaN(ml) && ml > 0 ? ml : 0,
+                    quantity: 1
+                });
+            }
+
+            const pName = formData.productName || '';
+            const isCleansing = pName.includes('클렌징') || pName.includes('샴푸') || pName.includes('워시') || pName.includes('바디') || pName.includes('비누') || pName.includes('클렌저');
+            const isSet = formData.isPlanningSet || formData.productType === '기획세트' || containers.length > 1;
+            const cat = overrideParams?.category || (isSet ? 'SET' : (isCleansing ? 'CLEANSING' : 'GENERAL'));
+
+            const calculatedList = calculateAllCountrySpaceRatios({
+                secondaryBox: box,
+                primaryContainers: containers,
+                productCategory: cat,
+                chinaKValue: 9.0,
+                isElectricDeviceIncluded: false,
+                taiwanCValue: 3.1,
+                packagingLayers: 2
             });
+
+            setSpaceRatioResults(calculatedList);
+        } catch (err) {
+            console.error("Space ratio calculation error:", err);
+        } finally {
+            setSpaceRatioLoading(false);
         }
-    }, [activeTab, product]);
+    };
+
+    // 포장재 정보 및 사양서로부터 2차 단상자 및 1차 용기 치수/용량 동기화 헬퍼
+    const handleSyncFromPackagingSpec = () => {
+        let boxW = 0, boxL = 0, boxH = 0;
+        let contShape = 'cylinder', contDia = 0, contW = 0, contD = 0, contH = 0;
+        let cap = 0;
+
+        // 문자열에서 첫 번째 유효 부동소수점/정수만 안전하게 추출하는 파서
+        const extractNum = (str) => {
+            if (!str) return 0;
+            const m = String(str).match(/([0-9]+(?:\.[0-9]+)?)/);
+            return m ? parseFloat(m[1]) : 0;
+        };
+
+        // 규격 문자열(예: '48*48*140', 'Ø55*145 (24g)', '38 x 38 x 125')을 파싱하여 [W, D, H] 또는 [Ø, H] 추출
+        const parseDim = (str) => {
+            if (!str) return [];
+            const parts = String(str).split(/[*xX×/~]/);
+            const nums = [];
+            for (const p of parts) {
+                const n = extractNum(p);
+                if (n > 0) nums.push(n);
+            }
+            return nums;
+        };
+
+        // 1. 단상자 기본 치수 (formData.dimensions) 우선 확인
+        if (formData.dimensions?.width && formData.dimensions?.length && formData.dimensions?.height) {
+            const dw = extractNum(formData.dimensions.width);
+            const dl = extractNum(formData.dimensions.length);
+            const dh = extractNum(formData.dimensions.height);
+            if (dw > 0 && dl > 0 && dh > 0) {
+                boxW = dw;
+                boxL = dl;
+                boxH = dh;
+            }
+        }
+
+        // 2. specComponents에서 2차 단상자 및 1차 용기 BOM 규격 정밀 추출
+        if (specComponents && specComponents.length > 0) {
+            // (1) 2차 단상자 검색 (단상자/단품박스/세트박스/슬리브 - 인박스/아웃박스는 절대 제외)
+            const boxItem = specComponents.find(c => {
+                const name = c.componentName || '';
+                const code = c.bomCode || '';
+                const isExcluded = name.includes('아웃') || name.includes('인박스') || name.includes('카톤') || code.includes('OUT') || code.includes('INB');
+                const isMatch = name.includes('단상자') || name.includes('단품박스') || name.includes('개별박스') || name.includes('세트박스') || name.includes('슬리브') || code.includes('UBX') || code.includes('UNIT');
+                return isMatch && !isExcluded;
+            });
+
+            if (boxItem && boxItem.sizeDimension) {
+                const parsed = parseDim(boxItem.sizeDimension);
+                if (parsed.length >= 3 && parsed[0] > 0 && parsed[1] > 0 && parsed[2] > 0) {
+                    boxW = parsed[0];
+                    boxL = parsed[1];
+                    boxH = parsed[2];
+                }
+            }
+
+            // (2) 1차 본체 용기 검색 (용기/본체/초자/유리/병/튜브/PET)
+            const containerItem = specComponents.find(c => {
+                const name = c.componentName || '';
+                const code = c.bomCode || '';
+                return name.includes('용기') || name.includes('본체') || name.includes('초자') || name.includes('유리') || name.includes('병') || name.includes('튜브') || name.includes('PET') || code.includes('BTL') || code.includes('JAR') || code.includes('TUB') || code.includes('CAN');
+            });
+
+            if (containerItem && containerItem.sizeDimension) {
+                const dimStr = String(containerItem.sizeDimension);
+                const isCylinder = dimStr.includes('Ø') || dimStr.includes('ø') || dimStr.includes('파이') || dimStr.includes('D');
+                const parsed = parseDim(dimStr);
+
+                if (isCylinder || parsed.length === 2) {
+                    contShape = 'cylinder';
+                    contDia = parsed[0] || 0;
+                    contH = parsed[1] || 0;
+                } else if (parsed.length >= 3) {
+                    contShape = 'rect';
+                    contW = parsed[0] || 0;
+                    contD = parsed[1] || 0;
+                    contH = parsed[2] || 0;
+                }
+            }
+        }
+
+        // 3. 내용량 (mL)
+        cap = extractNum(formData.capacity);
+        if (cap === 0 && formData.components && formData.components.length > 0) {
+            cap = formData.components.reduce((sum, c) => sum + extractNum(c.capacity), 0);
+        }
+
+        // 4. 단상자 기본값 fallback (내용량 기준 표준 단상자 규격 추정)
+        if (boxW === 0 || boxL === 0 || boxH === 0) {
+            if (cap >= 100) {
+                boxW = 48; boxL = 48; boxH = 140;
+            } else if (cap >= 50) {
+                boxW = 38; boxL = 38; boxH = 125;
+            } else if (cap >= 30) {
+                boxW = 34; boxL = 34; boxH = 110;
+            } else {
+                boxW = 40; boxL = 40; boxH = 120;
+            }
+        }
+
+        // 5. 1차 용기 기본값 fallback (단상자 치수 기준 직경 및 높이 정밀 추정)
+        if ((contDia === 0 && (contW === 0 || contD === 0)) || contH === 0) {
+            contShape = 'cylinder';
+            contDia = Math.max(10, Math.round(boxW - 3));
+            contH = Math.max(10, Math.round(boxH - 5));
+        }
+
+        // 상태 업데이트
+        setFormData(prev => ({
+            ...prev,
+            dimensions: {
+                ...prev.dimensions,
+                width: String(boxW),
+                length: String(boxL),
+                height: String(boxH)
+            },
+            capacity: cap > 0 ? String(cap) : prev.capacity
+        }));
+
+        setPrimaryContainer({
+            shape: contShape,
+            diameter: contDia > 0 ? String(contDia) : '',
+            width: contW > 0 ? String(contW) : '',
+            depth: contD > 0 ? String(contD) : '',
+            height: contH > 0 ? String(contH) : '',
+            capacity_ml: cap > 0 ? String(cap) : ''
+        });
+
+        calculateRealtimeSpaceRatio({
+            width: boxW,
+            length: boxL,
+            height: boxH,
+            capacity: cap,
+            containerShape: contShape,
+            containerDiameter: contDia,
+            containerWidth: contW,
+            containerDepth: contD,
+            containerHeight: contH
+        });
+
+        toast.success(`사양서 제원(단상자 ${boxW}×${boxL}×${boxH}mm / 1차용기 ${contShape === 'cylinder' ? `Ø${contDia}×${contH}` : `${contW}×${contD}×${contH}`}mm)이 정확하게 동기화되었습니다.`);
+    };
+
+    // 실시간 공간비율 계산 검증 연계
+    useEffect(() => {
+        if (activeTab === 'spaceRatio') {
+            calculateRealtimeSpaceRatio();
+        }
+    }, [activeTab, formData.dimensions?.width, formData.dimensions?.length, formData.dimensions?.height, formData.capacity, formData.components, formData.productType, formData.isPlanningSet, primaryContainer.shape, primaryContainer.diameter, primaryContainer.width, primaryContainer.depth, primaryContainer.height, primaryContainer.capacity_ml]);
 
     const [masterMethodImagesForInherit, setMasterMethodImagesForInherit] = useState({ images: [], masterSpecId: null });
     const packagingMethodSaveRef = useRef(null);
     const packagingMethodReloadRef = useRef(null);
     const packagingMethodInheritRef = useRef(null);
+
+    const getFullFileUrl = (url) => {
+        if (!url) return '';
+        if (url.startsWith('http://') || url.startsWith('https://')) return url;
+        const baseUrl = api.getBaseURL ? api.getBaseURL() : 'http://localhost:8080';
+        return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+    };
+
+    const fetchChannelStickerInfo = async (channelId) => {
+        if (!channelId) {
+            setChannelStickerInfo(null);
+            return;
+        }
+        try {
+            const res = await api.getChannelSpecialNotes(channelId);
+            const notes = res.data?.notes || [];
+            const stickerNote = notes.find(n => n.categoryKey === 'CHANNEL_STICKER' || (n.categoryLabel && n.categoryLabel.includes('스티커')));
+            if (stickerNote && stickerNote.fileUrl) {
+                setChannelStickerInfo({
+                    fileUrl: stickerNote.fileUrl,
+                    fileType: stickerNote.fileType || (stickerNote.fileUrl.toLowerCase().endsWith('.pdf') ? 'PDF' : 'IMAGE'),
+                    noteContent: stickerNote.noteContent || ''
+                });
+            } else {
+                setChannelStickerInfo(null);
+            }
+        } catch (err) {
+            console.error('채널 스티커 규정 조회 실패:', err);
+            setChannelStickerInfo(null);
+        }
+    };
+
+    useEffect(() => {
+        const rawChan = (formData.channels && formData.channels.length > 0) ? formData.channels[0] : null;
+        const channelId = rawChan ? rawChan.id : null;
+        if (channelId) {
+            fetchChannelStickerInfo(channelId);
+        } else {
+            setChannelStickerInfo(null);
+        }
+    }, [formData.channels]);
 
     // 3자리 수치 콤마(,) 포맷팅 헬퍼
     const formatComma = (val) => {
@@ -347,14 +640,15 @@ const ProductDrawer = ({ product, onClose, user }) => {
             ? channel.setCushioningStandard
             : (channel.cushioningStandard || '박스 상단 빈공간 비닐 에어캡 완충재 투입');
 
-        const expText = channel.expDateFormat ? `LOT 번호\nEXP ${channel.expDateFormat}` : '';
+        const expText = channel.expDateFormat ? `LOT(제조번호)\nEXP ${channel.expDateFormat}` : '';
         const uRule = isSet ? (channel.setUnitBoxMarkingRule || channel.unitBoxMarkingRule) : channel.unitBoxMarkingRule;
         const inboxRule = isSet ? channel.setInboxLabelMarkingRule : channel.inboxLabelMarkingRule;
         const outboxRule = isSet ? channel.setOutboxLabelMarkingRule : channel.outboxLabelMarkingRule;
         const palletRule = isSet ? channel.setPalletLabelMarkingRule : channel.palletLabelMarkingRule;
 
-        const markingText = uRule
-            ? (channel.expDateFormat ? `${uRule}\n(표기형식: ${channel.expDateFormat})` : uRule)
+        const cleanRule = uRule ? uRule.replace(/\[생산배치번호\]/g, 'LOT(제조번호)').replace(/생산배치번호/g, 'LOT(제조번호)') : '';
+        const markingText = cleanRule
+            ? (channel.expDateFormat ? `${cleanRule}\n(표기형식: ${channel.expDateFormat})` : cleanRule)
             : expText;
         const containerDisplay = isSet
             ? (channel.setContainerMarkingDisplay || '인쇄')
@@ -387,7 +681,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
             applyChannelSticker: !!channel.channelStickerRequired,
             outboxCushioningStandard: cushioningLabel,
             popRequiredStandard: popLabel,
-            unitBoxMarkingRule: uRule || prev.unitBoxMarkingRule || '',
+            unitBoxMarkingRule: cleanRule || prev.unitBoxMarkingRule || '',
             inboxLabelMarkingRule: inboxRule || prev.inboxLabelMarkingRule || '',
             outboxLabelMarkingRule: outboxRule || prev.outboxLabelMarkingRule || '',
             palletLabelMarkingRule: palletRule || prev.palletLabelMarkingRule || '',
@@ -400,7 +694,22 @@ const ProductDrawer = ({ product, onClose, user }) => {
             inboxTapeBanding: 'N'
         }));
 
-        toast.success(`[${channel.name}] (${isSet ? '기획세트' : '단품'}) 유통채널 포장재 규격, 착인기준, 현품표 조건이 동기화되었습니다.`);
+        // 유통채널 정보와 연계된 정보는 바로 제품 마스터(formData) 수정에 연동
+        setFormData(prev => ({
+            ...prev,
+            channels: [channel],
+            palletInfo: {
+                ...prev.palletInfo,
+                palletType: channel.palletType || prev.palletInfo?.palletType || '',
+                maxStackHeight: maxStack ? parseInt(maxStack, 10) || prev.palletInfo?.maxStackHeight : prev.palletInfo?.maxStackHeight
+            }
+        }));
+
+        if (channel && channel.id) {
+            fetchChannelStickerInfo(channel.id);
+        }
+
+        toast.success(`[${channel.name}] (${isSet ? '기획세트' : '단품'}) 유통채널 포장재 규격, 착인기준, 현품표 조건이 제품 마스터 및 사양서에 즉시 연동되었습니다.`);
         return true;
     };
 
@@ -827,9 +1136,10 @@ const ProductDrawer = ({ product, onClose, user }) => {
                             const iRule = isSet ? selectedChannel.setInboxLabelMarkingRule : selectedChannel.inboxLabelMarkingRule;
                             const oRule = isSet ? selectedChannel.setOutboxLabelMarkingRule : selectedChannel.outboxLabelMarkingRule;
                             const pRule = isSet ? selectedChannel.setPalletLabelMarkingRule : selectedChannel.palletLabelMarkingRule;
-                            const expFormat = selectedChannel.expDateFormat ? `LOT 번호\nEXP ${selectedChannel.expDateFormat}` : '';
-                            const autoMarkingText = uRule
-                                ? (selectedChannel.expDateFormat ? `${uRule}\n(표기형식: ${selectedChannel.expDateFormat})` : uRule)
+                            const expFormat = selectedChannel.expDateFormat ? `LOT(제조번호)\nEXP ${selectedChannel.expDateFormat}` : '';
+                            const cleanAutoRule = uRule ? uRule.replace(/\[생산배치번호\]/g, 'LOT(제조번호)').replace(/생산배치번호/g, 'LOT(제조번호)') : '';
+                            const autoMarkingText = cleanAutoRule
+                                ? (selectedChannel.expDateFormat ? `${cleanAutoRule}\n(표기형식: ${selectedChannel.expDateFormat})` : cleanAutoRule)
                                 : expFormat;
 
                             const stickerLabel = isSet && selectedChannel.setChannelStickerStandard
@@ -1557,8 +1867,6 @@ const ProductDrawer = ({ product, onClose, user }) => {
         }
     };
 
-    // getFileUrl imported from ./api
-
     const getCleanFileName = (path) => {
         if (!path) return '';
         let fileName = decodeURIComponent(path.split('/').pop());
@@ -1623,124 +1931,370 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                 <div className="card" style={{ borderLeft: '5px solid #6366f1' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                                         <h3 style={{ margin: 0 }}>⚖️ 6개국 포장공간비율 검증 및 규격 최적화 역산</h3>
-                                        <button 
-                                            type="button" 
-                                            className="primary" 
-                                            style={{ padding: '6px 15px', fontSize: '12.5px', background: '#4f46e5', border: 'none', borderRadius: '6px', color: '#fff', cursor: 'pointer' }}
-                                            onClick={() => {
-                                                // 강제 새로고침 트리거
-                                                setActiveTab('details');
-                                                setTimeout(() => setActiveTab('spaceRatio'), 50);
-                                            }}
-                                        >
-                                            🔄 실시간 재계산
-                                        </button>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <button 
+                                                type="button" 
+                                                className="secondary" 
+                                                style={{ padding: '6px 14px', fontSize: '12px', background: '#e0e7ff', border: '1px solid #c7d2fe', borderRadius: '6px', color: '#4338ca', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontWeight: '600' }}
+                                                onClick={handleSyncFromPackagingSpec}
+                                                title="사양서 및 BOM 부재료에 기재된 단상자/박스 규격 및 용량을 불러옵니다."
+                                            >
+                                                📥 사양서 제원 불러오기
+                                            </button>
+                                            <button 
+                                                type="button" 
+                                                className="primary" 
+                                                style={{ padding: '6px 15px', fontSize: '12.5px', background: '#4f46e5', border: 'none', borderRadius: '6px', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                                onClick={() => calculateRealtimeSpaceRatio()}
+                                            >
+                                                🔄 실시간 재계산
+                                            </button>
+                                        </div>
                                     </div>
-                                    <p style={{ color: '#64748b', fontSize: '13px', margin: '0 0 20px 0', lineHeight: '1.5' }}>
-                                        품목코드 마스터에 기재된 포장 제원(내용량, 구성품 크기, 외곽박스 치수)을 기반으로 각 국가의 포장규제 법률에 대입하여 실시간 판정합니다.
+                                    <p style={{ color: '#64748b', fontSize: '13px', margin: '0 0 15px 0', lineHeight: '1.5' }}>
+                                        품목코드 마스터에 기재된 포장 제원(단상자 치수, 내용량, 구성품)을 기반으로 각 국가의 포장규제 법률에 대입하여 실시간 판정합니다.
                                     </p>
+
+                                    {/* 실시간 계산 파라미터 제어 바 (Live Input & Control Bar) */}
+                                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '16px 18px', marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <strong style={{ fontSize: '13px', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <span>⚡</span> 실시간 계산용 포장 제원 (2차 단상자 & 1차 본체 용기 규격)
+                                            </strong>
+                                            <span style={{ fontSize: '11px', color: '#64748b' }}>
+                                                💡 수치 변경 시 즉시 6개국 법적 공간비율이 실시간 재계산됩니다.
+                                            </span>
+                                        </div>
+
+                                        {/* 1열: 2차 단상자 외형 규격 */}
+                                        <div style={{ background: '#ffffff', padding: '12px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                            <div style={{ fontSize: '12px', fontWeight: '700', color: '#4338ca', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                <span>📦</span> 2차 단상자(외형 박스) 규격
+                                            </div>
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', alignItems: 'flex-end' }}>
+                                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                                    <label style={{ fontSize: '11px', color: '#475569', fontWeight: '600' }}>단상자 가로 (W mm)</label>
+                                                    <input 
+                                                        type="text" 
+                                                        value={formData.dimensions?.width || ''} 
+                                                        onChange={(e) => {
+                                                            const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                            setFormData(prev => ({
+                                                                ...prev,
+                                                                dimensions: { ...prev.dimensions, width: val }
+                                                            }));
+                                                        }}
+                                                        placeholder="예: 48" 
+                                                        style={{ padding: '6px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                                                    />
+                                                </div>
+                                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                                    <label style={{ fontSize: '11px', color: '#475569', fontWeight: '600' }}>단상자 세로 (D mm)</label>
+                                                    <input 
+                                                        type="text" 
+                                                        value={formData.dimensions?.length || ''} 
+                                                        onChange={(e) => {
+                                                            const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                            setFormData(prev => ({
+                                                                ...prev,
+                                                                dimensions: { ...prev.dimensions, length: val }
+                                                            }));
+                                                        }}
+                                                        placeholder="예: 48" 
+                                                        style={{ padding: '6px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                                                    />
+                                                </div>
+                                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                                    <label style={{ fontSize: '11px', color: '#475569', fontWeight: '600' }}>단상자 높이 (H mm)</label>
+                                                    <input 
+                                                        type="text" 
+                                                        value={formData.dimensions?.height || ''} 
+                                                        onChange={(e) => {
+                                                            const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                            setFormData(prev => ({
+                                                                ...prev,
+                                                                dimensions: { ...prev.dimensions, height: val }
+                                                            }));
+                                                        }}
+                                                        placeholder="예: 140" 
+                                                        style={{ padding: '6px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                                                    />
+                                                </div>
+                                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                                    <label style={{ fontSize: '11px', color: '#475569', fontWeight: '600' }}>단상자 외형 체적</label>
+                                                    <div style={{ padding: '6px 10px', fontSize: '12.5px', fontWeight: '600', color: '#334155', background: '#f1f5f9', borderRadius: '6px', border: '1px solid #e2e8f0', textAlign: 'right' }}>
+                                                        {formData.dimensions?.width && formData.dimensions?.length && formData.dimensions?.height
+                                                            ? `${((parseFloat(formData.dimensions.width) * parseFloat(formData.dimensions.length) * parseFloat(formData.dimensions.height)) / 1000).toFixed(1)} mL (cm³)`
+                                                            : '-'}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* 2열: 1차 본체 용기 규격 및 내용량 */}
+                                        <div style={{ background: '#ffffff', padding: '12px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                            <div style={{ fontSize: '12px', fontWeight: '700', color: '#0284c7', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                <span>🧴</span> 1차 본체 용기(실체적) 및 내용량
+                                            </div>
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', alignItems: 'flex-end' }}>
+                                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                                    <label style={{ fontSize: '11px', color: '#475569', fontWeight: '600' }}>용기 형태</label>
+                                                    <select
+                                                        value={primaryContainer.shape || 'cylinder'}
+                                                        onChange={(e) => setPrimaryContainer(prev => ({ ...prev, shape: e.target.value }))}
+                                                        style={{ padding: '6px 10px', fontSize: '12.5px', borderRadius: '6px', border: '1px solid #cbd5e1', width: '100%' }}
+                                                    >
+                                                        <option value="cylinder">원기둥 (Ø 직경 × 높이)</option>
+                                                        <option value="rect">직육면체 (가로×세로×높이)</option>
+                                                        <option value="custom_volume">내용량 직접 산출</option>
+                                                    </select>
+                                                </div>
+
+                                                {primaryContainer.shape === 'cylinder' ? (
+                                                    <>
+                                                        <div className="form-group" style={{ marginBottom: 0 }}>
+                                                            <label style={{ fontSize: '11px', color: '#475569', fontWeight: '600' }}>용기 직경 (Ø mm)</label>
+                                                            <input 
+                                                                type="text" 
+                                                                value={primaryContainer.diameter || ''} 
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                                    setPrimaryContainer(prev => ({ ...prev, diameter: val }));
+                                                                }}
+                                                                placeholder="예: 45" 
+                                                                style={{ padding: '6px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                                                            />
+                                                        </div>
+                                                        <div className="form-group" style={{ marginBottom: 0 }}>
+                                                            <label style={{ fontSize: '11px', color: '#475569', fontWeight: '600' }}>용기 높이 (H mm)</label>
+                                                            <input 
+                                                                type="text" 
+                                                                value={primaryContainer.height || ''} 
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                                    setPrimaryContainer(prev => ({ ...prev, height: val }));
+                                                                }}
+                                                                placeholder="예: 135" 
+                                                                style={{ padding: '6px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                                                            />
+                                                        </div>
+                                                    </>
+                                                ) : primaryContainer.shape === 'rect' ? (
+                                                    <>
+                                                        <div className="form-group" style={{ marginBottom: 0 }}>
+                                                            <label style={{ fontSize: '11px', color: '#475569', fontWeight: '600' }}>용기 가로 (W mm)</label>
+                                                            <input 
+                                                                type="text" 
+                                                                value={primaryContainer.width || ''} 
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                                    setPrimaryContainer(prev => ({ ...prev, width: val }));
+                                                                }}
+                                                                placeholder="예: 45" 
+                                                                style={{ padding: '6px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                                                            />
+                                                        </div>
+                                                        <div className="form-group" style={{ marginBottom: 0 }}>
+                                                            <label style={{ fontSize: '11px', color: '#475569', fontWeight: '600' }}>용기 세로 (D mm)</label>
+                                                            <input 
+                                                                type="text" 
+                                                                value={primaryContainer.depth || ''} 
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                                    setPrimaryContainer(prev => ({ ...prev, depth: val }));
+                                                                }}
+                                                                placeholder="예: 45" 
+                                                                style={{ padding: '6px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                                                            />
+                                                        </div>
+                                                        <div className="form-group" style={{ marginBottom: 0 }}>
+                                                            <label style={{ fontSize: '11px', color: '#475569', fontWeight: '600' }}>용기 높이 (H mm)</label>
+                                                            <input 
+                                                                type="text" 
+                                                                value={primaryContainer.height || ''} 
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                                    setPrimaryContainer(prev => ({ ...prev, height: val }));
+                                                                }}
+                                                                placeholder="예: 135" 
+                                                                style={{ padding: '6px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                                                            />
+                                                        </div>
+                                                    </>
+                                                ) : null}
+
+                                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                                    <label style={{ fontSize: '11px', color: '#475569', fontWeight: '600' }}>내용량 (mL)</label>
+                                                    <input 
+                                                        type="text" 
+                                                        value={formData.capacity || primaryContainer.capacity_ml || ''} 
+                                                        onChange={(e) => {
+                                                            const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                            setFormData(prev => ({ ...prev, capacity: val }));
+                                                            setPrimaryContainer(prev => ({ ...prev, capacity_ml: val }));
+                                                        }}
+                                                        placeholder="예: 100" 
+                                                        style={{ padding: '6px 10px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                                                    />
+                                                </div>
+
+                                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                                    <label style={{ fontSize: '11px', color: '#475569', fontWeight: '600' }}>품목 구분</label>
+                                                    <select 
+                                                        value={formData.productType || '단품'} 
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            setFormData(prev => ({
+                                                                ...prev,
+                                                                productType: val,
+                                                                isPlanningSet: val === '기획세트'
+                                                            }));
+                                                        }}
+                                                        style={{ padding: '6px 10px', fontSize: '12.5px', borderRadius: '6px', border: '1px solid #cbd5e1', width: '100%' }}
+                                                    >
+                                                        <option value="단품">단품 일반 화장품 (10%)</option>
+                                                        <option value="세정용">인체/두발 세정용 (15%)</option>
+                                                        <option value="기획세트">기획세트 / 종합제품 (25%)</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
 
                                     {spaceRatioLoading ? (
                                         <div style={{ padding: '60px 0', textAlign: 'center', color: '#94a3b8' }}>
                                             <div className="spinner" style={{ margin: '0 auto 15px auto', width: '36px', height: '36px', border: '3px solid rgba(99,102,241,0.1)', borderLeftColor: '#6366f1', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-                                            <span>국가별 전략 패턴 연산 엔진 가동 중...</span>
+                                            <span>6개국 포장 규제 연산 엔진 실시간 가동 중...</span>
                                         </div>
-                                    ) : !spaceRatioResults ? (
+                                    ) : !spaceRatioResults || (Array.isArray(spaceRatioResults) && spaceRatioResults.length === 0) ? (
                                         <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', border: '1px dashed #cbd5e1', borderRadius: '8px' }}>
-                                            실시간 공간비율 데이터가 생성되지 않았습니다. 포장 사양의 가로/세로/높이 및 내용량이 채워졌는지 확인하십시오.
+                                            실시간 공간비율 데이터가 생성되지 않았습니다. 상단 입력란에 가로/세로/높이 및 내용량을 입력하십시오.
                                         </div>
                                     ) : (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                                             {/* 6개국 국가 카드 보드 */}
-                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '15px' }}>
-                                                {Object.entries(spaceRatioResults).map(([countryKey, res]) => {
-                                                    const isPass = res.passed;
-                                                    const isNull = res.spaceRatio === null;
-                                                    const countryName = 
-                                                        countryKey === 'KOREA' ? '대한민국 (Korea)' :
-                                                        countryKey === 'CHINA' ? '중국 (China)' :
-                                                        countryKey === 'TAIWAN' ? '대만 (Taiwan)' :
-                                                        countryKey === 'JAPAN' ? '일본 (Japan)' :
-                                                        countryKey === 'EU' ? '유럽연합 (EU)' :
-                                                        countryKey === 'USA' ? '미국 (USA)' : countryKey;
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '15px' }}>
+                                                {(Array.isArray(spaceRatioResults) ? spaceRatioResults : []).map((r) => {
+                                                    const isPass = r.status === 'PASS';
+                                                    const isFail = r.status === 'FAIL';
+                                                    const isRefer = r.badgeType === 'REFERENCE_ONLY';
+                                                    const isWaiting = r.badgeType === 'WAITING_INPUT';
 
-                                                    let borderTop = '4px solid #10b981'; // Green
-                                                    let bgLight = '#ecfdf5';
-                                                    let statusText = '합격 (Pass)';
-                                                    let statusColor = '#10b981';
+                                                    let borderTop = '4px solid #64748b';
+                                                    let cardBg = '#fff';
+                                                    let badgeBg = '#f1f5f9';
+                                                    let badgeText = '#475569';
 
-                                                    if (isNull) {
-                                                        borderTop = '4px solid #94a3b8'; // Gray
-                                                        bgLight = '#f8fafc';
-                                                        statusText = '판정 보류';
-                                                        statusColor = '#64748b';
-                                                    } else if (!isPass) {
-                                                        borderTop = '4px solid #ef4444'; // Red
-                                                        bgLight = '#fef2f2';
-                                                        statusText = '불합격 (Fail)';
-                                                        statusColor = '#ef4444';
+                                                    if (isWaiting) {
+                                                        borderTop = '4px solid #f59e0b';
+                                                        badgeBg = '#fef3c7';
+                                                        badgeText = '#b45309';
+                                                    } else if (isPass) {
+                                                        borderTop = '4px solid #10b981';
+                                                        badgeBg = '#dcfce7';
+                                                        badgeText = '#15803d';
+                                                    } else if (isFail) {
+                                                        borderTop = '4px solid #ef4444';
+                                                        badgeBg = '#fee2e2';
+                                                        badgeText = '#b91c1c';
+                                                    } else if (isRefer) {
+                                                        borderTop = '4px solid #8b5cf6';
+                                                        badgeBg = '#ede9fe';
+                                                        badgeText = '#6d28d9';
+                                                    } else if (r.badgeType === 'OFFICIAL_VALUE') {
+                                                        borderTop = '4px solid #3b82f6';
+                                                        badgeBg = '#e0e7ff';
+                                                        badgeText = '#3730a3';
                                                     }
 
                                                     return (
                                                         <div 
-                                                            key={countryKey} 
+                                                            key={r.countryCode} 
                                                             style={{ 
-                                                                background: '#fff', 
+                                                                background: cardBg, 
                                                                 border: '1px solid #e2e8f0', 
                                                                 borderTop, 
                                                                 borderRadius: '10px', 
-                                                                padding: '20px',
+                                                                padding: '18px 20px',
                                                                 boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
                                                                 display: 'flex',
                                                                 flexDirection: 'column',
-                                                                justifyContent: 'space-between'
+                                                                justifyContent: 'space-between',
+                                                                gap: '12px'
                                                             }}
                                                         >
                                                             <div>
-                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                                                                    <strong style={{ fontSize: '15px', color: '#1e293b' }}>{countryName}</strong>
-                                                                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: statusColor, padding: '2px 8px', borderRadius: '4px', backgroundColor: bgLight }}>
-                                                                        {statusText}
-                                                                    </span>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                        <span style={{ fontSize: '20px' }}>{r.flag}</span>
+                                                                        <strong style={{ fontSize: '15px', color: '#1e293b' }}>{r.countryName}</strong>
+                                                                        {r.isLegalForce ? (
+                                                                            <span style={{ fontSize: '10px', fontWeight: '700', padding: '1px 5px', borderRadius: '4px', background: '#fee2e2', color: '#991b1b' }}>법적 강제</span>
+                                                                        ) : (
+                                                                            <span style={{ fontSize: '10px', fontWeight: '700', padding: '1px 5px', borderRadius: '4px', background: '#f1f5f9', color: '#64748b' }}>참고용</span>
+                                                                        )}
+                                                                    </div>
+                                                                    
+                                                                    <div>
+                                                                        {r.badgeType === 'WAITING_INPUT' && (
+                                                                            <span style={{ fontSize: '11px', fontWeight: '800', color: badgeText, padding: '3px 8px', borderRadius: '12px', backgroundColor: badgeBg }}>
+                                                                                ⚠️ 치수 미입력
+                                                                            </span>
+                                                                        )}
+                                                                        {r.badgeType === 'LEGAL_DECISION' && (
+                                                                            <span style={{ fontSize: '11px', fontWeight: '800', color: badgeText, padding: '3px 8px', borderRadius: '12px', backgroundColor: badgeBg }}>
+                                                                                {isPass ? '✓ 적합' : '✕ 부적합'}
+                                                                            </span>
+                                                                        )}
+                                                                        {r.badgeType === 'OFFICIAL_VALUE' && (
+                                                                            <span style={{ fontSize: '11px', fontWeight: '800', color: badgeText, padding: '3px 8px', borderRadius: '12px', backgroundColor: badgeBg }}>
+                                                                                공식 산출치
+                                                                            </span>
+                                                                        )}
+                                                                        {r.badgeType === 'REFERENCE_ONLY' && (
+                                                                            <span style={{ fontSize: '11px', fontWeight: '800', color: badgeText, padding: '3px 8px', borderRadius: '12px', backgroundColor: badgeBg }}>
+                                                                                참고용 (Reference)
+                                                                            </span>
+                                                                        )}
+                                                                        {r.badgeType === 'NOT_APPLICABLE' && (
+                                                                            <span style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', padding: '3px 8px', borderRadius: '12px', backgroundColor: '#f1f5f9' }}>
+                                                                                해당 없음 (N/A)
+                                                                            </span>
+                                                                        )}
+                                                                        {r.badgeType === 'NO_BADGE' && (
+                                                                            <span style={{ fontSize: '12px', fontWeight: '800', color: '#1e293b', padding: '3px 8px', borderRadius: '12px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                                                                                {r.title}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
 
-                                                                {/* 계산 세부 수치 */}
-                                                                <div style={{ fontSize: '13px', color: '#475569', marginBottom: '15px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                                        <span>측정 공간비율:</span>
-                                                                        <span style={{ fontWeight: '700', color: '#1e293b' }}>
-                                                                            {isNull || typeof res.spaceRatio !== 'number' ? '-' : `${res.spaceRatio.toFixed(1)}%`}
-                                                                        </span>
-                                                                    </div>
-                                                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                                        <span>법적 허용한도:</span>
-                                                                        <span>{isNull ? '-' : `${res.limitRatio}% 이하`}</span>
-                                                                    </div>
+                                                                {/* 계산 세부 수치 요약 */}
+                                                                <div style={{ fontSize: '13px', fontWeight: '700', color: '#1e293b', marginBottom: '8px' }}>
+                                                                    {r.summary}
                                                                 </div>
 
-                                                                {/* 피드백 상세 메시지 */}
-                                                                {res.feedbackMessage && (
-                                                                    <div style={{ fontSize: '12px', color: '#4f46e5', backgroundColor: '#f5f3ff', padding: '10px', borderRadius: '6px', marginBottom: '15px', whiteSpace: 'pre-line', lineHeight: '1.4' }}>
-                                                                        💡 {res.feedbackMessage}
+                                                                {/* 상세 설명 */}
+                                                                <p style={{ fontSize: '12px', color: '#475569', margin: '0 0 8px 0', lineHeight: '1.45' }}>
+                                                                    {r.detailDescription}
+                                                                </p>
+
+                                                                {/* 플래그 경고 */}
+                                                                {r.flags && r.flags.length > 0 && (
+                                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
+                                                                        {r.flags.map((flag, fIdx) => (
+                                                                            <span key={fIdx} style={{ fontSize: '10px', fontWeight: '700', color: '#b45309', background: '#fef3c7', padding: '2px 6px', borderRadius: '4px' }}>
+                                                                                {flag}
+                                                                            </span>
+                                                                        ))}
                                                                     </div>
                                                                 )}
                                                             </div>
 
-                                                            {/* 역산 최적화 추천안 (Recommended Dimension Spec) */}
-                                                            {!isPass && res.recommendedSpec && (
-                                                                <div style={{ marginTop: 'auto', background: '#fef2f2', border: '1px solid #fee2e2', padding: '12px', borderRadius: '8px' }}>
-                                                                    <strong style={{ fontSize: '12px', color: '#b91c1c', display: 'block', marginBottom: '6px' }}>🛠️ 합격 기준 역산 권장 치수</strong>
-                                                                    <div style={{ fontSize: '12.5px', color: '#7f1d1d', fontFamily: 'monospace' }}>
-                                                                        가로 &times; 세로 &times; 높이:<br />
-                                                                        <b>
-                                                                            {Math.floor(res.recommendedSpec.recommendedWidth)} &times; {Math.floor(res.recommendedSpec.recommendedLength)} &times; {Math.floor(res.recommendedSpec.recommendedHeight)} mm 이하
-                                                                        </b>
-                                                                    </div>
-                                                                    <span style={{ fontSize: '11px', color: '#991b1b', marginTop: '4px', display: 'block' }}>
-                                                                        (외곽부피가 {Math.floor(res.recommendedSpec.targetOuterVolume / 1000).toLocaleString()} cm³ 이하가 되도록 패키지를 수정하십시오)
-                                                                    </span>
-                                                                </div>
-                                                            )}
+                                                            {/* 법령명 */}
+                                                            <div style={{ fontSize: '10.5px', color: '#94a3b8', borderTop: '1px solid #f1f5f9', paddingTop: '8px' }}>
+                                                                📜 근거: {r.lawName}
+                                                            </div>
                                                         </div>
                                                     );
                                                 })}
@@ -1749,12 +2303,13 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                             {/* 글로벌 법률 가이드라인 정보 탭 */}
                                             <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '20px', marginTop: '10px' }}>
                                                 <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#1e293b' }}>📌 국가별 포장공간비율 주요 법적 기준 요약</h4>
-                                                <ul style={{ fontSize: '12px', color: '#475569', paddingLeft: '20px', lineHeight: '1.6', margin: 0 }}>
-                                                    <li><b>한국 환경부 예외</b>: 종합제품(세트)은 개별 단품 판정 결과와 전체 세트 판정(25%이하)을 동시 독립 검증합니다. 3겹 이상 포장 시 자동 불합격 경고합니다.</li>
-                                                    <li><b>중국 SAMR 신표준(GB 23350)</b>: 끈/손잡이 부피를 최외곽 판매포장에 포함하며, 1겹 포장은 강제 합격 대상입니다. k값(화장품 기본 6.0) 가중치를 적용합니다.</li>
-                                                    <li><b>대만 EPA 고지</b>: 세트 포장박스 내부의 불필요한 고정용 완충 패드는 순수내용량(npv) 부피에서 배제하며, 단일/복합 재질 분류 C값으로 포장용적을 나눕니다.</li>
-                                                    <li><b>일본 적정포장규칙</b>: 1차 용기 내 내용물 충전율이 40%(소형 30%) 이상이어야 하며, 세트박스 내벽과의 간격은 유리(GLASS) 용기인 경우 상하/깊이방향 예외 완화(최대 15mm/8mm)가 적용됩니다.</li>
-                                                    <li><b>유럽연합(EU) / 미국(FDA)</b>: 법적 허용한도 명세가 부재하거나 사기성 포장금지(FDA) 포괄주의 기조이므로 참고치(50%) 및 Null(판정보류) 상태를 고지합니다.</li>
+                                                <ul style={{ fontSize: '12px', color: '#475569', paddingLeft: '20px', lineHeight: '1.7', margin: 0 }}>
+                                                    <li><b>🇰🇷 대한민국 (환경부 고시)</b>: 단품 일반 화장품 10% 이하, 인체·두발 세정용 15% 이하, 종합제품(기획세트) 25% 이하. 포장 횟수는 2차 이내(세트 2차 이내) 준수 필수.</li>
+                                                    <li><b>🇨🇳 중국 (GB 23350-2021 / 2024 개정)</b>: 화장품 K계수 기본 9.0(전동기구 동봉 시 1.5배 가산)을 적용한 공극률 계산. 포장 층수는 최대 4층 이하 준수.</li>
+                                                    <li><b>🇹🇼 대만 (자원회수재이용법 과도포장제한)</b>: 화장품 선물세트(禮盒) 대상 포장체적비치(PVR) 1.00 이하 강제 적용. 단일재질(C=3.1), 복합재질(C=2.7) 계수 반영. 단품은 규제 제외.</li>
+                                                    <li><b>🇪🇺 유럽연합 (EU PPWR 2025/40 Article 24)</b>: 개별 화장품 단상자에는 적용되지 않으며, 최종 화물 수송/이커머스 그룹포장 공극률 40%~50% 규제 적용 (참고용 안내).</li>
+                                                    <li><b>🇺🇸 미국 (21 CFR 100.100 / California B&P §12606)</b>: 연방법상 고정 수치 상한은 없으나 비기능적 여유공간(Slack-fill)에 따른 소비자 집단소송 리스크 관리 목적 참고치 제공.</li>
+                                                    <li><b>🇯🇵 일본 (용기포장리사이클법 / 자율규약)</b>: 개별 공간비율에 대한 법적 벌칙 규정은 없으며, 용기 재활용 의무 및 화장품공업연합회 적정포장 자율규약 기준 안내.</li>
                                                 </ul>
                                             </div>
                                         </div>
@@ -3371,26 +3926,26 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                         <label style={{ fontSize: '12px', fontWeight: '600', color: '#475569' }}>3. 사용기한 및 제조번호 표기 기준 (3줄)</label>
                                                         <select
                                                             onChange={(e) => {
-                                                                const val = e.target.value;
-                                                                if (val) {
-                                                                    const textToAppend = val === '그 외' 
-                                                                        ? "1. 사용기한 착인 또는 압인 시 '[직접 표기 기준 입력]' 기재" 
-                                                                        : `1. 사용기한 착인 또는 압인 시 '${val}' 기재`;
-                                                                    const current = currentSpec.containerMarkingText ? currentSpec.containerMarkingText + '\n' : '';
-                                                                    setCurrentSpec({ ...currentSpec, containerMarkingText: current + textToAppend });
+                                                                const chId = e.target.value;
+                                                                if (chId) {
+                                                                    const targetChannel = salesChannels.find(c => String(c.id) === String(chId));
+                                                                    if (targetChannel) {
+                                                                        syncChannelRulesToSpec(targetChannel, true);
+                                                                    }
                                                                 }
                                                             }}
                                                             disabled={!canEdit}
                                                             style={{ width: '100%', borderRadius: '6px', padding: '6px', border: '1px solid #93c5fd', fontSize: '12px', fontWeight: 'bold', backgroundColor: '#fff', marginBottom: '6px' }}
+                                                            value={(formData.channels && formData.channels[0]?.id) || ''}
                                                         >
-                                                            <option value="">-- 🧴 용기 착인 기준 프리셋 선택 --</option>
-                                                            <option value="LOT EXP YYYYMMDD까지">LOT EXP YYYYMMDD까지</option>
-                                                            <option value="LOT EXP DDMMYYYY">LOT EXP DDMMYYYY</option>
-                                                            <option value="LOT EXP MM-DD-YYYY">LOT EXP MM-DD-YYYY</option>
-                                                            <option value="표기금지(제조번호만 허용)">표기금지(제조번호만 허용)</option>
-                                                            <option value="그 외">그 외 (직접 별도 유형/목록 입력)</option>
+                                                            <option value="">-- 🌐 유통채널 연계 착인 기준 선택 --</option>
+                                                            {salesChannels.map(ch => (
+                                                                <option key={ch.id} value={ch.id}>
+                                                                    [{ch.name}] {ch.unitBoxMarkingRule ? ch.unitBoxMarkingRule.replace(/\[생산배치번호\]/g, 'LOT(제조번호)').replace(/생산배치번호/g, 'LOT(제조번호)') : (ch.expDateFormat ? `LOT(제조번호) EXP ${ch.expDateFormat}` : '표준 착인')}
+                                                                </option>
+                                                            ))}
                                                         </select>
-                                                        <textarea value={currentSpec.containerMarkingText || ''} onChange={e => setCurrentSpec({...currentSpec, containerMarkingText: e.target.value})} disabled={!canEdit} rows={3} style={{ fontSize: '12px', padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', width: '100%' }} placeholder={'LOT 번호\nEXP YYYYMMDD 까지'} />
+                                                        <textarea value={currentSpec.containerMarkingText || ''} onChange={e => setCurrentSpec({...currentSpec, containerMarkingText: e.target.value})} disabled={!canEdit} rows={3} style={{ fontSize: '12px', padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', width: '100%' }} placeholder={'LOT(제조번호)\nEXP YYYYMMDD 까지'} />
                                                     </div>
                                                 </div>
 
@@ -3418,26 +3973,26 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                         <label style={{ fontSize: '12px', fontWeight: '600', color: '#475569' }}>3. 사용기한 및 제조번호 표기 기준 (3줄)</label>
                                                         <select
                                                             onChange={(e) => {
-                                                                const val = e.target.value;
-                                                                if (val) {
-                                                                    const textToAppend = val === '그 외' 
-                                                                        ? "1. 사용기한 착인 또는 압인 시 '[직접 표기 기준 입력]' 기재" 
-                                                                        : `1. 사용기한 착인 또는 압인 시 '${val}' 기재`;
-                                                                    const current = currentSpec.unitBoxMarkingText ? currentSpec.unitBoxMarkingText + '\n' : '';
-                                                                    setCurrentSpec({ ...currentSpec, unitBoxMarkingText: current + textToAppend });
+                                                                const chId = e.target.value;
+                                                                if (chId) {
+                                                                    const targetChannel = salesChannels.find(c => String(c.id) === String(chId));
+                                                                    if (targetChannel) {
+                                                                        syncChannelRulesToSpec(targetChannel, true);
+                                                                    }
                                                                 }
                                                             }}
                                                             disabled={!canEdit}
                                                             style={{ width: '100%', borderRadius: '6px', padding: '6px', border: '1px solid #93c5fd', fontSize: '12px', fontWeight: 'bold', backgroundColor: '#fff', marginBottom: '6px' }}
+                                                            value={(formData.channels && formData.channels[0]?.id) || ''}
                                                         >
-                                                            <option value="">-- 📦 단상자 착인 기준 프리셋 선택 --</option>
-                                                            <option value="LOT EXP YYYYMMDD까지">LOT EXP YYYYMMDD까지</option>
-                                                            <option value="LOT EXP DDMMYYYY">LOT EXP DDMMYYYY</option>
-                                                            <option value="LOT EXP MM-DD-YYYY">LOT EXP MM-DD-YYYY</option>
-                                                            <option value="표기금지(제조번호만 허용)">표기금지(제조번호만 허용)</option>
-                                                            <option value="그 외">그 외 (직접 별도 유형/목록 입력)</option>
+                                                            <option value="">-- 🌐 유통채널 연계 착인 기준 선택 --</option>
+                                                            {salesChannels.map(ch => (
+                                                                <option key={ch.id} value={ch.id}>
+                                                                    [{ch.name}] {ch.unitBoxMarkingRule ? ch.unitBoxMarkingRule.replace(/\[생산배치번호\]/g, 'LOT(제조번호)').replace(/생산배치번호/g, 'LOT(제조번호)') : (ch.expDateFormat ? `LOT(제조번호) EXP ${ch.expDateFormat}` : '표준 착인')}
+                                                                </option>
+                                                            ))}
                                                         </select>
-                                                        <textarea value={currentSpec.unitBoxMarkingText || ''} onChange={e => setCurrentSpec({...currentSpec, unitBoxMarkingText: e.target.value})} disabled={!canEdit} rows={3} style={{ fontSize: '12px', padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', width: '100%' }} placeholder={'LOT 번호\nEXP YYYYMMDD 까지'} />
+                                                        <textarea value={currentSpec.unitBoxMarkingText || ''} onChange={e => setCurrentSpec({...currentSpec, unitBoxMarkingText: e.target.value})} disabled={!canEdit} rows={3} style={{ fontSize: '12px', padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', width: '100%' }} placeholder={'LOT(제조번호)\nEXP YYYYMMDD 까지'} />
                                                     </div>
                                                 </div>
                                             </div>
@@ -3685,7 +4240,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                         <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#1d4ed8' }}>📥 인박스 날짜 표기양식 (제조일자/사용기한)</label>
                                                         <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
                                                             <select
-                                                                value=""
+                                                                value={extractDateFormatPart(currentSpec.inboxDateFormat, 'mfg') || ''}
                                                                 onChange={(e) => {
                                                                     const val = e.target.value;
                                                                     if (val) {
@@ -3699,13 +4254,12 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                 style={{ flex: 1, borderRadius: '4px', padding: '4px', border: '1px solid #93c5fd', fontSize: '13px', backgroundColor: '#fff' }}
                                                             >
                                                                 <option value="">-- Mfg Date 프리셋 --</option>
-                                                                <option value="YYYYMMDD">YYYYMMDD</option>
                                                                 <option value="YYYY.MM.DD">YYYY.MM.DD</option>
                                                                 <option value="MM-DD-YYYY">MM-DD-YYYY</option>
-                                                                <option value="DDMMYYYY">DDMMYYYY</option>
+                                                                <option value="DD.MM.YYYY">DD.MM.YYYY</option>
                                                             </select>
                                                             <select
-                                                                value=""
+                                                                value={extractDateFormatPart(currentSpec.inboxDateFormat, 'exp') || ''}
                                                                 onChange={(e) => {
                                                                     const val = e.target.value;
                                                                     if (val) {
@@ -3719,10 +4273,9 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                 style={{ flex: 1, borderRadius: '4px', padding: '4px', border: '1px solid #93c5fd', fontSize: '13px', backgroundColor: '#fff' }}
                                                             >
                                                                 <option value="">-- Exp Date 프리셋 --</option>
-                                                                <option value="YYYYMMDD까지">YYYYMMDD까지</option>
                                                                 <option value="YYYY.MM.DD까지">YYYY.MM.DD까지</option>
                                                                 <option value="MM-DD-YYYY까지">MM-DD-YYYY까지</option>
-                                                                <option value="DDMMYYYY까지">DDMMYYYY까지</option>
+                                                                <option value="DD.MM.YYYY까지">DD.MM.YYYY까지</option>
                                                                 <option value="현품표 사용기한(Exp. Date) 항목 표기 안함">현품표 사용기한(Exp. Date) 항목 표기 안함</option>
                                                             </select>
                                                         </div>
@@ -3865,6 +4418,44 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                     <div className="form-group" style={{ marginBottom: '8px' }}>
                                                         <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#7c3aed' }}>🏷️ 채널스티커 (채널 자동 매칭 - 수정 불가)</label>
                                                         <input type="text" value={currentSpec.outboxChannelStickerStandard || ''} readOnly style={{ fontSize: '13px', padding: '6px 8px', background: '#e2e8f0', color: '#334155', cursor: 'not-allowed' }} placeholder="채널 선택 시 자동 반영" />
+                                                        {channelStickerInfo?.fileUrl && (
+                                                            <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '8px' }}>
+                                                                {channelStickerInfo.fileType === 'PDF' || channelStickerInfo.fileUrl.toLowerCase().endsWith('.pdf') ? (
+                                                                    <div 
+                                                                        style={{ width: '48px', height: '48px', backgroundColor: '#fee2e2', color: '#dc2626', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '11px', borderRadius: '6px', cursor: 'pointer', flexShrink: 0 }}
+                                                                        onClick={() => setPreviewStickerFile({ url: getFullFileUrl(channelStickerInfo.fileUrl), type: 'PDF' })}
+                                                                        title="클릭 시 크게보기"
+                                                                    >
+                                                                        📄 PDF
+                                                                    </div>
+                                                                ) : (
+                                                                    <img
+                                                                        src={getFullFileUrl(channelStickerInfo.fileUrl)}
+                                                                        alt="채널 스티커 규정"
+                                                                        style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #cbd5e1', cursor: 'pointer', backgroundColor: '#fff', flexShrink: 0 }}
+                                                                        onClick={() => setPreviewStickerFile({ url: getFullFileUrl(channelStickerInfo.fileUrl), type: 'IMAGE' })}
+                                                                        title="클릭 시 크게보기"
+                                                                    />
+                                                                )}
+                                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                                    <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#6d28d9', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                        <span>📷 채널 스티커 규정 이미지/문서 첨부됨</span>
+                                                                    </div>
+                                                                    {channelStickerInfo.noteContent && (
+                                                                        <div style={{ fontSize: '11px', color: '#475569', marginTop: '2px', whiteSpace: 'pre-line', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                                                                            {channelStickerInfo.noteContent}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setPreviewStickerFile({ url: getFullFileUrl(channelStickerInfo.fileUrl), type: channelStickerInfo.fileType || (channelStickerInfo.fileUrl.toLowerCase().endsWith('.pdf') ? 'PDF' : 'IMAGE') })}
+                                                                    style={{ padding: '4px 10px', fontSize: '12px', fontWeight: '600', color: '#6d28d9', backgroundColor: '#fff', border: '1px solid #c4b5fd', borderRadius: '6px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                                                                >
+                                                                    👁️ 크게보기
+                                                                </button>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                     <div className="form-group" style={{ marginBottom: '8px' }}>
                                                         <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#0284c7' }}>🎈 빈공간 완충재 처리 기준 (채널 자동 매칭 - 수정 불가)</label>
@@ -3902,7 +4493,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                         <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#1d4ed8' }}>📦 아웃박스 날짜 표기양식 (제조일자/사용기한)</label>
                                                         <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
                                                             <select
-                                                                value=""
+                                                                value={extractDateFormatPart(currentSpec.outboxDateFormat, 'mfg') || ''}
                                                                 onChange={(e) => {
                                                                     const val = e.target.value;
                                                                     if (val) {
@@ -3916,13 +4507,12 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                 style={{ flex: 1, borderRadius: '4px', padding: '4px', border: '1px solid #93c5fd', fontSize: '13px', backgroundColor: '#fff' }}
                                                             >
                                                                 <option value="">-- Mfg Date 프리셋 --</option>
-                                                                <option value="YYYYMMDD">YYYYMMDD</option>
                                                                 <option value="YYYY.MM.DD">YYYY.MM.DD</option>
                                                                 <option value="MM-DD-YYYY">MM-DD-YYYY</option>
-                                                                <option value="DDMMYYYY">DDMMYYYY</option>
+                                                                <option value="DD.MM.YYYY">DD.MM.YYYY</option>
                                                             </select>
                                                             <select
-                                                                value=""
+                                                                value={extractDateFormatPart(currentSpec.outboxDateFormat, 'exp') || ''}
                                                                 onChange={(e) => {
                                                                     const val = e.target.value;
                                                                     if (val) {
@@ -3936,10 +4526,9 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                 style={{ flex: 1, borderRadius: '4px', padding: '4px', border: '1px solid #93c5fd', fontSize: '13px', backgroundColor: '#fff' }}
                                                             >
                                                                 <option value="">-- Exp Date 프리셋 --</option>
-                                                                <option value="YYYYMMDD까지">YYYYMMDD까지</option>
                                                                 <option value="YYYY.MM.DD까지">YYYY.MM.DD까지</option>
                                                                 <option value="MM-DD-YYYY까지">MM-DD-YYYY까지</option>
-                                                                <option value="DDMMYYYY까지">DDMMYYYY까지</option>
+                                                                <option value="DD.MM.YYYY까지">DD.MM.YYYY까지</option>
                                                                 <option value="현품표 사용기한(Exp. Date) 항목 표기 안함">현품표 사용기한(Exp. Date) 항목 표기 안함</option>
                                                             </select>
                                                         </div>
@@ -4068,6 +4657,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                         >
                                                             <option value="">-- 🏷️ 팔레트 현품표 프리셋 --</option>
                                                             <option value="팔레트 랩핑 후 전면/측면 2면 현품표 부착 (제조일자, 사용기한 필수)">팔레트 랩핑 후 전면/측면 2면 현품표 부착 (제조일자, 사용기한 필수)</option>
+                                                            <option value="팔레트 랩핑 후 전면 1면 현품표 부착 (제조일자, 사용기한 필수)">팔레트 랩핑 후 전면 1면 현품표 부착 (제조일자, 사용기한 필수)</option>
                                                             <option value="현품표 사용기한(Exp. Date) 항목 표기 안함">현품표 사용기한(Exp. Date) 항목 표기 안함</option>
                                                             <option value="그 외">그 외 (직접 입력)</option>
                                                         </select>
@@ -4078,7 +4668,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                         <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#1d4ed8' }}>🏷️ 팔레트 날짜 표기양식 (제조일자/사용기한)</label>
                                                         <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
                                                             <select
-                                                                value=""
+                                                                value={extractDateFormatPart(currentSpec.palletDateFormat, 'mfg') || ''}
                                                                 onChange={(e) => {
                                                                     const val = e.target.value;
                                                                     if (val) {
@@ -4092,13 +4682,12 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                 style={{ flex: 1, borderRadius: '4px', padding: '4px', border: '1px solid #93c5fd', fontSize: '13px', backgroundColor: '#fff' }}
                                                             >
                                                                 <option value="">-- Mfg Date 프리셋 --</option>
-                                                                <option value="YYYYMMDD">YYYYMMDD</option>
                                                                 <option value="YYYY.MM.DD">YYYY.MM.DD</option>
                                                                 <option value="MM-DD-YYYY">MM-DD-YYYY</option>
-                                                                <option value="DDMMYYYY">DDMMYYYY</option>
+                                                                <option value="DD.MM.YYYY">DD.MM.YYYY</option>
                                                             </select>
                                                             <select
-                                                                value=""
+                                                                value={extractDateFormatPart(currentSpec.palletDateFormat, 'exp') || ''}
                                                                 onChange={(e) => {
                                                                     const val = e.target.value;
                                                                     if (val) {
@@ -4112,10 +4701,9 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                 style={{ flex: 1, borderRadius: '4px', padding: '4px', border: '1px solid #93c5fd', fontSize: '13px', backgroundColor: '#fff' }}
                                                             >
                                                                 <option value="">-- Exp Date 프리셋 --</option>
-                                                                <option value="YYYYMMDD까지">YYYYMMDD까지</option>
                                                                 <option value="YYYY.MM.DD까지">YYYY.MM.DD까지</option>
                                                                 <option value="MM-DD-YYYY까지">MM-DD-YYYY까지</option>
-                                                                <option value="DDMMYYYY까지">DDMMYYYY까지</option>
+                                                                <option value="DD.MM.YYYY까지">DD.MM.YYYY까지</option>
                                                                 <option value="현품표 사용기한(Exp. Date) 항목 표기 안함">현품표 사용기한(Exp. Date) 항목 표기 안함</option>
                                                             </select>
                                                         </div>
@@ -4272,7 +4860,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                     </tr>
                                                     <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
                                                         <td style={{ padding: '8px', fontWeight: 'bold', color: '#334155' }}>제조번호 (Lot No.):</td>
-                                                        <td style={{ padding: '8px' }}>[ 생산 배치번호 표기 ]</td>
+                                                        <td style={{ padding: '8px' }}>LOT(제조번호)</td>
                                                     </tr>
                                                     <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
                                                         <td style={{ padding: '8px', fontWeight: 'bold', color: '#334155' }}>제조일자 (Mfg. Date):</td>
@@ -4354,7 +4942,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                     </tr>
                                                     <tr style={{ borderBottom: '1px solid #000' }}>
                                                         <td style={{ padding: '8px', fontWeight: 'bold' }}>제조번호 (Lot No.):</td>
-                                                        <td style={{ padding: '8px' }}>[ 생산 배치번호 표기 ]</td>
+                                                        <td style={{ padding: '8px' }}>LOT(제조번호)</td>
                                                     </tr>
                                                     <tr style={{ borderBottom: '1px solid #000' }}>
                                                         <td style={{ padding: '8px', fontWeight: 'bold' }}>제조일자 (Mfg. Date):</td>
@@ -4448,7 +5036,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                     </tr>
                                                     <tr style={{ borderBottom: '1px solid #000' }}>
                                                         <td style={{ padding: '8px', fontWeight: 'bold' }}>제조번호 (Lot No.):</td>
-                                                        <td style={{ padding: '8px' }}>[ 생산 배치번호 표기 ]</td>
+                                                        <td style={{ padding: '8px' }}>LOT(제조번호)</td>
                                                     </tr>
                                                     <tr style={{ borderBottom: '1px solid #000' }}>
                                                         <td style={{ padding: '8px', fontWeight: 'bold' }}>제조일자 (Mfg. Date):</td>
@@ -4660,6 +5248,33 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                     borderRadius: '8px'
                                 }}
                             />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 채널 스티커 첨부 규정 파일 미리보기 모달 (PDF / 이미지 뷰어) */}
+            {previewStickerFile && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.75)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(4px)' }}>
+                    <div style={{ width: '80vw', height: '85vh', backgroundColor: '#fff', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px' }}>
+                            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#1e293b' }}>
+                                🏷️ 채널 스티커 첨부 규정 미리보기 ({previewStickerFile.type})
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={() => setPreviewStickerFile(null)}
+                                style={{ border: 'none', background: '#f1f5f9', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', color: '#475569' }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'auto', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
+                            {previewStickerFile.type === 'PDF' || previewStickerFile.url?.toLowerCase().endsWith('.pdf') ? (
+                                <iframe src={previewStickerFile.url} title="PDF Viewer" style={{ width: '100%', height: '100%', border: 'none' }} />
+                            ) : (
+                                <img src={previewStickerFile.url} alt="Sticker Preview" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                            )}
                         </div>
                     </div>
                 </div>

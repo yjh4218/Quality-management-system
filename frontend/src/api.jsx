@@ -567,6 +567,7 @@ export const getActiveSalesChannels = () => api.get('/api/admin/master-data/sale
 export const saveSalesChannel = (channel) => api.post('/api/admin/master-data/sales-channels', channel);
 export const toggleSalesChannel = (id) => api.post(`/api/admin/master-data/sales-channels/${id}/toggle`);
 export const deleteSalesChannel = (id) => api.delete(`/api/admin/master-data/sales-channels/${id}`);
+export const getChannelSpecialNotes = (channelId) => api.get(`/api/sales-channels/${channelId}/special-notes`, { skipToast: true }).catch(() => ({ data: { notes: [] } }));
 
 // Master Data Upload (Common)
 export const uploadMasterFile = (file, prefix = 'MASTER') => {

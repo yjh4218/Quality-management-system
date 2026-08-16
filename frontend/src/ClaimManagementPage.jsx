@@ -297,45 +297,97 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
                         </div>
                     </div>
 
-                    {/* 2. 품목/제품 정보 (품목코드 -> 🔍 -> 품목명) */}
-                    <div style={{ gridColumn: 'span 2' }}>
-                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '6px' }}>📦 품목 정보</label>
-                        <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
-                            <div style={{ display: 'flex', flex: 1, gap: '4px' }}>
-                                <input type="text" placeholder="품목코드" value={searchParams.itemCode || ''} onChange={e => setSearchParams({ ...searchParams, itemCode: e.target.value })} style={{ flex: 1, padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
-                                <button type="button" onClick={() => setShowSearchPopup(true)} title="품목 상세 검색" style={{ padding: '0 10px', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer' }}>🔍</button>
-                            </div>
-                            <input type="text" placeholder="제품명 검색" value={searchParams.productName || ''} onChange={e => setSearchParams({ ...searchParams, productName: e.target.value })} style={{ flex: 2, padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
+                    {/* 2. 품목코드 + 🔍 돋보기 */}
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏷️ 품목코드</label>
+                        <div style={{ display: 'flex', gap: '5px' }}>
+                            <input 
+                                type="text" 
+                                placeholder="코드 검색" 
+                                value={searchParams.itemCode || ''} 
+                                onChange={e => setSearchParams({ ...searchParams, itemCode: e.target.value })} 
+                                onKeyDown={e => e.key === 'Enter' && fetchClaims()}
+                                style={{ flex: 1, padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} 
+                            />
+                            <button 
+                                type="button" 
+                                onClick={() => setShowSearchPopup(true)} 
+                                title="품목 상세 검색" 
+                                style={{ padding: '0 10px', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer' }}
+                            >
+                                🔍
+                            </button>
                         </div>
                     </div>
 
-                    {/* 3. 제조사 */}
+                    {/* 3. 제품명 */}
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>📦 제품명</label>
+                        <input 
+                            type="text" 
+                            placeholder="제품명 검색" 
+                            value={searchParams.productName || ''} 
+                            onChange={e => setSearchParams({ ...searchParams, productName: e.target.value })} 
+                            onKeyDown={e => e.key === 'Enter' && fetchClaims()}
+                            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} 
+                        />
+                    </div>
+
+                    {/* 4. 제조사 */}
                     {!isManufacturer && (
                         <div>
                             <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏭 제조사</label>
-                            <input type="text" placeholder="제조사명" value={searchParams.manufacturer || ''} onChange={e => setSearchParams({ ...searchParams, manufacturer: e.target.value })} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
+                            <input 
+                                type="text" 
+                                placeholder="제조사명" 
+                                value={searchParams.manufacturer || ''} 
+                                onChange={e => setSearchParams({ ...searchParams, manufacturer: e.target.value })} 
+                                onKeyDown={e => e.key === 'Enter' && fetchClaims()}
+                                style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} 
+                            />
                         </div>
                     )}
 
-                    {/* 4. LOT 번호 */}
+                    {/* 5. LOT 번호 */}
                     <div>
                         <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🔢 LOT 번호</label>
-                        <input type="text" placeholder="LOT 번호" value={searchParams.lotNumber || ''} onChange={e => setSearchParams({ ...searchParams, lotNumber: e.target.value })} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
+                        <input 
+                            type="text" 
+                            placeholder="LOT 번호" 
+                            value={searchParams.lotNumber || ''} 
+                            onChange={e => setSearchParams({ ...searchParams, lotNumber: e.target.value })} 
+                            onKeyDown={e => e.key === 'Enter' && fetchClaims()}
+                            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} 
+                        />
                     </div>
 
-                    {/* 5. 문서번호 */}
+                    {/* 6. 문서번호 */}
                     <div>
                         <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>📑 문서번호</label>
-                        <input type="text" placeholder="문서번호" value={searchParams.claimNumber || ''} onChange={e => setSearchParams({ ...searchParams, claimNumber: e.target.value })} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
+                        <input 
+                            type="text" 
+                            placeholder="문서번호" 
+                            value={searchParams.claimNumber || ''} 
+                            onChange={e => setSearchParams({ ...searchParams, claimNumber: e.target.value })} 
+                            onKeyDown={e => e.key === 'Enter' && fetchClaims()}
+                            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} 
+                        />
                     </div>
 
-                    {/* 6. 국가 */}
+                    {/* 7. 국가 */}
                     <div>
                         <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🌍 국가</label>
-                        <input type="text" placeholder="국가명" value={searchParams.country || ''} onChange={e => setSearchParams({ ...searchParams, country: e.target.value })} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} />
+                        <input 
+                            type="text" 
+                            placeholder="국가명" 
+                            value={searchParams.country || ''} 
+                            onChange={e => setSearchParams({ ...searchParams, country: e.target.value })} 
+                            onKeyDown={e => e.key === 'Enter' && fetchClaims()}
+                            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }} 
+                        />
                     </div>
 
-                    {/* 7. 처리 상태 */}
+                    {/* 8. 처리 상태 */}
                     <div>
                         <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🔄 처리 상태</label>
                         <select value={searchParams.qualityStatus || ''} onChange={e => setSearchParams({ ...searchParams, qualityStatus: e.target.value })} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', backgroundColor: '#fff', height: '38px' }}>

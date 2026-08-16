@@ -1153,17 +1153,17 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
 
                 {/* 4. Footer Section */}
                 <div className="drawer-footer">
-                    <div style={{ display: 'flex', gap: '20px', fontSize: '12px', color: '#94a3b8' }}>
+                    <div className="footer-left">
                         <span>📅 등록일: <strong>{formData.createdAt ? formData.createdAt.substring(0, 16).replace('T', ' ') : '-'}</strong></span>
                         <span>🔄 마지막 수정: <strong>{formData.updatedAt ? formData.updatedAt.substring(0, 16).replace('T', ' ') : '-'}</strong></span>
                     </div>
-                    <div style={{ display: 'flex', gap: '10px' }}>
+                    <div className="footer-actions">
                         {claim && canDeleteClaim('claims') && (
                             <button 
                                 type="button" 
                                 className="outline" 
                                 onClick={handleClaimDelete} 
-                                style={{ minWidth: '80px', color: '#dc3545', borderColor: '#dc3545' }}
+                                style={{ minWidth: '80px', color: '#c53030', borderColor: '#feb2b2', marginRight: 'auto' }}
                             >
                                 🗑️ 삭제
                             </button>
@@ -1174,7 +1174,7 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                 type="submit" 
                                 form="claim-form"
                                 className="primary" 
-                                style={{ minWidth: '120px', background: '#003366', color: '#fff' }} 
+                                style={{ minWidth: '120px', background: '#003366', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 'bold', padding: '10px 20px' }} 
                                 disabled={loading}
                             >
                                 {loading ? '⏳ 저장 중...' : (claim ? '💾 저장하기' : '🚀 등록하기')}
