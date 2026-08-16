@@ -14,6 +14,8 @@ public interface MasterPackagingMaterialRepository extends JpaRepository<MasterP
     
     boolean existsByBomCode(String bomCode);
 
+    List<MasterPackagingMaterial> findByBomCodeStartingWith(String prefix);
+
     List<MasterPackagingMaterial> findByBomCodeContaining(String bomCode);
     
     List<MasterPackagingMaterial> findByComponentNameContaining(String componentName);

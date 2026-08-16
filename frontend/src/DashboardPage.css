@@ -344,6 +344,18 @@
 }
 
 /* ─── 반응형 미디어 쿼리 ──────────────────────────────────── */
+.dashboard-sector1-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+@media (max-width: 1400px) {
+    .dashboard-sector1-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 @media (max-width: 1366px) {
     .dashboard-grid--summary {
         grid-template-columns: repeat(2, 1fr); /* 1366px 이하에서 카드 붕괴를 막고 2열로 자동 배치 */
@@ -351,7 +363,7 @@
 }
 
 @media (max-width: 768px) {
-    .dashboard-grid--summary, .dashboard-grid--urgent, .dashboard-grid--reference {
+    .dashboard-grid--summary, .dashboard-grid--urgent, .dashboard-grid--reference, .dashboard-sector1-grid {
         grid-template-columns: 1fr; /* 모바일에서 1열 고정 */
     }
 }

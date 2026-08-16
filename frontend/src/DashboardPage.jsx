@@ -500,7 +500,7 @@ const DashboardPage = ({ user, onNavigate }) => {
     // ─── 위젯 분류 ────────────────────────────────────────────────
     const STATS_WIDGETS    = ['WIDGET_QUALITY_STATS', 'WIDGET_CLAIM_TREND', 'WIDGET_AUDIT_GRADE'];
     const ANN_WIDGETS      = ['WIDGET_ANNOUNCEMENTS'];
-    const URGENT_WIDGETS   = ['WIDGET_PENDING_USERS', 'WIDGET_AUDIT_REVIEW'];
+    const URGENT_WIDGETS   = ['WIDGET_AUDIT_REVIEW', 'WIDGET_PENDING_USERS'];
     const SUMMARY_WIDGETS  = ['WIDGET_NEW_PRODUCTS', 'WIDGET_RECENT_CLAIMS', 'WIDGET_MFR_COMPLETED_CLAIMS',
                               'WIDGET_AUDIT_PROGRESS', 'WIDGET_VOLUME_CONFIRMED'];
     const REFERENCE_WIDGETS = ['WIDGET_AUDIT_LOGS', 'WIDGET_QUALITY_STATS', 'WIDGET_CLAIM_TREND', 'WIDGET_AUDIT_GRADE'];
@@ -553,8 +553,8 @@ const DashboardPage = ({ user, onNavigate }) => {
             {data.widgetConfig && data.widgetConfig.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
-                    {/* ── 섹터 1: 공지사항 + 긴급 처리 (가로 분할) ── */}
-                    <div style={{ display: 'grid', gridTemplateColumns: annWidgets.length > 0 && urgentWidgets.length > 0 ? '1fr 1fr' : '1fr', gap: '14px' }}>
+                    {/* ── 섹터 1: 공지사항 + 긴급 처리 (가로 분할 & 반응형) ── */}
+                    <div className="dashboard-sector1-grid" style={{ gridTemplateColumns: (annWidgets.length > 0 && urgentWidgets.length > 0) ? undefined : '1fr' }}>
                         {annWidgets.length > 0 && (
                             <div>
                                 <SectorLabel icon="📢" label="공지사항" color="#6366f1" />

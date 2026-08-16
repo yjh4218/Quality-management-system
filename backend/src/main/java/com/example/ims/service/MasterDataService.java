@@ -18,7 +18,6 @@ import java.util.Optional;
 public class MasterDataService {
 
     private final PackagingMethodTemplateRepository templateRepository;
-    private final ChannelPackagingRuleRepository ruleRepository;
     private final MasterPackagingMaterialRepository materialRepository;
     private final ChannelStickerImageRepository stickerRepository;
     private final com.example.ims.repository.UserRepository userRepository;
@@ -28,13 +27,11 @@ public class MasterDataService {
     @Autowired
     public MasterDataService(
             PackagingMethodTemplateRepository templateRepository,
-            ChannelPackagingRuleRepository ruleRepository,
             MasterPackagingMaterialRepository materialRepository,
             ChannelStickerImageRepository stickerRepository,
             com.example.ims.repository.UserRepository userRepository,
             org.springframework.context.ApplicationEventPublisher eventPublisher) {
         this.templateRepository = templateRepository;
-        this.ruleRepository = ruleRepository;
         this.materialRepository = materialRepository;
         this.stickerRepository = stickerRepository;
         this.userRepository = userRepository;
@@ -87,53 +84,6 @@ public class MasterDataService {
         return saved;
     }
 
-    // --- Channel Packaging Rule (Feature 3, 4) ---
-    @Transactional(readOnly = true)
-    public List<ChannelPackagingRule> getAllRules() {
-        List<ChannelPackagingRule> rules = ruleRepository.findAll();
-        rules.forEach(r -> {
-            if (r.getChannel() != null) {
-                org.hibernate.Hibernate.initialize(r.getChannel());
-            }
-        });
-        return rules;
-    }
-
-    @Transactional(readOnly = true)
-    public List<ChannelPackagingRule> getRulesByChannel(SalesChannel channel) {
-        List<ChannelPackagingRule> rules = ruleRepository.findByChannel(channel);
-        rules.forEach(r -> {
-            if (r.getChannel() != null) {
-                org.hibernate.Hibernate.initialize(r.getChannel());
-            }
-        });
-        return rules;
-    }
-
-    @Transactional
-    public ChannelPackagingRule saveRule(ChannelPackagingRule rule, String username) {
-        rule.setUpdatedBy(username);
-        ChannelPackagingRule saved = ruleRepository.save(rule);
-        
-        // [Feature: Sync] 채널 규칙 저장 시 해당 채널 제품들의 사양서 자동 동기화
-        if (saved.getChannel() != null) {
-            packagingSpecService.syncRulesForChannel(saved.getChannel());
-        }
-        
-        return saved;
-    }
-
-    @Transactional
-    public void deleteRule(Long id) {
-        ChannelPackagingRule rule = ruleRepository.findById(id).orElse(null);
-        if (rule != null) {
-            ruleRepository.delete(rule);
-            if (rule.getChannel() != null) {
-                packagingSpecService.syncRulesForChannel(rule.getChannel());
-            }
-        }
-    }
-
     // --- Master Packaging Material (Feature 11) ---
     @Transactional(readOnly = true)
     public List<MasterPackagingMaterial> getAllMaterials(String username) {
@@ -150,8 +100,46 @@ public class MasterDataService {
         return all;
     }
 
+    public String getPrefixForType(String type) {
+        if (type == null) return "MAT";
+        String t = type.trim();
+        if (t.contains("용기")) return "CNT";
+        if (t.contains("캡") || t.contains("펌프")) return "CAP";
+        if (t.contains("단상자") || t.contains("라벨")) return "BOX";
+        if (t.contains("인박스") || t.contains("아웃박스") || t.contains("포장재")) return "SHP";
+        if (t.contains("부속품") || t.contains("잡자재") || t.contains("기타")) return "ETC";
+        return "MAT";
+    }
+
+    @Transactional(readOnly = true)
+    public String generateNextBomCode(String type) {
+        String subPrefix = getPrefixForType(type);
+        String fullPrefix = "MAT-" + subPrefix + "-";
+        
+        List<MasterPackagingMaterial> list = materialRepository.findByBomCodeStartingWith(fullPrefix);
+        int maxSeq = 0;
+        for (MasterPackagingMaterial m : list) {
+            String code = m.getBomCode();
+            if (code != null && code.startsWith(fullPrefix)) {
+                String numPart = code.substring(fullPrefix.length()).replaceAll("\\D.*", "");
+                try {
+                    int num = Integer.parseInt(numPart);
+                    if (num > maxSeq) {
+                        maxSeq = num;
+                    }
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+        return String.format("%s%04d", fullPrefix, maxSeq + 1);
+    }
+
     @Transactional
     public MasterPackagingMaterial saveMaterial(MasterPackagingMaterial material, String username) {
+        // [수정] BOM 코드 자동 생성 지원
+        if (material.getBomCode() == null || material.getBomCode().trim().isEmpty()) {
+            material.setBomCode(generateNextBomCode(material.getType()));
+        }
+
         // [수정] BOM 코드 중복 검사 (신규 등록인 경우)
         if (material.getId() == null && materialRepository.existsByBomCode(material.getBomCode())) {
             throw new RuntimeException("이미 존재하는 BOM 코드입니다: " + material.getBomCode());

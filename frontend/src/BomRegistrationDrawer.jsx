@@ -18,6 +18,7 @@ const BomRegistrationDrawer = ({ material, onClose, user }) => {
         weight: '',
         thickness: '',
         isMultiLayer: false,
+        imagePath: '',
         layers: []
     });
 
@@ -26,6 +27,8 @@ const BomRegistrationDrawer = ({ material, onClose, user }) => {
     const [bomCodeChecking, setBomCodeChecking] = useState(false);
     const [bomCodeAvailable, setBomCodeAvailable] = useState(null);
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+    const [uploadingImage, setUploadingImage] = useState(false);
+    const [previewModalOpen, setPreviewModalOpen] = useState(false);
     const { canEdit: canEditBom } = usePermissions(user);
     const canEdit = canEditBom('bomMaster');
 
@@ -46,6 +49,7 @@ const BomRegistrationDrawer = ({ material, onClose, user }) => {
                 weight: material.weight || '',
                 thickness: material.thickness || '',
                 isMultiLayer: material.isMultiLayer || false,
+                imagePath: material.imagePath || '',
                 layers: material.layers || [],
                 createdAt: material.createdAt || '',
                 updatedAt: material.updatedAt || ''
@@ -57,11 +61,26 @@ const BomRegistrationDrawer = ({ material, onClose, user }) => {
     const fetchActiveCategories = async () => {
         try {
             const res = await api.getActiveBomCategories();
-            setCategories(Array.isArray(res.data) ? res.data : []);
+            const list = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+            setCategories(list);
         } catch (error) {
             if (!categories.length) {
                 setCategories([]);
             }
+        }
+    };
+
+    const handleAutoGenerateCode = async (selectedType = formData.type) => {
+        try {
+            const res = await api.generateBomCode(selectedType);
+            const code = typeof res.data === 'string' ? res.data : (res.data?.data || '');
+            if (code) {
+                setFormData(prev => ({ ...prev, bomCode: code }));
+                setBomCodeAvailable(true);
+                toast.info(`BOM 코드가 자동 채번되었습니다: ${code}`);
+            }
+        } catch (err) {
+            console.error("Auto generate BOM code error:", err);
         }
     };
 
@@ -141,6 +160,40 @@ const BomRegistrationDrawer = ({ material, onClose, user }) => {
         }));
     };
 
+    const handleImageUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            return toast.error("이미지 파일만 업로드 가능합니다 (JPG, PNG, GIF, WEBP 등).");
+        }
+
+        if (file.size > 10 * 1024 * 1024) {
+            return toast.error("파일 크기는 최대 10MB까지 가능합니다.");
+        }
+
+        setUploadingImage(true);
+        try {
+            const res = await api.uploadMasterFile(file, 'BOM');
+            const imageUrl = typeof res.data === 'string' ? res.data : (res.data?.url || res.data?.data || '');
+            if (imageUrl) {
+                setFormData(prev => ({ ...prev, imagePath: imageUrl }));
+                toast.success("패키지 사진이 성공적으로 업로드되었습니다.");
+            }
+        } catch (err) {
+            console.error("Image upload failed:", err);
+            toast.error("사진 업로드 중 오류가 발생했습니다.");
+        } finally {
+            setUploadingImage(false);
+            e.target.value = '';
+        }
+    };
+
+    const handleRemoveImage = () => {
+        setFormData(prev => ({ ...prev, imagePath: '' }));
+        toast.info("패키지 사진이 삭제되었습니다.");
+    };
+
     const handleSubmit = (e) => {
         if (e) e.preventDefault();
         if (formData.isMultiLayer && formData.layers.length === 0) {
@@ -198,15 +251,26 @@ const BomRegistrationDrawer = ({ material, onClose, user }) => {
                                             setFormData({...formData, bomCode: e.target.value});
                                             setBomCodeAvailable(null);
                                         }} 
-                                        placeholder="예: BOM-PET-001" 
+                                        placeholder="예: MAT-CNT-0001" 
                                         required 
                                         disabled={!!material}
                                         style={{ flex: 1 }} 
                                     />
                                     {!material && (
-                                        <button type="button" onClick={handleCheckBomCode} disabled={bomCodeChecking || !formData.bomCode} className="secondary" style={{ padding: '0 15px' }}>
-                                            {bomCodeChecking ? '...' : '중복 확인'}
-                                        </button>
+                                        <>
+                                            <button 
+                                                type="button" 
+                                                onClick={() => handleAutoGenerateCode(formData.type)} 
+                                                className="secondary" 
+                                                style={{ padding: '0 12px', fontSize: '13px', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}
+                                                title="선택된 유형에 맞게 코드를 자동 채번합니다"
+                                            >
+                                                ⚡ 자동 채번
+                                            </button>
+                                            <button type="button" onClick={handleCheckBomCode} disabled={bomCodeChecking || !formData.bomCode} className="secondary" style={{ padding: '0 12px', fontSize: '13px' }}>
+                                                {bomCodeChecking ? '...' : '중복 확인'}
+                                            </button>
+                                        </>
                                     )}
                                 </div>
                             </div>
@@ -226,7 +290,13 @@ const BomRegistrationDrawer = ({ material, onClose, user }) => {
                                     <label>유형 (필수)</label>
                                     <select 
                                         value={formData.type} 
-                                        onChange={e => setFormData({...formData, type: e.target.value, detailedType: ''})} 
+                                        onChange={e => {
+                                            const newType = e.target.value;
+                                            setFormData(prev => ({ ...prev, type: newType, detailedType: '' }));
+                                            if (!material && (!formData.bomCode || formData.bomCode.startsWith('MAT-'))) {
+                                                handleAutoGenerateCode(newType);
+                                            }
+                                        }} 
                                         required
                                     >
                                         <option value="">선택하세요</option>
@@ -383,6 +453,128 @@ const BomRegistrationDrawer = ({ material, onClose, user }) => {
                             </div>
                         </div>
 
+                        {/* 섹션 4: 패키지 실물 사진 */}
+                        <div className="card" style={{ borderLeft: '5px solid #0284c7' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                <h3 style={{ margin: 0 }}>
+                                    <span style={{ color: '#0284c7' }}>📸</span> 패키지 실물 사진
+                                </h3>
+                                {formData.imagePath && (
+                                    <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: 600 }}>
+                                        ✓ 사진 등록 완료
+                                    </span>
+                                )}
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
+                                {/* 썸네일 미리보기 영역 */}
+                                <div style={{
+                                    width: '120px',
+                                    height: '120px',
+                                    borderRadius: '10px',
+                                    border: '2px dashed #cbd5e1',
+                                    background: '#f8fafc',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    overflow: 'hidden',
+                                    position: 'relative',
+                                    cursor: formData.imagePath ? 'pointer' : 'default',
+                                    flexShrink: 0
+                                }}
+                                onClick={() => formData.imagePath && setPreviewModalOpen(true)}
+                                title={formData.imagePath ? '클릭 시 확대 미리보기' : ''}
+                                >
+                                    {formData.imagePath ? (
+                                        <>
+                                            <img 
+                                                src={formData.imagePath} 
+                                                alt="패키지 실물 사진" 
+                                                style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#fff' }} 
+                                            />
+                                            <div style={{
+                                                position: 'absolute',
+                                                bottom: 0,
+                                                left: 0,
+                                                right: 0,
+                                                background: 'rgba(0,0,0,0.6)',
+                                                color: '#fff',
+                                                fontSize: '10px',
+                                                textAlign: 'center',
+                                                padding: '2px 0'
+                                            }}>
+                                                🔍 클릭 시 확대
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div style={{ textAlign: 'center', color: '#94a3b8', padding: '10px' }}>
+                                            <div style={{ fontSize: '24px', marginBottom: '4px' }}>📦</div>
+                                            <div style={{ fontSize: '11px' }}>사진 미등록</div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* 업로드 및 삭제 액션 영역 */}
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontSize: '13px', color: '#475569', marginBottom: '10px', lineHeight: '1.5' }}>
+                                        부자재의 외관, 형태, 인쇄 상태를 확인할 수 있는 실물 사진을 등록하세요.<br />
+                                        <span style={{ fontSize: '12px', color: '#64748b' }}>
+                                            • 지원 형식: JPG, PNG, GIF, WEBP (최대 10MB)
+                                        </span>
+                                    </div>
+
+                                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                        <label style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            padding: '8px 16px',
+                                            background: '#0284c7',
+                                            color: '#fff',
+                                            borderRadius: '6px',
+                                            fontSize: '13px',
+                                            fontWeight: 500,
+                                            cursor: canEdit && !uploadingImage ? 'pointer' : 'not-allowed',
+                                            opacity: canEdit && !uploadingImage ? 1 : 0.6
+                                        }}>
+                                            <span>📷</span> {uploadingImage ? '업로드 중...' : (formData.imagePath ? '사진 변경하기' : '사진 파일 등록')}
+                                            <input 
+                                                type="file" 
+                                                accept="image/*" 
+                                                onChange={handleImageUpload} 
+                                                disabled={!canEdit || uploadingImage} 
+                                                style={{ display: 'none' }} 
+                                            />
+                                        </label>
+
+                                        {formData.imagePath && (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPreviewModalOpen(true)}
+                                                    className="secondary"
+                                                    style={{ padding: '8px 14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                                >
+                                                    🔍 확대 보기
+                                                </button>
+                                                {canEdit && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleRemoveImage}
+                                                        className="secondary"
+                                                        style={{ padding: '8px 14px', fontSize: '13px', color: '#ef4444', borderColor: '#fca5a5' }}
+                                                    >
+                                                        🗑️ 사진 삭제
+                                                    </button>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         {/* 저장 버튼 영역 */}
                         <div style={{ marginTop: '20px', padding: '20px', background: '#fff', borderRadius: '12px', border: '1px solid #edf2f7', textAlign: 'center' }}>
                             <button type="submit" className="primary" style={{ minWidth: '240px', padding: '12px 40px', fontSize: '15px', opacity: canEdit ? 1 : 0.5 }} disabled={!canEdit}>
@@ -414,6 +606,79 @@ const BomRegistrationDrawer = ({ material, onClose, user }) => {
                 onClose={() => setIsConfirmOpen(false)}
                 onConfirm={handleConfirmSave}
             />
+
+            {/* Photo Preview Lightbox Modal */}
+            {previewModalOpen && formData.imagePath && (
+                <div 
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        zIndex: 99999,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '20px'
+                    }}
+                    onClick={() => setPreviewModalOpen(false)}
+                >
+                    <div 
+                        style={{
+                            maxWidth: '90vw',
+                            maxHeight: '85vh',
+                            background: '#fff',
+                            borderRadius: '12px',
+                            overflow: 'hidden',
+                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
+                            display: 'flex',
+                            flexDirection: 'column'
+                        }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div style={{
+                            padding: '12px 18px',
+                            background: '#0f172a',
+                            color: '#fff',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                        }}>
+                            <span style={{ fontWeight: 600, fontSize: '15px' }}>
+                                📸 {formData.componentName || formData.bomCode || '패키지 사진 미리보기'}
+                            </span>
+                            <button 
+                                onClick={() => setPreviewModalOpen(false)}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#fff',
+                                    fontSize: '20px',
+                                    cursor: 'pointer',
+                                    padding: '0 4px'
+                                }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div style={{ padding: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#f1f5f9' }}>
+                            <img 
+                                src={formData.imagePath} 
+                                alt={formData.componentName} 
+                                style={{
+                                    maxWidth: '80vw',
+                                    maxHeight: '70vh',
+                                    objectFit: 'contain',
+                                    borderRadius: '6px'
+                                }} 
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

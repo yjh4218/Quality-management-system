@@ -80,8 +80,21 @@ public class MasterDataController {
     }
 
     @GetMapping("/materials/check-bom-code")
-    public ResponseEntity<Boolean> checkBomCode(@RequestParam String bomCode) {
-        return ResponseEntity.ok(masterDataService.checkBomCodeExists(bomCode));
+    public ResponseEntity<?> checkBomCode(@RequestParam String bomCode) {
+        try {
+            return ResponseEntity.ok(masterDataService.checkBomCodeExists(bomCode));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("BOM 코드 중복 확인 중 오류가 발생했습니다.");
+        }
+    }
+
+    @GetMapping("/materials/generate-code")
+    public ResponseEntity<?> generateBomCode(@RequestParam(required = false, defaultValue = "기타") String type) {
+        try {
+            return ResponseEntity.ok(masterDataService.generateNextBomCode(type));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("BOM 코드 자동 생성 중 오류가 발생했습니다.");
+        }
     }
 
     // --- BOM Categories ---
@@ -111,6 +124,28 @@ public class MasterDataController {
             return ResponseEntity.ok(ApiResponse.success(bomCategoryService.saveCategory(category, userDetails.getUsername())));
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(ApiResponse.error("BOM 카테고리 저장 중 오류가 발생했습니다."));
+        }
+    }
+
+    @DeleteMapping("/bom-categories/{id}/soft")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> softDeleteBomCategory(@PathVariable Long id, @AuthenticationPrincipal UserDetails userDetails) {
+        try {
+            bomCategoryService.softDelete(id, userDetails.getUsername());
+            return ResponseEntity.ok(ApiResponse.success(null));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(ApiResponse.error("BOM 카테고리 숨김 처리 중 오류가 발생했습니다."));
+        }
+    }
+
+    @DeleteMapping("/bom-categories/{id}/hard")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> hardDeleteBomCategory(@PathVariable Long id, @AuthenticationPrincipal UserDetails userDetails) {
+        try {
+            bomCategoryService.hardDelete(id, userDetails.getUsername());
+            return ResponseEntity.ok(ApiResponse.success(null));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(ApiResponse.error("BOM 카테고리 영구 삭제 중 오류가 발생했습니다."));
         }
     }
 

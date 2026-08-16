@@ -62,6 +62,43 @@ public class SalesChannel {
     @Column(columnDefinition = "TEXT")
     private String specialNotes;            // 채널별 핵심 특이사항 원문
 
+    // --- 단품 전용 착인 및 현품표 기재 기준 ---
+    @Column(columnDefinition = "TEXT")
+    private String unitBoxMarkingRule;       // 단품 단상자/용기 착인 기준
+
+    @Column(columnDefinition = "TEXT")
+    private String inboxLabelMarkingRule;     // 단품 인박스 현품표 착인/기재 내용
+
+    @Column(columnDefinition = "TEXT")
+    private String outboxLabelMarkingRule;    // 단품 아웃박스 현품표 착인/기재 내용
+
+    @Column(columnDefinition = "TEXT")
+    private String palletLabelMarkingRule;    // 단품 팔레트 현품표 착인/기재 내용
+
+    // --- 기획세트 전용 착인 및 현품표 기재 기준 / 규격 ---
+    @Column(columnDefinition = "TEXT")
+    private String setContainerMarkingDisplay;// 기획세트 용기/단상자 표기사항
+
+    @Column(columnDefinition = "TEXT")
+    private String setUnitBoxMarkingRule;    // 기획세트 단상자/용기 착인 기준
+
+    @Column(columnDefinition = "TEXT")
+    private String setInboxLabelMarkingRule;  // 기획세트 인박스 현품표 착인/기재 내용
+
+    @Column(columnDefinition = "TEXT")
+    private String setOutboxLabelMarkingRule; // 기획세트 아웃박스 현품표 착인/기재 내용
+
+    @Column(columnDefinition = "TEXT")
+    private String setPalletLabelMarkingRule; // 기획세트 팔레트 현품표 착인/기재 내용
+
+    private String setCushioningStandard;     // 기획세트 완충재 기준
+
+    private String setPalletHeightLimit;       // 기획세트 적재높이 제한
+
+    private String inboxDateFormat;          // 인박스 현품표 날짜(제조일자/사용기한) 표시 양식
+    private String outboxDateFormat;         // 아웃박스 현품표 날짜(제조일자/사용기한) 표시 양식
+    private String palletDateFormat;         // 팔레트 현품표 날짜(제조일자/사용기한) 표시 양식
+
     private String updatedBy;
 
     @UpdateTimestamp

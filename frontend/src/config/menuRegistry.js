@@ -258,14 +258,6 @@ export const MENU_REGISTRY = [
         actions: ['VIEW', 'EDIT', 'DELETE']
     },
     {
-        key: 'packagingRules',
-        category: '📦 포장재 관리',
-        label: '채널별 포장 규칙 관리',
-        icon: '⚖️',
-        path: 'packagingRules',
-        actions: ['VIEW', 'EDIT']
-    },
-    {
         key: 'spaceRatioCalculator',
         category: '📦 포장재 관리',
         label: '포장공간비율 계산기',

@@ -8,19 +8,20 @@ import { usePermissions } from './usePermissions';
 import useDateRangePreset from './hooks/useDateRangePreset';
 
 const BOM_TYPE_MAP = {
-    '용기': ['PET병', '초자(유리)', '파우치', '필름', '합성수지 용기(헤비브로우, 트레이)', '튜브', '기타'],
-    '캡': ['원터치캡', '막캡', '스포이드', '펌프', '기타'],
-    '라벨': ['PP', 'LDPE', 'PET', '은박 + PP', '은박 + LDPE', '은박 + PET', '복합재질', '기타'],
-    '단상자': ['뷰티팩', '일반 종이', '기타'],
-    '봉합라벨': ['PP', 'LDPE', 'PET', '기타'],
-    '기타 잡자재': ['실링지', '박킹', '리드', '기타']
+    '용기': ['PET병', '초자(유리)', '파우치', '필름', '합성수지 용기(헤비브로우, 트레이)', '알루미늄 튜브', 'PP용기', '기타 용기'],
+    '캡·펌프': ['원터치캡', '막캡(스크류캡)', '일자 캡', '미스트 펌프', '로션 펌프', '스포이드(드로퍼)', '기타 캡/펌프'],
+    '단상자·라벨': ['CCP 단상자', '일반 종이 단상자', '방수 라벨(PP/PET)', '은박 라벨', '수축 필름(수축라벨)', '봉합 라벨', '기타 단상자/라벨'],
+    '인박스·아웃박스': ['인박스(골판지)', '아웃박스(골판지)', '간지/패드', '에어캡/완충재', '테이프/밴딩', '기타 포장박스'],
+    '부속품': ['스푼/스파츌라', '실링지', '박킹', '리드/속뚜껑', '도구가이드/설명서', '기타 부속품']
 };
 
 const BomMasterPage = ({ user }) => {
     const [materials, setMaterials] = useState([]);
+    const [categories, setCategories] = useState([]);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [selectedMaterial, setSelectedMaterial] = useState(null);
     const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
+    const [previewPhoto, setPreviewPhoto] = useState(null);
     const [filters, setFilters] = useState({
         startDate: '',
         endDate: '',
@@ -44,13 +45,39 @@ const BomMasterPage = ({ user }) => {
         if (hasFetchedOnMount.current) return;
         hasFetchedOnMount.current = true;
         fetchMaterials();
+        fetchCategories();
     }, []);
+
+    const fetchCategories = async () => {
+        try {
+            const res = await api.getActiveBomCategories();
+            const list = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+            setCategories(list);
+        } catch (error) {
+            console.error("Failed to load active BOM categories:", error);
+        }
+    };
+
+    const mainTypeOptions = useMemo(() => {
+        if (categories.length > 0) {
+            return [...new Set(categories.map(c => c.mainType))];
+        }
+        return Object.keys(BOM_TYPE_MAP);
+    }, [categories]);
+
+    const subTypeOptions = useMemo(() => {
+        if (!filters.type) return [];
+        if (categories.length > 0) {
+            return categories.filter(c => c.mainType === filters.type).map(c => c.subType);
+        }
+        return BOM_TYPE_MAP[filters.type] || [];
+    }, [filters.type, categories]);
 
     const fetchMaterials = async () => {
         setLoading(true);
         try {
             const res = await api.getMasterMaterialsSearch(filters);
-            setMaterials(res.data);
+            setMaterials(Array.isArray(res.data) ? res.data : (res.data?.data || []));
         } catch (error) {
             toast.error("BOM 데이터를 불러오지 못했습니다.");
         } finally {
@@ -65,6 +92,8 @@ const BomMasterPage = ({ user }) => {
 
     const handleReset = () => {
         setFilters({
+            startDate: '',
+            endDate: '',
             bomCode: '',
             componentName: '',
             type: '',
@@ -89,9 +118,46 @@ const BomMasterPage = ({ user }) => {
     const canEdit = canEditBom('bomMaster');
 
     const colDefs = useMemo(() => [
-        { field: "bomCode", headerName: "BOM 코드", filter: true, width: 140, pinned: 'left' },
-        { field: "componentName", headerName: "구성품명", filter: true, flex: 1, minWidth: 200 },
-        { field: "specification", headerName: "규격", filter: true, width: 150 },
+        {
+            headerName: "사진",
+            width: 75,
+            pinned: 'left',
+            cellRenderer: p => {
+                const img = p.data?.imagePath;
+                if (!img) {
+                    return (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                            <span style={{ fontSize: '18px', opacity: 0.35 }} title="사진 미등록">📦</span>
+                        </div>
+                    );
+                }
+                return (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                        <img 
+                            src={img} 
+                            alt="패키지" 
+                            style={{ 
+                                width: '38px', 
+                                height: '38px', 
+                                objectFit: 'contain', 
+                                borderRadius: '6px', 
+                                border: '1px solid #e2e8f0',
+                                background: '#fff',
+                                cursor: 'pointer',
+                                transition: 'transform 0.15s ease'
+                            }} 
+                            title="클릭 시 확대 미리보기"
+                            onClick={() => setPreviewPhoto({ url: img, title: `${p.data.bomCode} - ${p.data.componentName}` })}
+                            onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.15)'}
+                            onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                        />
+                    </div>
+                );
+            }
+        },
+        { field: "bomCode", headerName: "BOM 코드", filter: true, width: 150, pinned: 'left' },
+        { field: "componentName", headerName: "구성품명", filter: true, flex: 1, minWidth: 180 },
+        { field: "specification", headerName: "규격", filter: true, width: 140 },
         { 
             headerName: "유형 / 세부유형", 
             width: 180, 
@@ -100,15 +166,15 @@ const BomMasterPage = ({ user }) => {
         },
         { 
             headerName: "재질 상세", 
-            width: 250, 
+            width: 220, 
             valueGetter: p => p.data.isMultiLayer ? p.data.layers?.map(l => l.materialName).join(' + ') : (p.data.detailedMaterial || '-')
         },
         { 
             headerName: "중량(g) / 두께(um)", 
-            width: 180,
+            width: 160,
             valueGetter: p => `${p.data.weight || 0}g / ${p.data.thickness || 0}um`
         },
-        { field: "manufacturer", headerName: "제조사", filter: true, width: 150 },
+        { field: "manufacturer", headerName: "제조사", filter: true, width: 140 },
         {
             headerName: "관리",
             width: 100,
@@ -122,7 +188,7 @@ const BomMasterPage = ({ user }) => {
                 >수정</button>
             )
         }
-    ], []);
+    ], [canEdit]);
 
     return (
         <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#f1f5f9' }}>
@@ -279,7 +345,7 @@ const BomMasterPage = ({ user }) => {
                             style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', height: '37px', backgroundColor: '#fff' }}
                         >
                             <option value="">전체 유형</option>
-                            {Object.keys(BOM_TYPE_MAP).map(t => (
+                            {mainTypeOptions.map(t => (
                                 <option key={t} value={t}>{t}</option>
                             ))}
                         </select>
@@ -291,7 +357,14 @@ const BomMasterPage = ({ user }) => {
                         <select
                             value={filters.detailedType}
                             onChange={e => setFilters({...filters, detailedType: e.target.value})}
-                        />
+                            style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', height: '37px', backgroundColor: '#fff' }}
+                            disabled={!filters.type}
+                        >
+                            <option value="">전체 세부유형</option>
+                            {subTypeOptions.map(st => (
+                                <option key={st} value={st}>{st}</option>
+                            ))}
+                        </select>
                     </div>
                 </div>
             </div>
@@ -345,6 +418,79 @@ const BomMasterPage = ({ user }) => {
                         setIsProductSearchOpen(false);
                     }}
                 />
+            )}
+
+            {/* Photo Preview Lightbox Modal */}
+            {previewPhoto && (
+                <div 
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        zIndex: 99999,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '20px'
+                    }}
+                    onClick={() => setPreviewPhoto(null)}
+                >
+                    <div 
+                        style={{
+                            maxWidth: '90vw',
+                            maxHeight: '85vh',
+                            background: '#fff',
+                            borderRadius: '12px',
+                            overflow: 'hidden',
+                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
+                            display: 'flex',
+                            flexDirection: 'column'
+                        }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div style={{
+                            padding: '12px 18px',
+                            background: '#0f172a',
+                            color: '#fff',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                        }}>
+                            <span style={{ fontWeight: 600, fontSize: '15px' }}>
+                                📸 {previewPhoto.title || '패키지 사진 미리보기'}
+                            </span>
+                            <button 
+                                onClick={() => setPreviewPhoto(null)}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#fff',
+                                    fontSize: '20px',
+                                    cursor: 'pointer',
+                                    padding: '0 4px'
+                                }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div style={{ padding: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#f1f5f9' }}>
+                            <img 
+                                src={previewPhoto.url} 
+                                alt={previewPhoto.title} 
+                                style={{
+                                    maxWidth: '80vw',
+                                    maxHeight: '70vh',
+                                    objectFit: 'contain',
+                                    borderRadius: '6px'
+                                }} 
+                            />
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

@@ -519,6 +519,7 @@ export const copyMasterPackagingSpec = (productId, masterProductId) =>
     api.post(`/api/packaging-specs/copy-master?productId=${productId}&masterProductId=${masterProductId}`);
 export const downloadPackagingSpecExcel = (productId) => api.get(`/api/packaging-specs/export-excel/${productId}`, { responseType: 'blob' });
 export const downloadPackagingSpecPdf = (productId) => api.get(`/api/packaging-specs/export-pdf/${productId}`, { responseType: 'blob' });
+export const getPackagingMethodImages = (specId) => api.get(`/api/packaging-specs/${specId}/method-images`);
 
 // Production Audit (Photo Audit) APIs
 export const getProductionAudits = (manufacturerName) => 
@@ -541,12 +542,9 @@ export const exportAuditsExcel = (params) => {
     return api.get(`/api/production-audits/export?${queryParams.toString()}`, { responseType: 'blob' });
 };
 
-// Master Data APIs (Feature 2, 3, 4, 11)
+// Master Data APIs (Feature 2, 11)
 export const getMasterTemplates = () => api.get('/api/admin/master-data/templates', { skipToast: true }).catch(() => ({ data: [] }));
 export const saveMasterTemplate = (template) => api.post('/api/admin/master-data/templates', template);
-export const getMasterRules = () => api.get('/api/admin/master-data/rules', { skipToast: true }).catch(() => ({ data: [] }));
-export const saveMasterRule = (rule) => api.post('/api/admin/master-data/rules', rule);
-export const deleteMasterRule = (id) => api.delete(`/api/admin/master-data/rules/${id}`);
 export const getMasterMaterials = () => api.get('/api/admin/master-data/materials', { skipToast: true }).catch(() => ({ data: [] }));
 export const getMasterMaterialsSearch = (params = {}) => {
     const queryParams = new URLSearchParams();
@@ -559,6 +557,7 @@ export const getMasterMaterialsSearch = (params = {}) => {
 };
 export const saveMasterMaterial = (material) => api.post('/api/admin/master-data/materials', material);
 export const checkBomCodeExists = (bomCode) => api.get(`/api/admin/master-data/materials/check-bom-code?bomCode=${bomCode}`);
+export const generateBomCode = (type) => api.get(`/api/admin/master-data/materials/generate-code${type ? `?type=${encodeURIComponent(type)}` : ''}`);
 export const getMasterStickers = () => api.get('/api/admin/master-data/stickers', { skipToast: true }).catch(() => ({ data: [] }));
 export const saveMasterSticker = (sticker) => api.post('/api/admin/master-data/stickers', sticker);
 
@@ -584,7 +583,7 @@ export const getActiveBomCategories = () => api.get('/api/admin/master-data/bom-
 export const getAllBomCategories = () => api.get('/api/admin/master-data/bom-categories/all');
 export const saveBomCategory = (category) => api.post('/api/admin/master-data/bom-categories', category);
 export const softDeleteBomCategory = (id) => api.delete(`/api/admin/master-data/bom-categories/${id}/soft`);
-export const hardDeleteBomCategory = (id) => api.delete(`/api/admin/system/bom-categories/${id}/hard`); // Placeholder if needed
+export const hardDeleteBomCategory = (id) => api.delete(`/api/admin/master-data/bom-categories/${id}/hard`);
 
 // Global Admin & Profile APIs
 export const getAdminLogs = (params = {}) => {

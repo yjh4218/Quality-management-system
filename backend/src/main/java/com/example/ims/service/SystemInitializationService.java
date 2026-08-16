@@ -2,10 +2,8 @@ package com.example.ims.service;
 
 import com.example.ims.entity.User;
 import com.example.ims.entity.SalesChannel;
-import com.example.ims.entity.ChannelPackagingRule;
 import com.example.ims.repository.UserRepository;
 import com.example.ims.repository.SalesChannelRepository;
-import com.example.ims.repository.ChannelPackagingRuleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -29,7 +27,6 @@ public class SystemInitializationService {
     private final MailCategoryService mailCategoryService;
     private final MailTemplateService mailTemplateService;
     private final SalesChannelRepository salesChannelRepository;
-    private final ChannelPackagingRuleRepository channelPackagingRuleRepository;
     private final DocumentRequestService documentRequestService;
     private final com.example.ims.repository.ChannelNoteCategoryRepository categoryRepository;
     private final com.example.ims.repository.ChannelSpecialNoteRepository noteRepository;
@@ -84,14 +81,14 @@ public class SystemInitializationService {
 
         runIsolated("seedSalesChannelsAndRules", () -> {
             seedSalesChannels();
-            seedChannelPackagingRules();
-            log.info(">>>> [SYSTEM INIT] Sales channels and packaging rules seeded successfully.");
+            log.info(">>>> [SYSTEM INIT] Sales channels seeded successfully.");
         });
 
         runIsolated("repairAllSequences", this::repairAllSequences);
         runIsolated("alignProductsAndClaimsData", this::alignProductsAndClaimsData);
         runIsolated("appendChannelSuffixToProductNames", this::appendChannelSuffixToProductNames);
         runIsolated("seedNotificationSettings", this::seedNotificationSettings);
+        runIsolated("seedSampleBomMaterials", this::seedSampleBomMaterials);
 
         log.info(">>>> [SYSTEM INIT] Data Seeding & Repair Completed.");
         runIsolated("performDataAudit", this::performDataAudit);
@@ -261,8 +258,8 @@ public class SystemInitializationService {
         String adminJson = "{\"dashboard\":" + viewOnly + ",\"users\":" + allActions + ",\"logs\":" + viewOnly
                 + ",\"roles\":" + allActions + ",\"brands\":" + allActions + ",\"manufacturers\":" + allActions
                 + ",\"salesChannels\":" + allActions + ",\"products\":" + allActions + ",\"bomMaster\":" + allActions
-                + ",\"bomCategories\":" + allActions + ",\"packagingTemplates\":" + allActions + ",\"packagingRules\":"
-                + allActions + ",\"quality\":" + allActions + ",\"releaseRecord\":" + allActions + ",\"claims\":"
+                + ",\"bomCategories\":" + allActions + ",\"packagingTemplates\":" + allActions 
+                + ",\"quality\":" + allActions + ",\"releaseRecord\":" + allActions + ",\"claims\":"
                 + allActions + ",\"claimDashboard\":" + viewOnly + ",\"ingredientCompliance\":" + allActions 
                 + ",\"qualityPhotoAudit\":" + allActions + ",\"announcements\":" + allActions + ",\"announcementCategories\":" + allActions 
                 + ",\"notifications\":" + allActions + "}";
@@ -435,8 +432,6 @@ public class SystemInitializationService {
                 "[{\"subtitle\":\"공정별 생산 사진 실시간 확인\", \"content\":\"신제품 최초 생산 시, 제조사 현장 담당자가 현장 상황(배합, 칭량, 완포장) 사진을 촬영하여 시스템에 제출하는 프로세스입니다.\"}, {\"subtitle\":\"품질팀 피드백 및 변경 이력\", \"content\":\"품질팀은 사진 해상도와 라벨 부착 규격을 상세 검토하여 즉시 승인(Approve) 또는 반려(Reject) 피드백을 전달할 수 있습니다.\"}]");
         insertOrUpdateGuide("packagingTemplates", "📄 포장재 표준 사양서 템플릿",
                 "[{\"subtitle\":\"박스/라벨 설계도 표준화\", \"content\":\"단상자, 용기 실크 인쇄, 아웃박스 등 사양서 양식을 미리 생성하고, 일관된 레이아웃으로 도면과 스펙 정보를 작성하도록 강제합니다.\"}]");
-        insertOrUpdateGuide("packagingRules", "📦 유통 채널 적재 가이드라인",
-                "[{\"subtitle\":\"채널별 포장 규정 준수\", \"content\":\"예컨대 다이소 입고 시 물류 규격(예: 번들 개수 제한, 박스 총 중량 15kg 이하 준수 등)에 맞춰 포장 적합성을 검토하고 판정합니다.\"}]");
         insertOrUpdateGuide("quality", "🧪 원재료 입고 품질 및 COA 검사",
                 "[{\"subtitle\":\"시험성적서(COA) 정밀 대조\", \"content\":\"제조사로부터 제출된 시험성적서 PDF 파일 내용이 본사 내부 스펙 기준에 완전 일치하는지 정합성을 대조한 후 합격/불합격을 최종 승인합니다.\"}]");
         insertOrUpdateGuide("releaseRecord", "🚚 제품 최종 유통 출시 승인서",
@@ -570,6 +565,12 @@ public class SystemInitializationService {
             } catch (Exception e) {
                 log.warn(">>>> [SYSTEM INIT] Could not add column '{}' to packaging_specifications: {}", name, e.getMessage());
             }
+        }
+        try {
+            jdbcTemplate.execute("UPDATE packaging_specifications SET container_marking_text = REPLACE(REPLACE(container_marking_text, 'LOT 20260801', 'LOT [생산배치번호]'), 'EXP 20290731', 'EXP YYYYMMDD 까지') WHERE container_marking_text LIKE '%20260801%' OR container_marking_text LIKE '%20290731%'");
+            jdbcTemplate.execute("UPDATE packaging_specifications SET unit_box_marking_text = REPLACE(REPLACE(unit_box_marking_text, 'LOT 20260801', 'LOT [생산배치번호]'), 'EXP 20290731', 'EXP YYYYMMDD 까지') WHERE unit_box_marking_text LIKE '%20260801%' OR unit_box_marking_text LIKE '%20290731%'");
+        } catch (Exception e) {
+            log.warn(">>>> [SYSTEM INIT] Legacy date cleanup warning: {}", e.getMessage());
         }
     }
 
@@ -829,15 +830,15 @@ public class SystemInitializationService {
                             "inbox_use_yn, inbox_packaging_type, inbox_tape_method, inbox_qty, inbox_size, inbox_tape_banding, inbox_interlayer_sheet, inbox_material, " +
                             "outbox_type, outbox_qty, outbox_size, outbox_tape_banding, outbox_interlayer_sheet, outbox_material, " +
                             "outbox_channel_sticker_standard, outbox_cushioning_standard, pop_required_standard, outbox_remarks, " +
-                            "pallet_type_str, pallet_spec, pallet_height_limit, one_pallet_height, pallet_precautions, remarks, " +
+                            "pallet_type_str, pallet_spec, pallet_height_limit, one_pallet_height, one_pallet_weight, pallet_precautions, remarks, " +
                             "is_deleted, created_at, last_modified_at, version) " +
                             "VALUES (?, '8809123456789', 'LAB-2026-001', '김개발', '이디자인', '박품질', '러닝', '최바코드', " +
-                            "'인쇄', '표준 2줄 착인', '인쇄', '용기 하단 2줄 착인', 'LOT 20260801\nEXP 20290731', 'YYYYMMDD', " +
-                            "'인쇄', '단상자 하단 2줄 착인', 'LOT 20260801\nEXP 20290731', 'YYYYMMDD', " +
+                            "'인쇄', '표준 2줄 착인', '인쇄', '용기 하단 2줄 착인', 'LOT [생산배치번호]\nEXP YYYYMMDD 까지', 'YYYYMMDD', " +
+                            "'인쇄', '단상자 하단 2줄 착인', 'LOT [생산배치번호]\nEXP YYYYMMDD 까지', 'YYYYMMDD', " +
                             "'O', 'A형 박스', '일자 테이핑(H)', 10, '200x300x120', 'N', 'N', 'SK.S.S.K.K', " +
                             "'A형 박스', 40, '420x320x260', 'N', 'N', 'KLB.S.S.K.K', " +
                             "'채널 전용 스티커 부착 필수', '박스 상단 빈공간 비닐 에어캡 완충재 투입', 'POP 부착/동봉 필수', '상습 찌그러짐 주의', " +
-                            "'AJU 11형 플라스틱', '1100x1100x150', '1200', 1200.0, '패드 및 각대 부착 필수 / 랩핑 4회 밀봉', '기준 마스터 표준 사양서', " +
+                            "'AJU 11형 플라스틱', '1100x1100x150', '1200', 1200.0, 272.0, '패드 및 각대 부착 필수 / 랩핑 4회 밀봉', '기준 마스터 표준 사양서', " +
                             "false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
                             parentProdId
                         );
@@ -846,12 +847,12 @@ public class SystemInitializationService {
                         jdbcTemplate.update(
                             "UPDATE packaging_specifications SET " +
                             "barcode = '8809123456789', lab_number = 'LAB-2026-001', planner_name = '김개발', designer_name = '이디자인', qc_name = '박품질', barcode_manager = '최바코드', " +
-                            "container_marking_display = '인쇄', container_marking_location = '용기 하단 2줄 착인', container_marking_text = 'LOT 20260801\nEXP 20290731', container_marking_expiry_format = 'YYYYMMDD', " +
-                            "unit_box_marking_display = '인쇄', unit_box_marking_location = '단상자 하단 2줄 착인', unit_box_marking_text = 'LOT 20260801\nEXP 20290731', unit_box_marking_expiry_format = 'YYYYMMDD', " +
+                            "container_marking_display = '인쇄', container_marking_location = '용기 하단 2줄 착인', container_marking_text = 'LOT [생산배치번호]\nEXP YYYYMMDD 까지', container_marking_expiry_format = 'YYYYMMDD', " +
+                            "unit_box_marking_display = '인쇄', unit_box_marking_location = '단상자 하단 2줄 착인', unit_box_marking_text = 'LOT [생산배치번호]\nEXP YYYYMMDD 까지', unit_box_marking_expiry_format = 'YYYYMMDD', " +
                             "inbox_use_yn = 'O', inbox_packaging_type = 'A형 박스', inbox_tape_method = '일자 테이핑(H)', inbox_qty = 10, inbox_size = '200x300x120', inbox_material = 'SK.S.S.K.K', " +
                             "outbox_type = 'A형 박스', outbox_qty = 40, outbox_size = '420x320x260', outbox_material = 'KLB.S.S.K.K', " +
                             "outbox_channel_sticker_standard = '채널 전용 스티커 부착 필수', outbox_cushioning_standard = '박스 상단 빈공간 비닐 에어캡 완충재 투입', pop_required_standard = 'POP 부착/동봉 필수', " +
-                            "pallet_type_str = 'AJU 11형 플라스틱', pallet_spec = '1100x1100x150', pallet_height_limit = '1200', one_pallet_height = 1200.0, " +
+                            "pallet_type_str = 'AJU 11형 플라스틱', pallet_spec = '1100x1100x150', pallet_height_limit = '1200', one_pallet_height = 1200.0, one_pallet_weight = 272.0, " +
                             "pallet_precautions = '패드 및 각대 부착 필수 / 랩핑 4회 밀봉', remarks = '기준 마스터 표준 사양서' " +
                             "WHERE product_id = ?",
                             parentProdId
@@ -1193,138 +1194,21 @@ public class SystemInitializationService {
             if (channel == null) {
                 channel = SalesChannel.builder()
                     .name(name)
+                    .channelCode(code)
+                    .description(desc)
+                    .palletType(pType)
+                    .palletSpec(pSpec)
+                    .channelStickerRequired(stickerReq)
+                    .maxStackHeightMm(heightLimit)
+                    .padAndFrameRequired(padReq)
+                    .expDateFormat(expFormat)
+                    .specialNotes(notes)
+                    .active(true)
+                    .updatedBy("system")
                     .build();
+                salesChannelRepository.save(channel);
+                log.info(">>>> [SYSTEM INIT] Seeded New Sales Channel: {}", name);
             }
-            
-            // 모든 컬럼 필드 동기화 덮어쓰기
-            channel.setChannelCode(code);
-            channel.setDescription(desc);
-            channel.setPalletType(pType);
-            channel.setPalletSpec(pSpec);
-            channel.setChannelStickerRequired(stickerReq);
-            channel.setMaxStackHeightMm(heightLimit);
-            channel.setPadAndFrameRequired(padReq);
-            channel.setExpDateFormat(expFormat);
-            channel.setSpecialNotes(notes);
-            channel.setActive(true);
-            channel.setUpdatedBy("system");
-
-            salesChannelRepository.save(channel);
-            log.info(">>>> [SYSTEM INIT] Synced & Seeded Sales Channel: {}", name);
-        }
-    }
-
-    private void seedChannelPackagingRules() {
-        log.info(">>>> [SYSTEM INIT] Seeding Channel Packaging Rules...");
-        
-        seedRule("일반(GENERAL)", "PALLET_SPEC", "아주팔레트 (1,100 x 1,100 mm)", null);
-        seedRule("일반(GENERAL)", "STICKER_REQUIRED", "미부착", null);
-        seedRule("일반(GENERAL)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하", null);
-        seedRule("일반(GENERAL)", "LABELING", "EXP YYYYMMDD까지", "1. 사용기한 착인 또는 압인 시 'EXP YYYYMMDD까지' 기재");
-
-        seedRule("올리브영(OY)", "PALLET_SPEC", "아주팔레트 (1,100 x 1,100 mm)", null);
-        seedRule("올리브영(OY)", "STICKER_REQUIRED", "미부착", null);
-        seedRule("올리브영(OY)", "LOAD_HEIGHT", "PLT 제외, 1050mm 이하", null);
-        seedRule("올리브영(OY)", "LABELING", "EXP YYYYMMDD까지", 
-                 "1. 인박스 사용 시 B형 인박스 사용, 인박스에 박스 테이프 부착 금지\n" +
-                 "2. 아웃박스 포장 중 단상자 POP 등으로 빈공간 발생 시 비닐 에어캡으로 공간 완충 필요 (부직포, 발포지, 폐지, 신문지 등 사용 금지)\n" +
-                 "3. 사용기한 착인 또는 압인 시 'EXP YYYYMMDD까지' 기재\n" +
-                 "4. 인박스 현품표 사용 시 '바코드' 미기재 필수");
-
-        seedRule("군마트(PX)", "PALLET_SPEC", "아주팔레트 (1,100 x 1,100 mm)", null);
-        seedRule("군마트(PX)", "STICKER_REQUIRED", "미부착", null);
-        seedRule("군마트(PX)", "LOAD_HEIGHT", "PLT 제외, 1050mm 이하", null);
-        seedRule("군마트(PX)", "LABELING", "EXP YYYYMMDD까지",
-                 "1. 용기 및 단상자에 군마트용 문구 기재 확인 필수\n" +
-                 "2. 아웃박스 바코드 별도 운영 -> 반드시 확인 후 아웃박스 현품표에 아웃박스 바코드 기재 필요\n" +
-                 "3. 사용기한 착인 또는 압인 시 'EXP YYYYMMDD까지' 기재");
-
-        seedRule("일본/온라인(JP/ON)", "PALLET_SPEC", "아주팔레트 (1,100 x 1,100 mm)", null);
-        seedRule("일본/온라인(JP/ON)", "STICKER_REQUIRED", "미부착", null);
-        seedRule("일본/온라인(JP/ON)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하", null);
-        seedRule("일본/온라인(JP/ON)", "LABELING", "EXP YYYYMMDD까지",
-                 "1. 7매 마스크 품목에 한해 제조번호만 압인하며, 사용기한 압인 금지\n" +
-                 "2. 사용기한 착인 또는 압인 시 'EXP YYYYMMDD까지' 기재");
-
-        seedRule("일본/오프라인(JP/OFF)", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
-        seedRule("일본/오프라인(JP/OFF)", "STICKER_REQUIRED", "미부착", null);
-        seedRule("일본/오프라인(JP/OFF)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
-        seedRule("일본/오프라인(JP/OFF)", "LABELING", "사용기한 착인 금지",
-                 "1. 전 품목 사용기한 착인 또는 압인 금지, 제조번호만 착인 또는 압인\n" +
-                 "2. 일문 패키지\n" +
-                 "3. 인박스, 아웃박스, 팔레트 현품표에 사용기한 기재 금지\n" +
-                 "4. 인박스(+현품표) 필수\n" +
-                 "5. 기획세트의 경우, 모든 구성품의 로트 착인하며, 인박스, 아웃박스, 팔레트 현품표에도 모든 구성품의 로트 착인");
-
-        seedRule("일본/아마존(JP/AMZ)", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
-        seedRule("일본/아마존(JP/AMZ)", "STICKER_REQUIRED", "미부착", null);
-        seedRule("일본/아마존(JP/AMZ)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
-        seedRule("일본/아마존(JP/AMZ)", "LABELING", "EXP MM-DD-YYYY",
-                 "1. 일문 패키지 + AMZ바코드(X바코드)\n" +
-                 "2. 7매 마스크 품목의 경우, 지퍼백 포장 시 주의사항 문구 '※ご注意ください※\n" +
-                 "このビニール袋には、7枚入りマスクパック가 [7袋]入っています。\n" +
-                 "出荷時は[1袋ずつ] 取り出して出荷してください。' 표시 하고, 7매[7袋]와 1매입[1袋ずつ] 글자 굵게(bold) 필수 기재\n" +
-                 "3. 사용기한 착인 또는 압인 시 'EXP MM-DD-YYYY' 기재");
-
-        seedRule("글로벌(GLB)", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
-        seedRule("글로벌(GLB)", "STICKER_REQUIRED", "미부착", null);
-        seedRule("글로벌(GLB)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
-        seedRule("글로벌(GLB)", "LABELING", "EXP MM-DD-YYYY", "1. 사용기한 착인 또는 압인 시 'EXP MM-DD-YYYY' 기재");
-
-        seedRule("미국/아마존(US/AMZ)", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
-        seedRule("미국/아마존(US/AMZ)", "STICKER_REQUIRED", "부착", null);
-        seedRule("미국/아마존(US/AMZ)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
-        seedRule("미국/아마존(US/AMZ)", "LABELING", "EXP MM-DD-YYYY",
-                 "1. AMZ바코드(X바코드) 확인 필수\n" +
-                 "2. 사용기한 착인 또는 압인 시 'EXP MM-DD-YYYY' 기재");
-
-        seedRule("유럽(EU)", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
-        seedRule("유럽(EU)", "STICKER_REQUIRED", "부착", null);
-        seedRule("유럽(EU)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
-        seedRule("유럽(EU)", "LABELING", "EXP DDMMYYYY", "1. 사용기한 착인 또는 압인 시 'EXP DDMMYYYY' 기재");
-
-        seedRule("올리브영/역직구(OY/US)", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
-        seedRule("올리브영/역직구(OY/US)", "STICKER_REQUIRED", "미부착", null);
-        seedRule("올리브영/역직구(OY/US)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
-        seedRule("올리브영/역직구(OY/US)", "LABELING", "EXP YYYYMMDD까지",
-                 "1. 인박스 사용 시 B형 인박스 사용, 인박스에 박스 테이프 부착 금지\n" +
-                 "2. 아웃박스 포장 중 단상자 POP 등으로 빈공간 발생 시 비닐 에어캡으로 공간 완충 필요 (부직포, 발포지, 폐지, 신문지 등 사용 금지)\n" +
-                 "3. 사용기한 착인 또는 압인 시 'EXP YYYYMMDD까지' 기재\n" +
-                 "4. 인박스 현품표 사용 시 '바코드' 미기재 필수");
-
-        seedRule("유럽/아마존(EU/AMZ)", "PALLET_SPEC", "수출용 목재 팔렛트(1219*1016*120) - 바닥보드 5개 / 훈증처리(GMA) 필수", null);
-        seedRule("유럽/아마존(EU/AMZ)", "STICKER_REQUIRED", "부착", null);
-        seedRule("유럽/아마존(EU/AMZ)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
-        seedRule("유럽/아마존(EU/AMZ)", "LABELING", "EXP DDMMYYYY",
-                 "1. AMZ바코드(X바코드) 확인 필수\n" +
-                 "2. 사용기한 착인 또는 압인 시 'EXP DDMMYYYY' 기재");
-
-        seedRule("미국/OTC(OTC)", "PALLET_SPEC", "국내 생산 : 수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm) / 미국 생산 : 수출용 목재 팔렛트(1219*1016*120) - 바닥보드 5개 / 훈증처리(GMA) 필수", null);
-        seedRule("미국/OTC(OTC)", "STICKER_REQUIRED", "미부착", null);
-        seedRule("미국/OTC(OTC)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
-        seedRule("미국/OTC(OTC)", "LABELING", "EXP YYYY-MM", "1. 사용기한 착인 또는 압인 시 'EXP  YYYY-MM' 기재");
-
-        seedRule("할랄(HALAL)", "PALLET_SPEC", "수출용 검은색 일회용 팔레트 (1,100 x 1,100 mm)", null);
-        seedRule("할랄(HALAL)", "STICKER_REQUIRED", "부착", null);
-        seedRule("할랄(HALAL)", "LOAD_HEIGHT", "PLT 제외, 1,500mm 이하, 패드&각대 적용", null);
-        seedRule("할랄(HALAL)", "LABELING", "신설 예정", "신설 예정");
-    }
-
-    private void seedRule(String channelName, String ruleType, String value, String warning) {
-        SalesChannel channel = salesChannelRepository.findByName(channelName).orElse(null);
-        if (channel == null) {
-            log.error(">>>> [SYSTEM INIT] Channel not found for seeding rule: {}", channelName);
-            return;
-        }
-        if (channelPackagingRuleRepository.findByChannelAndRuleType(channel, ruleType).isEmpty()) {
-            channelPackagingRuleRepository.save(ChannelPackagingRule.builder()
-                .channel(channel)
-                .ruleType(ruleType)
-                .ruleValue(value)
-                .warningMessage(warning)
-                .updatedBy("system")
-                .build());
-            log.info(">>>> [SYSTEM INIT] Seeded Packaging Rule: {} -> {}", channelName, ruleType);
         }
     }
 
@@ -1398,7 +1282,7 @@ public class SystemInitializationService {
                     {"PACKAGE_LANGUAGE", "패키지 언어/표기 규정", 5},
                     {"GIFT_SET_LOT_MARKING", "기획세트 로트 착인 규정", 6},
                     {"CHANNEL_STICKER", "채널 스티커 부착 규정", 7},
-                    {"BARCODE_ATTACHMENT", "바코드 부착 규정", 8},
+                    {"BARCODE_ATTACHMENT", "인박스 바코드 부착 규정", 8},
                     {"OUTBOX_BARCODE_REQ", "아웃박스 바코드 부착 규정", 9},
                     {"ETC", "기타 특이사항", 10}
             };
@@ -1536,5 +1420,49 @@ public class SystemInitializationService {
                     .updatedBy("SYSTEM_INIT")
                     .build());
         }
+    }
+
+    private void seedSampleBomMaterials() {
+        try {
+            Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM master_packaging_materials", Integer.class);
+            if (count != null && count > 0) {
+                log.info(">>>> [SYSTEM INIT] Master packaging materials already present ({} records). Skipping sample seeding.", count);
+                return;
+            }
+
+            log.info(">>>> [SYSTEM INIT] Seeding standard sample BOM packaging materials...");
+
+            // [1] 250mL PET 용기 기준 부자재 풀
+            insertSampleMaterialIfNotExists("MAT-CNT-0001", "250mL 투명 PET 원형 보틀", "용기", "PET병", "PET (단일수지)", "PET", 28.5, 350.0, "Ø55 × 145mm (24/410)", "(주)삼화패키징");
+            insertSampleMaterialIfNotExists("MAT-CAP-0001", "24파이 플립 원터치캡 (화이트)", "캡·펌프", "원터치캡", "PP (단일수지)", "PP", 4.2, 200.0, "24/410 Ø27 × 22mm", "(주)우성플라테크");
+            insertSampleMaterialIfNotExists("MAT-BOX-0001", "250mL 원형용기 단상자 CCP 350g", "단상자·라벨", "단상자(CCP)", "CCP 350g/m²", "CCP", 18.0, 400.0, "58 × 58 × 150mm", "(주)신우지앤피");
+            insertSampleMaterialIfNotExists("MAT-BOX-0002", "250mL 보틀 전면 방수 유포지 라벨", "단상자·라벨", "수축/점착 라벨", "PP 유포지 (방수코팅)", "PP 유포지", 1.2, 50.0, "120 × 90mm", "태양라벨인쇄");
+            insertSampleMaterialIfNotExists("MAT-SHP-0001", "250mL 10구 골판지 인박스", "인박스·아웃박스", "인박스(골판지)", "E골(골판지)", "골판지", 85.0, 1500.0, "295 × 120 × 155mm", "(주)대양제지");
+            insertSampleMaterialIfNotExists("MAT-SHP-0002", "250mL 40개입 표준 골판지 아웃박스", "인박스·아웃박스", "아웃박스(골판지)", "A골(골판지 DW)", "골판지", 420.0, 4500.0, "605 × 255 × 325mm", "(주)대양제지");
+
+            // [2] 30mL 초자 유리병 스포이드 세럼 기준 부자재 풀
+            insertSampleMaterialIfNotExists("MAT-CNT-0002", "30mL 앰플용 초자 유리병 (투명)", "용기", "초자(유리)", "유리(Glass)", "유리", 62.0, 1200.0, "Ø38 × 78mm (18/415)", "(주)연우패키지");
+            insertSampleMaterialIfNotExists("MAT-CAP-0002", "18파이 NBR 고무 스포이드 캡", "캡·펌프", "스포이드(드로퍼)", "PP + NBR 고무 + 유리관 (복합재질)", "복합재질", 8.5, 300.0, "18/415 Ø22 × 82mm", "(주)진코스텍");
+            insertSampleMaterialIfNotExists("MAT-BOX-0003", "30mL 앰플 단상자 로얄아이보리 350g", "단상자·라벨", "단상자(RIV)", "RIV 350g/m²", "RIV", 12.5, 380.0, "42 × 42 × 85mm", "(주)신우지앤피");
+            insertSampleMaterialIfNotExists("MAT-BOX-0004", "30mL 앰플 배면 투명 라벨", "단상자·라벨", "수축/점착 라벨", "투명 PET지", "PET", 0.6, 30.0, "80 × 45mm", "태양라벨인쇄");
+            insertSampleMaterialIfNotExists("MAT-SHP-0003", "30mL 50개입 완충 일체형 아웃박스", "인박스·아웃박스", "아웃박스(골판지)", "B골(골판지 SW)", "골판지", 280.0, 3000.0, "440 × 225 × 190mm", "(주)대양제지");
+
+            // [3] 공용 부속품(완충재 / 방습제)
+            insertSampleMaterialIfNotExists("MAT-ETC-0001", "PE 에어캡 완충 패드", "부속품", "완충재(에어캡, 패드)", "LDPE", "LDPE", 6.5, 80.0, "300 × 300mm 2겹", "(주)에어플러스");
+            insertSampleMaterialIfNotExists("MAT-ETC-0002", "실리카겔 방습제 1g", "부속품", "기타 부속품", "실리카겔 / 부직포", "실리카겔", 1.0, 100.0, "40 × 30mm", "(주)데시칸트코리아");
+
+            log.info(">>>> [SYSTEM INIT] Sample BOM packaging materials seeded successfully.");
+        } catch (Exception e) {
+            log.warn(">>>> [SYSTEM INIT] Sample BOM materials seeding skipped or failed: {}", e.getMessage());
+        }
+    }
+
+    private void insertSampleMaterialIfNotExists(String bomCode, String componentName, String type, String detailedType,
+                                                String detailedMaterial, String material, Double weight, Double thickness,
+                                                String specification, String manufacturer) {
+        String sql = "INSERT INTO master_packaging_materials (bom_code, component_name, type, detailed_type, detailed_material, material, weight, thickness, specification, manufacturer, is_multi_layer, created_at) " +
+                "SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, CURRENT_TIMESTAMP " +
+                "WHERE NOT EXISTS (SELECT 1 FROM master_packaging_materials WHERE bom_code = ?)";
+        jdbcTemplate.update(sql, bomCode, componentName, type, detailedType, detailedMaterial, material, weight, thickness, specification, manufacturer, bomCode);
     }
 }

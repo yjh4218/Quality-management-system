@@ -12,7 +12,6 @@ import com.example.ims.repository.ManufacturerRepository;
 import com.example.ims.repository.MasterPackagingMaterialRepository;
 import com.example.ims.repository.PackagingMethodTemplateRepository;
 import com.example.ims.repository.PackagingSpecificationRepository;
-import com.example.ims.repository.ChannelPackagingRuleRepository;
 import com.example.ims.repository.ProductHistoryRepository;
 import com.example.ims.repository.ProductRepository;
 import com.example.ims.repository.ProductionAuditHistoryRepository;
@@ -51,7 +50,6 @@ public class DataTransferService {
     private final WmsInboundRepository inboundRepository;
     private final ClaimRepository claimRepository;
     private final PackagingSpecificationRepository packagingSpecRepository;
-    private final ChannelPackagingRuleRepository channelRuleRepository;
     private final PackagingMethodTemplateRepository templateRepository;
     private final MasterPackagingMaterialRepository materialRepository;
 
@@ -147,7 +145,6 @@ public class DataTransferService {
             entityManager.clear();
 
             if (data.getPackagingSpecs() != null) packagingSpecRepository.saveAll(data.getPackagingSpecs());
-            if (data.getChannelRules() != null) channelRuleRepository.saveAll(data.getChannelRules());
             if (data.getMethodTemplates() != null) templateRepository.saveAll(data.getMethodTemplates());
             if (data.getDashboardLayouts() != null) dashboardLayoutRepository.saveAll(data.getDashboardLayouts());
             

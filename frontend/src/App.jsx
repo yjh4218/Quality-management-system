@@ -21,7 +21,6 @@ import MarketReleaseRecordPage from './MarketReleaseRecordPage.jsx';
 import BomMasterPage from './BomMasterPage.jsx';
 import BomCategoryManagementPage from './BomCategoryManagementPage.jsx';
 import PackagingTemplatePage from './PackagingTemplatePage.jsx';
-import PackagingRulePage from './PackagingRulePage.jsx';
 import SalesChannelManagement from './SalesChannelManagement.jsx';
 import RoleManagementPage from './RoleManagementPage.jsx';
 import GuideManagementPage from './GuideManagementPage.jsx';
@@ -65,7 +64,6 @@ const PAGE_INFO = {
     bomMaster: { title: '📏 BOM 마스터' },
     bomCategories: { title: '⚙️ BOM 유형 설정' },
     packagingTemplates: { title: '📋 포장공정 템플릿' },
-    packagingRules: { title: '⚖️ 채널별 포장 규칙' },
     spaceRatioCalculator: { title: '📐 포장공간비율 계산기' },
     quality: { title: '📦 입고 품질 관리' },
     releaseRecord: { title: '📄 시장출하 기록' },
@@ -637,7 +635,7 @@ const App = () => {
         else if (['manufacturers', 'manufacturerCategories'].includes(pageKey)) targetSection = 'partner';
         else if (['manufacturerAudits', 'manufacturerAuditDashboard', 'manufacturerAuditItems'].includes(pageKey)) targetSection = 'audit';
         else if (['qualityPhotoAudit', 'productionAuditDashboard'].includes(pageKey)) targetSection = 'quality';
-        else if (['packagingTemplates', 'packagingRules', 'spaceRatioCalculator'].includes(pageKey)) targetSection = 'packaging';
+        else if (['packagingTemplates', 'spaceRatioCalculator'].includes(pageKey)) targetSection = 'packaging';
         else if (['qualityDashboard', 'quality', 'releaseRecord'].includes(pageKey)) targetSection = 'inbound';
         else if (['claims', 'claimDashboard'].includes(pageKey)) targetSection = 'claim';
 
@@ -820,7 +818,7 @@ const App = () => {
     const hasPartnerAccess = canAccess('manufacturers') || canAccess('manufacturerCategories') || canAccess('manufacturerGuide');
     const hasAuditAccess = canAccess('manufacturerAudits') || canAccess('manufacturerAuditDashboard') || canAccess('manufacturerAuditItems');
     const hasQualityAccess = canAccess('qualityPhotoAudit') || canAccess('productionAuditDashboard');
-    const hasPackagingAccess = canAccess('packagingTemplates') || canAccess('packagingRules') || canAccess('spaceRatioCalculator');
+    const hasPackagingAccess = canAccess('packagingTemplates') || canAccess('spaceRatioCalculator');
     const hasInboundAccess = canAccess('quality') || canAccess('releaseRecord') || canAccess('qualityDashboard');
     const hasClaimAccess = canAccess('claims') || canAccess('claimDashboard');
 
@@ -834,7 +832,7 @@ const App = () => {
             case 'partner': return ['manufacturers', 'manufacturerCategories', 'manufacturerGuide'].includes(activePage);
             case 'audit': return ['manufacturerAudits', 'manufacturerAuditDashboard', 'manufacturerAuditItems'].includes(activePage);
             case 'quality': return ['qualityPhotoAudit', 'productionAuditDashboard'].includes(activePage);
-            case 'packaging': return ['packagingTemplates', 'packagingRules', 'spaceRatioCalculator'].includes(activePage);
+            case 'packaging': return ['packagingTemplates', 'spaceRatioCalculator'].includes(activePage);
             case 'inbound': return ['qualityDashboard', 'quality', 'releaseRecord'].includes(activePage);
             case 'claim': return ['claims', 'claimDashboard'].includes(activePage);
             default: return false;
@@ -1165,11 +1163,6 @@ const App = () => {
                                         📋 포장공정 템플릿 관리
                                     </button>
                                 )}
-                                {canAccess('packagingRules') && (
-                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'packagingRules' ? 'active' : ''}`} onClick={() => handleNavigate('packagingRules')}>
-                                        ⚖️ 채널별 포장 규칙 관리
-                                    </button>
-                                )}
                                 {canAccess('spaceRatioCalculator') && (
                                     <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'spaceRatioCalculator' ? 'active' : ''}`} onClick={() => handleNavigate('spaceRatioCalculator')}>
                                         📐 포장공간비율 계산기
@@ -1471,7 +1464,6 @@ const App = () => {
                                 {tab.page === 'bomMaster' && <BomMasterPage user={user} />}
                                 {tab.page === 'bomCategories' && <BomCategoryManagementPage user={user} />}
                                 {tab.page === 'packagingTemplates' && <PackagingTemplatePage user={user} />}
-                                {tab.page === 'packagingRules' && <PackagingRulePage user={user} />}
                                 {canAccess('spaceRatioCalculator') && tab.page === 'spaceRatioCalculator' && (
                                     <PackagingSpaceRatioCalculatorPage user={user} onNavigate={handleNavigate} />
                                 )}

@@ -10,7 +10,6 @@ import com.example.ims.entity.Manufacturer;
 import com.example.ims.entity.MasterPackagingMaterial;
 import com.example.ims.entity.PackagingMethodTemplate;
 import com.example.ims.entity.PackagingSpecification;
-import com.example.ims.entity.ChannelPackagingRule;
 import com.example.ims.entity.Product;
 import com.example.ims.entity.ProductHistory;
 import com.example.ims.entity.ProductionAudit;
@@ -44,7 +43,6 @@ public class DataTransferDto {
     private List<WmsInbound> inbounds;
     private List<Claim> claims;
     private List<PackagingSpecification> packagingSpecs;
-    private List<ChannelPackagingRule> channelRules;
     private List<PackagingMethodTemplate> methodTemplates;
     private List<MasterPackagingMaterial> masterMaterials;
     

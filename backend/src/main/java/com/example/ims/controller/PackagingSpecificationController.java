@@ -367,6 +367,43 @@ public class PackagingSpecificationController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/{targetSpecId}/method-images/copy-from/{sourceSpecId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
+    public ResponseEntity<List<com.example.ims.entity.PackagingMethodImage>> copyFromMasterSpec(
+            @PathVariable Long targetSpecId,
+            @PathVariable Long sourceSpecId) {
+        log.info(">>>> [METHOD-IMAGES] COPY-FROM-MASTER targetSpecId={}, sourceSpecId={}", targetSpecId, sourceSpecId);
+        List<com.example.ims.entity.PackagingMethodImage> sourceImages = methodImageRepository.findActiveBySpecId(sourceSpecId);
+        if (sourceImages.isEmpty()) {
+            return ResponseEntity.ok(java.util.Collections.emptyList());
+        }
+
+        String currentUsername = "admin";
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+            currentUsername = auth.getName();
+        }
+
+        List<com.example.ims.entity.PackagingMethodImage> copiedList = new java.util.ArrayList<>();
+        for (com.example.ims.entity.PackagingMethodImage src : sourceImages) {
+            com.example.ims.entity.PackagingMethodImage copy = com.example.ims.entity.PackagingMethodImage.builder()
+                    .packagingSpecId(targetSpecId)
+                    .imageUrl(src.getImageUrl())
+                    .imagePath(src.getImagePath())
+                    .thumbnailUrl(src.getThumbnailUrl())
+                    .displayOrder(src.getDisplayOrder())
+                    .layoutWidthPx(src.getLayoutWidthPx())
+                    .layoutHeightPx(src.getLayoutHeightPx())
+                    .annotationsJson(src.getAnnotationsJson())
+                    .captionText(src.getCaptionText())
+                    .createdBy(currentUsername)
+                    .build();
+            copiedList.add(methodImageRepository.save(copy));
+        }
+
+        return ResponseEntity.ok(copiedList);
+    }
+
     @PostMapping("/method-images/{id}/restore")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
     public ResponseEntity<com.example.ims.entity.PackagingMethodImage> restoreMethodImage(@PathVariable Long id) {

@@ -17,6 +17,7 @@ const SalesChannelManagement = ({ user }) => {
     const [channels, setChannels] = useState([]);
     const [showDrawer, setShowDrawer] = useState(false);
     const [editingChannel, setEditingChannel] = useState(null);
+    const [activeDrawerTab, setActiveDrawerTab] = useState('unit'); // 'unit' | 'set'
     const [formData, setFormData] = useState({
         name: '',
         description: '',
@@ -27,7 +28,26 @@ const SalesChannelManagement = ({ user }) => {
         maxStackHeightMm: 1500,
         padAndFrameRequired: false,
         expDateFormat: '',
-        specialNotes: ''
+        popRequired: false,
+        cushioningStandard: '',
+        specialNotes: '',
+        // 단품 착인/현품표 기준 및 날짜 양식
+        unitBoxMarkingRule: '',
+        inboxLabelMarkingRule: '',
+        outboxLabelMarkingRule: '',
+        palletLabelMarkingRule: '',
+        inboxDateFormat: '',
+        outboxDateFormat: '',
+        palletDateFormat: '',
+        // 기획세트 착인/현품표 기준 및 규격
+        setContainerMarkingDisplay: '',
+        setUnitBoxMarkingRule: '',
+        setInboxLabelMarkingRule: '',
+        setOutboxLabelMarkingRule: '',
+        setPalletLabelMarkingRule: '',
+        setCushioningStandard: '',
+        setPalletHeightLimit: '',
+        setChannelStickerStandard: ''
     });
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
     const [quickFilterText, setQuickFilterText] = useState('');
@@ -134,6 +154,7 @@ const SalesChannelManagement = ({ user }) => {
     };
 
     const handleOpenDrawer = (channel = null) => {
+        setActiveDrawerTab('unit');
         if (channel) {
             setEditingChannel(channel);
             setFormData({
@@ -146,7 +167,24 @@ const SalesChannelManagement = ({ user }) => {
                 maxStackHeightMm: channel.maxStackHeightMm !== undefined ? channel.maxStackHeightMm : 1500,
                 padAndFrameRequired: !!channel.padAndFrameRequired,
                 expDateFormat: channel.expDateFormat || '',
-                specialNotes: channel.specialNotes || ''
+                popRequired: !!channel.popRequired,
+                cushioningStandard: channel.cushioningStandard || '',
+                specialNotes: channel.specialNotes || '',
+                unitBoxMarkingRule: channel.unitBoxMarkingRule || '',
+                inboxLabelMarkingRule: channel.inboxLabelMarkingRule || '',
+                outboxLabelMarkingRule: channel.outboxLabelMarkingRule || '',
+                palletLabelMarkingRule: channel.palletLabelMarkingRule || '',
+                inboxDateFormat: channel.inboxDateFormat || '',
+                outboxDateFormat: channel.outboxDateFormat || '',
+                palletDateFormat: channel.palletDateFormat || '',
+                setContainerMarkingDisplay: channel.setContainerMarkingDisplay || '',
+                setUnitBoxMarkingRule: channel.setUnitBoxMarkingRule || '',
+                setInboxLabelMarkingRule: channel.setInboxLabelMarkingRule || '',
+                setOutboxLabelMarkingRule: channel.setOutboxLabelMarkingRule || '',
+                setPalletLabelMarkingRule: channel.setPalletLabelMarkingRule || '',
+                setCushioningStandard: channel.setCushioningStandard || '',
+                setPalletHeightLimit: channel.setPalletHeightLimit || '',
+                setChannelStickerStandard: channel.setChannelStickerStandard || ''
             });
             fetchSpecialNotes(channel.id);
         } else {
@@ -161,7 +199,21 @@ const SalesChannelManagement = ({ user }) => {
                 maxStackHeightMm: 1500,
                 padAndFrameRequired: false,
                 expDateFormat: '',
-                specialNotes: ''
+                popRequired: false,
+                cushioningStandard: '',
+                specialNotes: '',
+                unitBoxMarkingRule: '',
+                inboxLabelMarkingRule: '',
+                outboxLabelMarkingRule: '',
+                palletLabelMarkingRule: '',
+                setContainerMarkingDisplay: '',
+                setUnitBoxMarkingRule: '',
+                setInboxLabelMarkingRule: '',
+                setOutboxLabelMarkingRule: '',
+                setPalletLabelMarkingRule: '',
+                setCushioningStandard: '',
+                setPalletHeightLimit: '',
+                setChannelStickerStandard: ''
             });
             fetchCategoriesOnly();
         }
@@ -391,8 +443,46 @@ const SalesChannelManagement = ({ user }) => {
                             <h3 style={{ fontSize: '20px', fontWeight: '800', margin: 0, color: '#0f172a' }}>{editingChannel ? '📝 유통 채널 포장 규격 수정' : '✨ 신규 유통 채널 등록'}</h3>
                             <button className="secondary" onClick={() => setShowDrawer(false)} style={{ borderRadius: '50%', width: '32px', height: '32px', padding: 0, border: 'none', background: '#f1f5f9', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>✕</button>
                         </div>
+                        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '2px solid #e2e8f0', paddingBottom: '0px' }}>
+                            <button
+                                type="button"
+                                onClick={() => setActiveDrawerTab('unit')}
+                                style={{
+                                    padding: '10px 20px',
+                                    fontWeight: '800',
+                                    fontSize: '14px',
+                                    border: 'none',
+                                    borderBottom: activeDrawerTab === 'unit' ? '3px solid #2563eb' : '3px solid transparent',
+                                    backgroundColor: 'transparent',
+                                    color: activeDrawerTab === 'unit' ? '#2563eb' : '#64748b',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                📦 기본 및 단품 규격 기준
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setActiveDrawerTab('set')}
+                                style={{
+                                    padding: '10px 20px',
+                                    fontWeight: '800',
+                                    fontSize: '14px',
+                                    border: 'none',
+                                    borderBottom: activeDrawerTab === 'set' ? '3px solid #7c3aed' : '3px solid transparent',
+                                    backgroundColor: 'transparent',
+                                    color: activeDrawerTab === 'set' ? '#7c3aed' : '#64748b',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                🎁 기획세트 포장 / 현품표 규격
+                            </button>
+                        </div>
+
                         <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                             
+                            {/* 공통 기본 정보 */}
                             <div style={{ display: 'flex', gap: '15px' }}>
                                 <div className="form-group" style={{ flex: 1 }}>
                                     <label style={{ fontWeight: '700', fontSize: '13px', marginBottom: '8px', display: 'block', color: '#475569' }}>채널 코드 *</label>
@@ -420,257 +510,699 @@ const SalesChannelManagement = ({ user }) => {
                                 </div>
                             </div>
 
-                            <div style={{ display: 'flex', gap: '15px' }}>
-                                <div className="form-group" style={{ flex: 1 }}>
-                                    <label style={{ fontWeight: '700', fontSize: '13px', marginBottom: '8px', display: 'block', color: '#475569' }}>팔레트 종류</label>
-                                    <select
-                                        value={formData.palletType}
-                                        onChange={e => setFormData({ ...formData, palletType: e.target.value })}
-                                        disabled={!canEdit}
-                                        style={{ width: '100%', borderRadius: '8px', padding: '10px', border: '1px solid #cbd5e1', fontWeight: '600', backgroundColor: '#fff' }}
-                                    >
-                                        <option value="">선택 안 함</option>
-                                        <option value="아주팔레트">아주팔레트</option>
-                                        <option value="수출용 검은색 일회용 팔레트">수출용 검은색 일회용 팔레트</option>
-                                        <option value="수출용 목재 팔렛트">수출용 목재 팔렛트</option>
-                                    </select>
-                                </div>
-                                <div className="form-group" style={{ flex: 1.5 }}>
-                                    <label style={{ fontWeight: '700', fontSize: '13px', marginBottom: '8px', display: 'block', color: '#475569' }}>팔레트 치수/훈증 스펙</label>
-                                    <input
-                                        type="text"
-                                        value={formData.palletSpec}
-                                        onChange={e => setFormData({ ...formData, palletSpec: e.target.value })}
-                                        placeholder="예: 1,100 x 1,100 mm / GMA훈증 필수"
-                                        disabled={!canEdit}
-                                        style={{ width: '100%', borderRadius: '8px', padding: '10px', border: '1px solid #cbd5e1', fontWeight: '600' }}
-                                    />
-                                </div>
-                            </div>
-
-                            <div style={{ display: 'flex', gap: '15px' }}>
-                                <div className="form-group" style={{ flex: 1 }}>
-                                    <label style={{ fontWeight: '700', fontSize: '13px', marginBottom: '8px', display: 'block', color: '#475569' }}>적재 한도 높이 (mm)</label>
-                                    <input
-                                        type="number"
-                                        value={formData.maxStackHeightMm}
-                                        onChange={e => setFormData({ ...formData, maxStackHeightMm: parseInt(e.target.value) || 0 })}
-                                        disabled={!canEdit}
-                                        style={{ width: '100%', borderRadius: '8px', padding: '10px', border: '1px solid #cbd5e1', fontWeight: '600', fontSize: '13px' }}
-                                    />
-                                </div>
-                            </div>
-
-                            <div style={{ display: 'flex', gap: '30px', alignItems: 'center', backgroundColor: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '13px', color: '#334155' }}>
-                                    <input
-                                        type="checkbox"
-                                        checked={formData.channelStickerRequired}
-                                        onChange={e => setFormData({ ...formData, channelStickerRequired: e.target.checked })}
-                                        disabled={!canEdit}
-                                        style={{ width: '16px', height: '16px' }}
-                                    />
-                                    🏷️ 물류 스티커 부착 필수
-                                </label>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '13px', color: '#334155' }}>
-                                    <input
-                                        type="checkbox"
-                                        checked={formData.padAndFrameRequired}
-                                        onChange={e => setFormData({ ...formData, padAndFrameRequired: e.target.checked })}
-                                        disabled={!canEdit}
-                                        style={{ width: '16px', height: '16px' }}
-                                    />
-                                    📦 패드 및 각대 부착 필수
-                                </label>
-                            </div>
-
-                            {/* 항목화된 채널 포장 특이사항 영역 */}
-                            <div className="form-group" style={{ backgroundColor: '#f8fafc', padding: '20px', borderRadius: '14px', border: '1px solid #cbd5e1', fontFamily: "'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif", WebkitFontSmoothing: 'antialiased' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                                    <label style={{ fontWeight: '900', fontSize: '15px', color: '#0f172a', letterSpacing: '-0.3px' }}>
-                                        📋 채널별 포장 특이사항 (항목별 규정)
-                                    </label>
-                                    <span style={{ fontSize: '13px', fontWeight: '600', color: '#475569' }}>입력 시 포장사양서 비고란에 자동 조합 출력됩니다.</span>
-                                </div>
-
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                                    {categorizedNotes.length === 0 ? (
-                                        <div style={{ gridColumn: 'span 2', padding: '20px', textOverflow: 'ellipsis', textAlign: 'center', color: '#64748b', fontSize: '13px', fontWeight: '600' }}>
-                                            특이사항 항목을 로딩 중입니다... 
-                                            <button 
-                                                type="button" 
-                                                onClick={fetchCategoriesOnly} 
-                                                style={{ marginLeft: '10px', background: 'none', border: 'none', color: '#1d4ed8', textDecoration: 'underline', cursor: 'pointer', fontWeight: 'bold' }}
+                            {activeDrawerTab === 'unit' ? (
+                                <>
+                                    {/* 📦 단품 규격 & 착인/현품표 탭 */}
+                                    <div style={{ display: 'flex', gap: '15px' }}>
+                                        <div className="form-group" style={{ flex: 1 }}>
+                                            <label style={{ fontWeight: '700', fontSize: '13px', marginBottom: '8px', display: 'block', color: '#475569' }}>팔레트 종류</label>
+                                            <select
+                                                value={formData.palletType}
+                                                onChange={e => setFormData({ ...formData, palletType: e.target.value })}
+                                                disabled={!canEdit}
+                                                style={{ width: '100%', borderRadius: '8px', padding: '10px', border: '1px solid #cbd5e1', fontWeight: '600', backgroundColor: '#fff' }}
                                             >
-                                                [항목 목록 불러오기]
-                                            </button>
+                                                <option value="">선택 안 함</option>
+                                                <option value="아주팔레트">아주팔레트</option>
+                                                <option value="수출용 검은색 일회용 팔레트">수출용 검은색 일회용 팔레트</option>
+                                                <option value="수출용 목재 팔렛트">수출용 목재 팔렛트</option>
+                                            </select>
                                         </div>
-                                    ) : (
-                                        categorizedNotes.map((item, idx) => {
-                                            const isSticker = item.categoryKey === 'CHANNEL_STICKER';
-                                            const isExpiry = item.categoryKey === 'EXPIRY_MARKING';
+                                        <div className="form-group" style={{ flex: 1.5 }}>
+                                            <label style={{ fontWeight: '700', fontSize: '13px', marginBottom: '8px', display: 'block', color: '#475569' }}>팔레트 치수/훈증 스펙</label>
+                                            <input
+                                                type="text"
+                                                value={formData.palletSpec}
+                                                onChange={e => setFormData({ ...formData, palletSpec: e.target.value })}
+                                                placeholder="예: 1,100 x 1,100 mm / GMA훈증 필수"
+                                                disabled={!canEdit}
+                                                style={{ width: '100%', borderRadius: '8px', padding: '10px', border: '1px solid #cbd5e1', fontWeight: '600' }}
+                                            />
+                                        </div>
+                                    </div>
 
-                                            return (
-                                                <div key={item.categoryId || idx} style={{ backgroundColor: '#ffffff', padding: '14px', borderRadius: '10px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', gap: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                        <label style={{ fontWeight: '800', fontSize: '13.5px', color: '#1d4ed8', letterSpacing: '-0.2px' }}>
-                                                            [{item.categoryLabel}]
-                                                        </label>
+                                    <div style={{ display: 'flex', gap: '15px' }}>
+                                        <div className="form-group" style={{ flex: 1 }}>
+                                            <label style={{ fontWeight: '700', fontSize: '13px', marginBottom: '8px', display: 'block', color: '#475569' }}>적재 한도 높이 (mm)</label>
+                                            <input
+                                                type="number"
+                                                value={formData.maxStackHeightMm}
+                                                onChange={e => setFormData({ ...formData, maxStackHeightMm: parseInt(e.target.value) || 0 })}
+                                                disabled={!canEdit}
+                                                style={{ width: '100%', borderRadius: '8px', padding: '10px', border: '1px solid #cbd5e1', fontWeight: '600', fontSize: '13px' }}
+                                            />
+                                        </div>
+                                        <div className="form-group" style={{ flex: 1 }}>
+                                            <label style={{ fontWeight: '700', fontSize: '13px', marginBottom: '8px', display: 'block', color: '#475569' }}>단품 완충재 투입 기준</label>
+                                            <input
+                                                type="text"
+                                                value={formData.cushioningStandard}
+                                                onChange={e => setFormData({ ...formData, cushioningStandard: e.target.value })}
+                                                placeholder="예: 박스 상단 빈공간 에어캡 투입"
+                                                disabled={!canEdit}
+                                                style={{ width: '100%', borderRadius: '8px', padding: '10px', border: '1px solid #cbd5e1', fontWeight: '600' }}
+                                            />
+                                        </div>
+                                    </div>
 
-                                                        {/* 서식 편집 툴바 (Bold, Italic, Color) */}
-                                                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                                                            <button
-                                                                type="button"
-                                                                title="글자 굵게"
-                                                                onClick={() => applyFormat(item.categoryId, 'bold')}
-                                                                style={{ padding: '2px 6px', fontWeight: 'bold', fontSize: '12px', border: '1px solid #cbd5e1', borderRadius: '4px', backgroundColor: '#f8fafc', cursor: 'pointer' }}
-                                                            >
-                                                                B
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                title="기울임"
-                                                                onClick={() => applyFormat(item.categoryId, 'italic')}
-                                                                style={{ padding: '2px 6px', fontStyle: 'italic', fontSize: '12px', border: '1px solid #cbd5e1', borderRadius: '4px', backgroundColor: '#f8fafc', cursor: 'pointer' }}
-                                                            >
-                                                                I
-                                                            </button>
-                                                            <input
-                                                                type="color"
-                                                                title="글자 색상 변경"
-                                                                onChange={(e) => applyFormat(item.categoryId, 'color', e.target.value)}
-                                                                style={{ width: '22px', height: '22px', border: 'none', background: 'none', cursor: 'pointer' }}
-                                                            />
-                                                        </div>
-                                                    </div>
+                                    <div style={{ display: 'flex', gap: '20px', alignItems: 'center', backgroundColor: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '13px', color: '#334155' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={formData.channelStickerRequired}
+                                                onChange={e => setFormData({ ...formData, channelStickerRequired: e.target.checked })}
+                                                disabled={!canEdit}
+                                                style={{ width: '16px', height: '16px' }}
+                                            />
+                                            🏷️ 물류 스티커 필수
+                                        </label>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '13px', color: '#334155' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={formData.padAndFrameRequired}
+                                                onChange={e => setFormData({ ...formData, padAndFrameRequired: e.target.checked })}
+                                                disabled={!canEdit}
+                                                style={{ width: '16px', height: '16px' }}
+                                            />
+                                            📦 패드/각대 필수
+                                        </label>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '13px', color: '#334155' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={formData.popRequired}
+                                                onChange={e => setFormData({ ...formData, popRequired: e.target.checked })}
+                                                disabled={!canEdit}
+                                                style={{ width: '16px', height: '16px' }}
+                                            />
+                                            📢 POP 동봉 필수
+                                        </label>
+                                    </div>
 
-                                                    {/* 1. 채널 스티커 규정: 이미지/PDF 첨부 및 썸네일 카드 미리보기 */}
-                                                    {isSticker ? (
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                                                <input
-                                                                    type="file"
-                                                                    accept="image/*,application/pdf"
-                                                                    onChange={(e) => handleFileUpload(item.categoryId, e.target.files[0])}
-                                                                    style={{ fontSize: '12px', flex: 1 }}
-                                                                    disabled={!canEdit}
-                                                                />
+                                     {/* 통합 유통채널 포장 특이사항 및 4대 포장재별 착인/현품표 표준 규격 카드 */}
+                                     <div style={{ backgroundColor: '#eff6ff', padding: '20px', borderRadius: '14px', border: '1px solid #bfdbfe', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                             <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '800', color: '#1e40af' }}>📋 유통채널 포장 특이사항 및 4대 포장재별 착인/현품표 표준 규격</h4>
+                                             <span style={{ fontSize: '12px', fontWeight: '600', color: '#2563eb' }}>포장사양서 단상자/용기/인박스/아웃박스/팔레트 항목에 직접 동기화됩니다.</span>
+                                         </div>
+                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                             
+                                             {/* 1. 단상자 / 용기 착인 기준 */}
+                                             <div style={{ backgroundColor: '#ffffff', padding: '14px', borderRadius: '10px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                 <label style={{ fontSize: '13px', fontWeight: '800', color: '#1e3a8a', display: 'block' }}>📦 단상자 / 용기 착인 기준 (제조번호, 사용기한, 제조일자)</label>
+                                                 <select
+                                                     onChange={(e) => {
+                                                         const val = e.target.value;
+                                                         if (val && val !== '그 외') {
+                                                             const current = formData.unitBoxMarkingRule ? formData.unitBoxMarkingRule + '\n' : '';
+                                                             setFormData({ ...formData, unitBoxMarkingRule: current + `1. 사용기한 착인 또는 압인 시 '${val}' 기재` });
+                                                         }
+                                                     }}
+                                                     disabled={!canEdit}
+                                                     style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #93c5fd', fontSize: '12.5px', fontWeight: 'bold', backgroundColor: '#f8fafc' }}
+                                                 >
+                                                     <option value="">-- 📦 단상자/용기 착인 기준 프리셋 선택 --</option>
+                                                     <option value="LOT EXP YYYYMMDD까지">LOT EXP YYYYMMDD까지</option>
+                                                     <option value="LOT EXP DDMMYYYY">LOT EXP DDMMYYYY</option>
+                                                     <option value="LOT EXP MM-DD-YYYY">LOT EXP MM-DD-YYYY</option>
+                                                     <option value="표기금지(제조번호만 허용)">표기금지(제조번호만 허용)</option>
+                                                     <option value="그 외">그 외 (직접 별도 유형/목록 입력)</option>
+                                                 </select>
+                                                 <textarea
+                                                     value={formData.unitBoxMarkingRule || ''}
+                                                     onChange={e => setFormData({ ...formData, unitBoxMarkingRule: e.target.value })}
+                                                     placeholder="예: 1. 단상자 후면 하단 잉크젯 착인 (LOT: XXX / EXP: YYYYMMDD)"
+                                                     rows={3}
+                                                     disabled={!canEdit}
+                                                     style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', lineHeight: 1.4 }}
+                                                 />
+                                             </div>
+
+                                             {/* 2. 인박스 현품표 착인 / 표시 기재 사항 및 날짜 양식 */}
+                                             <div style={{ backgroundColor: '#ffffff', padding: '14px', borderRadius: '10px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                 <label style={{ fontSize: '13px', fontWeight: '800', color: '#1e3a8a', display: 'block' }}>📥 인박스 현품표 착인 / 표시 기재 사항</label>
+                                                 <select
+                                                     onChange={(e) => {
+                                                         const val = e.target.value;
+                                                         if (val) {
+                                                             const current = formData.inboxLabelMarkingRule ? formData.inboxLabelMarkingRule + '\n' : '';
+                                                             setFormData({ ...formData, inboxLabelMarkingRule: current + val });
+                                                         }
+                                                     }}
+                                                     disabled={!canEdit}
+                                                     style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #93c5fd', fontSize: '12.5px', fontWeight: 'bold', backgroundColor: '#f8fafc' }}
+                                                 >
+                                                     <option value="">-- 📥 인박스 현품표 기재 사항 프리셋 선택 --</option>
+                                                     <option value="인박스 측면 현품표 스티커 부착 (제품명, 입수량, LOT, 사용기한 기재)">인박스 측면 현품표 스티커 부착 (제품명, 입수량, LOT, 사용기한 기재)</option>
+                                                     <option value="현품표 사용기한(Exp. Date) 항목 표기 안함">현품표 사용기한(Exp. Date) 항목 표기 안함</option>
+                                                     <option value="그 외">그 외 (직접 별도 유형/목록 입력)</option>
+                                                 </select>
+                                                 <textarea
+                                                     value={formData.inboxLabelMarkingRule || ''}
+                                                     onChange={e => setFormData({ ...formData, inboxLabelMarkingRule: e.target.value })}
+                                                     placeholder="예: 1. 인박스 측면 현품표 스티커 부착 (제품명, 입수량, LOT, 사용기한 기재)"
+                                                     rows={3}
+                                                     disabled={!canEdit}
+                                                     style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', lineHeight: 1.4 }}
+                                                 />
+
+                                                 {/* 인박스 날짜 표기양식 */}
+                                                 <div style={{ marginTop: '4px', paddingTop: '8px', borderTop: '1px dashed #bfdbfe', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                     <label style={{ fontSize: '12px', fontWeight: '700', color: '#1d4ed8' }}>📥 인박스 날짜 표기양식 (제조일자 & 사용기한 각각 선택):</label>
+                                                     <div style={{ display: 'flex', gap: '6px' }}>
+                                                         <select
+                                                             onChange={(e) => {
+                                                                 const val = e.target.value;
+                                                                 if (val) {
+                                                                     const current = formData.inboxDateFormat ? formData.inboxDateFormat + '\n' : '';
+                                                                     setFormData({ ...formData, inboxDateFormat: current + `제조일자 (Mfg. Date): ${val}` });
+                                                                 }
+                                                             }}
+                                                             disabled={!canEdit}
+                                                             style={{ flex: 1, borderRadius: '4px', padding: '4px 6px', border: '1px solid #93c5fd', fontSize: '11.5px', backgroundColor: '#fff' }}
+                                                         >
+                                                             <option value="">-- Mfg Date 프리셋 --</option>
+                                                             <option value="YYYYMMDD">YYYYMMDD</option>
+                                                             <option value="YYYY.MM.DD">YYYY.MM.DD</option>
+                                                             <option value="MM-DD-YYYY">MM-DD-YYYY</option>
+                                                             <option value="DDMMYYYY">DDMMYYYY</option>
+                                                         </select>
+                                                         <select
+                                                             onChange={(e) => {
+                                                                 const val = e.target.value;
+                                                                 if (val) {
+                                                                     const current = formData.inboxDateFormat ? formData.inboxDateFormat + '\n' : '';
+                                                                     setFormData({ ...formData, inboxDateFormat: current + `사용기한 (Exp. Date): ${val}` });
+                                                                 }
+                                                             }}
+                                                             disabled={!canEdit}
+                                                             style={{ flex: 1, borderRadius: '4px', padding: '4px 6px', border: '1px solid #93c5fd', fontSize: '11.5px', backgroundColor: '#fff' }}
+                                                         >
+                                                             <option value="">-- Exp Date 프리셋 --</option>
+                                                             <option value="YYYYMMDD까지">YYYYMMDD까지</option>
+                                                             <option value="YYYY.MM.DD까지">YYYY.MM.DD까지</option>
+                                                             <option value="MM-DD-YYYY까지">MM-DD-YYYY까지</option>
+                                                             <option value="DDMMYYYY까지">DDMMYYYY까지</option>
+                                                             <option value="현품표 사용기한(Exp. Date) 항목 표기 안함">현품표 사용기한(Exp. Date) 항목 표기 안함</option>
+                                                         </select>
+                                                     </div>
+                                                     <textarea
+                                                         value={formData.inboxDateFormat || ''}
+                                                         onChange={e => setFormData({ ...formData, inboxDateFormat: e.target.value })}
+                                                         placeholder="예: 제조일자: YYYY.MM.DD 표기&#10;사용기한: EXP YYYY.MM.DD까지 표기"
+                                                         rows={3}
+                                                         disabled={!canEdit}
+                                                         style={{ width: '100%', borderRadius: '6px', padding: '6px', border: '1px solid #93c5fd', fontSize: '12px', backgroundColor: '#fff', lineHeight: 1.4 }}
+                                                     />
+                                                 </div>
+                                             </div>
+
+                                             {/* 3. 아웃박스 현품표 착인 / 표시 기재 사항 및 날짜 양식 */}
+                                             <div style={{ backgroundColor: '#ffffff', padding: '14px', borderRadius: '10px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                 <label style={{ fontSize: '13px', fontWeight: '800', color: '#1e3a8a', display: 'block' }}>📦 아웃박스 현품표 착인 / 표시 기재 사항</label>
+                                                 <select
+                                                     onChange={(e) => {
+                                                         const val = e.target.value;
+                                                         if (val) {
+                                                             const current = formData.outboxLabelMarkingRule ? formData.outboxLabelMarkingRule + '\n' : '';
+                                                             setFormData({ ...formData, outboxLabelMarkingRule: current + val });
+                                                         }
+                                                     }}
+                                                     disabled={!canEdit}
+                                                     style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #93c5fd', fontSize: '12.5px', fontWeight: 'bold', backgroundColor: '#f8fafc' }}
+                                                 >
+                                                     <option value="">-- 📦 아웃박스 현품표 기재 사항 프리셋 선택 --</option>
+                                                     <option value="아웃박스 우측 상단 현품표 착인 (제조번호, 바코드, 사용기한 포함)">아웃박스 우측 상단 현품표 착인 (제조번호, 바코드, 사용기한 포함)</option>
+                                                     <option value="현품표 사용기한(Exp. Date) 항목 표기 안함">현품표 사용기한(Exp. Date) 항목 표기 안함</option>
+                                                     <option value="그 외">그 외 (직접 별도 유형/목록 입력)</option>
+                                                 </select>
+                                                 <textarea
+                                                     value={formData.outboxLabelMarkingRule || ''}
+                                                     onChange={e => setFormData({ ...formData, outboxLabelMarkingRule: e.target.value })}
+                                                     placeholder="예: 1. 아웃박스 우측 상단 현품표 착인 (제조번호, 바코드, 사용기한 포함)"
+                                                     rows={3}
+                                                     disabled={!canEdit}
+                                                     style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', lineHeight: 1.4 }}
+                                                 />
+
+                                                 {/* 아웃박스 날짜 표기양식 */}
+                                                 <div style={{ marginTop: '4px', paddingTop: '8px', borderTop: '1px dashed #bfdbfe', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                     <label style={{ fontSize: '12px', fontWeight: '700', color: '#1d4ed8' }}>📦 아웃박스 날짜 표기양식 (제조일자 & 사용기한 각각 선택):</label>
+                                                     <div style={{ display: 'flex', gap: '6px' }}>
+                                                         <select
+                                                             onChange={(e) => {
+                                                                 const val = e.target.value;
+                                                                 if (val) {
+                                                                     const current = formData.outboxDateFormat ? formData.outboxDateFormat + '\n' : '';
+                                                                     setFormData({ ...formData, outboxDateFormat: current + `제조일자 (Mfg. Date): ${val}` });
+                                                                 }
+                                                             }}
+                                                             disabled={!canEdit}
+                                                             style={{ flex: 1, borderRadius: '4px', padding: '4px 6px', border: '1px solid #93c5fd', fontSize: '11.5px', backgroundColor: '#fff' }}
+                                                         >
+                                                             <option value="">-- Mfg Date 프리셋 --</option>
+                                                             <option value="YYYYMMDD">YYYYMMDD</option>
+                                                             <option value="YYYY.MM.DD">YYYY.MM.DD</option>
+                                                             <option value="MM-DD-YYYY">MM-DD-YYYY</option>
+                                                             <option value="DDMMYYYY">DDMMYYYY</option>
+                                                         </select>
+                                                         <select
+                                                             onChange={(e) => {
+                                                                 const val = e.target.value;
+                                                                 if (val) {
+                                                                     const current = formData.outboxDateFormat ? formData.outboxDateFormat + '\n' : '';
+                                                                     setFormData({ ...formData, outboxDateFormat: current + `사용기한 (Exp. Date): ${val}` });
+                                                                 }
+                                                             }}
+                                                             disabled={!canEdit}
+                                                             style={{ flex: 1, borderRadius: '4px', padding: '4px 6px', border: '1px solid #93c5fd', fontSize: '11.5px', backgroundColor: '#fff' }}
+                                                         >
+                                                             <option value="">-- Exp Date 프리셋 --</option>
+                                                             <option value="YYYYMMDD까지">YYYYMMDD까지</option>
+                                                             <option value="YYYY.MM.DD까지">YYYY.MM.DD까지</option>
+                                                             <option value="MM-DD-YYYY까지">MM-DD-YYYY까지</option>
+                                                             <option value="DDMMYYYY까지">DDMMYYYY까지</option>
+                                                             <option value="현품표 사용기한(Exp. Date) 항목 표기 안함">현품표 사용기한(Exp. Date) 항목 표기 안함</option>
+                                                         </select>
+                                                     </div>
+                                                     <textarea
+                                                         value={formData.outboxDateFormat || ''}
+                                                         onChange={e => setFormData({ ...formData, outboxDateFormat: e.target.value })}
+                                                         placeholder="예: 제조일자: YYYY.MM.DD 표기&#10;사용기한: EXP YYYY.MM.DD까지 표기"
+                                                         rows={3}
+                                                         disabled={!canEdit}
+                                                         style={{ width: '100%', borderRadius: '6px', padding: '6px', border: '1px solid #93c5fd', fontSize: '12px', backgroundColor: '#fff', lineHeight: 1.4 }}
+                                                     />
+                                                 </div>
+                                             </div>
+
+                                             {/* 4. 팔레트 현품표 착인 / 표시 기재 사항 및 날짜 양식 */}
+                                             <div style={{ backgroundColor: '#ffffff', padding: '14px', borderRadius: '10px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                 <label style={{ fontSize: '13px', fontWeight: '800', color: '#1e3a8a', display: 'block' }}>🏷️ 팔레트 현품표 착인 / 표시 기재 사항</label>
+                                                 <select
+                                                     onChange={(e) => {
+                                                         const val = e.target.value;
+                                                         if (val) {
+                                                             const current = formData.palletLabelMarkingRule ? formData.palletLabelMarkingRule + '\n' : '';
+                                                             setFormData({ ...formData, palletLabelMarkingRule: current + val });
+                                                         }
+                                                     }}
+                                                     disabled={!canEdit}
+                                                     style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #93c5fd', fontSize: '12.5px', fontWeight: 'bold', backgroundColor: '#f8fafc' }}
+                                                 >
+                                                     <option value="">-- 🏷️ 팔레트 현품표 기재 사항 프리셋 선택 --</option>
+                                                     <option value="팔레트 랩핑 후 전면/측면 2면 현품표 부착 (제조일자, 사용기한 필수)">팔레트 랩핑 후 전면/측면 2면 현품표 부착 (제조일자, 사용기한 필수)</option>
+                                                     <option value="현품표 사용기한(Exp. Date) 항목 표기 안함">현품표 사용기한(Exp. Date) 항목 표기 안함</option>
+                                                     <option value="그 외">그 외 (직접 별도 유형/목록 입력)</option>
+                                                 </select>
+                                                 <textarea
+                                                     value={formData.palletLabelMarkingRule || ''}
+                                                     onChange={e => setFormData({ ...formData, palletLabelMarkingRule: e.target.value })}
+                                                     placeholder="예: 1. 팔레트 랩핑 후 전면/측면 2면 현품표 부착 (제조일자, 사용기한 필수)"
+                                                     rows={3}
+                                                     disabled={!canEdit}
+                                                     style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', lineHeight: 1.4 }}
+                                                 />
+
+                                                 {/* 팔레트 날짜 표기양식 */}
+                                                 <div style={{ marginTop: '4px', paddingTop: '8px', borderTop: '1px dashed #bfdbfe', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                     <label style={{ fontSize: '12px', fontWeight: '700', color: '#1d4ed8' }}>🏷️ 팔레트 날짜 표기양식 (제조일자 & 사용기한 각각 선택):</label>
+                                                     <div style={{ display: 'flex', gap: '6px' }}>
+                                                         <select
+                                                             onChange={(e) => {
+                                                                 const val = e.target.value;
+                                                                 if (val) {
+                                                                     const current = formData.palletDateFormat ? formData.palletDateFormat + '\n' : '';
+                                                                     setFormData({ ...formData, palletDateFormat: current + `제조일자 (Mfg. Date): ${val}` });
+                                                                 }
+                                                             }}
+                                                             disabled={!canEdit}
+                                                             style={{ flex: 1, borderRadius: '4px', padding: '4px 6px', border: '1px solid #93c5fd', fontSize: '11.5px', backgroundColor: '#fff' }}
+                                                         >
+                                                             <option value="">-- Mfg Date 프리셋 --</option>
+                                                             <option value="YYYYMMDD">YYYYMMDD</option>
+                                                             <option value="YYYY.MM.DD">YYYY.MM.DD</option>
+                                                             <option value="MM-DD-YYYY">MM-DD-YYYY</option>
+                                                             <option value="DDMMYYYY">DDMMYYYY</option>
+                                                         </select>
+                                                         <select
+                                                             onChange={(e) => {
+                                                                 const val = e.target.value;
+                                                                 if (val) {
+                                                                     const current = formData.palletDateFormat ? formData.palletDateFormat + '\n' : '';
+                                                                     setFormData({ ...formData, palletDateFormat: current + `사용기한 (Exp. Date): ${val}` });
+                                                                 }
+                                                             }}
+                                                             disabled={!canEdit}
+                                                             style={{ flex: 1, borderRadius: '4px', padding: '4px 6px', border: '1px solid #93c5fd', fontSize: '11.5px', backgroundColor: '#fff' }}
+                                                         >
+                                                             <option value="">-- Exp Date 프리셋 --</option>
+                                                             <option value="YYYYMMDD까지">YYYYMMDD까지</option>
+                                                             <option value="YYYY.MM.DD까지">YYYY.MM.DD까지</option>
+                                                             <option value="MM-DD-YYYY까지">MM-DD-YYYY까지</option>
+                                                             <option value="DDMMYYYY까지">DDMMYYYY까지</option>
+                                                             <option value="현품표 사용기한(Exp. Date) 항목 표기 안함">현품표 사용기한(Exp. Date) 항목 표기 안함</option>
+                                                         </select>
+                                                     </div>
+                                                     <textarea
+                                                         value={formData.palletDateFormat || ''}
+                                                         onChange={e => setFormData({ ...formData, palletDateFormat: e.target.value })}
+                                                         placeholder="예: 제조일자: YYYY.MM.DD 표기&#10;사용기한: EXP YYYY.MM.DD까지 표기"
+                                                         rows={3}
+                                                         disabled={!canEdit}
+                                                         style={{ width: '100%', borderRadius: '6px', padding: '6px', border: '1px solid #93c5fd', fontSize: '12px', backgroundColor: '#fff', lineHeight: 1.4 }}
+                                                     />
+                                                 </div>
+                                             </div>
+
+                                         </div>
+                                     </div>
+
+                                    {/* 항목화된 채널 포장 특이사항 영역 (단품 전용 특이사항만 노출) */}
+                                    <div className="form-group" style={{ backgroundColor: '#f8fafc', padding: '20px', borderRadius: '14px', border: '1px solid #cbd5e1', fontFamily: "'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif", WebkitFontSmoothing: 'antialiased' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                                            <label style={{ fontWeight: '900', fontSize: '15px', color: '#0f172a', letterSpacing: '-0.3px' }}>
+                                                📋 기타 일반 / 단품 포장 특이사항 (서식 및 첨부파일)
+                                            </label>
+                                            <span style={{ fontSize: '13px', fontWeight: '600', color: '#475569' }}>입력 시 포장사양서 비고란에 자동 조합 출력됩니다.</span>
+                                        </div>
+
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                            {categorizedNotes.length === 0 ? (
+                                                <div style={{ gridColumn: 'span 2', padding: '20px', textOverflow: 'ellipsis', textAlign: 'center', color: '#64748b', fontSize: '13px', fontWeight: '600' }}>
+                                                    특이사항 항목을 로딩 중입니다... 
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={fetchCategoriesOnly} 
+                                                        style={{ marginLeft: '10px', background: 'none', border: 'none', color: '#1d4ed8', textDecoration: 'underline', cursor: 'pointer', fontWeight: 'bold' }}
+                                                    >
+                                                        [항목 목록 불러오기]
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                categorizedNotes
+                                                .filter(item => {
+                                                    const isSetCat = item.categoryKey?.startsWith('SET_') || item.categoryLabel?.includes('기획세트');
+                                                    return !isSetCat;
+                                                })
+                                                .map((item, idx) => {
+                                                    const isSticker = item.categoryKey === 'CHANNEL_STICKER';
+                                                    const isExpiry = item.categoryKey === 'EXPIRY_MARKING';
+
+                                                    return (
+                                                        <div key={item.categoryId || idx} style={{ backgroundColor: '#ffffff', padding: '14px', borderRadius: '10px', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', gap: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                <label style={{ fontWeight: '800', fontSize: '13.5px', color: '#1d4ed8', letterSpacing: '-0.2px' }}>
+                                                                    [{item.categoryLabel}]
+                                                                </label>
+
+                                                                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                                                    <button
+                                                                        type="button"
+                                                                        title="글자 굵게"
+                                                                        onClick={() => applyFormat(item.categoryId, 'bold')}
+                                                                        style={{ padding: '2px 6px', fontWeight: 'bold', fontSize: '12px', border: '1px solid #cbd5e1', borderRadius: '4px', backgroundColor: '#f8fafc', cursor: 'pointer' }}
+                                                                    >
+                                                                        B
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        title="기울임"
+                                                                        onClick={() => applyFormat(item.categoryId, 'italic')}
+                                                                        style={{ padding: '2px 6px', fontStyle: 'italic', fontSize: '12px', border: '1px solid #cbd5e1', borderRadius: '4px', backgroundColor: '#f8fafc', cursor: 'pointer' }}
+                                                                    >
+                                                                        I
+                                                                    </button>
+                                                                    <input
+                                                                        type="color"
+                                                                        title="글자 색상 변경"
+                                                                        onChange={(e) => applyFormat(item.categoryId, 'color', e.target.value)}
+                                                                        style={{ width: '22px', height: '22px', border: 'none', background: 'none', cursor: 'pointer' }}
+                                                                    />
+                                                                </div>
                                                             </div>
 
-                                                            {/* 첨부된 파일 썸네일 카드 노출 */}
-                                                            {item.fileUrl && (
-                                                                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', backgroundColor: '#f1f5f9', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
-                                                                    {item.fileType === 'PDF' || item.fileUrl.toLowerCase().endsWith('.pdf') ? (
-                                                                        <div style={{ width: '54px', height: '54px', backgroundColor: '#fee2e2', color: '#dc2626', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '12px', borderRadius: '6px' }}>
-                                                                            📄 PDF
+                                                            {isSticker ? (
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                                        <input
+                                                                            type="file"
+                                                                            accept="image/*,application/pdf"
+                                                                            onChange={(e) => handleFileUpload(item.categoryId, e.target.files[0])}
+                                                                            style={{ fontSize: '12px', flex: 1 }}
+                                                                            disabled={!canEdit}
+                                                                        />
+                                                                    </div>
+
+                                                                    {item.fileUrl && (
+                                                                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', backgroundColor: '#f1f5f9', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                                                                            {item.fileType === 'PDF' || item.fileUrl.toLowerCase().endsWith('.pdf') ? (
+                                                                                <div style={{ width: '54px', height: '54px', backgroundColor: '#fee2e2', color: '#dc2626', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '12px', borderRadius: '6px' }}>
+                                                                                    📄 PDF
+                                                                                </div>
+                                                                            ) : (
+                                                                                <img
+                                                                                    src={getFullFileUrl(item.fileUrl)}
+                                                                                    alt="Sticker Thumbnail"
+                                                                                    style={{ width: '54px', height: '54px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff' }}
+                                                                                />
+                                                                            )}
+                                                                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                                                <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>
+                                                                                    채널 스티커 규정 파일 ({item.fileType || 'MEDIA'})
+                                                                                </span>
+                                                                                <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: '600' }}>
+                                                                                    ✓ 백엔드 저장 완료
+                                                                                </span>
+                                                                            </div>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => setPreviewFile({ url: getFullFileUrl(item.fileUrl), type: item.fileType })}
+                                                                                style={{ padding: '6px 12px', fontSize: '12px', fontWeight: 'bold', color: '#fff', backgroundColor: '#2563eb', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                                                                            >
+                                                                                👁️ 미리보기
+                                                                            </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => setCategorizedNotes(categorizedNotes.map(n => n.categoryId === item.categoryId ? { ...n, fileUrl: null, fileType: null } : n))}
+                                                                                style={{ padding: '6px 10px', fontSize: '12px', fontWeight: 'bold', color: '#ef4444', backgroundColor: '#fff', border: '1px solid #fca5a5', borderRadius: '6px', cursor: 'pointer' }}
+                                                                            >
+                                                                                ✕
+                                                                            </button>
                                                                         </div>
-                                                                    ) : (
-                                                                        <img
-                                                                            src={getFullFileUrl(item.fileUrl)}
-                                                                            alt="Sticker Thumbnail"
-                                                                            style={{ width: '54px', height: '54px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff' }}
-                                                                            onError={(e) => {
-                                                                                console.error("Thumbnail load failed:", item.fileUrl);
+                                                                    )}
+                                                                    <textarea
+                                                                        value={item.noteContent || ''}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value;
+                                                                            setCategorizedNotes(categorizedNotes.map(n => n.categoryId === item.categoryId ? { ...n, noteContent: val } : n));
+                                                                        }}
+                                                                        placeholder="채널 스티커 관련 세부 설명 입력..."
+                                                                        rows={2}
+                                                                        disabled={!canEdit}
+                                                                        style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px' }}
+                                                                    />
+                                                                </div>
+                                                            ) : isExpiry ? (
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                                    <select
+                                                                        value={item.expiryOption || (item.noteContent?.includes('LOT EXP YYYYMMDD') ? 'LOT EXP YYYYMMDD까지' : item.noteContent?.includes('LOT EXP DDMMYYYY') ? 'LOT EXP DDMMYYYY' : item.noteContent?.includes('LOT EXP MM-DD-YYYY') ? 'LOT EXP MM-DD-YYYY' : item.noteContent?.includes('표시금지') ? '표시금지(제조번호만 허용)' : item.noteContent ? '그 외' : '')}
+                                                                        onChange={(e) => {
+                                                                            const opt = e.target.value;
+                                                                            setCategorizedNotes(categorizedNotes.map(n => {
+                                                                                if (n.categoryId === item.categoryId) {
+                                                                                    let content = opt !== '그 외' ? opt : n.customExpiryFormat || '';
+                                                                                    return { ...n, expiryOption: opt, noteContent: content };
+                                                                                }
+                                                                                return n;
+                                                                            }));
+                                                                        }}
+                                                                        disabled={!canEdit}
+                                                                        style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: 'bold', backgroundColor: '#fff' }}
+                                                                    >
+                                                                        <option value="">-- 사용기한 착인 규정 선택 --</option>
+                                                                        <option value="LOT EXP YYYYMMDD까지">LOT EXP YYYYMMDD까지</option>
+                                                                        <option value="LOT EXP DDMMYYYY">LOT EXP DDMMYYYY</option>
+                                                                        <option value="LOT EXP MM-DD-YYYY">LOT EXP MM-DD-YYYY</option>
+                                                                        <option value="표시금지(제조번호만 허용)">표시금지(제조번호만 허용)</option>
+                                                                        <option value="그 외">그 외 (직접 별도 유형 기재)</option>
+                                                                    </select>
+                                                                    {(item.expiryOption === '그 외' || (item.noteContent && !['LOT EXP YYYYMMDD까지','LOT EXP DDMMYYYY','LOT EXP MM-DD-YYYY','표시금지(제조번호만 허용)'].includes(item.noteContent))) && (
+                                                                        <textarea
+                                                                            value={item.noteContent || ''}
+                                                                            onChange={(e) => {
+                                                                                const val = e.target.value;
+                                                                                setCategorizedNotes(categorizedNotes.map(n => n.categoryId === item.categoryId ? { ...n, customExpiryFormat: val, noteContent: val } : n));
                                                                             }}
+                                                                            placeholder="별도 사용기한 착인 규정 입력..."
+                                                                            rows={2}
+                                                                            disabled={!canEdit}
+                                                                            style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
                                                                         />
                                                                     )}
-                                                                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                                                        <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#1e293b' }}>
-                                                                            채널 스티커 규정 파일 ({item.fileType || 'MEDIA'})
-                                                                        </span>
-                                                                        <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: '600' }}>
-                                                                            ✓ 백엔드 저장 완료
-                                                                        </span>
-                                                                    </div>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => setPreviewFile({ url: getFullFileUrl(item.fileUrl), type: item.fileType })}
-                                                                        style={{ padding: '6px 12px', fontSize: '12px', fontWeight: 'bold', color: '#fff', backgroundColor: '#2563eb', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
-                                                                    >
-                                                                        👁️ 확대 미리보기
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => setCategorizedNotes(categorizedNotes.map(n => n.categoryId === item.categoryId ? { ...n, fileUrl: null, fileType: null } : n))}
-                                                                        style={{ padding: '6px 10px', fontSize: '12px', fontWeight: 'bold', color: '#ef4444', backgroundColor: '#fff', border: '1px solid #fca5a5', borderRadius: '6px', cursor: 'pointer' }}
-                                                                        title="첨부 파일 삭제"
-                                                                    >
-                                                                        ✕
-                                                                    </button>
                                                                 </div>
+                                                            ) : (
+                                                                <textarea
+                                                                    value={item.noteContent || ''}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value;
+                                                                        setCategorizedNotes(categorizedNotes.map(n => n.categoryId === item.categoryId ? { ...n, noteContent: val } : n));
+                                                                    }}
+                                                                    placeholder="해당 없음 (입력 시 포장사양서 비고란에 자동 출력)"
+                                                                    rows={2}
+                                                                    disabled={!canEdit}
+                                                                    style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #cbd5e1', fontSize: '13px', lineHeight: 1.4, resize: 'vertical' }}
+                                                                />
                                                             )}
+                                                        </div>
+                                                    );
+                                                })
+                                            )}
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    {/* 🎁 기획세트 포장 / 현품표 규격 탭 */}
+                                    <div style={{ backgroundColor: '#f3e8ff', padding: '16px', borderRadius: '12px', border: '1px solid #d8b4fe', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <h4 style={{ margin: 0, fontSize: '14px', fontWeight: '800', color: '#6b21a8' }}>🎁 [기획세트 전용] 용기/단상자/박스/팔레트 착인 및 현품표 상세 기준</h4>
+                                            <span style={{ fontSize: '12px', fontWeight: '600', color: '#9333ea' }}>포장사양서 기획세트 항목에 직접 동기화됩니다.</span>
+                                        </div>
+
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                            <div>
+                                                <label style={{ fontSize: '12px', fontWeight: '700', color: '#581c87', display: 'block', marginBottom: '4px' }}>기획세트 용기 / 단상자 표기사항</label>
+                                                <textarea
+                                                    value={formData.setContainerMarkingDisplay}
+                                                    onChange={e => setFormData({ ...formData, setContainerMarkingDisplay: e.target.value })}
+                                                    placeholder="예: 세트 구성품 표기사항 및 세트용 바코드 표시"
+                                                    rows={2}
+                                                    disabled={!canEdit}
+                                                    style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #c084fc', fontSize: '12.5px' }}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={{ fontSize: '12px', fontWeight: '700', color: '#581c87', display: 'block', marginBottom: '4px' }}>기획세트 단상자 / 용기 착인 기준</label>
+                                                <textarea
+                                                    value={formData.setUnitBoxMarkingRule}
+                                                    onChange={e => setFormData({ ...formData, setUnitBoxMarkingRule: e.target.value })}
+                                                    placeholder="예: 기획세트 단상자 측면 착인 (제조번호, 사용기한, 구성품 개별 착인 여부)"
+                                                    rows={2}
+                                                    disabled={!canEdit}
+                                                    style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #c084fc', fontSize: '12.5px' }}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={{ fontSize: '12px', fontWeight: '700', color: '#581c87', display: 'block', marginBottom: '4px' }}>기획세트 인박스 현품표 착인 / 기재 내용</label>
+                                                <textarea
+                                                    value={formData.setInboxLabelMarkingRule}
+                                                    onChange={e => setFormData({ ...formData, setInboxLabelMarkingRule: e.target.value })}
+                                                    placeholder="예: 기획세트 인박스 현품표에 세트 구성품 세부 목록 및 수량 기재"
+                                                    rows={2}
+                                                    disabled={!canEdit}
+                                                    style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #c084fc', fontSize: '12.5px' }}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={{ fontSize: '12px', fontWeight: '700', color: '#581c87', display: 'block', marginBottom: '4px' }}>기획세트 아웃박스 현품표 착인 / 기재 내용</label>
+                                                <textarea
+                                                    value={formData.setOutboxLabelMarkingRule}
+                                                    onChange={e => setFormData({ ...formData, setOutboxLabelMarkingRule: e.target.value })}
+                                                    placeholder="예: 기획세트 전용 아웃박스 현품표 착인 (기획세트 코드, LOT, 사용기한)"
+                                                    rows={2}
+                                                    disabled={!canEdit}
+                                                    style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #c084fc', fontSize: '12.5px' }}
+                                                />
+                                            </div>
+                                            <div style={{ gridColumn: 'span 2' }}>
+                                                <label style={{ fontSize: '12px', fontWeight: '700', color: '#581c87', display: 'block', marginBottom: '4px' }}>기획세트 팔레트 현품표 착인 / 기재 내용</label>
+                                                <textarea
+                                                    value={formData.setPalletLabelMarkingRule}
+                                                    onChange={e => setFormData({ ...formData, setPalletLabelMarkingRule: e.target.value })}
+                                                    placeholder="예: 기획세트 팔레트 전면/후면 현품표 부착 (기획세트명, 총 박스수량, 사용기한)"
+                                                    rows={2}
+                                                    disabled={!canEdit}
+                                                    style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #c084fc', fontSize: '12.5px' }}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginTop: '6px' }}>
+                                            <div>
+                                                <label style={{ fontSize: '12px', fontWeight: '700', color: '#581c87', display: 'block', marginBottom: '4px' }}>기획세트 완충재 기준</label>
+                                                <input
+                                                    type="text"
+                                                    value={formData.setCushioningStandard}
+                                                    onChange={e => setFormData({ ...formData, setCushioningStandard: e.target.value })}
+                                                    placeholder="예: 에어캡 파우치 개별 포장"
+                                                    disabled={!canEdit}
+                                                    style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #c084fc', fontSize: '12.5px' }}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={{ fontSize: '12px', fontWeight: '700', color: '#581c87', display: 'block', marginBottom: '4px' }}>기획세트 적재 높이 제한</label>
+                                                <input
+                                                    type="text"
+                                                    value={formData.setPalletHeightLimit}
+                                                    onChange={e => setFormData({ ...formData, setPalletHeightLimit: e.target.value })}
+                                                    placeholder="예: 1,200 mm 이하 제한"
+                                                    disabled={!canEdit}
+                                                    style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #c084fc', fontSize: '12.5px' }}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={{ fontSize: '12px', fontWeight: '700', color: '#581c87', display: 'block', marginBottom: '4px' }}>기획세트 스티커 부착 기준</label>
+                                                <input
+                                                    type="text"
+                                                    value={formData.setChannelStickerStandard}
+                                                    onChange={e => setFormData({ ...formData, setChannelStickerStandard: e.target.value })}
+                                                    placeholder="예: 기획세트 전용 바코드 스티커 상단 부착"
+                                                    disabled={!canEdit}
+                                                    style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #c084fc', fontSize: '12.5px' }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* 기획세트 전용 동적 특이사항 영역 */}
+                                    {categorizedNotes.some(item => item.categoryKey?.startsWith('SET_') || item.categoryLabel?.includes('기획세트')) && (
+                                        <div className="form-group" style={{ backgroundColor: '#faf5ff', padding: '20px', borderRadius: '14px', border: '1px solid #d8b4fe', fontFamily: "'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif", WebkitFontSmoothing: 'antialiased' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                                                <label style={{ fontWeight: '900', fontSize: '15px', color: '#6b21a8', letterSpacing: '-0.3px' }}>
+                                                    📋 기획세트 전용 포장 특이사항 (서식 및 추가 항목)
+                                                </label>
+                                                <span style={{ fontSize: '13px', fontWeight: '600', color: '#7e22ce' }}>기획세트 사양서 비고란에 자동 출력을 위한 추가 항목입니다.</span>
+                                            </div>
+
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                                {categorizedNotes
+                                                    .filter(item => item.categoryKey?.startsWith('SET_') || item.categoryLabel?.includes('기획세트'))
+                                                    .map((item, idx) => (
+                                                        <div key={item.categoryId || idx} style={{ backgroundColor: '#ffffff', padding: '14px', borderRadius: '10px', border: '1px solid #e9d5ff', display: 'flex', flexDirection: 'column', gap: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                <label style={{ fontWeight: '800', fontSize: '13.5px', color: '#7c3aed', letterSpacing: '-0.2px' }}>
+                                                                    [{item.categoryLabel}]
+                                                                </label>
+                                                            </div>
                                                             <textarea
                                                                 value={item.noteContent || ''}
                                                                 onChange={(e) => {
                                                                     const val = e.target.value;
                                                                     setCategorizedNotes(categorizedNotes.map(n => n.categoryId === item.categoryId ? { ...n, noteContent: val } : n));
                                                                 }}
-                                                                placeholder="채널 스티커 관련 세부 설명 입력..."
+                                                                placeholder="기획세트 특이사항 세부 내용 입력..."
                                                                 rows={2}
                                                                 disabled={!canEdit}
-                                                                style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', lineHeight: 1.4 }}
+                                                                style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #d8b4fe', fontSize: '13px', lineHeight: 1.4, resize: 'vertical' }}
                                                             />
                                                         </div>
-                                                    ) : isExpiry ? (
-                                                        /* 2. 사용기한 착인 규정: 목록 선택형 */
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                            <select
-                                                                value={item.expiryOption || (item.noteContent?.includes('LOT EXP YYYYMMDD') ? 'LOT EXP YYYYMMDD까지' : item.noteContent?.includes('LOT EXP DDMMYYYY') ? 'LOT EXP DDMMYYYY' : item.noteContent?.includes('LOT EXP MM-DD-YYYY') ? 'LOT EXP MM-DD-YYYY' : item.noteContent?.includes('표시금지') ? '표시금지(제조번호만 허용)' : item.noteContent ? '그 외' : '')}
-                                                                onChange={(e) => {
-                                                                    const opt = e.target.value;
-                                                                    setCategorizedNotes(categorizedNotes.map(n => {
-                                                                        if (n.categoryId === item.categoryId) {
-                                                                            let content = opt !== '그 외' ? opt : n.customExpiryFormat || '';
-                                                                            return { ...n, expiryOption: opt, noteContent: content };
-                                                                        }
-                                                                        return n;
-                                                                    }));
-                                                                }}
-                                                                disabled={!canEdit}
-                                                                style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: 'bold', backgroundColor: '#fff' }}
-                                                            >
-                                                                <option value="">-- 사용기한 착인 규정 선택 --</option>
-                                                                <option value="LOT EXP YYYYMMDD까지">LOT EXP YYYYMMDD까지</option>
-                                                                <option value="LOT EXP DDMMYYYY">LOT EXP DDMMYYYY</option>
-                                                                <option value="LOT EXP MM-DD-YYYY">LOT EXP MM-DD-YYYY</option>
-                                                                <option value="표시금지(제조번호만 허용)">표시금지(제조번호만 허용)</option>
-                                                                <option value="그 외">그 외 (직접 별도 유형 기재)</option>
-                                                            </select>
-
-                                                            {(item.expiryOption === '그 외' || (item.noteContent && !['LOT EXP YYYYMMDD까지','LOT EXP DDMMYYYY','LOT EXP MM-DD-YYYY','표시금지(제조번호만 허용)'].includes(item.noteContent))) && (
-                                                                <textarea
-                                                                    value={item.noteContent || ''}
-                                                                    onChange={(e) => {
-                                                                        const val = e.target.value;
-                                                                        setCategorizedNotes(categorizedNotes.map(n => n.categoryId === item.categoryId ? { ...n, customExpiryFormat: val, noteContent: val } : n));
-                                                                    }}
-                                                                    placeholder="별도 사용기한 착인 규정 입력..."
-                                                                    rows={2}
-                                                                    disabled={!canEdit}
-                                                                    style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
-                                                                />
-                                                            )}
-                                                        </div>
-                                                    ) : (
-                                                        /* 3. 일반 항목 */
-                                                        <textarea
-                                                            value={item.noteContent || ''}
-                                                            onChange={(e) => {
-                                                                const val = e.target.value;
-                                                                setCategorizedNotes(categorizedNotes.map(n => n.categoryId === item.categoryId ? { ...n, noteContent: val } : n));
-                                                            }}
-                                                            placeholder="해당 없음 (입력 시 포장사양서 비고란에 자동 출력)"
-                                                            rows={2}
-                                                            disabled={!canEdit}
-                                                            style={{ width: '100%', borderRadius: '6px', padding: '8px', border: '1px solid #cbd5e1', fontSize: '13px', lineHeight: 1.4, resize: 'vertical' }}
-                                                        />
-                                                    )}
-                                                </div>
-                                            );
-                                        })
+                                                    ))
+                                                }
+                                            </div>
+                                        </div>
                                     )}
-                                </div>
-                            </div>
+                                </>
+                            )}
 
                             <div className="form-group">
                                 <label style={{ fontWeight: '700', fontSize: '13px', marginBottom: '8px', display: 'block', color: '#475569' }}>채널 설명 (Description)</label>

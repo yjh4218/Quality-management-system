@@ -9,6 +9,8 @@ backend/.env
 frontend/.env
 
 # [SECURITY] Temporary or debug files
+logs/
+logs_*/
 diff.txt
 error_list_*.txt
 *.diff

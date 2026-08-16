@@ -77,8 +77,7 @@ public class PackagingSpecService {
             }
             
             for (SalesChannel channel : product.getChannels()) {
-                List<ChannelPackagingRule> rules = masterDataService.getRulesByChannel(channel);
-                applyChannelRulesToSpec(spec, rules);
+                applyChannelRulesToSpec(spec, channel);
             }
         }
 
@@ -141,8 +140,7 @@ public class PackagingSpecService {
             }
             
             for (SalesChannel channel : product.getChannels()) {
-                List<ChannelPackagingRule> rules = masterDataService.getRulesByChannel(channel);
-                applyChannelRulesToSpec(newSpec, rules);
+                applyChannelRulesToSpec(newSpec, channel);
             }
         }
 
@@ -196,101 +194,70 @@ public class PackagingSpecService {
         log.info("Starting rule synchronization for channel: {}", channel.getName());
         
         List<Product> products = productRepository.findAll().stream()
-                .filter(p -> p.getChannels().contains(channel))
+                .filter(p -> p.getChannels() != null && p.getChannels().contains(channel))
                 .collect(Collectors.toList());
-
-        List<ChannelPackagingRule> rules = masterDataService.getRulesByChannel(channel);
 
         for (Product product : products) {
             List<PackagingSpecification> specs = specRepository.findByProductId(product.getId());
             for (PackagingSpecification spec : specs) {
-                applyChannelRulesToSpec(spec, rules);
-                spec.setRevisionNotes(spec.getRevisionNotes() + "\n[SYSTEM] " + channel.getName() + " 채널 공통 규칙 적용됨.");
+                applyChannelRulesToSpec(spec, channel);
+                spec.setRevisionNotes(spec.getRevisionNotes() != null ? spec.getRevisionNotes() + "\n[SYSTEM] " + channel.getName() + " 채널 공통 규칙 적용됨." : "[SYSTEM] " + channel.getName() + " 채널 공통 규칙 적용됨.");
                 specRepository.save(spec);
             }
         }
         log.info("Rule synchronization completed for {} products in channel {}.", products.size(), channel.getName());
     }
 
-    private void applyChannelRulesToSpec(PackagingSpecification spec, List<ChannelPackagingRule> rules) {
-        StringBuilder remarksBuilder = new StringBuilder();
-        if (spec.getRemarks() != null && !spec.getRemarks().isEmpty()) {
-            remarksBuilder.append(spec.getRemarks());
+    private void applyChannelRulesToSpec(PackagingSpecification spec, SalesChannel channel) {
+        if (channel == null) return;
+        boolean isSet = spec.getProduct() != null && spec.getProduct().isPlanningSet();
+
+        if (channel.getPalletType() != null && !channel.getPalletType().isEmpty()) {
+            spec.setPalletTypeStr(channel.getPalletType());
+        }
+        if (channel.getPalletSpec() != null && !channel.getPalletSpec().isEmpty()) {
+            spec.setPalletSize(channel.getPalletSpec());
+        }
+        if (channel.getChannelStickerRequired() != null) {
+            spec.setApplyChannelSticker(channel.getChannelStickerRequired());
+        }
+        if (isSet && channel.getSetPalletHeightLimit() != null && !channel.getSetPalletHeightLimit().isEmpty()) {
+            spec.setPalletHeightLimit(channel.getSetPalletHeightLimit());
+        } else if (channel.getMaxStackHeightMm() != null) {
+            spec.setPalletHeightLimit(channel.getMaxStackHeightMm() + "mm 이하");
+        }
+        if (channel.getExpDateFormat() != null && !channel.getExpDateFormat().isEmpty()) {
+            spec.setLotAndExpiryFormat("EXP " + channel.getExpDateFormat());
         }
 
-        for (ChannelPackagingRule rule : rules) {
-            if (rule.getRuleType() == null) continue;
-            switch (rule.getRuleType()) {
-                case "PALLET_SPEC":
-                    spec.setPalletTypeStr(rule.getRuleValue());
-                    if (rule.getRuleValue() != null) {
-                        if (rule.getRuleValue().contains("1,100") || rule.getRuleValue().contains("1100")) {
-                            spec.setPalletSize("1,100 x 1,100 mm");
-                        } else if (rule.getRuleValue().contains("1219")) {
-                            spec.setPalletSize("1,219 x 1,016 x 120 mm");
-                        } else {
-                            spec.setPalletSize(rule.getRuleValue());
-                        }
-                    }
-                    break;
-
-                case "STICKER_REQUIRED":
-                    spec.setApplyChannelSticker("부착".equals(rule.getRuleValue()));
-                    break;
-
-                case "LOAD_HEIGHT":
-                    spec.setPalletHeightLimit(rule.getRuleValue());
-                    break;
-
-                case "LABELING":
-                    spec.setLotAndExpiryFormat(rule.getRuleValue());
-                    if (rule.getWarningMessage() != null && !rule.getWarningMessage().isEmpty()) {
-                        if (remarksBuilder.length() > 0) {
-                            remarksBuilder.append("\n");
-                        }
-                        remarksBuilder.append("[채널 표기 특이사항]\n").append(rule.getWarningMessage());
-                    }
-                    break;
-
-                case "PAD_FRAME_REQUIRED":
-                    if ("필요".equals(rule.getRuleValue())) {
-                        if (remarksBuilder.length() > 0) {
-                            remarksBuilder.append("\n");
-                        }
-                        remarksBuilder.append("[적재사항] 패드 및 각대 부착 필수 채널");
-                    }
-                    break;
-
-                case "SPECIAL_NOTE":
-                    if (rule.getRuleValue() != null && !rule.getRuleValue().trim().isEmpty()) {
-                        if (remarksBuilder.length() > 0) {
-                            remarksBuilder.append("\n");
-                        }
-                        remarksBuilder.append("• ").append(rule.getRuleValue());
-                    }
-                    break;
+        // [특이사항 자동 생성 예외 처리]
+        if (spec.getId() == null && (spec.getRemarks() == null || spec.getRemarks().trim().isEmpty())) {
+            StringBuilder remarksBuilder = new StringBuilder();
+            if (channel.getPadAndFrameRequired() != null && channel.getPadAndFrameRequired()) {
+                remarksBuilder.append("[적재사항] 패드 및 각대 부착 필수 채널");
             }
-        }
-
-        // 유통 채널별 항목별 특이사항 (ChannelSpecialNote) 렌더링 연결 ([항목명] 내용)
-        if (spec.getProduct() != null && spec.getProduct().getChannels() != null) {
-            for (SalesChannel ch : spec.getProduct().getChannels()) {
-                var notes = specialNoteRepository.findByChannelId(ch.getId());
-                notes.stream()
-                        .filter(n -> n.getCategory() != null && Boolean.TRUE.equals(n.getCategory().getIsActive()))
-                        .filter(n -> n.getNoteContent() != null && !n.getNoteContent().trim().isEmpty())
-                        .sorted(Comparator.comparingInt(n -> n.getCategory().getDisplayOrder()))
-                        .forEach(n -> {
-                            if (remarksBuilder.length() > 0) {
-                                remarksBuilder.append("\n");
-                            }
-                            remarksBuilder.append(String.format("[%s] %s", n.getCategory().getCategoryLabel(), n.getNoteContent().trim()));
-                        });
+            if (channel.getSpecialNotes() != null && !channel.getSpecialNotes().trim().isEmpty()) {
+                if (remarksBuilder.length() > 0) remarksBuilder.append("\n");
+                remarksBuilder.append("• ").append(channel.getSpecialNotes().trim());
             }
-        }
 
-        if (remarksBuilder.length() > 0) {
-            spec.setRemarks(remarksBuilder.toString());
+            if (spec.getProduct() != null && spec.getProduct().getChannels() != null) {
+                for (SalesChannel ch : spec.getProduct().getChannels()) {
+                    var notes = specialNoteRepository.findByChannelId(ch.getId());
+                    notes.stream()
+                            .filter(n -> n.getCategory() != null && Boolean.TRUE.equals(n.getCategory().getIsActive()))
+                            .filter(n -> n.getNoteContent() != null && !n.getNoteContent().trim().isEmpty())
+                            .sorted(Comparator.comparingInt(n -> n.getCategory().getDisplayOrder()))
+                            .forEach(n -> {
+                                if (remarksBuilder.length() > 0) remarksBuilder.append("\n");
+                                remarksBuilder.append(String.format("[%s] %s", n.getCategory().getCategoryLabel(), n.getNoteContent().trim()));
+                            });
+                }
+            }
+
+            if (remarksBuilder.length() > 0) {
+                spec.setRemarks(remarksBuilder.toString());
+            }
         }
 
         spec.setPalletType(calculateDefaultPalette(spec.getProduct()));
@@ -305,18 +272,14 @@ public class PackagingSpecService {
             return PaletteType.DISPOSABLE_EXPORT;
         }
 
-        // DB 채널 규칙 조회를 통해 동적으로 산출
         for (SalesChannel channel : product.getChannels()) {
-            List<ChannelPackagingRule> rules = masterDataService.getRulesByChannel(channel);
-            for (ChannelPackagingRule rule : rules) {
-                if ("PALLET_SPEC".equals(rule.getRuleType()) && rule.getRuleValue() != null) {
-                    String specVal = rule.getRuleValue();
-                    if (specVal.contains("아주팔레트")) {
-                        return PaletteType.AJU;
-                    }
-                    if (specVal.contains("목재") || specVal.contains("GMA")) {
-                        return PaletteType.WOODEN_FUMIGATED;
-                    }
+            String specVal = channel.getPalletSpec() != null ? channel.getPalletSpec() : channel.getPalletType();
+            if (specVal != null) {
+                if (specVal.contains("아주팔레트") || specVal.contains("1,100") || specVal.contains("1100")) {
+                    return PaletteType.AJU;
+                }
+                if (specVal.contains("목재") || specVal.contains("GMA") || specVal.contains("1219")) {
+                    return PaletteType.WOODEN_FUMIGATED;
                 }
             }
         }
@@ -327,13 +290,9 @@ public class PackagingSpecService {
     private boolean shouldApplySticker(Product product) {
         if (product == null || product.getChannels() == null) return false;
         
-        // DB 채널 규칙 조회를 통해 동적으로 판단
         for (SalesChannel channel : product.getChannels()) {
-            List<ChannelPackagingRule> rules = masterDataService.getRulesByChannel(channel);
-            for (ChannelPackagingRule rule : rules) {
-                if ("STICKER_REQUIRED".equals(rule.getRuleType()) && "부착".equals(rule.getRuleValue())) {
-                    return true;
-                }
+            if (Boolean.TRUE.equals(channel.getChannelStickerRequired())) {
+                return true;
             }
         }
         return false;
@@ -449,17 +408,23 @@ public class PackagingSpecService {
             throw new RuntimeException("사양서 저장을 위한 상품 ID가 전달되지 않았습니다.");
         }
 
-        // 수치 및 필드 타입 안전 보정 (String으로 오인되거나 널이거나 비정상 수치일 경우 대비 2차 검증)
-        if (spec.getOnePalletWeight() != null) {
-            double curWeight = spec.getOnePalletWeight();
-            int totBoxes = spec.getPalletTotalOutboxQty() != null ? spec.getPalletTotalOutboxQty() : 0;
-            double boxWeight = spec.getOneOutboxWeight() != null ? spec.getOneOutboxWeight() : 0.0;
-            
-            if (curWeight >= 1000.0 || (totBoxes == 0 && curWeight > 0.0)) {
-                double calcWeight = totBoxes * boxWeight;
-                log.info(">>>> [SAFETY] Correcting abnormal onePalletWeight from {} to {}", curWeight, calcWeight);
-                spec.setOnePalletWeight(calcWeight > 0.0 ? calcWeight : null);
-            }
+        // 수치 및 필드 타입 안전 보정 (1 팔레트 중량 자동 산출: 아웃박스 중량 × 팔레트 적재 박스 수)
+        double boxWeight = spec.getOneOutboxWeight() != null ? spec.getOneOutboxWeight() : 0.0;
+        if (boxWeight == 0.0 && spec.getProduct() != null && spec.getProduct().getOutboxInfo() != null && spec.getProduct().getOutboxInfo().getOutboxWeight() != null) {
+            boxWeight = spec.getProduct().getOutboxInfo().getOutboxWeight();
+        }
+
+        int totBoxes = spec.getPalletTotalOutboxQty() != null ? spec.getPalletTotalOutboxQty() : 0;
+        if (totBoxes == 0 && spec.getPalletTierQty() != null && spec.getPalletTierCount() != null) {
+            totBoxes = spec.getPalletTierQty() * spec.getPalletTierCount();
+        }
+        if (totBoxes == 0 && spec.getProduct() != null && spec.getProduct().getPalletInfo() != null && spec.getProduct().getPalletInfo().getPalletQuantity() != null) {
+            totBoxes = spec.getProduct().getPalletInfo().getPalletQuantity();
+        }
+
+        if (boxWeight > 0.0 && totBoxes > 0) {
+            double calcWeight = Math.round(boxWeight * totBoxes * 10.0) / 10.0;
+            spec.setOnePalletWeight(calcWeight);
         }
 
         if (spec.getPalletHeightLimit() == null && spec.getOnePalletHeight() != null) {
@@ -543,7 +508,36 @@ public class PackagingSpecService {
             existingToUpdate.setOutboxMaterial(spec.getOutboxMaterial());
             existingToUpdate.setOutboxRemarks(spec.getOutboxRemarks());
             existingToUpdate.setOutboxBarcodeStickerStandard(spec.getOutboxBarcodeStickerStandard());
+            existingToUpdate.setOutboxChannelStickerStandard(spec.getOutboxChannelStickerStandard());
             existingToUpdate.setOutboxCushioningStandard(spec.getOutboxCushioningStandard());
+            existingToUpdate.setPopRequiredStandard(spec.getPopRequiredStandard());
+
+            existingToUpdate.setContainerMarkingDisplay(spec.getContainerMarkingDisplay());
+            existingToUpdate.setContainerMarkingLocation(spec.getContainerMarkingLocation());
+            existingToUpdate.setContainerMarkingText(spec.getContainerMarkingText());
+            existingToUpdate.setContainerMarkingLotFormat(spec.getContainerMarkingLotFormat());
+            existingToUpdate.setContainerMarkingExpiryFormat(spec.getContainerMarkingExpiryFormat());
+
+            existingToUpdate.setUnitBoxMarkingDisplay(spec.getUnitBoxMarkingDisplay());
+            existingToUpdate.setUnitBoxMarkingLocation(spec.getUnitBoxMarkingLocation());
+            existingToUpdate.setUnitBoxMarkingText(spec.getUnitBoxMarkingText());
+            existingToUpdate.setUnitBoxMarkingLotFormat(spec.getUnitBoxMarkingLotFormat());
+            existingToUpdate.setUnitBoxMarkingExpiryFormat(spec.getUnitBoxMarkingExpiryFormat());
+
+            existingToUpdate.setInboxPackagingType(spec.getInboxPackagingType());
+            existingToUpdate.setInboxTapeMethod(spec.getInboxTapeMethod());
+            existingToUpdate.setInboxDateFormat(spec.getInboxDateFormat());
+            existingToUpdate.setInboxLabelMarkingRule(spec.getInboxLabelMarkingRule());
+
+            existingToUpdate.setOutboxTotalQty(spec.getOutboxTotalQty());
+            existingToUpdate.setOutboxInboxQty(spec.getOutboxInboxQty());
+            existingToUpdate.setOutboxDateFormat(spec.getOutboxDateFormat());
+            existingToUpdate.setOutboxLabelMarkingRule(spec.getOutboxLabelMarkingRule());
+            
+            existingToUpdate.setPalletSpec(spec.getPalletSpec());
+            existingToUpdate.setPalletTotalProductQty(spec.getPalletTotalProductQty());
+            existingToUpdate.setPalletDateFormat(spec.getPalletDateFormat());
+            existingToUpdate.setPalletLabelMarkingRule(spec.getPalletLabelMarkingRule());
             
             existingToUpdate.setPalletTypeStr(spec.getPalletTypeStr());
             existingToUpdate.setPalletStackingMethod(spec.getPalletStackingMethod());
@@ -666,8 +660,7 @@ public class PackagingSpecService {
                 }
                 
                 for (SalesChannel channel : prod.getChannels()) {
-                    List<ChannelPackagingRule> rules = masterDataService.getRulesByChannel(channel);
-                    applyChannelRulesToSpec(newSpec, rules);
+                    applyChannelRulesToSpec(newSpec, channel);
                 }
             }
             
@@ -787,8 +780,7 @@ public class PackagingSpecService {
         if (prod.getChannels() != null && !prod.getChannels().isEmpty()) {
             spec.setApplyChannelSticker(shouldApplySticker(prod));
             for (com.example.ims.entity.SalesChannel channel : prod.getChannels()) {
-                List<ChannelPackagingRule> rules = masterDataService.getRulesByChannel(channel);
-                applyChannelRulesToSpec(spec, rules);
+                applyChannelRulesToSpec(spec, channel);
             }
         }
     }

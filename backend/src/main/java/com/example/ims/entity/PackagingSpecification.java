@@ -135,6 +135,15 @@ public class PackagingSpecification {
     private Integer outboxInboxQty;                 // 아웃박스 인박스 입수량 (인박스 사용 시)
     private String palletSpec;                      // 팔레트 규격
     private Integer palletTotalProductQty;          // 팔레트 총 제품 수량
+    private String inboxDateFormat;                 // 인박스 현품표 날짜 표시 양식
+    private String outboxDateFormat;                // 아웃박스 현품표 날짜 표시 양식
+    private String palletDateFormat;                // 팔레트 현품표 날짜 표시 양식
+    @Column(columnDefinition = "TEXT")
+    private String inboxLabelMarkingRule;           // 인박스 현품표 착인/기재 사항
+    @Column(columnDefinition = "TEXT")
+    private String outboxLabelMarkingRule;          // 아웃박스 현품표 착인/기재 사항
+    @Column(columnDefinition = "TEXT")
+    private String palletLabelMarkingRule;          // 팔레트 현품표 착인/기재 사항
 
 
     private Integer version;

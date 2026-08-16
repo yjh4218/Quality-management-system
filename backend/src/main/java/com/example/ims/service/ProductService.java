@@ -919,14 +919,47 @@ public class ProductService {
         String[] headers = {
                 "ID", "품목코드", "제품명", "영문제품명", "제품유형", "브랜드", "제조사",
                 "유통기한(개월)", "전성분 요약", "마스터여부", "활성여부", "기획세트", "등록일",
-                "가로(mm)", "세로(mm)", "높이(mm)", "중량(g)", "인박스수량", "아웃박스수량", "팔레트적재수량"
+                "가로(mm)", "세로(mm)", "높이(mm)", "중량(g)", "인박스수량", "아웃박스수량", "팔레트적재수량",
+                "단상자/용기 착인기준", "인박스 현품표 착인기준", "아웃박스 현품표 착인기준", "팔레트 현품표 착인기준",
+                "인박스 날짜표기양식", "아웃박스 날짜표기양식", "팔레트 날짜표기양식"
         };
 
-        return excelExportService.exportToExcel("제품마스터", headers, data, p -> new Object[] {
-                p.id(), p.itemCode(), p.productName(), p.englishProductName(), p.productType(), p.brandName(),
-                p.manufacturerName(),
-                p.shelfLifeMonths(), p.ingredients(), p.isMaster(), p.active(), p.isPlanningSet(), p.createdAt(),
-                p.width(), p.length(), p.height(), p.weight(), p.inboxQuantity(), p.outboxQuantity(), p.palletQuantity()
+        return excelExportService.exportToExcel("제품마스터", headers, data, p -> {
+            List<com.example.ims.entity.PackagingSpecification> specs = packagingSpecService.getSpecsByProductId(p.id());
+            com.example.ims.entity.PackagingSpecification spec = (specs != null && !specs.isEmpty()) ? specs.get(specs.size() - 1) : null;
+
+            String unitMarking = spec != null && spec.getContainerMarkingText() != null ? spec.getContainerMarkingText() : "";
+            if (unitMarking.isEmpty() && spec != null && spec.getUnitBoxMarkingText() != null) {
+                unitMarking = spec.getUnitBoxMarkingText();
+            }
+
+            String inboxMarking = "";
+            String outboxMarking = "";
+            String palletMarking = "";
+            String inboxDateFormat = spec != null && spec.getInboxDateFormat() != null ? spec.getInboxDateFormat() : "";
+            String outboxDateFormat = spec != null && spec.getOutboxDateFormat() != null ? spec.getOutboxDateFormat() : "";
+            String palletDateFormat = spec != null && spec.getPalletDateFormat() != null ? spec.getPalletDateFormat() : "";
+
+            com.example.ims.entity.Product productEntity = productRepository.findById(p.id()).orElse(null);
+            if (productEntity != null && productEntity.getChannels() != null && !productEntity.getChannels().isEmpty()) {
+                com.example.ims.entity.SalesChannel chan = productEntity.getChannels().get(0);
+                if (unitMarking.isEmpty() && chan.getUnitBoxMarkingRule() != null) unitMarking = chan.getUnitBoxMarkingRule();
+                if (chan.getInboxLabelMarkingRule() != null) inboxMarking = chan.getInboxLabelMarkingRule();
+                if (chan.getOutboxLabelMarkingRule() != null) outboxMarking = chan.getOutboxLabelMarkingRule();
+                if (chan.getPalletLabelMarkingRule() != null) palletMarking = chan.getPalletLabelMarkingRule();
+                if (inboxDateFormat.isEmpty() && chan.getInboxDateFormat() != null) inboxDateFormat = chan.getInboxDateFormat();
+                if (outboxDateFormat.isEmpty() && chan.getOutboxDateFormat() != null) outboxDateFormat = chan.getOutboxDateFormat();
+                if (palletDateFormat.isEmpty() && chan.getPalletDateFormat() != null) palletDateFormat = chan.getPalletDateFormat();
+            }
+
+            return new Object[] {
+                    p.id(), p.itemCode(), p.productName(), p.englishProductName(), p.productType(), p.brandName(),
+                    p.manufacturerName(),
+                    p.shelfLifeMonths(), p.ingredients(), p.isMaster(), p.active(), p.isPlanningSet(), p.createdAt(),
+                    p.width(), p.length(), p.height(), p.weight(), p.inboxQuantity(), p.outboxQuantity(), p.palletQuantity(),
+                    unitMarking, inboxMarking, outboxMarking, palletMarking,
+                    inboxDateFormat, outboxDateFormat, palletDateFormat
+            };
         });
     }
 

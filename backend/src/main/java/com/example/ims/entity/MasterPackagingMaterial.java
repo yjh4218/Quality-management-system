@@ -60,6 +60,9 @@ public class MasterPackagingMaterial {
     @Builder.Default
     private List<MasterPackagingMaterialLayer> layers = new ArrayList<>();
 
+    @Column(length = 1000)
+    private String imagePath; // 부자재 실물 사진 URL
+
     @UpdateTimestamp
     private LocalDateTime updatedAt;
 

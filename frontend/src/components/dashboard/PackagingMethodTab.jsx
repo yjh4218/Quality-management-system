@@ -99,12 +99,13 @@ const AnnotatedCardImage = ({ imageUrl, annotationsJson, altText }) => {
  * - 3줄 전용 캡션 textarea
  * - 주석(도형/글씨) 카드 이미지 위 실시간 합성 표시
  */
-const PackagingMethodTab = ({ specId, canEdit, onRegisterSaveHandler, onRegisterReloadHandler, onEnsureSpecCreated }) => {
+const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, onRegisterSaveHandler, onRegisterReloadHandler, onRegisterInheritHandler, onEnsureSpecCreated }) => {
     const [images, setImages] = useState([]);
     const [pendingFiles, setPendingFiles] = useState([]); // 업로드 대기 신규 파일
     const [deletedIds, setDeletedIds] = useState([]); // 삭제 대기 ID 목록
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [loading, setLoading] = useState(false);
+    const pendingMasterSpecIdRef = useRef(null);
 
     // 드래그 앤 드롭 순서 변경 상태
     const [draggedIndex, setDraggedIndex] = useState(null);
@@ -220,19 +221,52 @@ const PackagingMethodTab = ({ specId, canEdit, onRegisterSaveHandler, onRegister
         }
     };
 
+    // 마스터 포장방법 사진 승계 수신 함수
+    const inheritMasterImages = (masterImages = [], masterSpecId = null) => {
+        if (!Array.isArray(masterImages)) return;
+        pendingMasterSpecIdRef.current = masterSpecId;
+        const inheritedList = masterImages.map(img => ({
+            ...img,
+            id: `temp_master_${img.id}_${Math.random().toString(36).substring(2, 6)}`,
+            isMasterInherited: true
+        }));
+        setImages(inheritedList);
+        setPendingFiles([]);
+        setDeletedIds([]);
+        setHasUnsavedChanges(true);
+        if (inheritedList.length > 0) {
+            toast.info(`마스터 포장방법 사진 ${inheritedList.length}장을 성공적으로 불러왔습니다.`);
+        }
+    };
+
+    const lastInheritedMasterSpecIdRef = useRef(null);
+
+    useEffect(() => {
+        if (masterMethodImages && Array.isArray(masterMethodImages.images) && masterMethodImages.images.length > 0) {
+            if (lastInheritedMasterSpecIdRef.current !== masterMethodImages.masterSpecId) {
+                lastInheritedMasterSpecIdRef.current = masterMethodImages.masterSpecId;
+                inheritMasterImages(masterMethodImages.images, masterMethodImages.masterSpecId);
+            }
+        }
+    }, [masterMethodImages]);
+
+    // specId가 존재하거나 변경 시 자동으로 포장방법 사진 목록을 서버에서 조회
     useEffect(() => {
         if (specId) {
             loadImages(specId);
         }
     }, [specId]);
 
-    // 부모 컴포넌트에 최종 [저장하기] 및 [새로고침] 핸들러 단 1회 안정적 바인딩
+    // 부모 컴포넌트에 최종 [저장하기], [새로고침], [마스터승계] 핸들러 단 1회 안정적 바인딩
     useEffect(() => {
         if (onRegisterSaveHandler) {
             onRegisterSaveHandler((overrideId) => saveAllChanges(overrideId));
         }
         if (onRegisterReloadHandler) {
             onRegisterReloadHandler((targetId) => loadImages(targetId));
+        }
+        if (onRegisterInheritHandler) {
+            onRegisterInheritHandler((masterImgs, masterSpecId) => inheritMasterImages(masterImgs, masterSpecId));
         }
     }, []);
 
@@ -373,6 +407,10 @@ const PackagingMethodTab = ({ specId, canEdit, onRegisterSaveHandler, onRegister
                         }
                     });
                 }
+            } else if (pendingMasterSpecIdRef.current) {
+                console.log('[PMT-DEBUG] copying method images from masterSpecId:', pendingMasterSpecIdRef.current);
+                await apiDefault.post(`/api/packaging-specs/${activeSpecId}/method-images/copy-from/${pendingMasterSpecIdRef.current}`);
+                pendingMasterSpecIdRef.current = null;
             } else {
                 console.log('[PMT-DEBUG] pendingFiles is EMPTY. Skipping batch-upload.');
             }
