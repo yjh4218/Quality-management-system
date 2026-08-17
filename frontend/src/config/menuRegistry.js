@@ -265,6 +265,14 @@ export const MENU_REGISTRY = [
         path: 'spaceRatioCalculator',
         actions: ['VIEW', 'EDIT']
     },
+    {
+        key: 'outboxCalculator',
+        category: '📦 포장재 관리',
+        label: '아웃박스 규격 계산기',
+        icon: '📦',
+        path: 'outboxCalculator',
+        actions: ['VIEW', 'EDIT']
+    },
 
     // 8. 🚚 입고검사 관리
     {

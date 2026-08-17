@@ -145,6 +145,17 @@ public class PackagingSpecification {
     @Column(columnDefinition = "TEXT")
     private String palletLabelMarkingRule;          // 팔레트 현품표 착인/기재 사항
 
+    // --- 3D 입수 및 팔레트 적재 패턴 (V99) ---
+    private String inboxPackingPattern;             // 인박스 입수 패턴 (예: "2열×3행×1단")
+    private String outboxPackingPattern;            // 아웃박스 입수 패턴 (예: "4열×5행×2단")
+    private String palletStackingPattern;           // 팔레트 적재 패턴 (예: "8방 핀휠 교차적재")
+
+    // --- POP, 에어캡, 팔레트 각대 옵션 (V100) ---
+    private String popUseYn;                        // 단상자 POP 적용 여부 (O / X)
+    private Double popHeight;                       // POP 높이 (mm, 기본 35.0)
+    private String airCapUseYn;                     // 비닐에어캡(뽁뽁이) 완충재 사용 여부 (O / X)
+    private String cornerPostUseYn;                 // 팔레트 코너 각대(L형 보호대) 적용 여부 (O / X)
+
 
     private Integer version;
     private String revisionNotes;

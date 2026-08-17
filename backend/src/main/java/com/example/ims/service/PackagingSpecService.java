@@ -555,10 +555,14 @@ public class PackagingSpecService {
             existingToUpdate.setRemarks(spec.getRemarks());
             
             existingToUpdate.setPalletType(spec.getPalletType());
-            existingToUpdate.setLotAndExpiryFormat(spec.getLotAndExpiryFormat());
-            existingToUpdate.setApplyChannelSticker(spec.isApplyChannelSticker());
-            existingToUpdate.setLastModifiedBy(username);
-            
+            existingToUpdate.setInboxPackingPattern(spec.getInboxPackingPattern());
+            existingToUpdate.setOutboxPackingPattern(spec.getOutboxPackingPattern());
+            existingToUpdate.setPalletStackingPattern(spec.getPalletStackingPattern());
+            existingToUpdate.setPopUseYn(spec.getPopUseYn());
+            existingToUpdate.setPopHeight(spec.getPopHeight());
+            existingToUpdate.setAirCapUseYn(spec.getAirCapUseYn());
+            existingToUpdate.setCornerPostUseYn(spec.getCornerPostUseYn());
+
             targetSpec = existingToUpdate;
         }
         

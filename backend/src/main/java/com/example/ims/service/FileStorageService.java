@@ -292,6 +292,36 @@ public class FileStorageService {
         return fileName;
     }
 
+    public String storeBase64Image(String base64Data, String prefix) {
+        if (base64Data == null || base64Data.trim().isEmpty()) {
+            throw new RuntimeException("Base64 image data is empty.");
+        }
+        try {
+            String cleanData = base64Data;
+            if (cleanData.contains(",")) {
+                cleanData = cleanData.substring(cleanData.indexOf(",") + 1);
+            }
+            byte[] bytes = java.util.Base64.getDecoder().decode(cleanData.trim());
+
+            String safePrefix = (prefix != null && !prefix.trim().isEmpty())
+                    ? prefix.replaceAll("[\\\\/:*?\"<>|\\s]", "_").trim() : "img";
+            String timeStamp = java.time.LocalDateTime.now()
+                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+            String uuidPart = UUID.randomUUID().toString().substring(0, 8);
+            String fileName = String.format("%s_%s_%s.png", safePrefix, timeStamp, uuidPart);
+
+            Path targetLocation = this.fileStorageLocation.resolve(fileName).normalize();
+            if (!targetLocation.startsWith(this.fileStorageLocation)) {
+                throw new RuntimeException("보안 위험: 지정된 업로드 경로를 벗어날 수 없습니다.");
+            }
+
+            Files.write(targetLocation, bytes);
+            return fileName;
+        } catch (Exception ex) {
+            throw new RuntimeException("Could not store base64 image.", ex);
+        }
+    }
+
     public boolean deleteFile(String fileName) {
         if (fileName == null || fileName.isEmpty()) return false;
 

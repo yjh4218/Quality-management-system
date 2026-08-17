@@ -15,6 +15,7 @@ const ProductDashboardPage = lazy(() => import('./ProductDashboardPage.jsx'));
 const ProductionAuditDashboardPage = lazy(() => import('./ProductionAuditDashboardPage.jsx'));
 const QualityManagementPage = lazy(() => import('./QualityManagementPage'));
 const PackagingSpaceRatioCalculatorPage = lazy(() => import('./PackagingSpaceRatioCalculatorPage.jsx'));
+const OutboxSpecCalculatorPage = lazy(() => import('./OutboxSpecCalculatorPage.jsx'));
 const LotPpmDashboardPage = lazy(() => import('./LotPpmDashboardPage.jsx'));
 
 import MarketReleaseRecordPage from './MarketReleaseRecordPage.jsx';
@@ -65,6 +66,7 @@ const PAGE_INFO = {
     bomCategories: { title: '⚙️ BOM 유형 설정' },
     packagingTemplates: { title: '📋 포장공정 템플릿' },
     spaceRatioCalculator: { title: '📐 포장공간비율 계산기' },
+    outboxCalculator: { title: '📦 아웃박스 규격 계산기' },
     quality: { title: '📦 입고 품질 관리' },
     releaseRecord: { title: '📄 시장출하 기록' },
     qualityPhotoAudit: { title: '📸 신제품 생산감리' },
@@ -635,7 +637,7 @@ const App = () => {
         else if (['manufacturers', 'manufacturerCategories'].includes(pageKey)) targetSection = 'partner';
         else if (['manufacturerAudits', 'manufacturerAuditDashboard', 'manufacturerAuditItems'].includes(pageKey)) targetSection = 'audit';
         else if (['qualityPhotoAudit', 'productionAuditDashboard'].includes(pageKey)) targetSection = 'quality';
-        else if (['packagingTemplates', 'spaceRatioCalculator'].includes(pageKey)) targetSection = 'packaging';
+        else if (['packagingTemplates', 'spaceRatioCalculator', 'outboxCalculator'].includes(pageKey)) targetSection = 'packaging';
         else if (['qualityDashboard', 'quality', 'releaseRecord'].includes(pageKey)) targetSection = 'inbound';
         else if (['claims', 'claimDashboard'].includes(pageKey)) targetSection = 'claim';
 
@@ -818,7 +820,7 @@ const App = () => {
     const hasPartnerAccess = canAccess('manufacturers') || canAccess('manufacturerCategories') || canAccess('manufacturerGuide');
     const hasAuditAccess = canAccess('manufacturerAudits') || canAccess('manufacturerAuditDashboard') || canAccess('manufacturerAuditItems');
     const hasQualityAccess = canAccess('qualityPhotoAudit') || canAccess('productionAuditDashboard');
-    const hasPackagingAccess = canAccess('packagingTemplates') || canAccess('spaceRatioCalculator');
+    const hasPackagingAccess = canAccess('packagingTemplates') || canAccess('spaceRatioCalculator') || canAccess('outboxCalculator');
     const hasInboundAccess = canAccess('quality') || canAccess('releaseRecord') || canAccess('qualityDashboard');
     const hasClaimAccess = canAccess('claims') || canAccess('claimDashboard');
 
@@ -832,7 +834,7 @@ const App = () => {
             case 'partner': return ['manufacturers', 'manufacturerCategories', 'manufacturerGuide'].includes(activePage);
             case 'audit': return ['manufacturerAudits', 'manufacturerAuditDashboard', 'manufacturerAuditItems'].includes(activePage);
             case 'quality': return ['qualityPhotoAudit', 'productionAuditDashboard'].includes(activePage);
-            case 'packaging': return ['packagingTemplates', 'spaceRatioCalculator'].includes(activePage);
+            case 'packaging': return ['packagingTemplates', 'spaceRatioCalculator', 'outboxCalculator'].includes(activePage);
             case 'inbound': return ['qualityDashboard', 'quality', 'releaseRecord'].includes(activePage);
             case 'claim': return ['claims', 'claimDashboard'].includes(activePage);
             default: return false;
@@ -1168,6 +1170,11 @@ const App = () => {
                                         📐 포장공간비율 계산기
                                     </button>
                                 )}
+                                {canAccess('outboxCalculator') && (
+                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'outboxCalculator' ? 'active' : ''}`} onClick={() => handleNavigate('outboxCalculator')}>
+                                        📦 아웃박스 규격 계산기
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>
@@ -1466,6 +1473,9 @@ const App = () => {
                                 {tab.page === 'packagingTemplates' && <PackagingTemplatePage user={user} />}
                                 {canAccess('spaceRatioCalculator') && tab.page === 'spaceRatioCalculator' && (
                                     <PackagingSpaceRatioCalculatorPage user={user} onNavigate={handleNavigate} />
+                                )}
+                                {canAccess('outboxCalculator') && tab.page === 'outboxCalculator' && (
+                                    <OutboxSpecCalculatorPage user={user} onNavigate={handleNavigate} />
                                 )}
                                 {tab.page === 'manufacturerAuditItems' && <ManufacturerAuditItemPage user={user} />}
                                 {tab.page === 'manufacturerAudits' && <ManufacturerAuditPage user={user} />}

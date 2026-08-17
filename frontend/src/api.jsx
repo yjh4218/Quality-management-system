@@ -520,6 +520,9 @@ export const copyMasterPackagingSpec = (productId, masterProductId) =>
 export const downloadPackagingSpecExcel = (productId) => api.get(`/api/packaging-specs/export-excel/${productId}`, { responseType: 'blob' });
 export const downloadPackagingSpecPdf = (productId) => api.get(`/api/packaging-specs/export-pdf/${productId}`, { responseType: 'blob' });
 export const getPackagingMethodImages = (specId) => api.get(`/api/packaging-specs/${specId}/method-images`);
+export const uploadPackagingSpec3DSnapshot = (specId, mode, imageBase64) => 
+    api.post(`/api/packaging-specs/${specId}/3d-snapshot`, { mode, imageBase64 });
+
 
 // Production Audit (Photo Audit) APIs
 export const getProductionAudits = (manufacturerName) => 

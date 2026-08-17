@@ -657,16 +657,6 @@ const SalesChannelManagement = ({ user }) => {
                                             />
                                             📦 패드/각대 필수
                                         </label>
-                                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '13px', color: '#334155' }}>
-                                            <input
-                                                type="checkbox"
-                                                checked={formData.popRequired}
-                                                onChange={e => setFormData({ ...formData, popRequired: e.target.checked })}
-                                                disabled={!canEdit}
-                                                style={{ width: '16px', height: '16px' }}
-                                            />
-                                            📢 POP 동봉 필수
-                                        </label>
                                     </div>
 
                                      {/* 통합 유통채널 포장 특이사항 및 4대 포장재별 착인/현품표 표준 규격 카드 */}

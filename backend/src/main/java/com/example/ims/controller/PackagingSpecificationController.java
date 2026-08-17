@@ -412,4 +412,47 @@ public class PackagingSpecificationController {
         existing.setDeletedAt(null);
         return ResponseEntity.ok(methodImageRepository.save(existing));
     }
+
+    /**
+     * Upload Base64 3D snapshot for packaging specification (inbox / outbox / pallet).
+     */
+    @PostMapping("/{specId}/3d-snapshot")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
+    public ResponseEntity<java.util.Map<String, String>> upload3DSnapshot(
+            @PathVariable Long specId,
+            @RequestBody java.util.Map<String, String> payload) {
+        String mode = payload.get("mode"); // "inbox" | "outbox" | "pallet"
+        String base64Image = payload.get("imageBase64");
+        if (base64Image == null || base64Image.trim().isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        try {
+            String prefix = "pkg_3d_" + (mode != null ? mode : "snap");
+            String storedFileName = fileStorageService.storeBase64Image(base64Image, prefix);
+            String fileUrl = "/uploads/" + storedFileName;
+
+            PackagingSpecification spec = specRepository.findById(specId)
+                    .orElseThrow(() -> new RuntimeException("Spec not found"));
+
+            if ("inbox".equals(mode)) {
+                spec.setInboxLayoutImage(fileUrl);
+            } else if ("outbox".equals(mode)) {
+                spec.setOutboxLayoutImageFile(fileUrl);
+                spec.setOutboxLayoutImage(fileUrl);
+            } else { // pallet or pallet-cross or pallet-normal
+                spec.setPalletLayoutImage(fileUrl);
+            }
+            specRepository.save(spec);
+
+            java.util.Map<String, String> response = new java.util.HashMap<>();
+            response.put("imagePath", fileUrl);
+            response.put("mode", mode);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Failed to save 3D snapshot", e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
 }
+

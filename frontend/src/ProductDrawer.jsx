@@ -23,6 +23,14 @@ import SaveConfirmModal from './components/SaveConfirmModal';
 import { usePermissions } from './usePermissions';
 import PackagingMethodTab from './components/dashboard/PackagingMethodTab';
 import { calculateAllCountrySpaceRatios, generateOptimizationSuggestions } from './utils/packagingRatioCalculator';
+import PackagingViewer3D from './components/PackagingViewer3D';
+import {
+    calcAllPalletPatterns,
+    generateArrangementOptions,
+    validateArrangement,
+    validateInboxArrangement,
+    getPIValues
+} from './utils/packingCalculator';
 
 const ProductDrawer = ({ product, onClose, user }) => {
     const isMobile = window.innerWidth <= 768; // Simple check for mobile
@@ -161,6 +169,13 @@ const ProductDrawer = ({ product, onClose, user }) => {
         inboxLayoutImage: '',
         outboxLayoutImageFile: '',
         palletLayoutImage: '',
+        inboxPackingPattern: '',
+        outboxPackingPattern: '',
+        palletStackingPattern: '',
+        popUseYn: 'X',
+        popHeight: 15,
+        airCapUseYn: 'X',
+        cornerPostUseYn: 'X',
         oneOutboxWeight: '',
         onePalletWeight: '',
         onePalletHeight: '',
@@ -178,11 +193,35 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
     const [specSubTab, setSpecSubTab] = useState('sheet1');
 
+    // 3D 입수 및 팔레트 적재 시뮬레이션 상태
+    const [sim3DTab, setSim3DTab] = useState('outbox'); // 'inbox' | 'outbox' | 'pallet'
+    const [pallet3DMode, setPallet3DMode] = useState('pallet-cross'); // 'pallet-cross' | 'pallet-normal'
+    const [selectedOutboxArrangement, setSelectedOutboxArrangement] = useState(null);
+    const [selectedInboxArrangement, setSelectedInboxArrangement] = useState(null);
+    const [selectedPalletPattern, setSelectedPalletPattern] = useState(null);
+    const [customOutboxArrangement, setCustomArrangement] = useState({ cols: '', rows: '', layers: '' });
+    const [customArrangementValidation, setCustomArrangementValidation] = useState(null);
+    const [palletCategoryTab, setPalletCategoryTab] = useState('all'); // 'all' | 'pinwheel' | 'grid' | 'brick'
+    const [specBaselineInboxUseYn, setSpecBaselineInboxUseYn] = useState(null);
+
+    useEffect(() => {
+        if (product) {
+            setSpecBaselineInboxUseYn(null);
+        }
+    }, [product]);
+
+    useEffect(() => {
+        if (currentSpec && currentSpec.inboxUseYn !== undefined && specBaselineInboxUseYn === null) {
+            setSpecBaselineInboxUseYn(currentSpec.inboxUseYn || 'X');
+        }
+    }, [currentSpec.inboxUseYn, specBaselineInboxUseYn]);
+
     const [spaceRatioResults, setSpaceRatioResults] = useState(null);
     const [spaceRatioLoading, setSpaceRatioLoading] = useState(false);
 
     // 1차 본체 용기 제원 상태 (공간비율 정밀 산출용)
     const [primaryContainer, setPrimaryContainer] = useState({
+
         shape: 'cylinder', // 'cylinder' | 'rect' | 'custom_volume'
         diameter: '',
         width: '',
@@ -691,7 +730,8 @@ const ProductDrawer = ({ product, onClose, user }) => {
             palletPrecautions: precautions.length > 0 ? precautions.join(' / ') : prev.palletPrecautions,
             inboxUseYn: inboxRequired ? 'O' : 'X',
             inboxTapeMethod: inboxTape,
-            inboxTapeBanding: 'N'
+            inboxTapeBanding: 'N',
+            cornerPostUseYn: channel.padAndFrameRequired ? 'O' : 'X'
         }));
 
         // 유통채널 정보와 연계된 정보는 바로 제품 마스터(formData) 수정에 연동
@@ -777,6 +817,74 @@ const ProductDrawer = ({ product, onClose, user }) => {
         updated[idx] = { ...updated[idx], [field]: val };
         setSpecRevisions(updated);
     };
+
+    // ── 3D 치수 파싱 및 스냅샷 유틸 ──
+    const get3DUnitBoxDims = () => {
+        let w = parseFloat(formData.dimensions?.width) || 0;
+        let d = parseFloat(formData.dimensions?.length) || 0;
+        let h = parseFloat(formData.dimensions?.height) || 0;
+        if (w === 0 && d === 0 && h === 0 && specComponents && specComponents.length > 0) {
+            const boxComp = specComponents.find(c => c.componentName?.includes('단상자') || c.bomCode?.includes('BOX'));
+            if (boxComp?.sizeDimension) {
+                const parts = String(boxComp.sizeDimension).split(/[*xX×/]/).map(s => parseFloat(s.replace(/[^0-9.]/g, '')) || 0);
+                if (parts.length >= 3) { w = parts[0]; d = parts[1]; h = parts[2]; }
+            }
+        }
+        return { w: w || 70, d: d || 40, h: h || 140 };
+    };
+
+    const get3DOutboxDims = () => {
+        const str = currentSpec.outboxSize || (formData.outboxInfo?.outboxLength && `${formData.outboxInfo.outboxLength}x${formData.outboxInfo.outboxWidth}x${formData.outboxInfo.outboxHeight}`);
+        if (str) {
+            const parts = String(str).toLowerCase().replace(/mm/g, '').split(/[x*×]/).map(s => parseFloat(s.trim())).filter(n => !isNaN(n) && n > 0);
+            if (parts.length >= 3) return { w: parts[0], d: parts[1], h: parts[2] };
+        }
+        return { w: 300, d: 200, h: 150 };
+    };
+
+    const get3DInboxDims = () => {
+        const str = currentSpec.inboxSize || (formData.inboxInfo?.inboxLength && `${formData.inboxInfo.inboxLength}x${formData.inboxInfo.inboxWidth}x${formData.inboxInfo.inboxHeight}`);
+        if (str) {
+            const parts = String(str).toLowerCase().replace(/mm/g, '').split(/[x*×]/).map(s => parseFloat(s.trim())).filter(n => !isNaN(n) && n > 0);
+            if (parts.length >= 3) return { w: parts[0], d: parts[1], h: parts[2] };
+        }
+        return { w: 150, d: 100, h: 145 };
+    };
+
+    const get3DPalletDims = () => {
+        const str = currentSpec.palletSize || (formData.palletInfo?.palletLength && `${formData.palletInfo.palletLength}x${formData.palletInfo.palletWidth}`);
+        if (str) {
+            const parts = String(str).toLowerCase().replace(/mm/g, '').split(/[x*×]/).map(s => parseFloat(s.trim())).filter(n => !isNaN(n) && n > 0);
+            if (parts.length >= 2) return { w: parts[0], d: parts[1] };
+        }
+        return { w: 1100, d: 1100 };
+    };
+
+    const handleSave3DSnapshot = async (dataUrl, mode) => {
+        if (!currentSpec?.id) {
+            toast.warn("사양서를 먼저 한 번 저장한 후 3D 이미지를 저장할 수 있습니다.");
+            return;
+        }
+        try {
+            const normalizedMode = mode.startsWith('pallet') ? 'pallet' : mode;
+            const res = await api.uploadPackagingSpec3DSnapshot(currentSpec.id, normalizedMode, dataUrl);
+            const savedPath = res.data?.imagePath;
+            if (savedPath) {
+                if (normalizedMode === 'inbox') {
+                    setCurrentSpec(prev => ({ ...prev, inboxLayoutImage: savedPath }));
+                } else if (normalizedMode === 'outbox') {
+                    setCurrentSpec(prev => ({ ...prev, outboxLayoutImageFile: savedPath, outboxLayoutImage: savedPath }));
+                } else {
+                    setCurrentSpec(prev => ({ ...prev, palletLayoutImage: savedPath }));
+                }
+                toast.success(`📸 ${normalizedMode === 'inbox' ? '인박스' : normalizedMode === 'outbox' ? '아웃박스' : '팔레트'} 3D 스냅샷이 저장되었습니다! (엑셀 출력 반영)`);
+            }
+        } catch (err) {
+            toast.error("3D 스냅샷 저장 중 오류가 발생했습니다.");
+            console.error(err);
+        }
+    };
+
 
     const handleAddSpecComponent = () => {
         setSpecComponents([...specComponents, {
@@ -4462,10 +4570,6 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                         <input type="text" value={currentSpec.outboxCushioningStandard || ''} readOnly style={{ fontSize: '13px', padding: '6px 8px', background: '#e2e8f0', color: '#334155', cursor: 'not-allowed' }} placeholder="채널 선택 시 자동 반영" />
                                                     </div>
                                                     <div className="form-group" style={{ marginBottom: '8px' }}>
-                                                        <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#d97706' }}>📣 제품 POP 부착/동봉 여부 (채널 자동 매칭 - 수정 불가)</label>
-                                                        <input type="text" value={currentSpec.popRequiredStandard || ''} readOnly style={{ fontSize: '13px', padding: '6px 8px', background: '#e2e8f0', color: '#334155', cursor: 'not-allowed' }} placeholder="채널 선택 시 자동 반영" />
-                                                    </div>
-                                                    <div className="form-group" style={{ marginBottom: '8px' }}>
                                                         <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#1d4ed8' }}>🏷️ 아웃박스 현품표 착인/기재 사항</label>
                                                         <select
                                                             value=""
@@ -4781,6 +4885,759 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                 </div>
                                             </div>
                                         </div>
+
+                                        {/* 3D 제품 입수 및 팔레트 적재 시뮬레이션 섹션 */}
+                                        {(() => {
+                                            const uBox = get3DUnitBoxDims();
+                                            const oBox = get3DOutboxDims();
+                                            const iBox = get3DInboxDims();
+                                            const pBox = get3DPalletDims();
+                                            const hasInbox = currentSpec.inboxUseYn === 'O';
+                                            const totalProductQty = parseInt(currentSpec.outboxQty || currentSpec.outboxTotalQty || 40, 10) || 40;
+                                            const inboxQty = parseInt(currentSpec.inboxQty || 10, 10) || 10;
+                                            const outboxInboxesQty = hasInbox ? Math.max(1, Math.round(totalProductQty / inboxQty)) : totalProductQty;
+                                            const palletStacks = parseInt(currentSpec.palletTierCount || 8, 10) || 8;
+                                            const isCornerPostActive = currentSpec.cornerPostUseYn === 'O' || Boolean(formData?.channels?.[0]?.padAndFrameRequired);
+
+                                            // 아웃박스 입수 배열 옵션 (인박스 사용 시 인박스 수량 기준, 미사용 시 단상자 수량 기준)
+                                            const outboxContainerBox = oBox;
+                                            const outboxUnitBox = hasInbox ? iBox : uBox;
+                                            const outboxOptions = generateArrangementOptions(outboxInboxesQty, 5, outboxUnitBox, outboxContainerBox);
+                                            const savedOutboxMatch = currentSpec.outboxPackingPattern ? outboxOptions.find(o => currentSpec.outboxPackingPattern.includes(`${o.cols}열`) && currentSpec.outboxPackingPattern.includes(`${o.rows}행`)) : null;
+                                            const bestOutboxOpt = outboxOptions.find(o => o.status === 'ok') || outboxOptions.find(o => o.status === 'warn') || outboxOptions[0] || (hasInbox ? { cols: 2, rows: 2, layers: 1, status: 'ok' } : { cols: 4, rows: 5, layers: 2, status: 'ok' });
+                                            const curOutboxArrangement = selectedOutboxArrangement || savedOutboxMatch || bestOutboxOpt;
+
+                                            // 인박스 입수 배열 옵션
+                                            const inboxOptions = generateArrangementOptions(inboxQty, 5, uBox, iBox);
+                                            const savedInboxMatch = currentSpec.inboxPackingPattern ? inboxOptions.find(o => currentSpec.inboxPackingPattern.includes(`${o.cols}열`) && currentSpec.inboxPackingPattern.includes(`${o.rows}행`)) : null;
+                                            const bestInboxOpt = inboxOptions.find(o => o.status === 'ok') || inboxOptions.find(o => o.status === 'warn') || inboxOptions[0] || { cols: 2, rows: 5, layers: 1, status: 'ok' };
+                                            const curInboxArrangement = selectedInboxArrangement || savedInboxMatch || bestInboxOpt;
+
+                                            // 팔레트 적재 패턴 목록
+                                            const allPalletPatterns = calcAllPalletPatterns(oBox.w, oBox.d, pBox.w, pBox.d);
+                                            const savedPalletMatch = currentSpec.palletStackingPattern ? allPalletPatterns.find(p => currentSpec.palletStackingPattern.includes(p.name)) : null;
+                                            const bestPalletOpt = allPalletPatterns.find(p => p.status === 'ok') || allPalletPatterns[0] || null;
+                                            const curPalletPattern = selectedPalletPattern || savedPalletMatch || bestPalletOpt;
+
+                                            const filteredPatterns = allPalletPatterns.filter(p => {
+                                                if (palletCategoryTab === 'all') return true;
+                                                if (palletCategoryTab === 'pinwheel') return p.category === 'pinwheel';
+                                                if (palletCategoryTab === 'grid') return p.category === 'grid';
+                                                if (palletCategoryTab === 'brick') return p.category === 'brick' || p.category === 'mix';
+                                                return true;
+                                            });
+
+                                            // 유효성 검증: 인박스 사용 시 아웃박스는 인박스 규격(iBox)과 비교, 미사용 시 단상자(uBox)와 비교
+                                            const outboxValidation = validateArrangement(outboxUnitBox, outboxContainerBox, curOutboxArrangement, { w: 0, d: 0, h: 0 });
+                                            const inboxValidation = validateInboxArrangement(uBox, iBox, curInboxArrangement, { w: 0, d: 0, h: 0 });
+
+                                            return (
+                                                <div className="card" style={{ padding: '20px', marginBottom: '20px', border: '1px solid #c7d2fe', borderRadius: '12px', background: 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)', boxShadow: '0 4px 12px rgba(79,70,229,0.05)' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                                                        <div>
+                                                            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', color: '#1e1b4b', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                <span>🔲 3D 제품 입수 및 팔레트 적재 시뮬레이션</span>
+                                                                <span style={{ fontSize: '11px', background: '#e0e7ff', color: '#3730a3', padding: '2px 8px', borderRadius: '12px', fontWeight: 600 }}>Three.js 3D 엔진</span>
+                                                            </h3>
+                                                            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+                                                                {hasInbox 
+                                                                    ? `단상자(${uBox.w}×${uBox.d}×${uBox.h}mm) → 인박스(${iBox.w}×${iBox.d}×${iBox.h}mm) → 아웃박스(${oBox.w}×${oBox.d}×${oBox.h}mm) → 팔레트(${pBox.w}×${pBox.d}mm)`
+                                                                    : `단상자(${uBox.w}×${uBox.d}×${uBox.h}mm) → 아웃박스(${oBox.w}×${oBox.d}×${oBox.h}mm) → 팔레트(${pBox.w}×${pBox.d}mm)`
+                                                                }
+                                                            </div>
+                                                        </div>
+
+                                                        {/* 모드 탭 (아웃박스 / 인박스 / 팔레트) */}
+                                                        <div style={{ display: 'flex', background: '#e2e8f0', padding: '3px', borderRadius: '8px', gap: '4px' }}>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setSim3DTab('outbox')}
+                                                                style={{
+                                                                    border: 'none',
+                                                                    background: sim3DTab === 'outbox' ? '#2563eb' : 'transparent',
+                                                                    color: sim3DTab === 'outbox' ? '#ffffff' : '#475569',
+                                                                    fontWeight: sim3DTab === 'outbox' ? 'bold' : 'normal',
+                                                                    padding: '6px 14px',
+                                                                    borderRadius: '6px',
+                                                                    fontSize: '12px',
+                                                                    cursor: 'pointer',
+                                                                    transition: 'all 0.15s'
+                                                                }}
+                                                            >
+                                                                📦 아웃박스 3D {hasInbox && '(인박스 입수)'}
+                                                            </button>
+                                                            {hasInbox && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setSim3DTab('inbox')}
+                                                                    style={{
+                                                                        border: 'none',
+                                                                        background: sim3DTab === 'inbox' ? '#7c3aed' : 'transparent',
+                                                                        color: sim3DTab === 'inbox' ? '#ffffff' : '#475569',
+                                                                        fontWeight: sim3DTab === 'inbox' ? 'bold' : 'normal',
+                                                                        padding: '6px 14px',
+                                                                        borderRadius: '6px',
+                                                                        fontSize: '12px',
+                                                                        cursor: 'pointer',
+                                                                        transition: 'all 0.15s'
+                                                                    }}
+                                                                >
+                                                                    📥 인박스 3D (단상자 입수)
+                                                                </button>
+                                                            )}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setSim3DTab('pallet')}
+                                                                style={{
+                                                                    border: 'none',
+                                                                    background: sim3DTab === 'pallet' ? '#d97706' : 'transparent',
+                                                                    color: sim3DTab === 'pallet' ? '#ffffff' : '#475569',
+                                                                    fontWeight: sim3DTab === 'pallet' ? 'bold' : 'normal',
+                                                                    padding: '6px 14px',
+                                                                    borderRadius: '6px',
+                                                                    fontSize: '12px',
+                                                                    cursor: 'pointer',
+                                                                    transition: 'all 0.15s'
+                                                                }}
+                                                            >
+                                                                🏗️ 팔레트 3D 적재
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* 본문 그리드 (왼쪽: 440px 고정 설정 패널, 오른쪽: 1fr 동적 3D 뷰어 공간) */}
+                                                    <div style={{ display: 'grid', gridTemplateColumns: '440px 1fr', gap: '16px', alignItems: 'start' }}>
+                                                        
+                                                        {/* 왼쪽: 입수 배열 / 적재 패턴 선택 패널 (440px 고정) */}
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '440px' }}>
+                                                            
+                                                            {/* 1. 아웃박스 탭일 때 */}
+                                                            {sim3DTab === 'outbox' && (
+                                                                <div style={{ background: '#ffffff', padding: '16px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', gap: '8px' }}>
+                                                                        <strong style={{ fontSize: '13px', color: '#1e293b', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                            {hasInbox 
+                                                                                ? `📐 인박스 ${outboxInboxesQty}박스 추천 배열 (${outboxInboxesQty * inboxQty}개입)`
+                                                                                : `📐 총 입수량 ${totalProductQty}개 기준 추천 배열`
+                                                                            }
+                                                                        </strong>
+                                                                        <span style={{ fontSize: '11px', color: '#64748b', whiteSpace: 'nowrap', flexShrink: 0 }}>선택 시 3D 즉시 갱신</span>
+                                                                    </div>
+
+                                                                    {/* 자동 생성된 입수 배열 버튼들 */}
+                                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '14px' }}>
+                                                                        {outboxOptions.slice(0, 6).map((opt, idx) => {
+                                                                            const isSel = curOutboxArrangement.cols === opt.cols && curOutboxArrangement.rows === opt.rows && curOutboxArrangement.layers === opt.layers;
+                                                                            const v = validateArrangement(outboxUnitBox, outboxContainerBox, opt, { w: 0, d: 0, h: 0 });
+                                                                            const isOk = v.status === 'ok';
+                                                                            const isWarn = v.status === 'warn';
+                                                                            return (
+                                                                                <button
+                                                                                    key={idx}
+                                                                                    type="button"
+                                                                                    onClick={() => {
+                                                                                        setSelectedOutboxArrangement(opt);
+                                                                                        const patternText = hasInbox 
+                                                                                            ? `${opt.cols}열×${opt.rows}행×${opt.layers}단 (인박스 ${opt.qty}박스입, 총 ${opt.qty * inboxQty}개)`
+                                                                                            : `${opt.cols}열×${opt.rows}행×${opt.layers}단 (${opt.qty}개입)`;
+                                                                                        setCurrentSpec(prev => ({
+                                                                                            ...prev,
+                                                                                            outboxPackingPattern: patternText
+                                                                                        }));
+                                                                                    }}
+                                                                                    style={{
+                                                                                        textAlign: 'left',
+                                                                                        padding: '8px 10px',
+                                                                                        borderRadius: '8px',
+                                                                                        border: isSel ? '2px solid #2563eb' : (isOk ? '1px solid #cbd5e1' : '1px dashed #cbd5e1'),
+                                                                                        background: isSel ? '#eff6ff' : '#ffffff',
+                                                                                        cursor: 'pointer',
+                                                                                        position: 'relative'
+                                                                                    }}
+                                                                                >
+                                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                                        <div style={{ fontSize: '12px', fontWeight: 'bold', color: isSel ? '#1d4ed8' : '#1e293b' }}>
+                                                                                            {opt.cols}열 × {opt.rows}행 × {opt.layers}단
+                                                                                        </div>
+                                                                                        <span style={{
+                                                                                            fontSize: '10px',
+                                                                                            padding: '1px 6px',
+                                                                                            borderRadius: '4px',
+                                                                                            fontWeight: 'bold',
+                                                                                            background: isOk ? '#dcfce7' : (isWarn ? '#fef3c7' : '#fee2e2'),
+                                                                                            color: isOk ? '#15803d' : (isWarn ? '#b45309' : '#b91c1c'),
+                                                                                            border: isOk ? '1px solid #86efac' : (isWarn ? '1px solid #fde68a' : '1px solid #fca5a5')
+                                                                                        }}>
+                                                                                            {isOk ? '✓ 적합' : (isWarn ? '⚠️ 주의' : '✕ 초과')}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                                                                                        {hasInbox ? `인박스 ${opt.qty}박스 (총 ${opt.qty * inboxQty}개)` : `단상자 ${opt.qty}개`}
+                                                                                    </div>
+                                                                                </button>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+
+                                                                    {/* 직접 입력 (열 x 행 x 단) */}
+                                                                    <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
+                                                                        <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '6px' }}>
+                                                                            ✏️ {hasInbox ? '인박스' : '단상자'} 배열 직접 지정 (Custom Arrangement)
+                                                                        </div>
+                                                                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                                                            <input
+                                                                                type="number"
+                                                                                placeholder="열(가로)"
+                                                                                value={customOutboxArrangement.cols}
+                                                                                onChange={e => {
+                                                                                    const c = parseInt(e.target.value, 10) || '';
+                                                                                    const next = { ...customOutboxArrangement, cols: c };
+                                                                                    setCustomArrangement(next);
+                                                                                    if (next.cols && next.rows && next.layers) {
+                                                                                        const customOpt = { cols: next.cols, rows: next.rows, layers: next.layers, qty: next.cols * next.rows * next.layers };
+                                                                                        setSelectedOutboxArrangement(customOpt);
+                                                                                        const patternText = hasInbox 
+                                                                                            ? `${customOpt.cols}열×${customOpt.rows}행×${customOpt.layers}단 (인박스 ${customOpt.qty}박스입, 총 ${customOpt.qty * inboxQty}개)`
+                                                                                            : `${customOpt.cols}열×${customOpt.rows}행×${customOpt.layers}단 (${customOpt.qty}개입)`;
+                                                                                        setCurrentSpec(prev => ({
+                                                                                            ...prev,
+                                                                                            outboxPackingPattern: patternText
+                                                                                        }));
+                                                                                    }
+                                                                                }}
+                                                                                style={{ width: '70px', padding: '4px 6px', fontSize: '12px', textAlign: 'center' }}
+                                                                            />
+                                                                            <span style={{ fontSize: '12px', color: '#94a3b8' }}>×</span>
+                                                                            <input
+                                                                                type="number"
+                                                                                placeholder="행(세로)"
+                                                                                value={customOutboxArrangement.rows}
+                                                                                onChange={e => {
+                                                                                    const r = parseInt(e.target.value, 10) || '';
+                                                                                    const next = { ...customOutboxArrangement, rows: r };
+                                                                                    setCustomArrangement(next);
+                                                                                    if (next.cols && next.rows && next.layers) {
+                                                                                        const customOpt = { cols: next.cols, rows: next.rows, layers: next.layers, qty: next.cols * next.rows * next.layers };
+                                                                                        setSelectedOutboxArrangement(customOpt);
+                                                                                        const patternText = hasInbox 
+                                                                                            ? `${customOpt.cols}열×${customOpt.rows}행×${customOpt.layers}단 (인박스 ${customOpt.qty}박스입, 총 ${customOpt.qty * inboxQty}개)`
+                                                                                            : `${customOpt.cols}열×${customOpt.rows}행×${customOpt.layers}단 (${customOpt.qty}개입)`;
+                                                                                        setCurrentSpec(prev => ({
+                                                                                            ...prev,
+                                                                                            outboxPackingPattern: patternText
+                                                                                        }));
+                                                                                    }
+                                                                                }}
+                                                                                style={{ width: '70px', padding: '4px 6px', fontSize: '12px', textAlign: 'center' }}
+                                                                            />
+                                                                            <span style={{ fontSize: '12px', color: '#94a3b8' }}>×</span>
+                                                                            <input
+                                                                                type="number"
+                                                                                placeholder="단(높이)"
+                                                                                value={customOutboxArrangement.layers}
+                                                                                onChange={e => {
+                                                                                    const l = parseInt(e.target.value, 10) || '';
+                                                                                    const next = { ...customOutboxArrangement, layers: l };
+                                                                                    setCustomArrangement(next);
+                                                                                    if (next.cols && next.rows && next.layers) {
+                                                                                        const customOpt = { cols: next.cols, rows: next.rows, layers: next.layers, qty: next.cols * next.rows * next.layers };
+                                                                                        setSelectedOutboxArrangement(customOpt);
+                                                                                        const patternText = hasInbox 
+                                                                                            ? `${customOpt.cols}열×${customOpt.rows}행×${customOpt.layers}단 (인박스 ${customOpt.qty}박스입, 총 ${customOpt.qty * inboxQty}개)`
+                                                                                            : `${customOpt.cols}열×${customOpt.rows}행×${customOpt.layers}단 (${customOpt.qty}개입)`;
+                                                                                        setCurrentSpec(prev => ({
+                                                                                            ...prev,
+                                                                                            outboxPackingPattern: patternText
+                                                                                        }));
+                                                                                    }
+                                                                                }}
+                                                                                style={{ width: '70px', padding: '4px 6px', fontSize: '12px', textAlign: 'center' }}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* 유효성 검증 메시지 */}
+                                                                    <div style={{ marginTop: '12px' }}>
+                                                                        {outboxValidation.valid ? (
+                                                                            <div style={{ padding: '8px 10px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '6px', fontSize: '12px', color: '#15803d', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                <span>✅</span>
+                                                                                <span><strong>아웃박스 규격 적합:</strong> 필요치수 {Math.round(outboxValidation.actualNeeded?.w)}×{Math.round(outboxValidation.actualNeeded?.d)}×{Math.round(outboxValidation.actualNeeded?.h)}mm ≤ 박스 {oBox.w}×{oBox.d}×{oBox.h}mm</span>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div style={{ padding: '8px 10px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '6px', fontSize: '12px', color: '#b91c1c', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                <span>⚠️</span>
+                                                                                <span><strong>{outboxValidation.reason}</strong></span>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {/* 2. 인박스 탭일 때 */}
+                                                            {sim3DTab === 'inbox' && (
+                                                                <div style={{ background: '#ffffff', padding: '16px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', gap: '8px' }}>
+                                                                        <strong style={{ fontSize: '13px', color: '#1e293b', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                            📥 인박스 입수량 {inboxQty}개 기준 추천 배열
+                                                                        </strong>
+                                                                        <span style={{ fontSize: '11px', color: '#64748b', whiteSpace: 'nowrap', flexShrink: 0 }}>선택 시 3D 즉시 갱신</span>
+                                                                    </div>
+
+                                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '14px' }}>
+                                                                        {inboxOptions.slice(0, 6).map((opt, idx) => {
+                                                                            const isSel = curInboxArrangement.cols === opt.cols && curInboxArrangement.rows === opt.rows && curInboxArrangement.layers === opt.layers;
+                                                                            const v = validateInboxArrangement(uBox, iBox, opt, { w: 0, d: 0, h: 0 });
+                                                                            const isOk = v.status === 'ok';
+                                                                            const isWarn = v.status === 'warn';
+                                                                            return (
+                                                                                <button
+                                                                                    key={idx}
+                                                                                    type="button"
+                                                                                    onClick={() => {
+                                                                                        setSelectedInboxArrangement(opt);
+                                                                                        setCurrentSpec(prev => ({
+                                                                                            ...prev,
+                                                                                            inboxPackingPattern: `${opt.cols}열×${opt.rows}행×${opt.layers}단 (${opt.qty}개입)`
+                                                                                        }));
+                                                                                    }}
+                                                                                    style={{
+                                                                                        textAlign: 'left',
+                                                                                        padding: '8px 10px',
+                                                                                        borderRadius: '8px',
+                                                                                        border: isSel ? '2px solid #7c3aed' : (isOk ? '1px solid #cbd5e1' : '1px dashed #cbd5e1'),
+                                                                                        background: isSel ? '#f5f3ff' : '#ffffff',
+                                                                                        cursor: 'pointer'
+                                                                                    }}
+                                                                                >
+                                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                                        <div style={{ fontSize: '12px', fontWeight: 'bold', color: isSel ? '#6d28d9' : '#1e293b' }}>
+                                                                                            {opt.cols}열 × {opt.rows}행 × {opt.layers}단
+                                                                                        </div>
+                                                                                        <span style={{
+                                                                                            fontSize: '10px',
+                                                                                            padding: '1px 6px',
+                                                                                            borderRadius: '4px',
+                                                                                            fontWeight: 'bold',
+                                                                                            background: isOk ? '#dcfce7' : (isWarn ? '#fef3c7' : '#fee2e2'),
+                                                                                            color: isOk ? '#15803d' : (isWarn ? '#b45309' : '#b91c1c'),
+                                                                                            border: isOk ? '1px solid #86efac' : (isWarn ? '1px solid #fde68a' : '1px solid #fca5a5')
+                                                                                        }}>
+                                                                                            {isOk ? '✓ 적합' : (isWarn ? '⚠️ 주의' : '✕ 초과')}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                                                                                        단상자 {opt.qty}개입
+                                                                                    </div>
+                                                                                </button>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+
+                                                                    <div>
+                                                                        {inboxValidation.valid ? (
+                                                                            <div style={{ padding: '8px 10px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '6px', fontSize: '12px', color: '#15803d' }}>
+                                                                                ✅ <strong>인박스 내부 공간 적합</strong> (필요치수 {Math.round(inboxValidation.actualNeeded?.w)}×{Math.round(inboxValidation.actualNeeded?.d)}×{Math.round(inboxValidation.actualNeeded?.h)}mm ≤ 박스 {iBox.w}×{iBox.d}×{iBox.h}mm)
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div style={{ padding: '8px 10px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '6px', fontSize: '12px', color: '#b91c1c' }}>
+                                                                                ⚠️ <strong>{inboxValidation.reason}</strong>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {/* 3. 팔레트 탭일 때 */}
+                                                            {sim3DTab === 'pallet' && (
+                                                                <div style={{ background: '#ffffff', padding: '16px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
+                                                                        <strong style={{ fontSize: '13px', color: '#1e293b' }}>
+                                                                            🏗️ 팔레트 적재 패턴 선택 (총 {filteredPatterns.length}개)
+                                                                        </strong>
+
+                                                                        {/* 교차 vs 일반 적재 토글 */}
+                                                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => setPallet3DMode('pallet-cross')}
+                                                                                style={{
+                                                                                    padding: '3px 8px',
+                                                                                    borderRadius: '4px',
+                                                                                    fontSize: '11px',
+                                                                                    fontWeight: 600,
+                                                                                    border: '1px solid #cbd5e1',
+                                                                                    background: pallet3DMode === 'pallet-cross' ? '#d97706' : '#ffffff',
+                                                                                    color: pallet3DMode === 'pallet-cross' ? '#ffffff' : '#475569',
+                                                                                    cursor: 'pointer'
+                                                                                }}
+                                                                            >
+                                                                                🔀 교차적재
+                                                                            </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => setPallet3DMode('pallet-normal')}
+                                                                                style={{
+                                                                                    padding: '3px 8px',
+                                                                                    borderRadius: '4px',
+                                                                                    fontSize: '11px',
+                                                                                    fontWeight: 600,
+                                                                                    border: '1px solid #cbd5e1',
+                                                                                    background: pallet3DMode === 'pallet-normal' ? '#d97706' : '#ffffff',
+                                                                                    color: pallet3DMode === 'pallet-normal' ? '#ffffff' : '#475569',
+                                                                                    cursor: 'pointer'
+                                                                                }}
+                                                                            >
+                                                                                ⏸️ 일반적재
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* 팔레트 카테고리 필터 탭 */}
+                                                                    <div style={{ display: 'flex', gap: '4px', marginBottom: '10px', flexWrap: 'wrap' }}>
+                                                                        {[
+                                                                            { id: 'all', label: '전체' },
+                                                                            { id: 'pinwheel', label: '🌀 핀휠 (4/8/12/16/20/24)' },
+                                                                            { id: 'grid', label: '📐 격자 (6/8/12/16)' },
+                                                                            { id: 'brick', label: '🧱 벽돌/혼합' }
+                                                                        ].map(c => (
+                                                                            <button
+                                                                                key={c.id}
+                                                                                type="button"
+                                                                                onClick={() => setPalletCategoryTab(c.id)}
+                                                                                style={{
+                                                                                    padding: '3px 8px',
+                                                                                    borderRadius: '12px',
+                                                                                    fontSize: '11px',
+                                                                                    fontWeight: palletCategoryTab === c.id ? 'bold' : 'normal',
+                                                                                    background: palletCategoryTab === c.id ? '#fef3c7' : '#f1f5f9',
+                                                                                    color: palletCategoryTab === c.id ? '#b45309' : '#64748b',
+                                                                                    border: palletCategoryTab === c.id ? '1px solid #fcd34d' : '1px solid transparent',
+                                                                                    cursor: 'pointer'
+                                                                                }}
+                                                                            >
+                                                                                {c.label}
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+
+                                                                    {/* 패턴 카드 목록 */}
+                                                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', maxHeight: '240px', overflowY: 'auto', paddingRight: '4px' }}>
+                                                                        {filteredPatterns.map((pat, idx) => {
+                                                                            const isSel = curPalletPattern?.name === pat.name;
+                                                                            const isOk = pat.status === 'ok';
+                                                                            const isWarn = pat.status === 'warn';
+                                                                            return (
+                                                                                <button
+                                                                                    key={idx}
+                                                                                    type="button"
+                                                                                    disabled={pat.status === 'ng'}
+                                                                                    onClick={() => {
+                                                                                        setSelectedPalletPattern(pat);
+                                                                                        const totalBoxes = pat.count * palletStacks;
+                                                                                        const totalProd = totalBoxes * totalProductQty;
+                                                                                        setCurrentSpec(prev => {
+                                                                                            const updated = {
+                                                                                                ...prev,
+                                                                                                palletTierQty: pat.count,
+                                                                                                palletStackingPattern: `${pat.name} (${pallet3DMode === 'pallet-cross' ? '교차적재' : '일반적재'})`,
+                                                                                                palletTotalOutboxQty: totalBoxes,
+                                                                                                palletTotalProductQty: totalProd
+                                                                                            };
+                                                                                            updated.onePalletWeight = calcPalletWeight(updated, formData);
+                                                                                            return updated;
+                                                                                        });
+                                                                                    }}
+                                                                                    style={{
+                                                                                        textAlign: 'left',
+                                                                                        padding: '8px',
+                                                                                        borderRadius: '8px',
+                                                                                        border: isSel ? '2px solid #d97706' : '1px solid #cbd5e1',
+                                                                                        background: isSel ? '#fffbeb' : (pat.status === 'ng' ? '#f8fafc' : '#ffffff'),
+                                                                                        opacity: pat.status === 'ng' ? 0.45 : 1,
+                                                                                        cursor: pat.status === 'ng' ? 'not-allowed' : 'pointer'
+                                                                                    }}
+                                                                                >
+                                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                                        <span style={{ fontSize: '12px', fontWeight: 'bold', color: isSel ? '#b45309' : '#1e293b' }}>
+                                                                                            {pat.label || pat.name}
+                                                                                        </span>
+                                                                                        <span style={{
+                                                                                            fontSize: '10px',
+                                                                                            padding: '1px 6px',
+                                                                                            borderRadius: '4px',
+                                                                                            fontWeight: 'bold',
+                                                                                            background: isOk ? '#dcfce7' : (isWarn ? '#fef3c7' : '#fee2e2'),
+                                                                                            color: isOk ? '#15803d' : (isWarn ? '#b45309' : '#b91c1c'),
+                                                                                            border: isOk ? '1px solid #86efac' : (isWarn ? '1px solid #fde68a' : '1px solid #fca5a5')
+                                                                                        }}>
+                                                                                            {pat.statusLabel}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    <div style={{ fontSize: '11px', color: '#475569', marginTop: '2px' }}>
+                                                                                        1단 <strong>{pat.count}박스</strong> (fp: {Math.round(pat.fp)}mm)
+                                                                                    </div>
+                                                                                </button>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {/* 🛠️ 3D 시각화 옵션: POP, 비닐에어캡, 코너 각대 (여유로운 카드 레이아웃) */}
+                                                            <div style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', padding: '12px 14px', marginBottom: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                                                                <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e293b', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                        <span>🛠️ 3D 시각화 고급 옵션</span>
+                                                                    </span>
+                                                                    <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 'normal', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
+                                                                        포장사양서 3D 캡처 자동 연동
+                                                                    </span>
+                                                                </div>
+                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                                    {/* 1. 단상자 POP 적용 토글 & 높이 */}
+                                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8fafc', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                            <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#b45309' }}>🏷️ POP 동봉 (마주보기)</span>
+                                                                            {(currentSpec.popUseYn === 'O' || (currentSpec.popRequiredStandard && !currentSpec.popRequiredStandard.includes('해당 없음') && currentSpec.popRequiredStandard.includes('POP'))) && (
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                                                    <span style={{ fontSize: '11px', color: '#64748b' }}>높이:</span>
+                                                                                    <input
+                                                                                        type="number"
+                                                                                        value={currentSpec.popHeight ?? 15}
+                                                                                        onChange={(e) => {
+                                                                                            const val = Number(e.target.value);
+                                                                                            setCurrentSpec(prev => ({ ...prev, popHeight: val }));
+                                                                                        }}
+                                                                                        disabled={!canEdit}
+                                                                                        style={{ width: '45px', padding: '2px 4px', fontSize: '11px', textAlign: 'center', border: '1px solid #cbd5e1', borderRadius: '4px', fontWeight: 'bold', color: '#e11d48', background: '#fff' }}
+                                                                                    />
+                                                                                    <span style={{ fontSize: '11px', color: '#64748b' }}>mm</span>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                const isPop = currentSpec.popUseYn !== 'O' && !(currentSpec.popRequiredStandard && !currentSpec.popRequiredStandard.includes('해당 없음') && currentSpec.popRequiredStandard.includes('POP'));
+                                                                                setCurrentSpec(prev => ({
+                                                                                    ...prev,
+                                                                                    popUseYn: isPop ? 'O' : 'X',
+                                                                                    popHeight: prev.popHeight || 15,
+                                                                                    popRequiredStandard: isPop ? (prev.popRequiredStandard && !prev.popRequiredStandard.includes('해당 없음') ? prev.popRequiredStandard : 'POP 부착/동봉 필수') : '해당 없음 (POP 미동봉)'
+                                                                                }));
+                                                                            }}
+                                                                            disabled={!canEdit}
+                                                                            style={{
+                                                                                padding: '4px 10px',
+                                                                                fontSize: '11px',
+                                                                                fontWeight: 'bold',
+                                                                                borderRadius: '6px',
+                                                                                border: 'none',
+                                                                                background: (currentSpec.popUseYn === 'O' || (currentSpec.popRequiredStandard && !currentSpec.popRequiredStandard.includes('해당 없음') && currentSpec.popRequiredStandard.includes('POP'))) ? '#e11d48' : '#e2e8f0',
+                                                                                color: (currentSpec.popUseYn === 'O' || (currentSpec.popRequiredStandard && !currentSpec.popRequiredStandard.includes('해당 없음') && currentSpec.popRequiredStandard.includes('POP'))) ? '#ffffff' : '#64748b',
+                                                                                cursor: 'pointer',
+                                                                                whiteSpace: 'nowrap'
+                                                                            }}
+                                                                        >
+                                                                            {(currentSpec.popUseYn === 'O' || (currentSpec.popRequiredStandard && !currentSpec.popRequiredStandard.includes('해당 없음') && currentSpec.popRequiredStandard.includes('POP'))) ? 'ON (동봉)' : 'OFF'}
+                                                                        </button>
+                                                                    </div>
+
+                                                                    {/* 2. 비닐 에어캡 완충재 토글 & 3. 코너 각대 나란히 */}
+                                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8fafc', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                                                            <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#0284c7' }}>🫧 에어캡 완충재</span>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    const isAir = currentSpec.airCapUseYn !== 'O';
+                                                                                    setCurrentSpec(prev => ({
+                                                                                        ...prev,
+                                                                                        airCapUseYn: isAir ? 'O' : 'X'
+                                                                                    }));
+                                                                                }}
+                                                                                disabled={!canEdit}
+                                                                                style={{
+                                                                                    padding: '4px 10px',
+                                                                                    fontSize: '11px',
+                                                                                    fontWeight: 'bold',
+                                                                                    borderRadius: '6px',
+                                                                                    border: 'none',
+                                                                                    background: currentSpec.airCapUseYn === 'O' ? '#0284c7' : '#e2e8f0',
+                                                                                    color: currentSpec.airCapUseYn === 'O' ? '#ffffff' : '#64748b',
+                                                                                    cursor: 'pointer',
+                                                                                    whiteSpace: 'nowrap'
+                                                                                }}
+                                                                            >
+                                                                                {currentSpec.airCapUseYn === 'O' ? 'ON' : 'OFF'}
+                                                                            </button>
+                                                                        </div>
+
+                                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8fafc', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                                                            <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#d97706' }}>📐 코너 각대</span>
+                                                                            <div
+                                                                                title="유통채널 마스터(SalesChannel)의 '패드/각대' 규정에 따라 자동 결정되며, 임의 수정이 제한됩니다."
+                                                                                style={{
+                                                                                    padding: '4px 8px',
+                                                                                    fontSize: '10px',
+                                                                                    fontWeight: 'bold',
+                                                                                    borderRadius: '6px',
+                                                                                    background: isCornerPostActive ? '#fef3c7' : '#f1f5f9',
+                                                                                    color: isCornerPostActive ? '#b45309' : '#64748b',
+                                                                                    border: isCornerPostActive ? '1px solid #fde68a' : '1px solid #cbd5e1',
+                                                                                    display: 'flex',
+                                                                                    alignItems: 'center',
+                                                                                    gap: '3px',
+                                                                                    cursor: 'not-allowed',
+                                                                                    whiteSpace: 'nowrap'
+                                                                                }}
+                                                                            >
+                                                                                <span>🔒</span>
+                                                                                <span>{isCornerPostActive ? 'ON (채널 연동)' : 'OFF (채널 연동)'}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* 선택된 패턴 종합 요약 카드 */}
+                                                            <div style={{ background: '#f1f5f9', padding: '10px 14px', borderRadius: '8px', fontSize: '12px', color: '#334155' }}>
+                                                                <div style={{ fontWeight: 'bold', color: '#0f172a', marginBottom: '4px' }}>
+                                                                    📋 현재 설정된 3D 포장 사양
+                                                                </div>
+                                                                <div>• 아웃박스 입수: <strong>{currentSpec.outboxPackingPattern || (hasInbox ? `${curOutboxArrangement.cols}열×${curOutboxArrangement.rows}행×${curOutboxArrangement.layers}단 (인박스 ${curOutboxArrangement.qty}박스입)` : `${curOutboxArrangement.cols}열×${curOutboxArrangement.rows}행×${curOutboxArrangement.layers}단`)}</strong></div>
+                                                                {hasInbox && (
+                                                                    <div>• 인박스 입수: <strong>{currentSpec.inboxPackingPattern || `${curInboxArrangement.cols}열×${curInboxArrangement.rows}행×${curInboxArrangement.layers}단`}</strong></div>
+                                                                )}
+                                                                <div>• 팔레트 적재: <strong>{currentSpec.palletStackingPattern || (curPalletPattern?.name ? `${curPalletPattern.name} (${pallet3DMode === 'pallet-cross' ? '교차적재' : '일반적재'})` : '8방 핀휠 교차적재')}</strong> (1단 {currentSpec.palletTierQty || 8}박스 × {palletStacks}단)</div>
+                                                                <div>• 고급 옵션: <strong>POP {currentSpec.popUseYn === 'O' || (currentSpec.popRequiredStandard && !currentSpec.popRequiredStandard.includes('해당 없음') && currentSpec.popRequiredStandard.includes('POP')) ? '적용(마주보기)' : '미적용'}</strong> / <strong>에어캡 {currentSpec.airCapUseYn === 'O' ? '적용' : '미적용'}</strong> / <strong>팔레트 각대 {isCornerPostActive ? '적용(채널연동)' : '미적용(채널연동)'}</strong></div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* 오른쪽: 3D 뷰어 캔버스 (인박스 설정 변경 시 블러 & 새로고침 안내) */}
+                                                        {(() => {
+                                                            const isInboxUseYnChanged = specBaselineInboxUseYn !== null && specBaselineInboxUseYn !== currentSpec.inboxUseYn;
+                                                            return (
+                                                                <div style={{ position: 'relative', minHeight: '420px' }}>
+                                                                    <div style={{
+                                                                        filter: isInboxUseYnChanged ? 'blur(6px)' : 'none',
+                                                                        pointerEvents: isInboxUseYnChanged ? 'none' : 'auto',
+                                                                        opacity: isInboxUseYnChanged ? 0.35 : 1,
+                                                                        transition: 'filter 0.25s ease, opacity 0.25s ease'
+                                                                    }}>
+                                                                        <PackagingViewer3D
+                                                                            mode={sim3DTab === 'pallet' ? pallet3DMode : sim3DTab}
+                                                                            unitBox={uBox}
+                                                                            inbox={iBox}
+                                                                            outbox={oBox}
+                                                                            arrangement={sim3DTab === 'inbox' ? curInboxArrangement : curOutboxArrangement}
+                                                                            inboxArrangement={curInboxArrangement}
+                                                                            useInbox={hasInbox}
+                                                                            hasPop={currentSpec.popUseYn === 'O' || (currentSpec.popRequiredStandard && !currentSpec.popRequiredStandard.includes('해당 없음') && currentSpec.popRequiredStandard.includes('POP'))}
+                                                                            popHeight={Number(currentSpec.popHeight) || 15}
+                                                                            useAirCap={currentSpec.airCapUseYn === 'O'}
+                                                                            useCornerPost={isCornerPostActive}
+                                                                            palletConfig={{
+                                                                                w: pBox.w,
+                                                                                d: pBox.d,
+                                                                                pattern: curPalletPattern,
+                                                                                stacks: palletStacks
+                                                                            }}
+                                                                            onCapture={(dataUrl, renderedMode) => handleSave3DSnapshot(dataUrl, renderedMode)}
+                                                                            height={410}
+                                                                        />
+
+                                                                        {/* 저장된 스냅샷 미리보기 썸네일 표시 */}
+                                                                        <div style={{ display: 'flex', gap: '10px', marginTop: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                                            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b' }}>저장된 3D 스냅샷:</span>
+                                                                            {currentSpec.inboxLayoutImage && (
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#f5f3ff', padding: '2px 8px', borderRadius: '6px', border: '1px solid #ddd6fe' }}>
+                                                                                    <span style={{ fontSize: '11px', color: '#6d28d9', fontWeight: 600 }}>📥 인박스</span>
+                                                                                    <img src={getFileUrl(currentSpec.inboxLayoutImage)} alt="인박스 3D" style={{ width: '22px', height: '22px', objectFit: 'cover', borderRadius: '3px' }} />
+                                                                                </div>
+                                                                            )}
+                                                                            {(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) && (
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#eff6ff', padding: '2px 8px', borderRadius: '6px', border: '1px solid #bfdbfe' }}>
+                                                                                    <span style={{ fontSize: '11px', color: '#1d4ed8', fontWeight: 600 }}>📦 아웃박스</span>
+                                                                                    <img src={getFileUrl(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage)} alt="아웃박스 3D" style={{ width: '22px', height: '22px', objectFit: 'cover', borderRadius: '3px' }} />
+                                                                                </div>
+                                                                            )}
+                                                                            {currentSpec.palletLayoutImage && (
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#fef3c7', padding: '2px 8px', borderRadius: '6px', border: '1px solid #fde68a' }}>
+                                                                                    <span style={{ fontSize: '11px', color: '#b45309', fontWeight: 600 }}>🏗️ 팔레트</span>
+                                                                                    <img src={getFileUrl(currentSpec.palletLayoutImage)} alt="팔레트 3D" style={{ width: '22px', height: '22px', objectFit: 'cover', borderRadius: '3px' }} />
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* 📦 인박스 사용유무 변경 시 블러 오버레이 & 즉시 새로고침 안내 */}
+                                                                    {isInboxUseYnChanged && (
+                                                                        <div style={{
+                                                                            position: 'absolute',
+                                                                            top: 0,
+                                                                            left: 0,
+                                                                            right: 0,
+                                                                            bottom: 0,
+                                                                            background: 'rgba(255, 255, 255, 0.85)',
+                                                                            backdropFilter: 'blur(5px)',
+                                                                            WebkitBackdropFilter: 'blur(5px)',
+                                                                            display: 'flex',
+                                                                            flexDirection: 'column',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'center',
+                                                                            zIndex: 30,
+                                                                            borderRadius: '12px',
+                                                                            padding: '24px',
+                                                                            textAlign: 'center',
+                                                                            border: '2px dashed #93c5fd',
+                                                                            boxShadow: '0 10px 25px -5px rgba(59, 130, 246, 0.18)'
+                                                                        }}>
+                                                                            <div style={{ fontSize: '38px', marginBottom: '10px' }}>📦🔄</div>
+                                                                            <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#1e293b', marginBottom: '6px' }}>
+                                                                                인박스(Inner Box) 사용 설정이 변경되었습니다.
+                                                                            </div>
+                                                                            <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px', lineHeight: '1.6', maxWidth: '340px' }}>
+                                                                                포장 구조가 변경되었습니다.<br/>
+                                                                                <strong>사양서 저장 후 3D 시뮬레이션을 재조회</strong>해 주세요.<br/>
+                                                                                <span style={{ fontSize: '11px', color: '#2563eb' }}>(임시로 즉시 시뮬레이션하시려면 아래 버튼을 눌러주세요)</span>
+                                                                            </div>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    setSpecBaselineInboxUseYn(currentSpec.inboxUseYn);
+                                                                                    setSelectedOutboxArrangement(null);
+                                                                                    setSelectedInboxArrangement(null);
+                                                                                    setSim3DTab('outbox');
+                                                                                }}
+                                                                                style={{
+                                                                                    padding: '9px 20px',
+                                                                                    fontSize: '13px',
+                                                                                    fontWeight: 'bold',
+                                                                                    background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                                                                                    color: '#ffffff',
+                                                                                    border: 'none',
+                                                                                    borderRadius: '8px',
+                                                                                    cursor: 'pointer',
+                                                                                    boxShadow: '0 4px 10px rgba(37, 99, 235, 0.3)',
+                                                                                    display: 'flex',
+                                                                                    alignItems: 'center',
+                                                                                    gap: '8px'
+                                                                                }}
+                                                                            >
+                                                                                <span>🔄</span>
+                                                                                <span>3D 시뮬레이션 즉시 새로고침</span>
+                                                                            </button>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })()}
+
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
 
                                         {/* 특이사항 */}
                                         <div className="card" style={{ padding: '20px', marginBottom: '20px', border: '1px solid #e2e8f0', borderRadius: '12px' }}>

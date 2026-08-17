@@ -29,6 +29,9 @@ import java.awt.Graphics2D;
 import java.awt.Color;
 import java.awt.BasicStroke;
 import java.awt.FontMetrics;
+import java.awt.RenderingHints;
+import java.awt.GradientPaint;
+import java.awt.Polygon;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -391,6 +394,106 @@ public class PackagingSpecExportService {
             addRow(sheet0, currentRow++, labelStyle, dataStyle, "아웃박스 구분", spec.getOutboxType() != null ? spec.getOutboxType() : "아웃박스", "아웃박스 입수량", spec.getOutboxQty() != null ? spec.getOutboxQty() + " ea" : "-", "아웃박스 규격", spec.getOutboxSize() != null ? spec.getOutboxSize() : "-", "아웃박스 재질", spec.getOutboxMaterial() != null ? spec.getOutboxMaterial() : "-");
             addRow(sheet0, currentRow++, labelStyle, dataStyle, "팔레트 종류", spec.getPalletTypeStr() != null ? spec.getPalletTypeStr() : "-", "적재 방법", spec.getPalletStackingMethod() != null ? spec.getPalletStackingMethod() : "-", "팔레트 규격", spec.getPalletSize() != null ? spec.getPalletSize() : "-", "높이 제한", spec.getPalletHeightLimit() != null ? spec.getPalletHeightLimit() : "-");
             addRow(sheet0, currentRow++, labelStyle, dataStyle, "1아웃박스 중량 [제한12kg]", (spec.getOneOutboxWeight() != null ? spec.getOneOutboxWeight() + " kg" : "-"), "1팔레트 중량 [제한630kg]", (spec.getOnePalletWeight() != null ? spec.getOnePalletWeight() + " kg" : "-"), "1팔레트 높이 [제한1500mm]", (spec.getOnePalletHeight() != null ? spec.getOnePalletHeight() + " mm" : "-"), "검증 상태", "정상 규격");
+
+            // [5-1. 3D 입수 및 팔레트 적재 형태 (3D Loading Layout)]
+            createSectionHeader(sheet0, currentRow, "5-1. 📦 3D 제품 입수 및 팔레트 적재 형태 (3D Loading Layout)", headerStyle, 7);
+            currentRow++;
+            addRow(sheet0, currentRow++, labelStyle, dataStyle, 
+                "인박스 입수패턴", spec.getInboxPackingPattern() != null ? spec.getInboxPackingPattern() : "-",
+                "아웃박스 입수패턴", spec.getOutboxPackingPattern() != null ? spec.getOutboxPackingPattern() : "-",
+                "팔레트 적재패턴", spec.getPalletStackingPattern() != null ? spec.getPalletStackingPattern() : (spec.getPalletStackingMethod() != null ? spec.getPalletStackingMethod() : "-"),
+                "적재 단수", (spec.getPalletTierCount() != null ? spec.getPalletTierCount() + "단" : "-"));
+
+            byte[] inboxImgBytes = getImageBytesFromFileOrUrl(spec.getInboxLayoutImage());
+            if (inboxImgBytes == null || inboxImgBytes.length == 0) {
+                inboxImgBytes = generateIsometricInboxLayoutImage(product, spec);
+            }
+
+            byte[] outboxImgBytes = getImageBytesFromFileOrUrl(spec.getOutboxLayoutImageFile() != null ? spec.getOutboxLayoutImageFile() : spec.getOutboxLayoutImage());
+            if (outboxImgBytes == null || outboxImgBytes.length == 0) {
+                outboxImgBytes = generateIsometricOutboxLayoutImage(product, spec);
+            }
+
+            byte[] palletImgBytes = getImageBytesFromFileOrUrl(spec.getPalletLayoutImage());
+            if (palletImgBytes == null || palletImgBytes.length == 0) {
+                palletImgBytes = generateIsometricPalletLayoutImage(product, spec);
+            }
+
+            // 1) 3D 도면 타이틀 서브헤더 행 (높이 24pt)
+            Row layoutTitleRow = sheet0.createRow(currentRow);
+            layoutTitleRow.setHeightInPoints(24);
+            createCell(layoutTitleRow, 0, "📥 인박스 3D 입수 도면", subHeaderStyle);
+            createCell(layoutTitleRow, 1, "", subHeaderStyle);
+            createCell(layoutTitleRow, 2, "", subHeaderStyle);
+            sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 0, 2));
+
+            createCell(layoutTitleRow, 3, "📦 아웃박스 3D 입수 도면", subHeaderStyle);
+            createCell(layoutTitleRow, 4, "", subHeaderStyle);
+            createCell(layoutTitleRow, 5, "", subHeaderStyle);
+            sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 3, 5));
+
+            createCell(layoutTitleRow, 6, "🏗️ 팔레트 3D 적재 도면", subHeaderStyle);
+            createCell(layoutTitleRow, 7, "", subHeaderStyle);
+            sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 6, 7));
+
+            // 2) 3D 도면 이미지 전용 캔버스 행 (높이 220pt)
+            int imgRowIdx = currentRow + 1;
+            Row layoutImgRow = sheet0.createRow(imgRowIdx);
+            layoutImgRow.setHeightInPoints(220);
+            for (int col = 0; col <= 7; col++) {
+                createCell(layoutImgRow, col, "", dataStyle);
+            }
+            sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(imgRowIdx, imgRowIdx, 0, 2));
+            sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(imgRowIdx, imgRowIdx, 3, 5));
+            sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(imgRowIdx, imgRowIdx, 6, 7));
+
+            org.apache.poi.ss.usermodel.Drawing<?> sheet0Drawing = sheet0.getDrawingPatriarch() != null ? sheet0.getDrawingPatriarch() : sheet0.createDrawingPatriarch();
+
+            if (inboxImgBytes != null && inboxImgBytes.length > 0) {
+                try {
+                    int picIdx = workbook.addPicture(inboxImgBytes, Workbook.PICTURE_TYPE_PNG);
+                    org.apache.poi.ss.usermodel.ClientAnchor anchor = workbook.getCreationHelper().createClientAnchor();
+                    anchor.setCol1(0); anchor.setRow1(imgRowIdx);
+                    anchor.setCol2(3); anchor.setRow2(imgRowIdx + 1);
+                    anchor.setDx1(5 * 10000); anchor.setDy1(5 * 10000);
+                    anchor.setDx2(-5 * 10000); anchor.setDy2(-5 * 10000);
+                    anchor.setAnchorType(org.apache.poi.ss.usermodel.ClientAnchor.AnchorType.MOVE_AND_RESIZE);
+                    sheet0Drawing.createPicture(anchor, picIdx);
+                } catch (Exception ex) {
+                    log.error("Failed to insert inbox 3d image into Excel", ex);
+                }
+            }
+
+            if (outboxImgBytes != null && outboxImgBytes.length > 0) {
+                try {
+                    int picIdx = workbook.addPicture(outboxImgBytes, Workbook.PICTURE_TYPE_PNG);
+                    org.apache.poi.ss.usermodel.ClientAnchor anchor = workbook.getCreationHelper().createClientAnchor();
+                    anchor.setCol1(3); anchor.setRow1(imgRowIdx);
+                    anchor.setCol2(6); anchor.setRow2(imgRowIdx + 1);
+                    anchor.setDx1(5 * 10000); anchor.setDy1(5 * 10000);
+                    anchor.setDx2(-5 * 10000); anchor.setDy2(-5 * 10000);
+                    anchor.setAnchorType(org.apache.poi.ss.usermodel.ClientAnchor.AnchorType.MOVE_AND_RESIZE);
+                    sheet0Drawing.createPicture(anchor, picIdx);
+                } catch (Exception ex) {
+                    log.error("Failed to insert outbox 3d image into Excel", ex);
+                }
+            }
+
+            if (palletImgBytes != null && palletImgBytes.length > 0) {
+                try {
+                    int picIdx = workbook.addPicture(palletImgBytes, Workbook.PICTURE_TYPE_PNG);
+                    org.apache.poi.ss.usermodel.ClientAnchor anchor = workbook.getCreationHelper().createClientAnchor();
+                    anchor.setCol1(6); anchor.setRow1(imgRowIdx);
+                    anchor.setCol2(8); anchor.setRow2(imgRowIdx + 1);
+                    anchor.setDx1(5 * 10000); anchor.setDy1(5 * 10000);
+                    anchor.setDx2(-5 * 10000); anchor.setDy2(-5 * 10000);
+                    anchor.setAnchorType(org.apache.poi.ss.usermodel.ClientAnchor.AnchorType.MOVE_AND_RESIZE);
+                    sheet0Drawing.createPicture(anchor, picIdx);
+                } catch (Exception ex) {
+                    log.error("Failed to insert pallet 3d image into Excel", ex);
+                }
+            }
+            currentRow += 2;
 
             // 여백 행
             createMarginRow(sheet0, currentRow++, 10);
@@ -1270,5 +1373,302 @@ public class PackagingSpecExportService {
             return channel.getExpDateFormat().startsWith("EXP") ? channel.getExpDateFormat() : "EXP " + channel.getExpDateFormat();
         }
         return "[ YYYY.MM.DD 까지 ]";
+    }
+
+    /**
+     * Java2D 기반 고화질 3D 등각투시도(Isometric) 렌더러 - 인박스 3D 입수
+     */
+    private byte[] generateIsometricInboxLayoutImage(Product product, PackagingSpecification spec) {
+        try {
+            int width = 500, height = 400;
+            BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g2 = img.createGraphics();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+            // 배경 그라데이션
+            GradientPaint bg = new GradientPaint(0, 0, new Color(248, 250, 252), 0, height, new Color(241, 245, 249));
+            g2.setPaint(bg);
+            g2.fillRect(0, 0, width, height);
+
+            boolean isInboxUsed = "O".equalsIgnoreCase(spec.getInboxUseYn()) || (spec.getInboxQty() != null && spec.getInboxQty() > 0);
+
+            if (!isInboxUsed) {
+                g2.setColor(new Color(148, 163, 184));
+                g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 14));
+                g2.drawString("📥 인박스 미사용 품목", 16, 30);
+                g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.PLAIN, 12));
+                g2.setColor(new Color(100, 116, 139));
+                g2.drawString("단상자가 아웃박스에 직접 입수되는 포장 구조입니다.", 16, 52);
+
+                g2.setColor(new Color(226, 232, 240));
+                g2.fillRoundRect(80, 100, 340, 200, 16, 16);
+                g2.setColor(new Color(148, 163, 184));
+                g2.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{6}, 0));
+                g2.drawRoundRect(80, 100, 340, 200, 16, 16);
+
+                g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 16));
+                g2.drawString("📦 인박스 없음 (Direct Packing)", 125, 205);
+            } else {
+                g2.setColor(new Color(109, 40, 217)); // 보라색
+                g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 14));
+                String pattern = spec.getInboxPackingPattern() != null ? spec.getInboxPackingPattern() : "2열×5행×1단 (10개입)";
+                g2.drawString("📥 인박스 3D 입수 시뮬레이션", 16, 26);
+                g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.PLAIN, 11));
+                g2.setColor(new Color(100, 116, 139));
+                String sizeStr = spec.getInboxSize() != null ? spec.getInboxSize() : "규격 미지정";
+                g2.drawString("배열: " + pattern + " | 규격: " + sizeStr + "mm", 16, 44);
+
+                int cols = 2, rows = 5, layers = 1;
+                if (pattern.contains("열") && pattern.contains("행")) {
+                    try {
+                        String[] parts = pattern.split("열|행|단");
+                        if (parts.length >= 2) {
+                            cols = Integer.parseInt(parts[0].replaceAll("[^0-9]", ""));
+                            rows = Integer.parseInt(parts[1].replaceAll("[^0-9]", ""));
+                            if (parts.length >= 3) layers = Math.max(1, Integer.parseInt(parts[2].replaceAll("[^0-9]", "")));
+                        }
+                    } catch (Exception ignored) {}
+                }
+
+                drawIsometricBoxStack(g2, width / 2, height / 2 + 30, cols, rows, layers, 
+                    new Color(221, 214, 254), new Color(196, 181, 253), new Color(167, 139, 250), 
+                    new Color(109, 40, 217), "인박스", sizeStr, false, false, false);
+            }
+
+            g2.dispose();
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageIO.write(img, "png", baos);
+            return baos.toByteArray();
+        } catch (Exception e) {
+            log.error("Failed to generate fallback inbox isometric image", e);
+            return null;
+        }
+    }
+
+    /**
+     * Java2D 기반 고화질 3D 등각투시도(Isometric) 렌더러 - 아웃박스 3D 입수
+     */
+    private byte[] generateIsometricOutboxLayoutImage(Product product, PackagingSpecification spec) {
+        try {
+            int width = 500, height = 400;
+            BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g2 = img.createGraphics();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+            GradientPaint bg = new GradientPaint(0, 0, new Color(248, 250, 252), 0, height, new Color(241, 245, 249));
+            g2.setPaint(bg);
+            g2.fillRect(0, 0, width, height);
+
+            g2.setColor(new Color(29, 78, 216)); // 블루
+            g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 14));
+            String pattern = spec.getOutboxPackingPattern() != null ? spec.getOutboxPackingPattern() : "4열×5행×2단 (40개입)";
+            g2.drawString("📦 아웃박스 3D 입수 시뮬레이션", 16, 26);
+            g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.PLAIN, 11));
+            g2.setColor(new Color(100, 116, 139));
+            String sizeStr = spec.getOutboxSize() != null ? spec.getOutboxSize() : "규격 미지정";
+            boolean hasPop = "O".equalsIgnoreCase(spec.getPopUseYn()) || (spec.getPopRequiredStandard() != null && spec.getPopRequiredStandard().contains("POP") && !spec.getPopRequiredStandard().contains("해당 없음"));
+            boolean hasAirCap = "O".equalsIgnoreCase(spec.getAirCapUseYn());
+            String optStr = (hasPop ? "[POP적용] " : "") + (hasAirCap ? "[에어캡완충] " : "");
+            g2.drawString("배열: " + pattern + " | 규격: " + sizeStr + "mm " + optStr, 16, 44);
+
+            int cols = 4, rows = 5, layers = 2;
+            if (pattern.contains("열") && pattern.contains("행")) {
+                try {
+                    String[] parts = pattern.split("열|행|단");
+                    if (parts.length >= 2) {
+                        cols = Integer.parseInt(parts[0].replaceAll("[^0-9]", ""));
+                        rows = Integer.parseInt(parts[1].replaceAll("[^0-9]", ""));
+                        if (parts.length >= 3) layers = Math.max(1, Integer.parseInt(parts[2].replaceAll("[^0-9]", "")));
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            drawIsometricBoxStack(g2, width / 2, height / 2 + 30, cols, rows, layers, 
+                new Color(191, 219, 254), new Color(147, 197, 253), new Color(96, 165, 250), 
+                new Color(29, 78, 216), "아웃박스", sizeStr, hasPop, hasAirCap, false);
+
+            g2.dispose();
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageIO.write(img, "png", baos);
+            return baos.toByteArray();
+        } catch (Exception e) {
+            log.error("Failed to generate fallback outbox isometric image", e);
+            return null;
+        }
+    }
+
+    /**
+     * Java2D 기반 고화질 3D 등각투시도(Isometric) 렌더러 - 팔레트 3D 적재
+     */
+    private byte[] generateIsometricPalletLayoutImage(Product product, PackagingSpecification spec) {
+        try {
+            int width = 500, height = 400;
+            BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g2 = img.createGraphics();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+            GradientPaint bg = new GradientPaint(0, 0, new Color(248, 250, 252), 0, height, new Color(241, 245, 249));
+            g2.setPaint(bg);
+            g2.fillRect(0, 0, width, height);
+
+            g2.setColor(new Color(180, 83, 9)); // 앰버
+            g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 14));
+            String pattern = spec.getPalletStackingPattern() != null ? spec.getPalletStackingPattern() : (spec.getPalletStackingMethod() != null ? spec.getPalletStackingMethod() : "8방 핀휠 교차적재");
+            int stacks = spec.getPalletTierCount() != null ? spec.getPalletTierCount() : 8;
+            int tierQty = spec.getPalletTierQty() != null ? spec.getPalletTierQty() : 8;
+            int totalBoxes = tierQty * stacks;
+            g2.drawString("🏗️ 팔레트 3D 적재 시뮬레이션", 16, 26);
+            g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.PLAIN, 11));
+            g2.setColor(new Color(100, 116, 139));
+            String sizeStr = spec.getPalletSize() != null ? spec.getPalletSize() : "1,100×1,100mm";
+            boolean hasCornerPost = "O".equalsIgnoreCase(spec.getCornerPostUseYn());
+            g2.drawString("패턴: " + pattern + " (" + stacks + "단, 총 " + totalBoxes + "박스) " + (hasCornerPost ? "[코너각대 적용]" : ""), 16, 44);
+
+            drawIsometricPalletStack(g2, width / 2, height / 2 + 50, stacks, tierQty, sizeStr, hasCornerPost);
+
+            g2.dispose();
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageIO.write(img, "png", baos);
+            return baos.toByteArray();
+        } catch (Exception e) {
+            log.error("Failed to generate fallback pallet isometric image", e);
+            return null;
+        }
+    }
+
+    private void drawIsometricBoxStack(Graphics2D g2, int originX, int originY, int cols, int rows, int layers,
+                                      Color topColor, Color leftColor, Color rightColor, Color wireColor,
+                                      String boxLabel, String sizeStr, boolean hasPop, boolean hasAirCap, boolean isPallet) {
+        int cellW = Math.max(16, Math.min(36, 160 / Math.max(cols, rows)));
+        int cellD = cellW;
+        int cellH = Math.max(14, Math.min(28, 120 / Math.max(1, layers)));
+
+        double cos30 = 0.866025;
+        double sin30 = 0.5;
+
+        int totalSpanX = (int) ((cols * cellW + rows * cellD) * cos30);
+        int totalSpanY = (int) ((cols * cellW + rows * cellD) * sin30);
+        int startX = originX - (int) ((cols * cellW - rows * cellD) * cos30 / 2);
+        int startY = originY + totalSpanY / 4;
+
+        g2.setColor(new Color(226, 232, 240));
+        g2.setStroke(new BasicStroke(1.5f));
+
+        for (int l = 0; l < layers; l++) {
+            for (int r = rows - 1; r >= 0; r--) {
+                for (int c = 0; c < cols; c++) {
+                    int bx = startX + (int) ((c * cellW - r * cellD) * cos30);
+                    int by = startY + (int) ((c * cellW + r * cellD) * sin30) - l * cellH;
+
+                    drawIsometricCube(g2, bx, by, cellW, cellD, cellH, topColor, leftColor, rightColor, new Color(148, 163, 184));
+                }
+            }
+        }
+
+        if (hasPop) {
+            g2.setColor(new Color(225, 29, 72));
+            g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 10));
+            g2.drawString("🏷️ POP 동봉", startX - 30, startY - layers * cellH - 10);
+            g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{4}, 0));
+            g2.drawRect(startX - 35, startY - layers * cellH - 24, 80, 18);
+        }
+
+        if (hasAirCap) {
+            g2.setColor(new Color(2, 132, 199));
+            g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 10));
+            g2.drawString("🫧 에어캡 완충재", startX + totalSpanX / 4, startY - layers * cellH - 10);
+        }
+    }
+
+    private void drawIsometricPalletStack(Graphics2D g2, int originX, int originY, int stacks, int tierQty, String sizeStr, boolean hasCornerPost) {
+        int palW = 140, palD = 140, palH = 14;
+        double cos30 = 0.866025;
+        double sin30 = 0.5;
+
+        int startX = originX;
+        int startY = originY;
+
+        drawIsometricCube(g2, startX, startY, palW, palD, palH, new Color(203, 213, 225), new Color(148, 163, 184), new Color(100, 116, 139), new Color(71, 85, 105));
+
+        int drawStacks = Math.min(8, Math.max(3, stacks));
+        int boxH = 16;
+        for (int s = 0; s < drawStacks; s++) {
+            int layerY = startY - palH - s * boxH;
+            Color topC = (s % 2 == 0) ? new Color(254, 243, 199) : new Color(253, 230, 138);
+            Color leftC = (s % 2 == 0) ? new Color(253, 224, 71) : new Color(250, 204, 21);
+            Color rightC = (s % 2 == 0) ? new Color(234, 179, 8) : new Color(202, 138, 4);
+
+            int half = palW / 2 - 2;
+            drawIsometricCube(g2, startX - (int)(half * cos30 / 2), layerY + (int)(half * sin30 / 2), half, half, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+            drawIsometricCube(g2, startX + (int)(half * cos30 / 2), layerY - (int)(half * sin30 / 2), half, half, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+            drawIsometricCube(g2, startX + (int)(half * cos30 / 2), layerY + (int)(half * sin30 / 2), half, half, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+            drawIsometricCube(g2, startX - (int)(half * cos30 / 2), layerY - (int)(half * sin30 / 2), half, half, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+        }
+
+        if (hasCornerPost) {
+            g2.setColor(new Color(217, 119, 6)); // 짙은 오렌지 각대
+            g2.setStroke(new BasicStroke(4.0f));
+            int totalH = drawStacks * boxH + palH;
+            int p1X = startX, p1Y = startY + (int)(palW * sin30);
+            int p2X = startX - (int)(palD * cos30), p2Y = startY;
+            int p3X = startX + (int)(palW * cos30), p3Y = startY;
+
+            g2.drawLine(p1X, p1Y, p1X, p1Y - totalH);
+            g2.drawLine(p2X, p2Y, p2X, p2Y - totalH);
+            g2.drawLine(p3X, p3Y, p3X, p3Y - totalH);
+
+            g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 10));
+            g2.drawString("📐 코너 각대(L형)", p1X - 35, p1Y - totalH - 8);
+        }
+    }
+
+    private void drawIsometricCube(Graphics2D g2, int cx, int cy, int w, int d, int h, Color topColor, Color leftColor, Color rightColor, Color strokeColor) {
+        double cos30 = 0.866025;
+        double sin30 = 0.5;
+
+        int dxW = (int) (w * cos30);
+        int dyW = (int) (w * sin30);
+        int dxD = (int) (d * cos30);
+        int dyD = (int) (d * sin30);
+
+        // 상단 면
+        Polygon top = new Polygon();
+        top.addPoint(cx, cy - h);
+        top.addPoint(cx + dxW, cy + dyW - h);
+        top.addPoint(cx + dxW - dxD, cy + dyW + dyD - h);
+        top.addPoint(cx - dxD, cy + dyD - h);
+
+        g2.setColor(topColor);
+        g2.fill(top);
+        g2.setColor(strokeColor);
+        g2.setStroke(new BasicStroke(1.0f));
+        g2.draw(top);
+
+        // 좌측 면
+        Polygon left = new Polygon();
+        left.addPoint(cx - dxD, cy + dyD - h);
+        left.addPoint(cx + dxW - dxD, cy + dyW + dyD - h);
+        left.addPoint(cx + dxW - dxD, cy + dyW + dyD);
+        left.addPoint(cx - dxD, cy + dyD);
+
+        g2.setColor(leftColor);
+        g2.fill(left);
+        g2.setColor(strokeColor);
+        g2.draw(left);
+
+        // 우측 면
+        Polygon right = new Polygon();
+        right.addPoint(cx + dxW - dxD, cy + dyW + dyD - h);
+        right.addPoint(cx + dxW, cy + dyW - h);
+        right.addPoint(cx + dxW, cy + dyW);
+        right.addPoint(cx + dxW - dxD, cy + dyW + dyD);
+
+        g2.setColor(rightColor);
+        g2.fill(right);
+        g2.setColor(strokeColor);
+        g2.draw(right);
     }
 }
