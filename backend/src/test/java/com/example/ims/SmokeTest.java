@@ -3,8 +3,6 @@ package com.example.ims;
 import com.example.ims.controller.PackagingSpecificationController;
 import com.example.ims.controller.ProductController;
 import com.example.ims.entity.Product;
-import com.example.ims.entity.SalesChannel;
-import com.example.ims.service.ProductService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,9 +31,6 @@ public class SmokeTest {
 
     @Autowired(required = false)
     private PackagingSpecificationController packagingSpecController;
-
-    @Autowired
-    private ProductService productService;
 
     @Test
     @DisplayName("1. 백엔드 주요 컨트롤러 및 컴포넌트 마운트 정상 검증")

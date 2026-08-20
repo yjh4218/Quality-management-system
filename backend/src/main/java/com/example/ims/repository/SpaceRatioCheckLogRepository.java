@@ -4,12 +4,10 @@ import com.example.ims.entity.SpaceRatioCheckLog;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
 /**
  * 포장공간비율 검증 로그 레포지토리
  */
-@Repository
 public interface SpaceRatioCheckLogRepository extends JpaRepository<SpaceRatioCheckLog, Long> {
     
     /**

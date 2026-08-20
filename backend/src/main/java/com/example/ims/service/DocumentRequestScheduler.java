@@ -173,7 +173,6 @@ public class DocumentRequestScheduler {
     }
 
     private String getRecipientEmail(DocumentRequirement req) {
-        String email = null;
         Manufacturer mfr = null;
 
         if (req.getProduct() != null && req.getProduct().getManufacturerInfo() != null) {

@@ -2,10 +2,8 @@ package com.example.ims.repository;
 
 import com.example.ims.entity.ProductionAudit;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 import java.util.List;
 
-@Repository
 public interface ProductionAuditRepository extends JpaRepository<ProductionAudit, Long> {
     java.util.Optional<ProductionAudit> findByItemCode(String itemCode);
 

@@ -1,11 +1,39 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import * as THREE from 'three';
 
 /**
  * 3D 포장 및 팔레트 적재 뷰어 (PackagingViewer3D)
  * Three.js 기반 인박스/아웃박스 입수 및 팔레트 적재 실시간 3D 렌더러
  */
-export default function PackagingViewer3D({
+const parseViewConfig = (cfg) => {
+  if (!cfg) return null;
+  if (typeof cfg === 'object') {
+    if (typeof cfg.theta === 'number' && typeof cfg.phi === 'number') {
+      return {
+        theta: Number(cfg.theta),
+        phi: Number(cfg.phi),
+        dist: typeof cfg.dist === 'number' ? Number(cfg.dist) : 3.8,
+        lookY: typeof cfg.lookY === 'number' ? Number(cfg.lookY) : 0.3
+      };
+    }
+  }
+  if (typeof cfg === 'string') {
+    try {
+      const parsed = JSON.parse(cfg);
+      if (parsed && typeof parsed.theta === 'number' && typeof parsed.phi === 'number') {
+        return {
+          theta: Number(parsed.theta),
+          phi: Number(parsed.phi),
+          dist: typeof parsed.dist === 'number' ? Number(parsed.dist) : 3.8,
+          lookY: typeof parsed.lookY === 'number' ? Number(parsed.lookY) : 0.3
+        };
+      }
+    } catch (e) {}
+  }
+  return null;
+};
+
+const PackagingViewer3D = forwardRef(function PackagingViewer3D({
   mode = 'pallet-cross', // 'inbox' | 'outbox' | 'pallet-cross' | 'pallet-normal'
   unitBox = { w: 70, d: 40, h: 140 }, // 단상자 치수 (mm)
   inbox = null, // { w, d, h } 인박스 치수 (mm)
@@ -18,10 +46,12 @@ export default function PackagingViewer3D({
   useAirCap = false, // 비닐에어캡(뽁뽁이) 완충재 사용 여부
   useCornerPost = false, // 팔레트 코너 각대 적용 여부
   palletConfig = { w: 1100, d: 1100, pattern: null, stacks: 8 },
+  savedViewConfig = null,
+  onViewChange = null,
   onCapture = null,
   height = 380,
   style = {}
-}) {
+}, ref) {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const stateRef = useRef({
@@ -40,8 +70,26 @@ export default function PackagingViewer3D({
     isDragging: false,
     lx: 0,
     ly: 0,
-    touchDist: null
+    touchDist: null,
+    hasCustomAngle: false,
+    currentMode: mode
   });
+
+  // ── Sync Saved View Config / Mode Changes ──
+  useEffect(() => {
+    const s = stateRef.current;
+    const parsed = parseViewConfig(savedViewConfig);
+    if (parsed) {
+      s.tgtTheta = parsed.theta;
+      s.tgtPhi = parsed.phi;
+      s.tgtDist = parsed.dist;
+      s.tgtLookY = parsed.lookY;
+      s.hasCustomAngle = true;
+    } else if (s.currentMode !== mode) {
+      s.hasCustomAngle = false;
+    }
+    s.currentMode = mode;
+  }, [mode, savedViewConfig]);
 
   const [isCapturing, setIsCapturing] = useState(false);
 
@@ -433,21 +481,73 @@ export default function PackagingViewer3D({
     return baseY + pH;
   };
 
-  // ── Helper: 90° Rotated positions for Cross Stacking ──
-  const rotatePosLayer = (positions) => {
-    if (!positions || !positions.length) return [];
-    const maxX = positions.reduce((m, p) => Math.max(m, p[0] + p[2]), 0);
-    const maxZ = positions.reduce((m, p) => Math.max(m, p[1] + p[3]), 0);
-    const cx = maxX / 2, cy = maxZ / 2;
-    const rotated = positions.map(([px, py, bw, bd]) => {
-      const bcx = px + bw / 2, bcy = py + bd / 2;
-      const dx = bcx - cx, dy = bcy - cy;
-      const ncx = cx + dy, ncy = cy - dx;
-      return [ncx - bd / 2, ncy - bw / 2, bd, bw];
-    });
-    const minX = Math.min(...rotated.map(p => p[0]));
-    const minY = Math.min(...rotated.map(p => p[1]));
-    return rotated.map(([px, py, bw, bd]) => [px - minX, py - minY, bw, bd]);
+  // ── Helper: Get 3D Box Positions for Selected Pallet Pattern ──
+  const getPalletPatternPositions = (pattern, pw, pd, sc) => {
+    if (pattern && Array.isArray(pattern.positions) && pattern.positions.length > 0) {
+      const maxX = pattern.positions.reduce((m, p) => Math.max(m, p[0] + p[2]), 0);
+      const maxZ = pattern.positions.reduce((m, p) => Math.max(m, p[1] + p[3]), 0);
+      const totalW = (maxX || pw) * sc;
+      const totalD = (maxZ || pd) * sc;
+      const offsetX = -totalW / 2;
+      const offsetZ = -totalD / 2;
+      return pattern.positions.map(([bx, bz, bw, bd]) => ({
+        x: offsetX + bx * sc,
+        z: offsetZ + bz * sc,
+        w: bw * sc,
+        d: bd * sc
+      }));
+    }
+
+    // 기본 8방 격자 폴백
+    const cols = 4;
+    const rows = 2;
+    const cellW = (pw * 0.96 / cols) * sc;
+    const cellD = (pd * 0.96 / rows) * sc;
+    const offsetX = -(cols * cellW) / 2;
+    const offsetZ = -(rows * cellD) / 2;
+    const fallbackPositions = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        fallbackPositions.push({
+          x: offsetX + c * cellW,
+          z: offsetZ + r * cellD,
+          w: cellW,
+          d: cellD
+        });
+      }
+    }
+    return fallbackPositions;
+  };
+
+  // ── Helper: Interlocking (Cross Stacking) Transformation for Odd Layers ──
+  const getInterlockedBox = (bx, bz, bw, bd, patternCategory, palWSc, palDSc) => {
+    // 1. 핀휠 패턴인 경우 (또는 기본 핀휠): 좌우 반전(Mirroring X)으로 시계방향 ↔ 반시계방향 핀휠로 반전되어 완벽한 90도 교차 결속 형성
+    if (!patternCategory || patternCategory === 'pinwheel') {
+      const cx = bx + bw / 2;
+      const cz = bz + bd / 2;
+      const ncx = -cx; // X축 거울 대칭 반전
+      const ncz = cz;
+      return {
+        x: ncx - bw / 2,
+        z: ncz - bd / 2,
+        w: bw,
+        d: bd
+      };
+    }
+
+    // 2. 격자(Grid) / 벽돌(Brick) / 혼합(Mix) 패턴인 경우: 90도 중심 회전
+    const cx = bx + bw / 2;
+    const cz = bz + bd / 2;
+    const ncx = -cz;
+    const ncz = cx;
+    const nbw = bd;
+    const nbd = bw;
+    return {
+      x: ncx - nbw / 2,
+      z: ncz - nbd / 2,
+      w: nbw,
+      d: nbd
+    };
   };
 
   const stretchToFit = (positions, pw, pd) => {
@@ -553,10 +653,19 @@ export default function PackagingViewer3D({
         makeAirCapBuffer(s.scene, padW, padD, padH, px0, padY, pz0, hasPop, cols, rows);
       }
 
-      s.tgtDist = Math.max(Math.sqrt(bw * bw + bd * bd) * 2.2 + bh * 0.8, 2.5);
-      s.tgtLookY = bh * 0.5;
-      s.tgtPhi = 0.44;
-      s.tgtTheta = 0.65;
+      const popH = Math.max((popHeight || 15) * sc, 0.012);
+      const totalHeight = bh + (hasPop ? popH : (useAirCap ? (hasPop ? popH : 0.024) : 0));
+      const maxDim = Math.max(bw, bd, totalHeight);
+      const defaultDist = Math.max(maxDim * 2.2, 1.8);
+      const defaultLookY = totalHeight * 0.50;
+      const defaultPhi = 0.95; // 약 35° 아이소메트릭 앙각으로 전면/측면 입체감과 상단 배열을 균형 있게 노출
+      const defaultTheta = 0.68;
+      if (!s.hasCustomAngle) {
+        s.tgtDist = defaultDist;
+        s.tgtLookY = defaultLookY;
+        s.tgtPhi = defaultPhi;
+        s.tgtTheta = defaultTheta;
+      }
 
     } else if (mode === 'outbox') {
       // ── Outbox 3D Mode ──
@@ -628,38 +737,62 @@ export default function PackagingViewer3D({
               tapeMesh.position.set(ibX + ibW / 2, ibY + ibH + tapeH / 2, ibZ + ibD / 2);
               s.scene.add(tapeMesh);
 
-              // 3. Front Identification Label Plate ([INBOX 1/4] 현품표 라벨 스티커)
-              const lblW = Math.min(ibW * 0.45, 0.08);
-              const lblH = Math.min(ibH * 0.35, 0.05);
-              const lblGeo = new THREE.PlaneGeometry(lblW, lblH);
-              const lblMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.2 });
+              // 3. Clear Side Shipping / Barcode Label (측면 현품표 스티커)
+              const lblW = ibW * 0.45;
+              const lblH = ibH * 0.40;
+              const lblThick = 0.002;
+              const lblGeo = new THREE.BoxGeometry(lblW, lblH, lblThick);
+              const lblMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.3, metalness: 0.05 });
               const lblMesh = new THREE.Mesh(lblGeo, lblMat);
-              lblMesh.position.set(ibX + ibW / 2, ibY + ibH * 0.6, ibZ + ibD + 0.001);
-              lblMesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(lblGeo), new THREE.LineBasicMaterial({ color: 0x7C3AED })));
+              lblMesh.position.set(ibX + ibW * 0.70, ibY + ibH * 0.50, ibZ + ibD + lblThick / 2);
               s.scene.add(lblMesh);
+
+              // 4. White Clean Grid/Edge Outline on each inbox for crisp contrast
+              const ibEdgeGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(ibW, ibH, ibD), 12);
+              const ibEdgeMat = new THREE.LineBasicMaterial({ color: 0xFFFFFF, transparent: true, opacity: 0.90 });
+              ibMesh.add(new THREE.LineSegments(ibEdgeGeo, ibEdgeMat));
+
+              // 5. Distinct Number Badge on Inbox (NO.1, NO.2 ...)
+              const badgeCanvas = document.createElement('canvas');
+              badgeCanvas.width = 128;
+              badgeCanvas.height = 64;
+              const bCtx = badgeCanvas.getContext('2d');
+              bCtx.fillStyle = '#7C3AED'; // Vivid Purple Badge
+              bCtx.fillRect(0, 0, 128, 64);
+              bCtx.fillStyle = '#FFFFFF';
+              bCtx.font = 'bold 32px sans-serif';
+              bCtx.textAlign = 'center';
+              bCtx.textBaseline = 'middle';
+              bCtx.fillText(`IN-${inboxIndex}`, 64, 32);
+              const bTex = new THREE.CanvasTexture(badgeCanvas);
+              const bMat = new THREE.MeshBasicMaterial({ map: bTex, transparent: true });
+              const bGeo = new THREE.PlaneGeometry(ibW * 0.38, ibH * 0.22);
+              const bMesh = new THREE.Mesh(bGeo, bMat);
+              bMesh.position.set(ibX + ibW * 0.28, ibY + ibH * 0.65, ibZ + ibD + 0.003);
+              s.scene.add(bMesh);
 
               inboxIndex++;
             }
           }
         }
 
-        // Air Cap Cushion on top of Inboxes if enabled
+        // Air Cap Cushion: 인박스 적재 상단 빈 공간 완충재 투입 (사진 실물과 100% 동일)
         if (useAirCap) {
           const padW = bw - vGapW;
           const padD = bd - vGapD;
-          const padH = 0.025;
+          const padH = 0.028;
           const padY = py0 + layers * cellH;
           makeAirCapBuffer(s.scene, padW, padD, padH, px0, padY, pz0, false, cols, rows);
         }
 
       } else {
-        // ── Case B: Outbox directly containing Unit Boxes ──
+        // ── Case B: Direct Unit Box Packing into Outbox (단상자 아웃박스 직접 수납) ──
         for (let lz = 0; lz < layers; lz++) {
           for (let ry = 0; ry < rows; ry++) {
             for (let cx = 0; cx < cols; cx++) {
               const [colA, colB] = brightKraftPalette[lz % brightKraftPalette.length];
               const col = (cx + ry) % 2 === 0 ? colA : colB;
-              const gap3d = 0.012;
+              const gap3d = 0.01;
               makeUnitBoxWithPop(
                 s.scene,
                 cellW - gap3d, cellD - gap3d, cellH - gap3d * 0.5,
@@ -686,10 +819,19 @@ export default function PackagingViewer3D({
         }
       }
 
-      s.tgtDist = Math.max(Math.sqrt(bw * bw + bd * bd) * 2.0 + bh * 0.6, 2.5);
-      s.tgtLookY = bh * 0.5;
-      s.tgtPhi = 0.44;
-      s.tgtTheta = 0.65;
+      const popH = Math.max((popHeight || 15) * sc, 0.012);
+      const totalHeight = bh + (hasPop ? popH : (useAirCap ? 0.024 : 0));
+      const maxDim = Math.max(bw, bd, totalHeight);
+      const defaultDist = Math.max(maxDim * 2.2, 1.8);
+      const defaultLookY = totalHeight * 0.50;
+      const defaultPhi = 0.95; // 약 35° 아이소메트릭 앙각으로 전면/측면 입체감과 상단 배열을 균형 있게 노출
+      const defaultTheta = 0.68;
+      if (!s.hasCustomAngle) {
+        s.tgtDist = defaultDist;
+        s.tgtLookY = defaultLookY;
+        s.tgtPhi = defaultPhi;
+        s.tgtTheta = defaultTheta;
+      }
 
     } else {
       // ── Pallet 3D Mode (pallet-cross / pallet-normal) ──
@@ -703,84 +845,89 @@ export default function PackagingViewer3D({
       const obh = (outbox?.h || 150) * sc;
 
       // Positions from pattern
-      let basePos = palletConfig?.pattern?.positions || [];
-      if (!basePos.length) {
-        const obw = outbox?.w || 300;
-        const obd = outbox?.d || 200;
-        const sw = Math.min(obw, obd), lg = Math.max(obw, obd);
-        basePos = [
-          [0, 0, sw, lg], [sw, 0, sw, lg], [0, lg, lg, sw], [0, lg + sw, lg, sw],
-          [2 * sw, 0, lg, sw], [2 * sw, sw, lg, sw], [lg, 2 * sw, sw, lg], [lg + sw, 2 * sw, sw, lg]
-        ];
-      }
+      const tierPositions = getPalletPatternPositions(palletConfig?.pattern, pw, pd, sc);
 
-      const evenCols = [0xE6AA68, 0xD4924A, 0xF3BE82];
-      const oddCols = [0x3B82F6, 0x60A5FA, 0x2563EB]; // Sky Blue cross layers
-      const normalCols = [0xE6AA68, 0xD4924A, 0xF3BE82];
+      for (let layer = 0; layer < stacks; layer++) {
+        const layerY = baseY + layer * obh;
+        const [colA, colB] = brightKraftPalette[layer % brightKraftPalette.length];
+        const isOddLayer = layer % 2 === 1;
 
-      const baseMinX = Math.min(...basePos.map(p => p[0]));
-      const baseMinZ = Math.min(...basePos.map(p => p[1]));
-      const baseMaxX = Math.max(...basePos.map(p => p[0] + p[2]));
-      const baseMaxZ = Math.max(...basePos.map(p => p[1] + p[3]));
-      const patCenterX = (baseMinX + baseMaxX) / 2;
-      const patCenterZ = (baseMinZ + baseMaxZ) / 2;
+        tierPositions.forEach((box, bIdx) => {
+          let bx = box.x;
+          let bz = box.z;
+          let bw = box.w;
+          let bd = box.d;
 
-      for (let st = 0; st < stacks; st++) {
-        const isOdd = isCross && (st % 2 === 1);
-        const yBase = baseY + st * obh;
-        const cols = isCross ? (isOdd ? oddCols : evenCols) : normalCols;
-
-        basePos.forEach(([px, py, bw2, bd2], i) => {
-          // 패턴 정중앙 기준 상대 좌표
-          const relX = px + bw2 / 2 - patCenterX;
-          const relZ = py + bd2 / 2 - patCenterZ;
-
-          let cx3d, cz3d, w3d, d3d;
-          if (isOdd) {
-            // 원점 (0,0) 기준 정확한 90도 회전
-            cx3d = -relZ * sc;
-            cz3d = relX * sc;
-            w3d = bd2 * sc - 0.001;
-            d3d = bw2 * sc - 0.001;
-          } else {
-            cx3d = relX * sc;
-            cz3d = relZ * sc;
-            w3d = bw2 * sc - 0.001;
-            d3d = bd2 * sc - 0.001;
+          if (isCross && isOddLayer) {
+            // 홀수단 교차 적재 (Interlocking Stacking: 핀휠은 좌우반전, 격자는 90도 회전)
+            const interlocked = getInterlockedBox(bx, bz, bw, bd, palletConfig?.pattern?.category, pw * sc, pd * sc);
+            bx = interlocked.x;
+            bz = interlocked.z;
+            bw = interlocked.w;
+            bd = interlocked.d;
           }
 
-          const wx = cx3d - w3d / 2;
-          const wz = cz3d - d3d / 2;
-          makeBox(s.scene, w3d, d3d, obh, cols[i % cols.length], wx, yBase, wz, 0.55, 0.02);
+          const col = (bIdx + layer) % 2 === 0 ? colA : colB;
+          const boxMesh = makeBox(s.scene, bw - 0.006, bd - 0.006, obh - 0.003, col, bx, layerY, bz, 0.60, 0.02, 0.98);
+
+          // Top tape line on outboxes
+          const tapeW = bw * 0.95;
+          const tapeD = Math.min(bd * 0.15, 0.025);
+          const tapeGeo = new THREE.BoxGeometry(tapeW, 0.002, tapeD);
+          const tapeMat = new THREE.MeshStandardMaterial({ color: 0x92400E, roughness: 0.3 });
+          const tapeMesh = new THREE.Mesh(tapeGeo, tapeMat);
+          tapeMesh.position.set(bx + bw / 2, layerY + obh + 0.001, bz + bd / 2);
+          s.scene.add(tapeMesh);
         });
+
+        // Stretch Wrap Film (전체 팔레트 랩핑 필름)
+        if (layer > 0 && layer % 2 === 0) {
+          const wrapGeo = new THREE.BoxGeometry(pw * sc + 0.015, obh * 0.85, pd * sc + 0.015);
+          const wrapMat = new THREE.MeshStandardMaterial({
+            color: 0x60A5FA,
+            transparent: true,
+            opacity: 0.10,
+            roughness: 0.1,
+            metalness: 0.3,
+            depthWrite: false
+          });
+          const wrapMesh = new THREE.Mesh(wrapGeo, wrapMat);
+          wrapMesh.position.set(0, layerY + obh * 0.5, 0);
+          s.scene.add(wrapMesh);
+        }
       }
 
-      // Render Corner Posts (4모서리 밀착 & Z-fighting 방지)
+      // Pallet Corner Posts (코너 각대: 4개 모서리에 오렌지/옐로우 보호대 장착)
       if (useCornerPost) {
-        makeCornerPostsAndStraps(s.scene, pw * sc, pd * sc, stacks * obh, baseY, sc);
+        const totalHeight = stacks * obh;
+        makeCornerPostsAndStraps(s.scene, pw * sc, pd * sc, totalHeight, baseY, sc);
       }
 
       const totalH = baseY + stacks * obh;
-      const span = Math.max(baseMaxX, baseMaxZ, pw, pd) * sc;
-      s.tgtDist = Math.max(span * 2.2 + totalH * 0.5 + baseY * 2.5, 3.2);
-      s.tgtLookY = baseY + (totalH - baseY) * 0.38;
-      s.tgtPhi = 0.46;
-      s.tgtTheta = 0.65;
+      const maxDim = Math.max(pw * sc, pd * sc, totalH);
+      const defaultDist = Math.max(maxDim * 2.2, 3.2);
+      const defaultLookY = totalH * 0.50;
+      const defaultPhi = 0.98;
+      const defaultTheta = 0.65;
+      if (!s.hasCustomAngle) {
+        s.tgtDist = defaultDist;
+        s.tgtLookY = defaultLookY;
+        s.tgtPhi = defaultPhi;
+        s.tgtTheta = defaultTheta;
+      }
     }
-  }, [mode, unitBox, inbox, outbox, arrangement, inboxArrangement, useInbox, hasPop, popHeight, useAirCap, useCornerPost, palletConfig]);
+  }, [mode, inbox, outbox, unitBox, arrangement, palletConfig, useInbox, hasPop, popHeight, useAirCap, useCornerPost]);
 
   // ── Render Loop ──
   const renderLoop = useCallback(() => {
     const s = stateRef.current;
     if (!s.renderer || !s.scene || !s.camera) return;
 
-    s.animFrame = requestAnimationFrame(renderLoop);
-
-    const t = 0.075;
-    s.theta += (s.tgtTheta - s.theta) * t;
-    s.phi += (s.tgtPhi - s.phi) * t;
-    s.dist += (s.tgtDist - s.dist) * t;
-    s.lookY += (s.tgtLookY - s.lookY) * t;
+    // Smooth lerp to target angles
+    s.theta += (s.tgtTheta - s.theta) * 0.15;
+    s.phi += (s.tgtPhi - s.phi) * 0.15;
+    s.dist += (s.tgtDist - s.dist) * 0.15;
+    s.lookY += (s.tgtLookY - s.lookY) * 0.15;
 
     const x = s.dist * Math.sin(s.phi) * Math.cos(s.theta);
     const y = s.dist * Math.cos(s.phi);
@@ -790,29 +937,230 @@ export default function PackagingViewer3D({
     s.camera.lookAt(0, s.lookY, 0);
 
     s.renderer.render(s.scene, s.camera);
+
+    // Schedule next frame for continuous interactive 3D navigation
+    s.animFrame = requestAnimationFrame(renderLoop);
   }, []);
 
-  // ── Canvas Snapshot ──
-  const handleCapture = () => {
+  // ── Smart Auto-Crop for 3D Snapshot ──
+  const cropCanvasContent = (sourceCanvas) => {
+    if (!sourceCanvas) return null;
+    try {
+      const w = sourceCanvas.width;
+      const h = sourceCanvas.height;
+      if (!w || !h) return sourceCanvas.toDataURL('image/png');
+
+      // Create a 2D canvas to inspect rendered pixels
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = w;
+      tempCanvas.height = h;
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCtx.drawImage(sourceCanvas, 0, 0);
+
+      const imgData = tempCtx.getImageData(0, 0, w, h);
+      const data = imgData.data;
+
+      let minX = w, maxX = 0, minY = h, maxY = 0;
+      let found = false;
+
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const idx = (y * w + x) * 4;
+          const r = data[idx];
+          const g = data[idx + 1];
+          const b = data[idx + 2];
+          const a = data[idx + 3];
+
+          // Pure white (255,255,255) or near-white / transparent background
+          const isBg = a < 20 || (r >= 240 && g >= 240 && b >= 240);
+          if (!isBg) {
+            found = true;
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+
+      if (!found || (maxX - minX < 20) || (maxY - minY < 20)) {
+        return sourceCanvas.toDataURL('image/png');
+      }
+
+      // 8% proportional padding around model bounding box + 12px safe margin to prevent top clipping
+      const padX = Math.round((maxX - minX) * 0.08) + 12;
+      const padY = Math.round((maxY - minY) * 0.08) + 12;
+
+      const actualMinX = Math.max(0, minX - padX);
+      const actualMaxX = Math.min(w - 1, maxX + padX);
+      const actualMinY = Math.max(0, minY - padY);
+      const actualMaxY = Math.min(h - 1, maxY + padY);
+
+      const cropX = actualMinX;
+      const cropY = actualMinY;
+      const cropW = actualMaxX - actualMinX + 1;
+      const cropH = actualMaxY - actualMinY + 1;
+
+      const croppedCanvas = document.createElement('canvas');
+      croppedCanvas.width = cropW;
+      croppedCanvas.height = cropH;
+      const cCtx = croppedCanvas.getContext('2d');
+      cCtx.drawImage(tempCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+      return croppedCanvas.toDataURL('image/png');
+    } catch (e) {
+      console.warn('Auto-crop fallback to original canvas dataUrl', e);
+      return sourceCanvas.toDataURL('image/png');
+    }
+  };
+
+  // ── Canvas Snapshot with Ground/Grid Temporarily Hidden ──
+  const performSnapshotCapture = () => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return null;
     setIsCapturing(true);
     const s = stateRef.current;
+    let dataUrl = null;
     if (s.renderer && s.scene && s.camera) {
+      const prevGroundVis = s.ground ? s.ground.visible : true;
+      const prevGridVis = s.grid ? s.grid.visible : true;
+      if (s.ground) s.ground.visible = false;
+      if (s.grid) s.grid.visible = false;
+
       s.renderer.render(s.scene, s.camera);
-      const dataUrl = canvas.toDataURL('image/png');
-      if (onCapture) {
+      dataUrl = cropCanvasContent(canvas);
+
+      if (s.ground) s.ground.visible = prevGroundVis;
+      if (s.grid) s.grid.visible = prevGridVis;
+      s.renderer.render(s.scene, s.camera);
+
+      if (onCapture && dataUrl) {
         onCapture(dataUrl, mode);
       }
     }
     setTimeout(() => setIsCapturing(false), 300);
+    return dataUrl;
+  };
+
+  const handleCapture = () => {
+    performSnapshotCapture();
   };
 
   const handleResetView = () => {
     const s = stateRef.current;
-    s.tgtTheta = 0.65;
-    s.tgtPhi = 0.40;
+    s.hasCustomAngle = false;
+    if (mode === 'inbox') {
+      const ibw = (inbox?.w || unitBox.w * arrangement.cols + 16) || 120;
+      const ibd = (inbox?.d || unitBox.d * arrangement.rows + 16) || 120;
+      const ibh = (inbox?.h || unitBox.h * arrangement.layers + 16) || 150;
+      const sc = Math.min(0.014, 3.8 / Math.max(ibw, ibd));
+      const bw = ibw * sc, bd = ibd * sc, bh = ibh * sc;
+      const popH = Math.max((popHeight || 15) * sc, 0.012);
+      const totalHeight = bh + (hasPop ? popH : (useAirCap ? (hasPop ? popH : 0.024) : 0));
+      const maxDim = Math.max(bw, bd, totalHeight);
+      s.tgtDist = Math.max(maxDim * 2.2, 1.8);
+      s.tgtLookY = totalHeight * 0.50;
+      s.tgtPhi = 0.95;
+      s.tgtTheta = 0.68;
+    } else if (mode === 'outbox') {
+      const obw = outbox?.w || 300;
+      const obd = outbox?.d || 200;
+      const obh = outbox?.h || 150;
+      const sc = Math.min(0.014, 4.0 / Math.max(obw, obd));
+      const bw = obw * sc, bd = obd * sc, bh = obh * sc;
+      const popH = Math.max((popHeight || 15) * sc, 0.012);
+      const totalHeight = bh + (hasPop ? popH : (useAirCap ? 0.024 : 0));
+      const maxDim = Math.max(bw, bd, totalHeight);
+      s.tgtDist = Math.max(maxDim * 2.2, 1.8);
+      s.tgtLookY = totalHeight * 0.50;
+      s.tgtPhi = 0.95;
+      s.tgtTheta = 0.68;
+    } else {
+      const pw = palletConfig?.w || 1100;
+      const pd = palletConfig?.d || 1100;
+      const stacks = Math.min(palletConfig?.stacks || 8, 20);
+      const sc = 0.004;
+      const obh = (outbox?.h || 150) * sc;
+      const baseY = 0.144;
+      const totalH = baseY + stacks * obh;
+      const maxDim = Math.max(pw * sc, pd * sc, totalH);
+      s.tgtDist = Math.max(maxDim * 2.2, 3.2);
+      s.tgtLookY = totalH * 0.50;
+      s.tgtPhi = 0.98;
+      s.tgtTheta = 0.65;
+    }
+    if (onViewChange) {
+      onViewChange(null);
+    }
   };
+
+  const handleZoomIn = () => {
+    const s = stateRef.current;
+    s.tgtDist = Math.max(0.6, s.tgtDist * 0.82);
+    s.hasCustomAngle = true;
+    if (onViewChange) {
+      onViewChange({ theta: s.tgtTheta, phi: s.tgtPhi, dist: s.tgtDist, lookY: s.tgtLookY });
+    }
+  };
+
+  const handleZoomOut = () => {
+    const s = stateRef.current;
+    s.tgtDist = Math.min(20, s.tgtDist * 1.22);
+    s.hasCustomAngle = true;
+    if (onViewChange) {
+      onViewChange({ theta: s.tgtTheta, phi: s.tgtPhi, dist: s.tgtDist, lookY: s.tgtLookY });
+    }
+  };
+
+  const handleRotateLeft = () => {
+    const s = stateRef.current;
+    s.tgtTheta += Math.PI / 6; // 30도 좌회전
+    s.hasCustomAngle = true;
+    if (onViewChange) {
+      onViewChange({ theta: s.tgtTheta, phi: s.tgtPhi, dist: s.tgtDist, lookY: s.tgtLookY });
+    }
+  };
+
+  const handleRotateRight = () => {
+    const s = stateRef.current;
+    s.tgtTheta -= Math.PI / 6; // 30도 우회전
+    s.hasCustomAngle = true;
+    if (onViewChange) {
+      onViewChange({ theta: s.tgtTheta, phi: s.tgtPhi, dist: s.tgtDist, lookY: s.tgtLookY });
+    }
+  };
+
+  const handlePitchUp = () => {
+    const s = stateRef.current;
+    s.tgtPhi = Math.max(0.08, s.tgtPhi - 0.15);
+    s.hasCustomAngle = true;
+    if (onViewChange) {
+      onViewChange({ theta: s.tgtTheta, phi: s.tgtPhi, dist: s.tgtDist, lookY: s.tgtLookY });
+    }
+  };
+
+  const handlePitchDown = () => {
+    const s = stateRef.current;
+    s.tgtPhi = Math.min(Math.PI / 2, s.tgtPhi + 0.15);
+    s.hasCustomAngle = true;
+    if (onViewChange) {
+      onViewChange({ theta: s.tgtTheta, phi: s.tgtPhi, dist: s.tgtDist, lookY: s.tgtLookY });
+    }
+  };
+
+  useImperativeHandle(ref, () => ({
+    capture: performSnapshotCapture,
+    resetView: handleResetView,
+    getViewConfig: () => {
+      const s = stateRef.current;
+      return {
+        theta: s.tgtTheta,
+        phi: s.tgtPhi,
+        dist: s.tgtDist,
+        lookY: s.tgtLookY
+      };
+    }
+  }), [mode, onCapture, inbox, outbox, unitBox, arrangement, palletConfig, onViewChange]);
 
   // ── Init Three.js ──
   useEffect(() => {
@@ -883,6 +1231,8 @@ export default function PackagingViewer3D({
     stateRef.current.scene = scene;
     stateRef.current.camera = camera;
     stateRef.current.renderer = renderer;
+    stateRef.current.ground = ground;
+    stateRef.current.grid = grid;
 
     buildScene();
     renderLoop();
@@ -908,11 +1258,29 @@ export default function PackagingViewer3D({
       stateRef.current.tgtPhi = Math.max(0.05, Math.min(Math.PI / 2, stateRef.current.tgtPhi + dy));
       stateRef.current.lx = e.clientX;
       stateRef.current.ly = e.clientY;
+      stateRef.current.hasCustomAngle = true;
+      if (onViewChange) {
+        onViewChange({
+          theta: stateRef.current.tgtTheta,
+          phi: stateRef.current.tgtPhi,
+          dist: stateRef.current.tgtDist,
+          lookY: stateRef.current.tgtLookY
+        });
+      }
     };
 
     const onWheel = (e) => {
       e.preventDefault();
       stateRef.current.tgtDist = Math.max(0.8, Math.min(18, stateRef.current.tgtDist + e.deltaY * 0.004));
+      stateRef.current.hasCustomAngle = true;
+      if (onViewChange) {
+        onViewChange({
+          theta: stateRef.current.tgtTheta,
+          phi: stateRef.current.tgtPhi,
+          dist: stateRef.current.tgtDist,
+          lookY: stateRef.current.tgtLookY
+        });
+      }
     };
 
     const onTouchStart = (e) => {
@@ -937,6 +1305,15 @@ export default function PackagingViewer3D({
         stateRef.current.tgtPhi = Math.max(0.05, Math.min(Math.PI / 2, stateRef.current.tgtPhi + dy));
         stateRef.current.lx = e.touches[0].clientX;
         stateRef.current.ly = e.touches[0].clientY;
+        stateRef.current.hasCustomAngle = true;
+        if (onViewChange) {
+          onViewChange({
+            theta: stateRef.current.tgtTheta,
+            phi: stateRef.current.tgtPhi,
+            dist: stateRef.current.tgtDist,
+            lookY: stateRef.current.tgtLookY
+          });
+        }
       } else if (e.touches.length === 2) {
         const d = Math.hypot(
           e.touches[0].clientX - e.touches[1].clientX,
@@ -944,6 +1321,15 @@ export default function PackagingViewer3D({
         );
         if (stateRef.current.touchDist) {
           stateRef.current.tgtDist = Math.max(0.8, Math.min(18, stateRef.current.tgtDist - (d - stateRef.current.touchDist) * 0.01));
+          stateRef.current.hasCustomAngle = true;
+          if (onViewChange) {
+            onViewChange({
+              theta: stateRef.current.tgtTheta,
+              phi: stateRef.current.tgtPhi,
+              dist: stateRef.current.tgtDist,
+              lookY: stateRef.current.tgtLookY
+            });
+          }
         }
         stateRef.current.touchDist = d;
       }
@@ -1026,15 +1412,132 @@ export default function PackagingViewer3D({
           top: '10px',
           right: '10px',
           display: 'flex',
-          gap: '6px',
-          zIndex: 10
+          gap: '4px',
+          zIndex: 10,
+          flexWrap: 'wrap',
+          justifyContent: 'flex-end'
         }}
       >
+        {/* Navigation Controls Group */}
+        <div style={{
+          display: 'flex',
+          gap: '2px',
+          background: 'rgba(255, 255, 255, 0.90)',
+          backdropFilter: 'blur(4px)',
+          padding: '2px 4px',
+          borderRadius: '6px',
+          border: '1px solid #CBD5E1',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.06)'
+        }}>
+          <button
+            type="button"
+            onClick={handleZoomIn}
+            style={{
+              background: '#F1F5F9',
+              border: '1px solid #E2E8F0',
+              borderRadius: '4px',
+              padding: '3px 7px',
+              fontSize: '11px',
+              fontWeight: 700,
+              color: '#1E293B',
+              cursor: 'pointer'
+            }}
+            title="확대 (Zoom In)"
+          >
+            🔍+
+          </button>
+          <button
+            type="button"
+            onClick={handleZoomOut}
+            style={{
+              background: '#F1F5F9',
+              border: '1px solid #E2E8F0',
+              borderRadius: '4px',
+              padding: '3px 7px',
+              fontSize: '11px',
+              fontWeight: 700,
+              color: '#1E293B',
+              cursor: 'pointer'
+            }}
+            title="축소 (Zoom Out)"
+          >
+            🔍-
+          </button>
+          <button
+            type="button"
+            onClick={handleRotateLeft}
+            style={{
+              background: '#F1F5F9',
+              border: '1px solid #E2E8F0',
+              borderRadius: '4px',
+              padding: '3px 7px',
+              fontSize: '11px',
+              fontWeight: 600,
+              color: '#1E293B',
+              cursor: 'pointer'
+            }}
+            title="좌회전 (Rotate Left 30°)"
+          >
+            ↶ 30°
+          </button>
+          <button
+            type="button"
+            onClick={handleRotateRight}
+            style={{
+              background: '#F1F5F9',
+              border: '1px solid #E2E8F0',
+              borderRadius: '4px',
+              padding: '3px 7px',
+              fontSize: '11px',
+              fontWeight: 600,
+              color: '#1E293B',
+              cursor: 'pointer'
+            }}
+            title="우회전 (Rotate Right 30°)"
+          >
+            ↷ 30°
+          </button>
+          <button
+            type="button"
+            onClick={handlePitchUp}
+            style={{
+              background: '#F1F5F9',
+              border: '1px solid #E2E8F0',
+              borderRadius: '4px',
+              padding: '3px 5px',
+              fontSize: '11px',
+              fontWeight: 600,
+              color: '#1E293B',
+              cursor: 'pointer'
+            }}
+            title="탑뷰로 기울이기 (Tilt Up)"
+          >
+            ⬆️
+          </button>
+          <button
+            type="button"
+            onClick={handlePitchDown}
+            style={{
+              background: '#F1F5F9',
+              border: '1px solid #E2E8F0',
+              borderRadius: '4px',
+              padding: '3px 5px',
+              fontSize: '11px',
+              fontWeight: 600,
+              color: '#1E293B',
+              cursor: 'pointer'
+            }}
+            title="사이드뷰로 기울이기 (Tilt Down)"
+          >
+            ⬇️
+          </button>
+        </div>
+
         <button
           type="button"
           onClick={handleResetView}
           style={{
-            background: 'rgba(255, 255, 255, 0.85)',
+            background: 'rgba(255, 255, 255, 0.90)',
             backdropFilter: 'blur(4px)',
             border: '1px solid #CBD5E1',
             borderRadius: '6px',
@@ -1047,7 +1550,7 @@ export default function PackagingViewer3D({
           }}
           title="시점 초기화"
         >
-          🔄 시점 초기화
+          🔄 초기화
         </button>
 
         {onCapture && (
@@ -1094,4 +1597,6 @@ export default function PackagingViewer3D({
       </div>
     </div>
   );
-}
+});
+
+export default PackagingViewer3D;

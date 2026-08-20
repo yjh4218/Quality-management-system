@@ -156,6 +156,18 @@ public class PackagingSpecification {
     private String airCapUseYn;                     // 비닐에어캡(뽁뽁이) 완충재 사용 여부 (O / X)
     private String cornerPostUseYn;                 // 팔레트 코너 각대(L형 보호대) 적용 여부 (O / X)
 
+    // --- 3D 입수 및 팔레트 적재 세부 치수 (V101) ---
+    private Integer inboxPackingCols;               // 인박스 입수 가로 열 수
+    private Integer inboxPackingRows;               // 인박스 입수 세로 행 수
+    private Integer inboxPackingLayers;             // 인박스 입수 높이 단 수
+    private Integer outboxPackingCols;              // 아웃박스 입수 가로 열 수
+    private Integer outboxPackingRows;              // 아웃박스 입수 세로 행 수
+    private Integer outboxPackingLayers;            // 아웃박스 입수 높이 단 수
+
+    // --- 3D 시뮬레이션 카메라 뷰/각도 설정 JSON (V102) ---
+    private String inboxViewConfig;                 // 인박스 3D 뷰어 카메라 각도/거리 설정
+    private String outboxViewConfig;                // 아웃박스 3D 뷰어 카메라 각도/거리 설정
+    private String palletViewConfig;                // 팔레트 3D 뷰어 카메라 각도/거리 설정
 
     private Integer version;
     private String revisionNotes;

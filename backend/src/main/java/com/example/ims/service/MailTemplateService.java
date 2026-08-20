@@ -2,18 +2,17 @@ package com.example.ims.service;
 
 import com.example.ims.entity.MailTemplate;
 import com.example.ims.repository.MailTemplateRepository;
-import jakarta.annotation.PostConstruct;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class MailTemplateService {
 
-    @Autowired
-    private MailTemplateRepository mailTemplateRepository;
+    private final MailTemplateRepository mailTemplateRepository;
 
     public void initDefaultTemplates() {
         java.util.Optional<MailTemplate> existingClaimDefault = mailTemplateRepository.findByTemplateCodeAndDeletedFalse("CLAIM_DEFAULT");

@@ -43,7 +43,7 @@ public class SalesChannelService {
     public void deleteChannel(Long id) {
         repository.findById(id).ifPresent(ch -> {
             ch.setIsDeleted(true);
-            SalesChannel saved = repository.save(ch);
+            repository.save(ch);
             auditLogService.logAction(ch.getUpdatedBy() != null ? ch.getUpdatedBy() : "SYSTEM", "SALES_CHANNEL_DELETE",
                     "유통채널 삭제", String.format("유통채널 [ID: %d, 채널명: %s] 삭제", id, ch.getName()));
         });

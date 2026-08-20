@@ -2,7 +2,7 @@ package com.example.ims.controller;
 
 import com.example.ims.entity.MailCategory;
 import com.example.ims.service.MailCategoryService;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -11,10 +11,10 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/mail-categories")
+@RequiredArgsConstructor
 public class MailCategoryController {
 
-    @Autowired
-    private MailCategoryService service;
+    private final MailCategoryService service;
 
     @GetMapping
     public ResponseEntity<List<MailCategory>> getAllCategories() {

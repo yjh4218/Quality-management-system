@@ -7,7 +7,6 @@ import com.example.ims.repository.DocumentRequirementSpecification;
 import com.example.ims.service.DocumentRequestService;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;

@@ -17,14 +17,14 @@ import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.ss.usermodel.PageMargin;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
 import java.util.stream.Collectors;
 import java.util.List;
+import java.util.ArrayList;
 import java.awt.Graphics2D;
 import java.awt.Color;
 import java.awt.BasicStroke;
@@ -199,19 +199,31 @@ public class PackagingSpecExportService {
             }
 
             // [1. 제품 및 기본 정보]
-            createSectionHeader(sheet0, 3, "1. 📌 제품 및 기본 정보", headerStyle, 7);
-            addRow(sheet0, 4, labelStyle, dataStyle, "품목코드", product.getItemCode(), "브랜드명", product.getBrand() != null ? product.getBrand().getName() : "-", "유통채널", channelNames, "버전", "v" + (spec.getVersion() != null ? spec.getVersion() : 1));
-            addRow(sheet0, 5, labelStyle, dataStyle, "제품명(국문)", productNameWithSpecs, "제품명(영문)", englishProductNameWithSpecs, "제조사", product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-", "제품구분", product.getProductType() != null ? product.getProductType().toString() : "-");
-            addRow(sheet0, 6, labelStyle, dataStyle, "사용기한", (product.getShelfLifeMonths() != null ? "제조일로부터 " + product.getShelfLifeMonths() + "개월" : "-"), "개봉후기한", (product.getOpenedShelfLifeMonths() != null ? "개봉 후 " + product.getOpenedShelfLifeMonths() + "개월" : "-"), "제품 바코드", (product.getProductBarcode() != null ? product.getProductBarcode() : "-"), "아웃박스 바코드", (product.getOutboxBarcode() != null ? product.getOutboxBarcode() : "-"));
-            addRow(sheet0, 7, labelStyle, dataStyle, "기획 담당", (spec.getPlannerName() != null ? spec.getPlannerName() : "-"), "디자인 담당", (spec.getDesignerName() != null ? spec.getDesignerName() : "-"), "품질관리 담당", (spec.getQcName() != null ? spec.getQcName() : "-"), "바코드 담당자", (spec.getBarcodeManager() != null ? spec.getBarcodeManager() : "-"));
+            createSectionHeader(sheet0, 3, "1. 📌 제품 및 기본 정보", headerStyle, 7, 28);
+            addRow(sheet0, 4, 28f, labelStyle, dataStyle, "품목코드", product.getItemCode(), "브랜드명", product.getBrand() != null ? product.getBrand().getName() : "-", "유통채널", channelNames, "버전", "v" + (spec.getVersion() != null ? spec.getVersion() : 1));
+            
+            // 제품명 행 (긴 국문/영문 제품명 잘림 방지를 위해 42pt 및 wrapDataStyle 적용)
+            Row r5 = sheet0.createRow(5);
+            r5.setHeightInPoints(42);
+            createCell(r5, 0, "제품명(국문)", labelStyle);
+            createCell(r5, 1, productNameWithSpecs, wrapDataStyle);
+            createCell(r5, 2, "제품명(영문)", labelStyle);
+            createCell(r5, 3, englishProductNameWithSpecs, wrapDataStyle);
+            createCell(r5, 4, "제조사", labelStyle);
+            createCell(r5, 5, product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-", dataStyle);
+            createCell(r5, 6, "제품구분", labelStyle);
+            createCell(r5, 7, product.getProductType() != null ? product.getProductType().toString() : "-", dataStyle);
+
+            addRow(sheet0, 6, 28f, labelStyle, dataStyle, "사용기한", (product.getShelfLifeMonths() != null ? "제조일로부터 " + product.getShelfLifeMonths() + "개월" : "-"), "개봉후기한", (product.getOpenedShelfLifeMonths() != null ? "개봉 후 " + product.getOpenedShelfLifeMonths() + "개월" : "-"), "제품 바코드", (product.getProductBarcode() != null ? product.getProductBarcode() : "-"), "아웃박스 바코드", (product.getOutboxBarcode() != null ? product.getOutboxBarcode() : "-"));
+            addRow(sheet0, 7, 28f, labelStyle, dataStyle, "기획 담당", (spec.getPlannerName() != null ? spec.getPlannerName() : "-"), "디자인 담당", (spec.getDesignerName() != null ? spec.getDesignerName() : "-"), "품질관리 담당", (spec.getQcName() != null ? spec.getQcName() : "-"), "바코드 담당자", (spec.getBarcodeManager() != null ? spec.getBarcodeManager() : "-"));
 
             // 여백 행 (Row 8)
             createMarginRow(sheet0, 8, 10);
 
             // [2. 개정 이력]
-            createSectionHeader(sheet0, 9, "2. 🔄 개정 이력 (Revision History)", headerStyle, 7);
+            createSectionHeader(sheet0, 9, "2. 🔄 개정 이력 (Revision History)", headerStyle, 7, 28);
             Row revHeader = sheet0.createRow(10);
-            revHeader.setHeightInPoints(24);
+            revHeader.setHeightInPoints(26);
             createCell(revHeader, 0, "No.", subHeaderStyle);
             createCell(revHeader, 1, "개정 내용", subHeaderStyle);
             sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(10, 10, 1, 4));
@@ -225,7 +237,7 @@ public class PackagingSpecExportService {
             int currentRow = 11;
             if (revisions.isEmpty()) {
                 Row r = sheet0.createRow(currentRow);
-                r.setHeightInPoints(24);
+                r.setHeightInPoints(28);
                 createCell(r, 0, "-", centerDataStyle);
                 createCell(r, 1, "등록된 개정이력이 없습니다.", dataStyle);
                 sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 1, 4));
@@ -238,11 +250,11 @@ public class PackagingSpecExportService {
             } else {
                 for (PackagingSpecRevision rev : revisions) {
                     Row r = sheet0.createRow(currentRow);
-                    r.setHeightInPoints(24);
+                    r.setHeightInPoints(28);
                     createCell(r, 0, String.valueOf(rev.getRevisionNo()), centerDataStyle);
-                    createCell(r, 1, rev.getContent() != null ? rev.getContent() : "-", dataStyle);
+                    createCell(r, 1, rev.getContent() != null ? rev.getContent() : "-", wrapDataStyle);
                     sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 1, 4));
-                    for (int c = 2; c <= 4; c++) createCell(r, c, "", dataStyle);
+                    for (int c = 2; c <= 4; c++) createCell(r, c, "", wrapDataStyle);
                     createCell(r, 5, rev.getRevisionDate() != null ? rev.getRevisionDate().toString() : "-", centerDataStyle);
                     createCell(r, 6, rev.getRevisionAuthor() != null ? rev.getRevisionAuthor() : "-", centerDataStyle);
                     createCell(r, 7, "", centerDataStyle);
@@ -255,10 +267,10 @@ public class PackagingSpecExportService {
             createMarginRow(sheet0, currentRow++, 10);
 
             // [3. 구성품 리스트 (BOM)]
-            createSectionHeader(sheet0, currentRow, "3. 🧩 제품 구성품 리스트 (BOM Components)", headerStyle, 7);
+            createSectionHeader(sheet0, currentRow, "3. 🧩 제품 구성품 리스트 (BOM Components)", headerStyle, 7, 28);
             currentRow++;
             Row compHeader = sheet0.createRow(currentRow);
-            compHeader.setHeightInPoints(24);
+            compHeader.setHeightInPoints(26);
             createCell(compHeader, 0, "BOM 코드", subHeaderStyle);
             createCell(compHeader, 1, "구성품명", subHeaderStyle);
             createCell(compHeader, 2, "재질 및 세부사양", subHeaderStyle);
@@ -272,7 +284,7 @@ public class PackagingSpecExportService {
             List<PackagingSpecComponent> components = componentRepository.findBySpecId(spec.getId());
             if (components.isEmpty()) {
                 Row r = sheet0.createRow(currentRow);
-                r.setHeightInPoints(24);
+                r.setHeightInPoints(32);
                 createCell(r, 0, "-", centerDataStyle);
                 createCell(r, 1, "등록된 구성품이 없습니다.", dataStyle);
                 createCell(r, 2, "-", dataStyle);
@@ -285,7 +297,7 @@ public class PackagingSpecExportService {
             } else {
                 for (PackagingSpecComponent comp : components) {
                     Row r = sheet0.createRow(currentRow);
-                    r.setHeightInPoints(24);
+                    r.setHeightInPoints(32);
                     double w = comp.getWeight() != null ? comp.getWeight() : 0.0;
                     int q = comp.getQuantity() != null ? comp.getQuantity() : 1;
                     String wStr = w > 0 ? String.format("%.2fg", w) : "-";
@@ -294,13 +306,13 @@ public class PackagingSpecExportService {
                             (comp.getRemarks() != null && !comp.getRemarks().trim().isEmpty() ? " (" + comp.getRemarks() + ")" : "");
 
                     createCell(r, 0, comp.getBomCode() != null ? comp.getBomCode() : "-", centerDataStyle);
-                    createCell(r, 1, comp.getComponentName() != null ? comp.getComponentName() : "-", dataStyle);
-                    createCell(r, 2, comp.getSpecDetails() != null ? comp.getSpecDetails() : "-", dataStyle);
+                    createCell(r, 1, comp.getComponentName() != null ? comp.getComponentName() : "-", wrapDataStyle);
+                    createCell(r, 2, comp.getSpecDetails() != null ? comp.getSpecDetails() : "-", wrapDataStyle);
                     createCell(r, 3, comp.getSizeDimension() != null ? comp.getSizeDimension() : "-", centerDataStyle);
                     createCell(r, 4, wStr, centerDataStyle);
                     createCell(r, 5, q + " ea", centerDataStyle);
                     createCell(r, 6, totalWStr, centerDataStyle);
-                    createCell(r, 7, supplierRemarks, dataStyle);
+                    createCell(r, 7, supplierRemarks, wrapDataStyle);
                     currentRow++;
                 }
             }
@@ -308,10 +320,16 @@ public class PackagingSpecExportService {
             // 여백 행
             createMarginRow(sheet0, currentRow++, 10);
 
+            // [3-1. 🖼️ 제품 및 패키지 실물 이미지 (Product & Package Images)]
+            currentRow = renderProductPackageImagesSection(sheet0, currentRow, product, spec, workbook, headerStyle, subHeaderStyle, labelStyle, dataStyle, wrapDataStyle, centerDataStyle);
+
+            // 여백 행
+            createMarginRow(sheet0, currentRow++, 10);
+
             // [4. 아웃박스 & 착인 기준 및 포장방법 서술]
-            createSectionHeader(sheet0, currentRow, "4. 📦 용기/단상자/아웃박스 착인 기준 및 포장방법", headerStyle, 7);
+            createSectionHeader(sheet0, currentRow, "4. 📦 용기/단상자/아웃박스 착인 기준 및 포장방법", headerStyle, 7, 28);
             currentRow++;
-            addRow(sheet0, currentRow++, labelStyle, dataStyle, "용기 표기방법", spec.getContainerMarkingDisplay() != null ? spec.getContainerMarkingDisplay() : "-", "용기 착인위치", spec.getContainerMarkingLocation() != null ? spec.getContainerMarkingLocation() : "-", "단상자 표기방법", spec.getUnitBoxMarkingDisplay() != null ? spec.getUnitBoxMarkingDisplay() : "-", "단상자 착인위치", spec.getUnitBoxMarkingLocation() != null ? spec.getUnitBoxMarkingLocation() : "-");
+            addRow(sheet0, currentRow++, 28f, labelStyle, dataStyle, "용기 표기방법", spec.getContainerMarkingDisplay() != null ? spec.getContainerMarkingDisplay() : "-", "용기 착인위치", spec.getContainerMarkingLocation() != null ? spec.getContainerMarkingLocation() : "-", "단상자 표기방법", spec.getUnitBoxMarkingDisplay() != null ? spec.getUnitBoxMarkingDisplay() : "-", "단상자 착인위치", spec.getUnitBoxMarkingLocation() != null ? spec.getUnitBoxMarkingLocation() : "-");
             
             String containerText = spec.getContainerMarkingText() != null && !spec.getContainerMarkingText().trim().isEmpty() 
                     ? spec.getContainerMarkingText().replace("LOT [생산배치번호]", "LOT(제조번호)").replace("[생산배치번호]", "LOT(제조번호)").replace("생산배치번호", "LOT(제조번호)") 
@@ -319,12 +337,30 @@ public class PackagingSpecExportService {
             String unitBoxText = spec.getUnitBoxMarkingText() != null && !spec.getUnitBoxMarkingText().trim().isEmpty() 
                     ? spec.getUnitBoxMarkingText().replace("LOT [생산배치번호]", "LOT(제조번호)").replace("[생산배치번호]", "LOT(제조번호)").replace("생산배치번호", "LOT(제조번호)") 
                     : "-";
-            addRow(sheet0, currentRow++, labelStyle, wrapDataStyle, "용기 착인기준(3줄)", containerText, "단상자 착인기준(3줄)", unitBoxText, "포장방법 타입", "서술형 지침", "-", "-");
+
+            // 3줄 착인기준 전용 행 (높이 60pt로 3줄 모두 수직 잘림 없이 온전히 노출)
+            Row markingRow = sheet0.createRow(currentRow++);
+            markingRow.setHeightInPoints(60);
+            createCell(markingRow, 0, "용기 착인기준(3줄)", labelStyle);
+            createCell(markingRow, 1, containerText, wrapDataStyle);
+            createCell(markingRow, 2, "단상자 착인기준(3줄)", labelStyle);
+            createCell(markingRow, 3, unitBoxText, wrapDataStyle);
+            createCell(markingRow, 4, "포장방법 타입", labelStyle);
+            createCell(markingRow, 5, "서술형 지침", dataStyle);
+            createCell(markingRow, 6, "-", labelStyle);
+            createCell(markingRow, 7, "-", dataStyle);
+
+            // [요청 반영] 포장방법 영역에 '포장방법 사진 참조' 표준 문구 자동 표기
+            String methodDesc = "포장방법 사진 참조";
+            if (spec.getPackagingMethodText() != null && !spec.getPackagingMethodText().isBlank() 
+                    && !"등록된 포장방법 설명이 없습니다.".equals(spec.getPackagingMethodText().trim())) {
+                methodDesc = "포장방법 사진 참조\n\n" + spec.getPackagingMethodText().trim();
+            }
 
             Row methodRow = sheet0.createRow(currentRow);
-            methodRow.setHeightInPoints(90);
+            methodRow.setHeightInPoints(64);
             createCell(methodRow, 0, "포장방법 (서술)", labelStyle);
-            createCell(methodRow, 1, spec.getPackagingMethodText() != null ? spec.getPackagingMethodText() : "등록된 포장방법 설명이 없습니다.", wrapDataStyle);
+            createCell(methodRow, 1, methodDesc, wrapDataStyle);
             for (int col = 2; col <= 7; col++) createCell(methodRow, col, "", wrapDataStyle);
             sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 1, 7));
             currentRow++;
@@ -333,7 +369,7 @@ public class PackagingSpecExportService {
             createMarginRow(sheet0, currentRow++, 10);
 
             // [4-1. 유통 채널 포장 규정 및 스티커/완충재 기준]
-            createSectionHeader(sheet0, currentRow, "4-1. 🏷️ 유통 채널 전용 포장 규정 및 스티커 / 완충재 / 현품표 기준", headerStyle, 7);
+            createSectionHeader(sheet0, currentRow, "4-1. 🏷️ 유통 채널 전용 포장 규정 및 스티커 / 완충재 / 현품표 기준", headerStyle, 7, 28);
             currentRow++;
             String stickerStr = spec.getOutboxChannelStickerStandard() != null && !spec.getOutboxChannelStickerStandard().isEmpty()
                     ? spec.getOutboxChannelStickerStandard()
@@ -345,9 +381,21 @@ public class PackagingSpecExportService {
                     ? spec.getPopRequiredStandard()
                     : (firstChannel != null && Boolean.TRUE.equals(firstChannel.getPopRequired()) ? (firstChannel.getName() + " POP 부착/동봉 필수") : "해당 없음");
 
-            addRow(sheet0, currentRow++, labelStyle, dataStyle, "채널스티커 기준", stickerStr, "완충재 처리기준", cushionStr, "제품 POP 기준", popStr, "적용 유통채널", firstChannel != null ? firstChannel.getName() : "-");
-            addRow(sheet0, currentRow++, labelStyle, wrapDataStyle, "인박스 현품표", inboxMarkingRule, "아웃박스 현품표", outboxMarkingRule, "팔레트 현품표", palletMarkingRule, "-", "-");
-            addRow(sheet0, currentRow++, labelStyle, dataStyle, "인박스 날짜양식", inboxDateFormatStr, "아웃박스 날짜양식", outboxDateFormatStr, "팔레트 날짜양식", palletDateFormatStr, "-", "-");
+            addRow(sheet0, currentRow++, 28f, labelStyle, dataStyle, "채널스티커 기준", stickerStr, "완충재 처리기준", cushionStr, "제품 POP 기준", popStr, "적용 유통채널", firstChannel != null ? firstChannel.getName() : "-");
+            
+            // 현품표 규칙 행 (줄바꿈 지원 및 높이 70pt 적용)
+            Row labelRuleRow = sheet0.createRow(currentRow++);
+            labelRuleRow.setHeightInPoints(70);
+            createCell(labelRuleRow, 0, "인박스 현품표", labelStyle);
+            createCell(labelRuleRow, 1, inboxMarkingRule, wrapDataStyle);
+            createCell(labelRuleRow, 2, "아웃박스 현품표", labelStyle);
+            createCell(labelRuleRow, 3, outboxMarkingRule, wrapDataStyle);
+            createCell(labelRuleRow, 4, "팔레트 현품표", labelStyle);
+            createCell(labelRuleRow, 5, palletMarkingRule, wrapDataStyle);
+            createCell(labelRuleRow, 6, "-", labelStyle);
+            createCell(labelRuleRow, 7, "-", wrapDataStyle);
+
+            addRow(sheet0, currentRow++, 48f, labelStyle, wrapDataStyle, "인박스 날짜양식", inboxDateFormatStr, "아웃박스 날짜양식", outboxDateFormatStr, "팔레트 날짜양식", palletDateFormatStr, "-", "-");
 
             if (stickerNote != null && stickerNote.getFileUrl() != null) {
                 byte[] stickerBytes = getImageBytesFromFileOrUrl(stickerNote.getFileUrl());
@@ -388,131 +436,38 @@ public class PackagingSpecExportService {
             createMarginRow(sheet0, currentRow++, 10);
 
             // [5. 체적/적재 사양 및 검증 기준]
-            createSectionHeader(sheet0, currentRow, "5. 🚚 체적/적재 사양 및 검증 기준 (Volume & Loading Spec)", headerStyle, 7);
+            createSectionHeader(sheet0, currentRow, "5. 🚚 체적/적재 사양 및 검증 기준 (Volume & Loading Spec)", headerStyle, 7, 28);
             currentRow++;
-            addRow(sheet0, currentRow++, labelStyle, dataStyle, "인박스 구분", spec.getInboxType() != null ? spec.getInboxType() : "인박스", "인박스 입수량", spec.getInboxQty() != null ? spec.getInboxQty() + " ea" : "-", "인박스 규격", spec.getInboxSize() != null ? spec.getInboxSize() : "-", "인박스 재질", spec.getInboxMaterial() != null ? spec.getInboxMaterial() : "-");
-            addRow(sheet0, currentRow++, labelStyle, dataStyle, "아웃박스 구분", spec.getOutboxType() != null ? spec.getOutboxType() : "아웃박스", "아웃박스 입수량", spec.getOutboxQty() != null ? spec.getOutboxQty() + " ea" : "-", "아웃박스 규격", spec.getOutboxSize() != null ? spec.getOutboxSize() : "-", "아웃박스 재질", spec.getOutboxMaterial() != null ? spec.getOutboxMaterial() : "-");
-            addRow(sheet0, currentRow++, labelStyle, dataStyle, "팔레트 종류", spec.getPalletTypeStr() != null ? spec.getPalletTypeStr() : "-", "적재 방법", spec.getPalletStackingMethod() != null ? spec.getPalletStackingMethod() : "-", "팔레트 규격", spec.getPalletSize() != null ? spec.getPalletSize() : "-", "높이 제한", spec.getPalletHeightLimit() != null ? spec.getPalletHeightLimit() : "-");
-            addRow(sheet0, currentRow++, labelStyle, dataStyle, "1아웃박스 중량 [제한12kg]", (spec.getOneOutboxWeight() != null ? spec.getOneOutboxWeight() + " kg" : "-"), "1팔레트 중량 [제한630kg]", (spec.getOnePalletWeight() != null ? spec.getOnePalletWeight() + " kg" : "-"), "1팔레트 높이 [제한1500mm]", (spec.getOnePalletHeight() != null ? spec.getOnePalletHeight() + " mm" : "-"), "검증 상태", "정상 규격");
+            addRow(sheet0, currentRow++, 28f, labelStyle, dataStyle, "인박스 구분", spec.getInboxType() != null ? spec.getInboxType() : "인박스", "인박스 입수량", spec.getInboxQty() != null ? spec.getInboxQty() + " ea" : "-", "인박스 규격", spec.getInboxSize() != null ? spec.getInboxSize() : "-", "인박스 재질", spec.getInboxMaterial() != null ? spec.getInboxMaterial() : "-");
+            addRow(sheet0, currentRow++, 28f, labelStyle, dataStyle, "아웃박스 구분", spec.getOutboxType() != null ? spec.getOutboxType() : "아웃박스", "아웃박스 입수량", spec.getOutboxQty() != null ? spec.getOutboxQty() + " ea" : "-", "아웃박스 규격", spec.getOutboxSize() != null ? spec.getOutboxSize() : "-", "아웃박스 재질", spec.getOutboxMaterial() != null ? spec.getOutboxMaterial() : "-");
+            addRow(sheet0, currentRow++, 28f, labelStyle, dataStyle, "팔레트 종류", spec.getPalletTypeStr() != null ? spec.getPalletTypeStr() : "-", "적재 방법", spec.getPalletStackingMethod() != null ? spec.getPalletStackingMethod() : "-", "팔레트 규격", spec.getPalletSize() != null ? spec.getPalletSize() : "-", "높이 제한", spec.getPalletHeightLimit() != null ? spec.getPalletHeightLimit() : "-");
+            addRow(sheet0, currentRow++, 28f, labelStyle, dataStyle, "1아웃박스 중량 [제한12kg]", (spec.getOneOutboxWeight() != null ? spec.getOneOutboxWeight() + " kg" : "-"), "1팔레트 중량 [제한630kg]", (spec.getOnePalletWeight() != null ? spec.getOnePalletWeight() + " kg" : "-"), "1팔레트 높이 [제한1500mm]", (spec.getOnePalletHeight() != null ? spec.getOnePalletHeight() + " mm" : "-"), "검증 상태", "정상 규격");
 
             // [5-1. 3D 입수 및 팔레트 적재 형태 (3D Loading Layout)]
-            createSectionHeader(sheet0, currentRow, "5-1. 📦 3D 제품 입수 및 팔레트 적재 형태 (3D Loading Layout)", headerStyle, 7);
-            currentRow++;
-            addRow(sheet0, currentRow++, labelStyle, dataStyle, 
-                "인박스 입수패턴", spec.getInboxPackingPattern() != null ? spec.getInboxPackingPattern() : "-",
-                "아웃박스 입수패턴", spec.getOutboxPackingPattern() != null ? spec.getOutboxPackingPattern() : "-",
-                "팔레트 적재패턴", spec.getPalletStackingPattern() != null ? spec.getPalletStackingPattern() : (spec.getPalletStackingMethod() != null ? spec.getPalletStackingMethod() : "-"),
-                "적재 단수", (spec.getPalletTierCount() != null ? spec.getPalletTierCount() + "단" : "-"));
-
-            byte[] inboxImgBytes = getImageBytesFromFileOrUrl(spec.getInboxLayoutImage());
-            if (inboxImgBytes == null || inboxImgBytes.length == 0) {
-                inboxImgBytes = generateIsometricInboxLayoutImage(product, spec);
-            }
-
-            byte[] outboxImgBytes = getImageBytesFromFileOrUrl(spec.getOutboxLayoutImageFile() != null ? spec.getOutboxLayoutImageFile() : spec.getOutboxLayoutImage());
-            if (outboxImgBytes == null || outboxImgBytes.length == 0) {
-                outboxImgBytes = generateIsometricOutboxLayoutImage(product, spec);
-            }
-
-            byte[] palletImgBytes = getImageBytesFromFileOrUrl(spec.getPalletLayoutImage());
-            if (palletImgBytes == null || palletImgBytes.length == 0) {
-                palletImgBytes = generateIsometricPalletLayoutImage(product, spec);
-            }
-
-            // 1) 3D 도면 타이틀 서브헤더 행 (높이 24pt)
-            Row layoutTitleRow = sheet0.createRow(currentRow);
-            layoutTitleRow.setHeightInPoints(24);
-            createCell(layoutTitleRow, 0, "📥 인박스 3D 입수 도면", subHeaderStyle);
-            createCell(layoutTitleRow, 1, "", subHeaderStyle);
-            createCell(layoutTitleRow, 2, "", subHeaderStyle);
-            sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 0, 2));
-
-            createCell(layoutTitleRow, 3, "📦 아웃박스 3D 입수 도면", subHeaderStyle);
-            createCell(layoutTitleRow, 4, "", subHeaderStyle);
-            createCell(layoutTitleRow, 5, "", subHeaderStyle);
-            sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 3, 5));
-
-            createCell(layoutTitleRow, 6, "🏗️ 팔레트 3D 적재 도면", subHeaderStyle);
-            createCell(layoutTitleRow, 7, "", subHeaderStyle);
-            sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 6, 7));
-
-            // 2) 3D 도면 이미지 전용 캔버스 행 (높이 220pt)
-            int imgRowIdx = currentRow + 1;
-            Row layoutImgRow = sheet0.createRow(imgRowIdx);
-            layoutImgRow.setHeightInPoints(220);
-            for (int col = 0; col <= 7; col++) {
-                createCell(layoutImgRow, col, "", dataStyle);
-            }
-            sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(imgRowIdx, imgRowIdx, 0, 2));
-            sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(imgRowIdx, imgRowIdx, 3, 5));
-            sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(imgRowIdx, imgRowIdx, 6, 7));
-
-            org.apache.poi.ss.usermodel.Drawing<?> sheet0Drawing = sheet0.getDrawingPatriarch() != null ? sheet0.getDrawingPatriarch() : sheet0.createDrawingPatriarch();
-
-            if (inboxImgBytes != null && inboxImgBytes.length > 0) {
-                try {
-                    int picIdx = workbook.addPicture(inboxImgBytes, Workbook.PICTURE_TYPE_PNG);
-                    org.apache.poi.ss.usermodel.ClientAnchor anchor = workbook.getCreationHelper().createClientAnchor();
-                    anchor.setCol1(0); anchor.setRow1(imgRowIdx);
-                    anchor.setCol2(3); anchor.setRow2(imgRowIdx + 1);
-                    anchor.setDx1(5 * 10000); anchor.setDy1(5 * 10000);
-                    anchor.setDx2(-5 * 10000); anchor.setDy2(-5 * 10000);
-                    anchor.setAnchorType(org.apache.poi.ss.usermodel.ClientAnchor.AnchorType.MOVE_AND_RESIZE);
-                    sheet0Drawing.createPicture(anchor, picIdx);
-                } catch (Exception ex) {
-                    log.error("Failed to insert inbox 3d image into Excel", ex);
-                }
-            }
-
-            if (outboxImgBytes != null && outboxImgBytes.length > 0) {
-                try {
-                    int picIdx = workbook.addPicture(outboxImgBytes, Workbook.PICTURE_TYPE_PNG);
-                    org.apache.poi.ss.usermodel.ClientAnchor anchor = workbook.getCreationHelper().createClientAnchor();
-                    anchor.setCol1(3); anchor.setRow1(imgRowIdx);
-                    anchor.setCol2(6); anchor.setRow2(imgRowIdx + 1);
-                    anchor.setDx1(5 * 10000); anchor.setDy1(5 * 10000);
-                    anchor.setDx2(-5 * 10000); anchor.setDy2(-5 * 10000);
-                    anchor.setAnchorType(org.apache.poi.ss.usermodel.ClientAnchor.AnchorType.MOVE_AND_RESIZE);
-                    sheet0Drawing.createPicture(anchor, picIdx);
-                } catch (Exception ex) {
-                    log.error("Failed to insert outbox 3d image into Excel", ex);
-                }
-            }
-
-            if (palletImgBytes != null && palletImgBytes.length > 0) {
-                try {
-                    int picIdx = workbook.addPicture(palletImgBytes, Workbook.PICTURE_TYPE_PNG);
-                    org.apache.poi.ss.usermodel.ClientAnchor anchor = workbook.getCreationHelper().createClientAnchor();
-                    anchor.setCol1(6); anchor.setRow1(imgRowIdx);
-                    anchor.setCol2(8); anchor.setRow2(imgRowIdx + 1);
-                    anchor.setDx1(5 * 10000); anchor.setDy1(5 * 10000);
-                    anchor.setDx2(-5 * 10000); anchor.setDy2(-5 * 10000);
-                    anchor.setAnchorType(org.apache.poi.ss.usermodel.ClientAnchor.AnchorType.MOVE_AND_RESIZE);
-                    sheet0Drawing.createPicture(anchor, picIdx);
-                } catch (Exception ex) {
-                    log.error("Failed to insert pallet 3d image into Excel", ex);
-                }
-            }
-            currentRow += 2;
+            currentRow = renderLoadingLayoutSection(sheet0, currentRow, spec, product, workbook, headerStyle, subHeaderStyle, labelStyle, dataStyle, wrapDataStyle);
 
             // 여백 행
             createMarginRow(sheet0, currentRow++, 10);
 
             // [6. 사양서 특이사항]
-            createSectionHeader(sheet0, currentRow, "6. 📝 사양서 특이사항 (Remarks)", headerStyle, 7);
+            createSectionHeader(sheet0, currentRow, "6. 📝 사양서 특이사항 (Remarks)", headerStyle, 7, 28);
             currentRow++;
             Row remRow = sheet0.createRow(currentRow);
-            remRow.setHeightInPoints(90);
+            remRow.setHeightInPoints(60);
             createCell(remRow, 0, "특이사항", labelStyle);
             createCell(remRow, 1, spec.getRemarks() != null ? spec.getRemarks() : "등록된 특이사항이 없습니다.", wrapDataStyle);
             for (int col = 2; col <= 7; col++) createCell(remRow, col, "", wrapDataStyle);
             sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 1, 7));
 
-            // 컬럼 너비 밸런스 최적화 (레이블: 5500, 데이터: 7500)
-            sheet0.setColumnWidth(0, 5500); sheet0.setColumnWidth(1, 7500);
-            sheet0.setColumnWidth(2, 5500); sheet0.setColumnWidth(3, 7500);
-            sheet0.setColumnWidth(4, 5500); sheet0.setColumnWidth(5, 7500);
-            sheet0.setColumnWidth(6, 5500); sheet0.setColumnWidth(7, 7500);
+            // 컬럼 너비 최적화 (레이블: 4800, 데이터: 9000~10500)
+            sheet0.setColumnWidth(0, 4800);
+            sheet0.setColumnWidth(1, 10500);
+            sheet0.setColumnWidth(2, 4800);
+            sheet0.setColumnWidth(3, 10500);
+            sheet0.setColumnWidth(4, 4800);
+            sheet0.setColumnWidth(5, 9500);
+            sheet0.setColumnWidth(6, 4800);
+            sheet0.setColumnWidth(7, 9000);
             applyPrintSetup(sheet0);
 
             // --- Sheet 2: 포장방법 사진 ---
@@ -545,7 +500,7 @@ public class PackagingSpecExportService {
                     r.setHeightInPoints(320); // [요청 반영] 기존 160pt에서 2배로 확대 (320pt)
                     createCell(r, 0, "NO." + (i + 1), centerDataStyle);
                     createCell(r, 1, "", centerDataStyle); // 사진 들어갈 셀
-                    createCell(r, 2, imgEntity.getCaptionText() != null ? imgEntity.getCaptionText() : "-", wrapDataStyle);
+                    createCell(r, 2, (imgEntity.getCaptionText() != null && !imgEntity.getCaptionText().isBlank()) ? imgEntity.getCaptionText().trim() : "-", wrapDataStyle);
                     createCell(r, 3, "", wrapDataStyle);
                     sheet1.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(imgRow, imgRow, 2, 3));
 
@@ -553,7 +508,7 @@ public class PackagingSpecExportService {
                     byte[] imgBytes = getAnnotatedImageBytes(imgEntity);
                     if (imgBytes != null && imgBytes.length > 0) {
                         try {
-                            int pictureIdx = workbook.addPicture(imgBytes, Workbook.PICTURE_TYPE_JPEG);
+                            int pictureIdx = workbook.addPicture(imgBytes, detectPictureType(imgBytes));
                             org.apache.poi.ss.usermodel.ClientAnchor anchor = workbook.getCreationHelper().createClientAnchor();
                             anchor.setCol1(1);
                             anchor.setRow1(imgRow);
@@ -570,22 +525,22 @@ public class PackagingSpecExportService {
                     imgRow++;
                 }
             }
-            sheet1.setColumnWidth(0, 3000); 
-            sheet1.setColumnWidth(1, 12000); // [요청 반영] 포장방법 사진 열 가로 넓이 절반으로 축소 (24000 -> 12000)
-            sheet1.setColumnWidth(2, 8000); 
-            sheet1.setColumnWidth(3, 8000);
+            sheet1.setColumnWidth(0, 3500); 
+            sheet1.setColumnWidth(1, 15000); // 포장방법 사진 열
+            sheet1.setColumnWidth(2, 10000); 
+            sheet1.setColumnWidth(3, 10000);
             applyPrintSetup(sheet1);
 
             // --- Sheet 3: 인박스 현품표 ---
             Sheet sheet2 = workbook.createSheet("인박스 현품표");
             createSectionHeader(sheet2, 0, "[ 인 박 스 현 품 표 / INBOX LABEL ]", headerStyle, 3, 30);
-            addRow(sheet2, 1, labelStyle, dataStyle, "품목코드 (Product Code)", product.getItemCode(), "입수량 (Quantity)", (spec.getInboxQty() != null ? spec.getInboxQty() + " EA" : "0 EA"));
-            addRow(sheet2, 2, labelStyle, dataStyle, "국문 제품명 (Product Name KOR)", product.getProductName(), "제조사 (Manufacturer)", (product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-"));
-            addRow(sheet2, 3, labelStyle, dataStyle, "영문 제품명 (Product Name ENG)", (product.getEnglishProductName() != null ? product.getEnglishProductName() : "-"), "제조일자 (Mfg. Date)", extractMfgDateDisplay(inboxDateFormatStr, firstChannel));
-            addRow(sheet2, 4, labelStyle, dataStyle, "제조번호 (Lot No.)", "LOT(제조번호)", "사용기한 (Exp. Date)", extractExpDateDisplay(inboxDateFormatStr, firstChannel));
+            addRow(sheet2, 1, 28f, labelStyle, dataStyle, "품목코드 (Product Code)", product.getItemCode(), "입수량 (Quantity)", (spec.getInboxQty() != null ? spec.getInboxQty() + " EA" : "0 EA"));
+            addRow(sheet2, 2, 28f, labelStyle, dataStyle, "국문 제품명 (Product Name KOR)", product.getProductName(), "제조사 (Manufacturer)", (product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-"));
+            addRow(sheet2, 3, 28f, labelStyle, dataStyle, "영문 제품명 (Product Name ENG)", (product.getEnglishProductName() != null ? product.getEnglishProductName() : "-"), "제조일자 (Mfg. Date)", extractMfgDateDisplay(inboxDateFormatStr, firstChannel));
+            addRow(sheet2, 4, 28f, labelStyle, dataStyle, "제조번호 (Lot No.)", "LOT(제조번호)", "사용기한 (Exp. Date)", extractExpDateDisplay(inboxDateFormatStr, firstChannel));
             
             Row inboxMarkingRow = sheet2.createRow(5);
-            inboxMarkingRow.setHeightInPoints(28);
+            inboxMarkingRow.setHeightInPoints(70);
             createCell(inboxMarkingRow, 0, "🏷️ 현품표 착인/기재 기준", labelStyle);
             createCell(inboxMarkingRow, 1, inboxMarkingRule, wrapDataStyle);
             for (int col = 2; col <= 3; col++) createCell(inboxMarkingRow, col, "", wrapDataStyle);
@@ -597,23 +552,23 @@ public class PackagingSpecExportService {
             createCell(inboxNoteRow, 1, "⚠️ 인박스 현품표에는 바코드를 부착/표기하지 않습니다. (규정 준수)", wrapDataStyle);
             for (int col = 2; col <= 3; col++) createCell(inboxNoteRow, col, "", wrapDataStyle);
             sheet2.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(6, 6, 1, 3));
-            sheet2.setColumnWidth(0, 7000); sheet2.setColumnWidth(1, 10000); sheet2.setColumnWidth(2, 7000); sheet2.setColumnWidth(3, 10000);
+            sheet2.setColumnWidth(0, 6500); sheet2.setColumnWidth(1, 11000); sheet2.setColumnWidth(2, 6500); sheet2.setColumnWidth(3, 11000);
             setOuterBorders(sheet2, 0, 6, 0, 3);
             applyPrintSetup(sheet2);
 
             // --- Sheet 4: 아웃박스 현품표 ---
             Sheet sheet3 = workbook.createSheet("아웃박스 현품표");
             createSectionHeader(sheet3, 0, "[ 아 웃 박 스 현 품 표 / OUTBOX LABEL ]", headerStyle, 3, 30);
-            addRow(sheet3, 1, labelStyle, dataStyle, "품목코드 (Product Code)", product.getItemCode(), "입수량 (Quantity)", (spec.getOutboxQty() != null ? spec.getOutboxQty() + " EA" : "0 EA"));
-            addRow(sheet3, 2, labelStyle, dataStyle, "국문 제품명 (Product Name KOR)", product.getProductName(), "제품무게 (Gross Weight)", (spec.getOneOutboxWeight() != null ? spec.getOneOutboxWeight() + " kg" : "- kg"));
-            addRow(sheet3, 3, labelStyle, dataStyle, "영문 제품명 (Product Name ENG)", (product.getEnglishProductName() != null ? product.getEnglishProductName() : "-"), "제조일자 (Mfg. Date)", extractMfgDateDisplay(outboxDateFormatStr, firstChannel));
-            addRow(sheet3, 4, labelStyle, dataStyle, "제조번호 (Lot No.)", "LOT(제조번호)", "사용기한 (Exp. Date)", extractExpDateDisplay(outboxDateFormatStr, firstChannel));
+            addRow(sheet3, 1, 28f, labelStyle, dataStyle, "품목코드 (Product Code)", product.getItemCode(), "입수량 (Quantity)", (spec.getOutboxQty() != null ? spec.getOutboxQty() + " EA" : "0 EA"));
+            addRow(sheet3, 2, 28f, labelStyle, dataStyle, "국문 제품명 (Product Name KOR)", product.getProductName(), "제품무게 (Gross Weight)", (spec.getOneOutboxWeight() != null ? spec.getOneOutboxWeight() + " kg" : "- kg"));
+            addRow(sheet3, 3, 28f, labelStyle, dataStyle, "영문 제품명 (Product Name ENG)", (product.getEnglishProductName() != null ? product.getEnglishProductName() : "-"), "제조일자 (Mfg. Date)", extractMfgDateDisplay(outboxDateFormatStr, firstChannel));
+            addRow(sheet3, 4, 28f, labelStyle, dataStyle, "제조번호 (Lot No.)", "LOT(제조번호)", "사용기한 (Exp. Date)", extractExpDateDisplay(outboxDateFormatStr, firstChannel));
             
             String outboxBarcodeText = (product.getOutboxBarcode() != null && !product.getOutboxBarcode().isEmpty()) ? product.getOutboxBarcode() : (product.getProductBarcode() != null ? product.getProductBarcode() : (spec.getBarcode() != null ? spec.getBarcode() : "BARCODE-NOT-SET"));
-            addRow(sheet3, 5, labelStyle, dataStyle, "제조사 (Manufacturer)", (product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-"), "바코드 텍스트", outboxBarcodeText);
+            addRow(sheet3, 5, 28f, labelStyle, dataStyle, "제조사 (Manufacturer)", (product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-"), "바코드 텍스트", outboxBarcodeText);
             
             Row outboxMarkingRow = sheet3.createRow(6);
-            outboxMarkingRow.setHeightInPoints(28);
+            outboxMarkingRow.setHeightInPoints(70);
             createCell(outboxMarkingRow, 0, "🏷️ 현품표 착인/기재 기준", labelStyle);
             createCell(outboxMarkingRow, 1, outboxMarkingRule, wrapDataStyle);
             for (int col = 2; col <= 3; col++) createCell(outboxMarkingRow, col, "", wrapDataStyle);
@@ -621,14 +576,14 @@ public class PackagingSpecExportService {
 
             // 바코드 이미지 렌더링 행 (Row 7)
             Row obBarcodeRow = sheet3.createRow(7);
-            obBarcodeRow.setHeightInPoints(120); // [요청 반영] 바코드 이미지 높이 2배 확대 (120pt)
+            obBarcodeRow.setHeightInPoints(120);
             createCell(obBarcodeRow, 0, "바코드 스캔 이미지", labelStyle);
             createCell(obBarcodeRow, 1, "", dataStyle);
             for (int col = 2; col <= 3; col++) createCell(obBarcodeRow, col, "", dataStyle);
             sheet3.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(7, 7, 1, 3));
 
             org.apache.poi.ss.usermodel.Drawing<?> obDrawing = sheet3.createDrawingPatriarch();
-            byte[] obBarcodeBytes = generateBarcodeImageBytes(outboxBarcodeText, 450, 160); // [요청 반영] 픽셀 높이 2배 확대 (160)
+            byte[] obBarcodeBytes = generateBarcodeImageBytes(outboxBarcodeText, 450, 160);
             if (obBarcodeBytes != null) {
                 try {
                     int picIdx = workbook.addPicture(obBarcodeBytes, Workbook.PICTURE_TYPE_PNG);
@@ -643,29 +598,29 @@ public class PackagingSpecExportService {
                 }
             }
 
-            sheet3.setColumnWidth(0, 7000); sheet3.setColumnWidth(1, 10000); sheet3.setColumnWidth(2, 7000); sheet3.setColumnWidth(3, 10000);
+            sheet3.setColumnWidth(0, 6500); sheet3.setColumnWidth(1, 11000); sheet3.setColumnWidth(2, 6500); sheet3.setColumnWidth(3, 11000);
             setOuterBorders(sheet3, 0, 7, 0, 3);
             applyPrintSetup(sheet3);
 
             // --- Sheet 5: 팔레트 현품표 ---
             Sheet sheet4 = workbook.createSheet("팔레트 현품표");
             createSectionHeader(sheet4, 0, "[ 팔 레 트 현 품 표 / PALLET LABEL ]", headerStyle, 3, 30);
-            String palletBoxQtyStr = (product.getPalletInfo() != null && product.getPalletInfo().getPalletQuantity() != null) ? String.valueOf(product.getPalletInfo().getPalletQuantity()) : null;
-            Integer pBoxQty = parseIntSafe(palletBoxQtyStr);
+            Integer pBoxQty = (product.getPalletInfo() != null) ? product.getPalletInfo().getPalletQuantity() : null;
+            String palletBoxQtyStr = (pBoxQty != null) ? String.valueOf(pBoxQty) : null;
             String totalPcsStr = "- EA";
             if (pBoxQty != null && spec.getOutboxQty() != null) {
                 totalPcsStr = String.valueOf(pBoxQty * spec.getOutboxQty()) + " EA";
             }
-            addRow(sheet4, 1, labelStyle, dataStyle, "품목코드 (Product Code)", product.getItemCode(), "적재 박스 수량 (Box Qty/Pallet)", (palletBoxQtyStr != null ? palletBoxQtyStr + " Box" : "- Box"));
-            addRow(sheet4, 2, labelStyle, dataStyle, "국문 제품명 (Product Name KOR)", product.getProductName(), "적재 낱개 수량 (Total Pcs/Pallet)", totalPcsStr);
-            addRow(sheet4, 3, labelStyle, dataStyle, "영문 제품명 (Product Name ENG)", (product.getEnglishProductName() != null ? product.getEnglishProductName() : "-"), "제조일자 (Mfg. Date)", extractMfgDateDisplay(palletDateFormatStr, firstChannel));
-            addRow(sheet4, 4, labelStyle, dataStyle, "제조번호 (Lot No.)", "LOT(제조번호)", "사용기한 (Exp. Date)", extractExpDateDisplay(palletDateFormatStr, firstChannel));
+            addRow(sheet4, 1, 28f, labelStyle, dataStyle, "품목코드 (Product Code)", product.getItemCode(), "적재 박스 수량 (Box Qty/Pallet)", (palletBoxQtyStr != null ? palletBoxQtyStr + " Box" : "- Box"));
+            addRow(sheet4, 2, 28f, labelStyle, dataStyle, "국문 제품명 (Product Name KOR)", product.getProductName(), "적재 낱개 수량 (Total Pcs/Pallet)", totalPcsStr);
+            addRow(sheet4, 3, 28f, labelStyle, dataStyle, "영문 제품명 (Product Name ENG)", (product.getEnglishProductName() != null ? product.getEnglishProductName() : "-"), "제조일자 (Mfg. Date)", extractMfgDateDisplay(palletDateFormatStr, firstChannel));
+            addRow(sheet4, 4, 28f, labelStyle, dataStyle, "제조번호 (Lot No.)", "LOT(제조번호)", "사용기한 (Exp. Date)", extractExpDateDisplay(palletDateFormatStr, firstChannel));
             
             String palletBarcodeText = (product.getProductBarcode() != null && !product.getProductBarcode().isEmpty()) ? product.getProductBarcode() : (spec.getBarcode() != null ? spec.getBarcode() : "BARCODE-NOT-SET");
-            addRow(sheet4, 5, labelStyle, dataStyle, "제조사 (Manufacturer)", (product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-"), "바코드 텍스트", palletBarcodeText);
+            addRow(sheet4, 5, 28f, labelStyle, dataStyle, "제조사 (Manufacturer)", (product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-"), "바코드 텍스트", palletBarcodeText);
 
             Row palletMarkingRow = sheet4.createRow(6);
-            palletMarkingRow.setHeightInPoints(28);
+            palletMarkingRow.setHeightInPoints(70);
             createCell(palletMarkingRow, 0, "🏷️ 현품표 착인/기재 기준", labelStyle);
             createCell(palletMarkingRow, 1, palletMarkingRule, wrapDataStyle);
             for (int col = 2; col <= 3; col++) createCell(palletMarkingRow, col, "", wrapDataStyle);
@@ -673,14 +628,14 @@ public class PackagingSpecExportService {
 
             // 바코드 이미지 렌더링 행 (Row 7)
             Row pltBarcodeRow = sheet4.createRow(7);
-            pltBarcodeRow.setHeightInPoints(120); // [요청 반영] 바코드 이미지 높이 2배 확대 (120pt)
+            pltBarcodeRow.setHeightInPoints(120);
             createCell(pltBarcodeRow, 0, "바코드 스캔 이미지", labelStyle);
             createCell(pltBarcodeRow, 1, "", dataStyle);
             for (int col = 2; col <= 3; col++) createCell(pltBarcodeRow, col, "", dataStyle);
             sheet4.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(7, 7, 1, 3));
 
             org.apache.poi.ss.usermodel.Drawing<?> pltDrawing = sheet4.createDrawingPatriarch();
-            byte[] pltBarcodeBytes = generateBarcodeImageBytes(palletBarcodeText, 450, 160); // [요청 반영] 픽셀 높이 2배 확대 (160)
+            byte[] pltBarcodeBytes = generateBarcodeImageBytes(palletBarcodeText, 450, 160);
             if (pltBarcodeBytes != null) {
                 try {
                     int picIdx = workbook.addPicture(pltBarcodeBytes, Workbook.PICTURE_TYPE_PNG);
@@ -695,7 +650,7 @@ public class PackagingSpecExportService {
                 }
             }
 
-            sheet4.setColumnWidth(0, 7000); sheet4.setColumnWidth(1, 10000); sheet4.setColumnWidth(2, 7000); sheet4.setColumnWidth(3, 10000);
+            sheet4.setColumnWidth(0, 6500); sheet4.setColumnWidth(1, 11000); sheet4.setColumnWidth(2, 6500); sheet4.setColumnWidth(3, 11000);
             setOuterBorders(sheet4, 0, 7, 0, 3);
             applyPrintSetup(sheet4);
 
@@ -723,9 +678,9 @@ public class PackagingSpecExportService {
         row.setHeightInPoints(heightInPoints);
     }
 
-    private void addRow(Sheet sheet, int rowIdx, org.apache.poi.ss.usermodel.CellStyle labelStyle, org.apache.poi.ss.usermodel.CellStyle dataStyle, String l1, String v1, String l2, String v2, String l3, String v3, String l4, String v4) {
+    private void addRow(Sheet sheet, int rowIdx, float heightInPoints, org.apache.poi.ss.usermodel.CellStyle labelStyle, org.apache.poi.ss.usermodel.CellStyle dataStyle, String l1, String v1, String l2, String v2, String l3, String v3, String l4, String v4) {
         Row row = sheet.createRow(rowIdx);
-        row.setHeightInPoints(24);
+        row.setHeightInPoints(heightInPoints);
         createCell(row, 0, l1, labelStyle);
         createCell(row, 1, v1, dataStyle);
         createCell(row, 2, l2, labelStyle);
@@ -736,13 +691,21 @@ public class PackagingSpecExportService {
         createCell(row, 7, v4, dataStyle);
     }
 
-    private void addRow(Sheet sheet, int rowIdx, org.apache.poi.ss.usermodel.CellStyle labelStyle, org.apache.poi.ss.usermodel.CellStyle dataStyle, String l1, String v1, String l2, String v2) {
+    private void addRow(Sheet sheet, int rowIdx, org.apache.poi.ss.usermodel.CellStyle labelStyle, org.apache.poi.ss.usermodel.CellStyle dataStyle, String l1, String v1, String l2, String v2, String l3, String v3, String l4, String v4) {
+        addRow(sheet, rowIdx, 28f, labelStyle, dataStyle, l1, v1, l2, v2, l3, v3, l4, v4);
+    }
+
+    private void addRow(Sheet sheet, int rowIdx, float heightInPoints, org.apache.poi.ss.usermodel.CellStyle labelStyle, org.apache.poi.ss.usermodel.CellStyle dataStyle, String l1, String v1, String l2, String v2) {
         Row row = sheet.createRow(rowIdx);
-        row.setHeightInPoints(24);
+        row.setHeightInPoints(heightInPoints);
         createCell(row, 0, l1, labelStyle);
         createCell(row, 1, v1, dataStyle);
         createCell(row, 2, l2, labelStyle);
         createCell(row, 3, v2, dataStyle);
+    }
+
+    private void addRow(Sheet sheet, int rowIdx, org.apache.poi.ss.usermodel.CellStyle labelStyle, org.apache.poi.ss.usermodel.CellStyle dataStyle, String l1, String v1, String l2, String v2) {
+        addRow(sheet, rowIdx, 28f, labelStyle, dataStyle, l1, v1, l2, v2);
     }
 
     private void createCell(Row row, int colIdx, String value, org.apache.poi.ss.usermodel.CellStyle style) {
@@ -798,34 +761,10 @@ public class PackagingSpecExportService {
         sheet.getPrintSetup().setFitWidth((short) 1);
         sheet.getPrintSetup().setFitHeight((short) 0);
         sheet.getPrintSetup().setLandscape(false);
-        sheet.setMargin(Sheet.TopMargin, 0.5);
-        sheet.setMargin(Sheet.BottomMargin, 0.5);
-        sheet.setMargin(Sheet.LeftMargin, 0.5);
-        sheet.setMargin(Sheet.RightMargin, 0.5);
-    }
-
-    private void setCellValue(Sheet sheet, int rowIndex, int colIndex, String value) {
-        Row row = sheet.getRow(rowIndex);
-        if (row == null) {
-            row = sheet.createRow(rowIndex);
-        }
-        org.apache.poi.ss.usermodel.Cell cell = row.getCell(colIndex);
-        if (cell == null) {
-            cell = row.createCell(colIndex);
-        }
-        cell.setCellValue(value);
-    }
-
-    private Integer parseIntSafe(String s) {
-        if (s == null || s.isBlank()) return null;
-        try { return Integer.parseInt(s.trim()); }
-        catch (NumberFormatException e) { return null; }
-    }
-
-    private Double parseDoubleSafe(String s) {
-        if (s == null || s.isBlank()) return null;
-        try { return Double.parseDouble(s.trim()); }
-        catch (NumberFormatException e) { return null; }
+        sheet.setMargin(PageMargin.TOP, 0.5);
+        sheet.setMargin(PageMargin.BOTTOM, 0.5);
+        sheet.setMargin(PageMargin.LEFT, 0.5);
+        sheet.setMargin(PageMargin.RIGHT, 0.5);
     }
 
     /**
@@ -1063,10 +1002,18 @@ public class PackagingSpecExportService {
     }
 
     /**
-     * Helper to read image bytes directly from local disk path or remote URL.
+     * Helper to read image bytes directly from local disk path, remote URL, or Base64 Data URL.
      */
     private byte[] getImageBytesFromFileOrUrl(String fileUrl) {
         if (fileUrl == null || fileUrl.isBlank()) return null;
+        if (fileUrl.startsWith("data:image/") && fileUrl.contains("base64,")) {
+            try {
+                String base64Data = fileUrl.substring(fileUrl.indexOf("base64,") + 7);
+                return java.util.Base64.getDecoder().decode(base64Data);
+            } catch (Exception e) {
+                log.warn("Failed to decode base64 data url", e);
+            }
+        }
         java.io.File file = findLocalFile(fileUrl, null);
         if (file != null && file.exists()) {
             try {
@@ -1089,6 +1036,68 @@ public class PackagingSpecExportService {
             }
         }
         return null;
+    }
+
+    /**
+     * Automatically crops whitespace and empty floor borders around 3D render images
+     * to maximize the visible size of the subject in Excel with guaranteed symmetric padding.
+     */
+    private byte[] autoCropWhitespace(byte[] imageBytes, int padding) {
+        if (imageBytes == null || imageBytes.length == 0) return imageBytes;
+        try {
+            BufferedImage src = ImageIO.read(new java.io.ByteArrayInputStream(imageBytes));
+            if (src == null) return imageBytes;
+
+            int w = src.getWidth();
+            int h = src.getHeight();
+            if (w <= 30 || h <= 30) return imageBytes;
+
+            int minX = w, maxX = 0, minY = h, maxY = 0;
+            boolean foundContent = false;
+
+            for (int y = 0; y < h; y++) {
+                for (int x = 0; x < w; x++) {
+                    int rgb = src.getRGB(x, y);
+                    int alpha = (rgb >> 24) & 0xff;
+                    int r = (rgb >> 16) & 0xff;
+                    int g = (rgb >> 8) & 0xff;
+                    int b = rgb & 0xff;
+
+                    // Treat transparent or near-white / studio-floor-grey (>= 220) as background
+                    boolean isBackground = (alpha < 20) || (r >= 220 && g >= 220 && b >= 220);
+                    if (!isBackground) {
+                        foundContent = true;
+                        if (x < minX) minX = x;
+                        if (x > maxX) maxX = x;
+                        if (y < minY) minY = y;
+                        if (y > maxY) maxY = y;
+                    }
+                }
+            }
+
+            if (!foundContent || (maxX - minX < 20) || (maxY - minY < 20)) {
+                return imageBytes;
+            }
+
+            int pad = Math.max(padding, 16);
+            int actualMinX = Math.max(0, minX - pad);
+            int actualMaxX = Math.min(w - 1, maxX + pad);
+            int actualMinY = Math.max(0, minY - pad);
+            int actualMaxY = Math.min(h - 1, maxY + pad);
+
+            int cropX = actualMinX;
+            int cropY = actualMinY;
+            int cropW = actualMaxX - actualMinX + 1;
+            int cropH = actualMaxY - actualMinY + 1;
+
+            BufferedImage cropped = src.getSubimage(cropX, cropY, cropW, cropH);
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageIO.write(cropped, "png", baos);
+            return baos.toByteArray();
+        } catch (Exception e) {
+            log.warn("Failed to auto-crop whitespace from 3D layout image", e);
+            return imageBytes;
+        }
     }
 
     /**
@@ -1230,15 +1239,17 @@ public class PackagingSpecExportService {
             g2d.setColor(Color.WHITE);
             g2d.fillRect(0, 0, width, height);
 
-            // Draw Border
+            int pad = 8;
+            // Draw Border with inner margin
             g2d.setColor(Color.LIGHT_GRAY);
-            g2d.drawRect(0, 0, width - 1, height - 1);
+            g2d.drawRect(pad, pad, width - 1 - pad * 2, height - 1 - pad * 2);
 
             // Generate deterministic pseudo-random / checksum bars from barcodeText string
             g2d.setColor(Color.BLACK);
-            int startX = 20;
-            int barAreaWidth = width - 40;
-            int barHeight = height - 25;
+            int startX = pad + 15;
+            int barAreaWidth = width - (pad * 2 + 30);
+            int barStartY = pad + 10;
+            int barHeight = height - pad * 2 - 34;
 
             byte[] textBytes = barcodeText.getBytes(java.nio.charset.StandardCharsets.UTF_8);
             int hash = 0;
@@ -1246,9 +1257,9 @@ public class PackagingSpecExportService {
             java.util.Random rnd = new java.util.Random(hash);
 
             // Guard bars (start)
-            g2d.fillRect(startX, 10, 2, barHeight);
-            g2d.fillRect(startX + 4, 10, 1, barHeight);
-            g2d.fillRect(startX + 7, 10, 3, barHeight);
+            g2d.fillRect(startX, barStartY, 2, barHeight);
+            g2d.fillRect(startX + 4, barStartY, 1, barHeight);
+            g2d.fillRect(startX + 7, barStartY, 3, barHeight);
 
             int currentX = startX + 12;
             int endX = startX + barAreaWidth - 12;
@@ -1257,14 +1268,14 @@ public class PackagingSpecExportService {
                 int barW = rnd.nextInt(3) + 1;
                 int spaceW = rnd.nextInt(3) + 1;
                 if (currentX + barW + spaceW >= endX) break;
-                g2d.fillRect(currentX, 10, barW, barHeight);
+                g2d.fillRect(currentX, barStartY, barW, barHeight);
                 currentX += (barW + spaceW);
             }
 
             // Guard bars (stop)
-            g2d.fillRect(endX - 8, 10, 3, barHeight);
-            g2d.fillRect(endX - 4, 10, 1, barHeight);
-            g2d.fillRect(endX - 2, 10, 2, barHeight);
+            g2d.fillRect(endX - 8, barStartY, 3, barHeight);
+            g2d.fillRect(endX - 4, barStartY, 1, barHeight);
+            g2d.fillRect(endX - 2, barStartY, 2, barHeight);
 
             // Human Readable Text Label
             g2d.setColor(Color.DARK_GRAY);
@@ -1272,7 +1283,7 @@ public class PackagingSpecExportService {
             FontMetrics fm = g2d.getFontMetrics();
             int textW = fm.stringWidth(barcodeText);
             int textX = (width - textW) / 2;
-            g2d.drawString(barcodeText, textX, height - 5);
+            g2d.drawString(barcodeText, textX, height - pad - 6);
 
             g2d.dispose();
 
@@ -1284,7 +1295,6 @@ public class PackagingSpecExportService {
             return null;
         }
     }
-
     private Color parseColorSafe(String hex, Color defaultColor) {
         if (hex == null || hex.isBlank()) return defaultColor;
         try {
@@ -1301,36 +1311,92 @@ public class PackagingSpecExportService {
      * Helper to resolve physical file location across various upload path formats
      */
     private java.io.File findLocalFile(String imageUrl, String imagePath) {
+        if ((imageUrl == null || imageUrl.isBlank()) && (imagePath == null || imagePath.isBlank())) {
+            return null;
+        }
+        
         String cleanFileName = null;
-        if (imageUrl != null && imageUrl.contains("/")) {
-            cleanFileName = imageUrl.substring(imageUrl.lastIndexOf('/') + 1);
-        } else if (imagePath != null && imagePath.contains("/")) {
-            cleanFileName = imagePath.substring(imagePath.lastIndexOf('/') + 1);
+        String raw = (imageUrl != null && !imageUrl.isBlank()) ? imageUrl.trim() : imagePath.trim();
+        
+        // Strip parameters if any
+        if (raw.contains("?")) {
+            raw = raw.substring(0, raw.indexOf('?')).trim();
+        }
+        
+        if (raw.contains("/") || raw.contains("\\")) {
+            int lastSlash = Math.max(raw.lastIndexOf('/'), raw.lastIndexOf('\\'));
+            cleanFileName = raw.substring(lastSlash + 1).trim();
+        } else {
+            cleanFileName = raw;
         }
 
-        String[] candidates = new String[] {
-            imagePath,
-            imageUrl,
-            imageUrl != null ? imageUrl.replace("/uploads/", "uploads/") : null,
-            imageUrl != null ? imageUrl.replace("/uploads/", "./uploads/") : null,
-            imageUrl != null ? imageUrl.replace("/uploads/", "backend/uploads/") : null,
-            imageUrl != null ? imageUrl.replace("http://localhost:8080/uploads/", "uploads/") : null,
-            imageUrl != null ? imageUrl.replace("http://localhost:8080/uploads/", "./uploads/") : null,
-            cleanFileName != null ? "uploads/" + cleanFileName : null,
-            cleanFileName != null ? "./uploads/" + cleanFileName : null,
-            cleanFileName != null ? "backend/uploads/" + cleanFileName : null,
-            imageUrl != null ? "data/" + imageUrl : null,
-            imageUrl != null ? "./data/" + imageUrl : null
-        };
+        String userDir = System.getProperty("user.dir", ".");
+        
+        List<String> uploadRoots = new ArrayList<>();
+        uploadRoots.add("uploads");
+        uploadRoots.add("./uploads");
+        uploadRoots.add("backend/uploads");
+        uploadRoots.add("./backend/uploads");
+        uploadRoots.add("internal-management-system/backend/uploads");
+        uploadRoots.add("./internal-management-system/backend/uploads");
+        uploadRoots.add(userDir + "/uploads");
+        uploadRoots.add(userDir + "/backend/uploads");
+        uploadRoots.add(userDir + "/internal-management-system/backend/uploads");
+        uploadRoots.add("E:/AI/internal-management-system/backend/uploads");
+        uploadRoots.add("E:/AI/uploads");
+        uploadRoots.add("C:/uploads");
+        uploadRoots.add("data");
+        uploadRoots.add("./data");
+
+        List<String> candidates = new ArrayList<>();
+        candidates.add(imagePath);
+        candidates.add(imageUrl);
+        candidates.add(raw);
+
+        for (String root : uploadRoots) {
+            if (cleanFileName != null && !cleanFileName.isBlank()) {
+                candidates.add(root + "/" + cleanFileName);
+                candidates.add(root + "/products/" + cleanFileName);
+            }
+            if (raw != null && !raw.isBlank()) {
+                String subPath = raw.startsWith("/") ? raw.substring(1) : raw;
+                if (subPath.startsWith("uploads/")) {
+                    subPath = subPath.substring("uploads/".length());
+                }
+                candidates.add(root + "/" + subPath);
+            }
+        }
+
         for (String path : candidates) {
             if (path != null && !path.isBlank()) {
                 java.io.File f = new java.io.File(path);
-                if (f.exists() && f.isFile()) {
+                if (f.exists() && f.isFile() && f.length() > 0) {
                     return f;
                 }
             }
         }
+
+        // Direct directory scan fallback
+        for (String root : uploadRoots) {
+            java.io.File dir = new java.io.File(root);
+            if (dir.exists() && dir.isDirectory() && cleanFileName != null && !cleanFileName.isBlank()) {
+                java.io.File target = new java.io.File(dir, cleanFileName);
+                if (target.exists() && target.isFile() && target.length() > 0) {
+                    return target;
+                }
+            }
+        }
+
         return null;
+    }
+
+    private int detectPictureType(byte[] bytes) {
+        if (bytes != null && bytes.length >= 8) {
+            if ((bytes[0] & 0xFF) == 0x89 && bytes[1] == 'P' && bytes[2] == 'N' && bytes[3] == 'G') {
+                return Workbook.PICTURE_TYPE_PNG;
+            }
+        }
+        return Workbook.PICTURE_TYPE_JPEG;
     }
 
     private String extractMfgDateDisplay(String fullFormat, com.example.ims.entity.SalesChannel channel) {
@@ -1375,31 +1441,189 @@ public class PackagingSpecExportService {
         return "[ YYYY.MM.DD 까지 ]";
     }
 
-    /**
-     * Java2D 기반 고화질 3D 등각투시도(Isometric) 렌더러 - 인박스 3D 입수
-     */
+    // [5-1. 3D 제품 입수 및 팔레트 적재 형태 (3D Loading Layout)]
+    private int renderLoadingLayoutSection(org.apache.poi.ss.usermodel.Sheet sheet0, int currentRow, PackagingSpecification spec, Product product, org.apache.poi.ss.usermodel.Workbook workbook, org.apache.poi.ss.usermodel.CellStyle headerStyle, org.apache.poi.ss.usermodel.CellStyle subHeaderStyle, org.apache.poi.ss.usermodel.CellStyle labelStyle, org.apache.poi.ss.usermodel.CellStyle dataStyle, org.apache.poi.ss.usermodel.CellStyle wrapDataStyle) {
+        createSectionHeader(sheet0, currentRow, "5-1. 3D 제품 입수 및 팔레트 적재 형태 (3D Loading Layout)", headerStyle, 7, 28);
+        currentRow++;
+
+        boolean isInboxUsed = "O".equalsIgnoreCase(spec.getInboxUseYn()) || 
+                              (spec.getInboxQty() != null && spec.getInboxQty() > 0);
+
+        int inQty = spec.getInboxQty() != null && spec.getInboxQty() > 0 ? spec.getInboxQty() : 10;
+        int outQty = spec.getOutboxQty() != null && spec.getOutboxQty() > 0 ? spec.getOutboxQty() : 40;
+        int inboxesInOutbox = isInboxUsed ? Math.max(1, outQty / Math.max(1, inQty)) : 1;
+
+        String defaultInboxPattern = isInboxUsed ? "2열×5행×1단 (" + inQty + "개입)" : "인박스 미사용 (Direct)";
+        String defaultOutboxPattern = isInboxUsed 
+            ? "2열×2행×1단 (인박스 " + inboxesInOutbox + "박스입, 총 " + outQty + "개입)"
+            : "4열×5행×2단 (총 " + outQty + "개입)";
+
+        int tierCount = spec.getPalletTierCount() != null && spec.getPalletTierCount() > 0 ? spec.getPalletTierCount() : 5;
+        int tierQty = spec.getPalletTierQty() != null && spec.getPalletTierQty() > 0 ? spec.getPalletTierQty() : 8;
+        String defaultPalletPattern = "8방 핀휠 교차적재 (" + tierCount + "단, 1단당 " + tierQty + "박스, 총 " + (tierCount * tierQty) + "박스)";
+
+        String inboxPatternText = (spec.getInboxPackingPattern() != null && !spec.getInboxPackingPattern().trim().isEmpty() && !spec.getInboxPackingPattern().equals("-"))
+            ? spec.getInboxPackingPattern() : defaultInboxPattern;
+
+        String outboxPatternText = (spec.getOutboxPackingPattern() != null && !spec.getOutboxPackingPattern().trim().isEmpty() && !spec.getOutboxPackingPattern().equals("-"))
+            ? spec.getOutboxPackingPattern() : defaultOutboxPattern;
+
+        String palletPatternText = (spec.getPalletStackingPattern() != null && !spec.getPalletStackingPattern().trim().isEmpty() && !spec.getPalletStackingPattern().equals("-"))
+            ? spec.getPalletStackingPattern() 
+            : ((spec.getPalletStackingMethod() != null && !spec.getPalletStackingMethod().trim().isEmpty() && !spec.getPalletStackingMethod().equals("-")) 
+                ? spec.getPalletStackingMethod() : defaultPalletPattern);
+
+        // 패턴 텍스트 행: 높이 32pt 및 wrapDataStyle 적용으로 긴 패턴명 2줄 노출 보장
+        Row patRow = sheet0.createRow(currentRow++);
+        patRow.setHeightInPoints(32);
+        createCell(patRow, 0, "인박스 입수패턴", labelStyle);
+        createCell(patRow, 1, inboxPatternText, wrapDataStyle);
+        createCell(patRow, 2, "아웃박스 입수패턴", labelStyle);
+        createCell(patRow, 3, outboxPatternText, wrapDataStyle);
+        createCell(patRow, 4, "팔레트 적재패턴", labelStyle);
+        createCell(patRow, 5, palletPatternText, wrapDataStyle);
+        createCell(patRow, 6, "적재 단수", labelStyle);
+        createCell(patRow, 7, (tierCount + "단"), dataStyle);
+
+        byte[] inboxImgBytes = getImageBytesFromFileOrUrl(spec.getInboxLayoutImage());
+        if (inboxImgBytes == null || inboxImgBytes.length == 0) {
+            inboxImgBytes = generateIsometricInboxLayoutImage(product, spec);
+        }
+        inboxImgBytes = autoCropWhitespace(inboxImgBytes, 8);
+
+        byte[] outboxImgBytes = getImageBytesFromFileOrUrl(spec.getOutboxLayoutImageFile() != null ? spec.getOutboxLayoutImageFile() : spec.getOutboxLayoutImage());
+        if (outboxImgBytes == null || outboxImgBytes.length == 0) {
+            outboxImgBytes = generateIsometricOutboxLayoutImage(product, spec);
+        }
+        outboxImgBytes = autoCropWhitespace(outboxImgBytes, 8);
+
+        byte[] palletImgBytes = getImageBytesFromFileOrUrl(spec.getPalletLayoutImage());
+        if (palletImgBytes == null || palletImgBytes.length == 0) {
+            palletImgBytes = generateIsometricPalletLayoutImage(product, spec);
+        }
+        palletImgBytes = autoCropWhitespace(palletImgBytes, 8);
+
+        Row layoutTitleRow = sheet0.createRow(currentRow);
+        layoutTitleRow.setHeightInPoints(26);
+        createCell(layoutTitleRow, 0, "📥 인박스 3D 입수 도면", subHeaderStyle);
+        createCell(layoutTitleRow, 1, "", subHeaderStyle);
+        createCell(layoutTitleRow, 2, "", subHeaderStyle);
+        sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 0, 2));
+
+        createCell(layoutTitleRow, 3, "📦 아웃박스 3D 입수 도면", subHeaderStyle);
+        createCell(layoutTitleRow, 4, "", subHeaderStyle);
+        createCell(layoutTitleRow, 5, "", subHeaderStyle);
+        sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 3, 5));
+
+        createCell(layoutTitleRow, 6, "🏗️ 팔레트 3D 적재 도면", subHeaderStyle);
+        createCell(layoutTitleRow, 7, "", subHeaderStyle);
+        sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 6, 7));
+
+        int imgRowIdx = currentRow + 1;
+        Row layoutImgRow = sheet0.createRow(imgRowIdx);
+        layoutImgRow.setHeightInPoints(190); // [요청 반영] 크롭된 3D 피사체가 큼직하고 시원하게 보이도록 190pt로 확장
+        for (int col = 0; col <= 7; col++) {
+            createCell(layoutImgRow, col, "", dataStyle);
+        }
+        sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(imgRowIdx, imgRowIdx, 0, 2));
+        sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(imgRowIdx, imgRowIdx, 3, 5));
+        sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(imgRowIdx, imgRowIdx, 6, 7));
+
+        org.apache.poi.ss.usermodel.Drawing<?> sheet0Drawing = sheet0.getDrawingPatriarch() != null ? sheet0.getDrawingPatriarch() : sheet0.createDrawingPatriarch();
+
+        if (inboxImgBytes != null && inboxImgBytes.length > 0) {
+            try {
+                int picIdx = workbook.addPicture(inboxImgBytes, detectPictureType(inboxImgBytes));
+                org.apache.poi.ss.usermodel.ClientAnchor anchor = workbook.getCreationHelper().createClientAnchor();
+                anchor.setCol1(0); anchor.setRow1(imgRowIdx);
+                anchor.setCol2(3); anchor.setRow2(imgRowIdx + 1);
+                anchor.setDx1(4 * 10000); anchor.setDy1(3 * 10000);
+                anchor.setDx2(-4 * 10000); anchor.setDy2(-3 * 10000);
+                anchor.setAnchorType(org.apache.poi.ss.usermodel.ClientAnchor.AnchorType.MOVE_AND_RESIZE);
+                sheet0Drawing.createPicture(anchor, picIdx);
+            } catch (Exception e) {
+                log.error("Failed to insert inbox 3D drawing into Sheet 1", e);
+            }
+        }
+
+        if (outboxImgBytes != null && outboxImgBytes.length > 0) {
+            try {
+                int picIdx = workbook.addPicture(outboxImgBytes, detectPictureType(outboxImgBytes));
+                org.apache.poi.ss.usermodel.ClientAnchor anchor = workbook.getCreationHelper().createClientAnchor();
+                anchor.setCol1(3); anchor.setRow1(imgRowIdx);
+                anchor.setCol2(6); anchor.setRow2(imgRowIdx + 1);
+                anchor.setDx1(4 * 10000); anchor.setDy1(3 * 10000);
+                anchor.setDx2(-4 * 10000); anchor.setDy2(-3 * 10000);
+                anchor.setAnchorType(org.apache.poi.ss.usermodel.ClientAnchor.AnchorType.MOVE_AND_RESIZE);
+                sheet0Drawing.createPicture(anchor, picIdx);
+            } catch (Exception e) {
+                log.error("Failed to insert outbox 3D drawing into Sheet 1", e);
+            }
+        }
+
+        if (palletImgBytes != null && palletImgBytes.length > 0) {
+            try {
+                int picIdx = workbook.addPicture(palletImgBytes, detectPictureType(palletImgBytes));
+                org.apache.poi.ss.usermodel.ClientAnchor anchor = workbook.getCreationHelper().createClientAnchor();
+                anchor.setCol1(6); anchor.setRow1(imgRowIdx);
+                anchor.setCol2(8); anchor.setRow2(imgRowIdx + 1);
+                anchor.setDx1(4 * 10000); anchor.setDy1(3 * 10000);
+                anchor.setDx2(-4 * 10000); anchor.setDy2(-3 * 10000);
+                anchor.setAnchorType(org.apache.poi.ss.usermodel.ClientAnchor.AnchorType.MOVE_AND_RESIZE);
+                sheet0Drawing.createPicture(anchor, picIdx);
+            } catch (Exception e) {
+                log.error("Failed to insert pallet 3D drawing into Sheet 1", e);
+            }
+        }
+
+        return imgRowIdx + 1;
+    }
+
+    private int drawBadge(Graphics2D g2, int x, int y, String text, Color bgColor, Color textColor, Color borderColor) {
+        g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 11));
+        FontMetrics fm = g2.getFontMetrics();
+        int textW = fm.stringWidth(text);
+        int padH = 8;
+        int badgeW = textW + padH * 2;
+        int badgeH = 20;
+
+        g2.setColor(bgColor);
+        g2.fillRoundRect(x, y - 14, badgeW, badgeH, 6, 6);
+        if (borderColor != null) {
+            g2.setColor(borderColor);
+            g2.setStroke(new BasicStroke(1.0f));
+            g2.drawRoundRect(x, y - 14, badgeW, badgeH, 6, 6);
+        }
+        g2.setColor(textColor);
+        g2.drawString(text, x + padH, y);
+        return badgeW;
+    }
+
     private byte[] generateIsometricInboxLayoutImage(Product product, PackagingSpecification spec) {
         try {
-            int width = 500, height = 400;
+            int width = 500, height = 420;
             BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
             Graphics2D g2 = img.createGraphics();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
 
-            // 배경 그라데이션
             GradientPaint bg = new GradientPaint(0, 0, new Color(248, 250, 252), 0, height, new Color(241, 245, 249));
             g2.setPaint(bg);
             g2.fillRect(0, 0, width, height);
 
-            boolean isInboxUsed = "O".equalsIgnoreCase(spec.getInboxUseYn()) || (spec.getInboxQty() != null && spec.getInboxQty() > 0);
+            boolean isInboxUsed = "O".equalsIgnoreCase(spec.getInboxUseYn()) || 
+                                  (spec.getInboxQty() != null && spec.getInboxQty() > 0);
 
             if (!isInboxUsed) {
+                int badgeW = drawBadge(g2, 16, 26, "[인박스 미사용]", new Color(241, 245, 249), new Color(100, 116, 139), new Color(203, 213, 225));
+                g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 13));
+                g2.setColor(new Color(71, 85, 105));
+                g2.drawString("단상자 아웃박스 직접 입수 (Direct Packing)", 16 + badgeW + 8, 26);
+
+                g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.PLAIN, 11));
                 g2.setColor(new Color(148, 163, 184));
-                g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 14));
-                g2.drawString("📥 인박스 미사용 품목", 16, 30);
-                g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.PLAIN, 12));
-                g2.setColor(new Color(100, 116, 139));
-                g2.drawString("단상자가 아웃박스에 직접 입수되는 포장 구조입니다.", 16, 52);
+                g2.drawString("단상자가 인박스 없이 아웃박스에 직접 수납되는 포장 사양입니다.", 16, 46);
 
                 g2.setColor(new Color(226, 232, 240));
                 g2.fillRoundRect(80, 100, 340, 200, 16, 16);
@@ -1407,17 +1631,23 @@ public class PackagingSpecExportService {
                 g2.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{6}, 0));
                 g2.drawRoundRect(80, 100, 340, 200, 16, 16);
 
-                g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 16));
-                g2.drawString("📦 인박스 없음 (Direct Packing)", 125, 205);
+                g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 15));
+                g2.setColor(new Color(100, 116, 139));
+                g2.drawString("인박스 없음 (Direct Packing)", 140, 205);
             } else {
-                g2.setColor(new Color(109, 40, 217)); // 보라색
-                g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 14));
-                String pattern = spec.getInboxPackingPattern() != null ? spec.getInboxPackingPattern() : "2열×5행×1단 (10개입)";
-                g2.drawString("📥 인박스 3D 입수 시뮬레이션", 16, 26);
+                int badgeW = drawBadge(g2, 16, 26, "[인박스 3D]", new Color(237, 233, 254), new Color(109, 40, 217), new Color(221, 214, 254));
+                g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 13));
+                g2.setColor(new Color(109, 40, 217));
+                g2.drawString("단상자 입수 시뮬레이션", 16 + badgeW + 8, 26);
+
+                int inQty = spec.getInboxQty() != null && spec.getInboxQty() > 0 ? spec.getInboxQty() : 10;
+                String pattern = (spec.getInboxPackingPattern() != null && !spec.getInboxPackingPattern().trim().isEmpty() && !spec.getInboxPackingPattern().equals("-"))
+                    ? spec.getInboxPackingPattern() : "2열×5행×1단 (" + inQty + "개입)";
+
                 g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.PLAIN, 11));
                 g2.setColor(new Color(100, 116, 139));
                 String sizeStr = spec.getInboxSize() != null ? spec.getInboxSize() : "규격 미지정";
-                g2.drawString("배열: " + pattern + " | 규격: " + sizeStr + "mm", 16, 44);
+                g2.drawString("배열: " + pattern + " | 규격: " + sizeStr + "mm", 16, 46);
 
                 int cols = 2, rows = 5, layers = 1;
                 if (pattern.contains("열") && pattern.contains("행")) {
@@ -1431,9 +1661,9 @@ public class PackagingSpecExportService {
                     } catch (Exception ignored) {}
                 }
 
-                drawIsometricBoxStack(g2, width / 2, height / 2 + 30, cols, rows, layers, 
+                drawIsometricBoxStack(g2, width / 2, height / 2 + 10, cols, rows, layers, 
                     new Color(221, 214, 254), new Color(196, 181, 253), new Color(167, 139, 250), 
-                    new Color(109, 40, 217), "인박스", sizeStr, false, false, false);
+                    new Color(109, 40, 217), "단상자", sizeStr, false, false);
             }
 
             g2.dispose();
@@ -1446,34 +1676,59 @@ public class PackagingSpecExportService {
         }
     }
 
-    /**
-     * Java2D 기반 고화질 3D 등각투시도(Isometric) 렌더러 - 아웃박스 3D 입수
-     */
     private byte[] generateIsometricOutboxLayoutImage(Product product, PackagingSpecification spec) {
         try {
-            int width = 500, height = 400;
+            int width = 500, height = 420;
             BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
             Graphics2D g2 = img.createGraphics();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
 
             GradientPaint bg = new GradientPaint(0, 0, new Color(248, 250, 252), 0, height, new Color(241, 245, 249));
             g2.setPaint(bg);
             g2.fillRect(0, 0, width, height);
 
-            g2.setColor(new Color(29, 78, 216)); // 블루
-            g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 14));
-            String pattern = spec.getOutboxPackingPattern() != null ? spec.getOutboxPackingPattern() : "4열×5행×2단 (40개입)";
-            g2.drawString("📦 아웃박스 3D 입수 시뮬레이션", 16, 26);
+            boolean isInboxUsed = "O".equalsIgnoreCase(spec.getInboxUseYn()) || 
+                                  (spec.getInboxQty() != null && spec.getInboxQty() > 0);
+
+            int inQty = spec.getInboxQty() != null && spec.getInboxQty() > 0 ? spec.getInboxQty() : 10;
+            int outQty = spec.getOutboxQty() != null && spec.getOutboxQty() > 0 ? spec.getOutboxQty() : 40;
+            int inboxesCount = isInboxUsed ? Math.max(1, outQty / Math.max(1, inQty)) : 1;
+
+            int badgeW = drawBadge(g2, 16, 26, "[아웃박스 3D]", new Color(219, 234, 254), new Color(29, 78, 216), new Color(191, 219, 254));
+            g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 13));
+            g2.setColor(new Color(29, 78, 216));
+            g2.drawString(isInboxUsed ? "인박스 수납 입수 시뮬레이션" : "단상자 직접 입수 시뮬레이션", 16 + badgeW + 8, 26);
+
+            String defaultPattern = isInboxUsed 
+                ? "2열×2행×1단 (인박스 " + inboxesCount + "박스입, 총 " + outQty + "개입)"
+                : "4열×5행×2단 (총 " + outQty + "개입)";
+
+            String pattern = (spec.getOutboxPackingPattern() != null && !spec.getOutboxPackingPattern().trim().isEmpty() && !spec.getOutboxPackingPattern().equals("-"))
+                ? spec.getOutboxPackingPattern() : defaultPattern;
+
             g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.PLAIN, 11));
             g2.setColor(new Color(100, 116, 139));
             String sizeStr = spec.getOutboxSize() != null ? spec.getOutboxSize() : "규격 미지정";
             boolean hasPop = "O".equalsIgnoreCase(spec.getPopUseYn()) || (spec.getPopRequiredStandard() != null && spec.getPopRequiredStandard().contains("POP") && !spec.getPopRequiredStandard().contains("해당 없음"));
             boolean hasAirCap = "O".equalsIgnoreCase(spec.getAirCapUseYn());
-            String optStr = (hasPop ? "[POP적용] " : "") + (hasAirCap ? "[에어캡완충] " : "");
-            g2.drawString("배열: " + pattern + " | 규격: " + sizeStr + "mm " + optStr, 16, 44);
+            g2.drawString("배열: " + pattern + " | 규격: " + sizeStr + "mm", 16, 46);
 
-            int cols = 4, rows = 5, layers = 2;
+            int badgeX = width - 16;
+            if (hasAirCap) {
+                badgeX -= 90;
+                drawBadge(g2, badgeX, 26, "[에어캡 완충]", new Color(224, 242, 254), new Color(2, 132, 199), new Color(186, 230, 253));
+            }
+            if (hasPop) {
+                badgeX -= 80;
+                drawBadge(g2, badgeX, 26, "[POP 동봉]", new Color(255, 228, 230), new Color(225, 29, 72), new Color(253, 164, 175));
+            }
+
+            int cols = isInboxUsed ? 2 : 4;
+            int rows = isInboxUsed ? 2 : 5;
+            int layers = isInboxUsed ? 1 : 2;
+
             if (pattern.contains("열") && pattern.contains("행")) {
                 try {
                     String[] parts = pattern.split("열|행|단");
@@ -1485,9 +1740,15 @@ public class PackagingSpecExportService {
                 } catch (Exception ignored) {}
             }
 
-            drawIsometricBoxStack(g2, width / 2, height / 2 + 30, cols, rows, layers, 
-                new Color(191, 219, 254), new Color(147, 197, 253), new Color(96, 165, 250), 
-                new Color(29, 78, 216), "아웃박스", sizeStr, hasPop, hasAirCap, false);
+            if (isInboxUsed) {
+                drawIsometricBoxStack(g2, width / 2, height / 2 + 10, cols, rows, layers, 
+                    new Color(221, 214, 254), new Color(196, 181, 253), new Color(167, 139, 250), 
+                    new Color(109, 40, 217), "인박스", sizeStr, hasPop, hasAirCap);
+            } else {
+                drawIsometricBoxStack(g2, width / 2, height / 2 + 10, cols, rows, layers, 
+                    new Color(191, 219, 254), new Color(147, 197, 253), new Color(96, 165, 250), 
+                    new Color(29, 78, 216), "단상자", sizeStr, hasPop, hasAirCap);
+            }
 
             g2.dispose();
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -1499,35 +1760,45 @@ public class PackagingSpecExportService {
         }
     }
 
-    /**
-     * Java2D 기반 고화질 3D 등각투시도(Isometric) 렌더러 - 팔레트 3D 적재
-     */
     private byte[] generateIsometricPalletLayoutImage(Product product, PackagingSpecification spec) {
         try {
-            int width = 500, height = 400;
+            int width = 500, height = 420;
             BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
             Graphics2D g2 = img.createGraphics();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
 
             GradientPaint bg = new GradientPaint(0, 0, new Color(248, 250, 252), 0, height, new Color(241, 245, 249));
             g2.setPaint(bg);
             g2.fillRect(0, 0, width, height);
 
-            g2.setColor(new Color(180, 83, 9)); // 앰버
-            g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 14));
-            String pattern = spec.getPalletStackingPattern() != null ? spec.getPalletStackingPattern() : (spec.getPalletStackingMethod() != null ? spec.getPalletStackingMethod() : "8방 핀휠 교차적재");
-            int stacks = spec.getPalletTierCount() != null ? spec.getPalletTierCount() : 8;
-            int tierQty = spec.getPalletTierQty() != null ? spec.getPalletTierQty() : 8;
+            int badgeW = drawBadge(g2, 16, 26, "[팔레트 3D]", new Color(254, 243, 199), new Color(180, 83, 9), new Color(253, 230, 138));
+            g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 13));
+            g2.setColor(new Color(180, 83, 9));
+            g2.drawString("아웃박스 팔레트 적재 시뮬레이션", 16 + badgeW + 8, 26);
+
+            int stacks = spec.getPalletTierCount() != null && spec.getPalletTierCount() > 0 ? spec.getPalletTierCount() : 5;
+            int tierQty = spec.getPalletTierQty() != null && spec.getPalletTierQty() > 0 ? spec.getPalletTierQty() : 8;
             int totalBoxes = tierQty * stacks;
-            g2.drawString("🏗️ 팔레트 3D 적재 시뮬레이션", 16, 26);
+
+            String defaultPattern = "8방 핀휠 교차적재 (" + stacks + "단, 1단 " + tierQty + "박스, 총 " + totalBoxes + "박스)";
+            String pattern = (spec.getPalletStackingPattern() != null && !spec.getPalletStackingPattern().trim().isEmpty() && !spec.getPalletStackingPattern().equals("-"))
+                ? spec.getPalletStackingPattern() 
+                : ((spec.getPalletStackingMethod() != null && !spec.getPalletStackingMethod().trim().isEmpty() && !spec.getPalletStackingMethod().equals("-")) 
+                    ? spec.getPalletStackingMethod() : defaultPattern);
+
             g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.PLAIN, 11));
             g2.setColor(new Color(100, 116, 139));
             String sizeStr = spec.getPalletSize() != null ? spec.getPalletSize() : "1,100×1,100mm";
             boolean hasCornerPost = "O".equalsIgnoreCase(spec.getCornerPostUseYn());
-            g2.drawString("패턴: " + pattern + " (" + stacks + "단, 총 " + totalBoxes + "박스) " + (hasCornerPost ? "[코너각대 적용]" : ""), 16, 44);
+            g2.drawString("패턴: " + pattern + " | 팔레트: " + sizeStr, 16, 46);
 
-            drawIsometricPalletStack(g2, width / 2, height / 2 + 50, stacks, tierQty, sizeStr, hasCornerPost);
+            if (hasCornerPost) {
+                drawBadge(g2, width - 110, 26, "[코너 각대 연동]", new Color(254, 243, 199), new Color(217, 119, 6), new Color(253, 230, 138));
+            }
+
+            drawIsometricPalletStack(g2, width / 2, height / 2 + 25, stacks, tierQty, sizeStr, hasCornerPost);
 
             g2.dispose();
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -1541,10 +1812,10 @@ public class PackagingSpecExportService {
 
     private void drawIsometricBoxStack(Graphics2D g2, int originX, int originY, int cols, int rows, int layers,
                                       Color topColor, Color leftColor, Color rightColor, Color wireColor,
-                                      String boxLabel, String sizeStr, boolean hasPop, boolean hasAirCap, boolean isPallet) {
-        int cellW = Math.max(16, Math.min(36, 160 / Math.max(cols, rows)));
+                                      String boxLabel, String sizeStr, boolean hasPop, boolean hasAirCap) {
+        int cellW = Math.max(16, Math.min(38, 150 / Math.max(cols, rows)));
         int cellD = cellW;
-        int cellH = Math.max(14, Math.min(28, 120 / Math.max(1, layers)));
+        int cellH = Math.max(14, Math.min(28, 110 / Math.max(1, layers)));
 
         double cos30 = 0.866025;
         double sin30 = 0.5;
@@ -1555,7 +1826,7 @@ public class PackagingSpecExportService {
         int startY = originY + totalSpanY / 4;
 
         g2.setColor(new Color(226, 232, 240));
-        g2.setStroke(new BasicStroke(1.5f));
+        g2.setStroke(new BasicStroke(1.2f));
 
         for (int l = 0; l < layers; l++) {
             for (int r = rows - 1; r >= 0; r--) {
@@ -1569,11 +1840,10 @@ public class PackagingSpecExportService {
         }
 
         if (hasPop) {
+            drawBadge(g2, startX - 35, startY - layers * cellH - 16, "POP 동봉", new Color(255, 228, 230), new Color(225, 29, 72), new Color(253, 164, 175));
             g2.setColor(new Color(225, 29, 72));
-            g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 10));
-            g2.drawString("🏷️ POP 동봉", startX - 30, startY - layers * cellH - 10);
-            g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{4}, 0));
-            g2.drawRect(startX - 35, startY - layers * cellH - 24, 80, 18);
+            g2.setStroke(new BasicStroke(1.2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{4}, 0));
+            g2.drawRoundRect(startX - 40, startY - layers * cellH - 32, 80, 20, 4, 4);
         }
 
         if (hasAirCap) {
@@ -1584,7 +1854,7 @@ public class PackagingSpecExportService {
     }
 
     private void drawIsometricPalletStack(Graphics2D g2, int originX, int originY, int stacks, int tierQty, String sizeStr, boolean hasCornerPost) {
-        int palW = 140, palD = 140, palH = 14;
+        int palW = 130, palD = 130, palH = 12;
         double cos30 = 0.866025;
         double sin30 = 0.5;
 
@@ -1594,81 +1864,229 @@ public class PackagingSpecExportService {
         drawIsometricCube(g2, startX, startY, palW, palD, palH, new Color(203, 213, 225), new Color(148, 163, 184), new Color(100, 116, 139), new Color(71, 85, 105));
 
         int drawStacks = Math.min(8, Math.max(3, stacks));
-        int boxH = 16;
+        int boxH = 14;
         for (int s = 0; s < drawStacks; s++) {
             int layerY = startY - palH - s * boxH;
             Color topC = (s % 2 == 0) ? new Color(254, 243, 199) : new Color(253, 230, 138);
             Color leftC = (s % 2 == 0) ? new Color(253, 224, 71) : new Color(250, 204, 21);
             Color rightC = (s % 2 == 0) ? new Color(234, 179, 8) : new Color(202, 138, 4);
 
-            int half = palW / 2 - 2;
-            drawIsometricCube(g2, startX - (int)(half * cos30 / 2), layerY + (int)(half * sin30 / 2), half, half, boxH, topC, leftC, rightC, new Color(180, 83, 9));
-            drawIsometricCube(g2, startX + (int)(half * cos30 / 2), layerY - (int)(half * sin30 / 2), half, half, boxH, topC, leftC, rightC, new Color(180, 83, 9));
-            drawIsometricCube(g2, startX + (int)(half * cos30 / 2), layerY + (int)(half * sin30 / 2), half, half, boxH, topC, leftC, rightC, new Color(180, 83, 9));
-            drawIsometricCube(g2, startX - (int)(half * cos30 / 2), layerY - (int)(half * sin30 / 2), half, half, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+            if (tierQty >= 8) {
+                int bw = 42, bd = 30;
+                int rot = (s % 2);
+                if (rot == 0) {
+                    // 8-Pinwheel Layer A: 4 quadrants x 2 boxes each
+                    drawIsometricCube(g2, startX - (int)(30 * cos30), layerY - (int)(26 * sin30), bw, bd, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+                    drawIsometricCube(g2, startX - (int)(8 * cos30), layerY - (int)(38 * sin30), bw, bd, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+
+                    drawIsometricCube(g2, startX + (int)(22 * cos30), layerY - (int)(26 * sin30), bd, bw, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+                    drawIsometricCube(g2, startX + (int)(38 * cos30), layerY - (int)(6 * sin30), bd, bw, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+
+                    drawIsometricCube(g2, startX + (int)(30 * cos30), layerY + (int)(26 * sin30), bw, bd, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+                    drawIsometricCube(g2, startX + (int)(8 * cos30), layerY + (int)(38 * sin30), bw, bd, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+
+                    drawIsometricCube(g2, startX - (int)(22 * cos30), layerY + (int)(26 * sin30), bd, bw, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+                    drawIsometricCube(g2, startX - (int)(38 * cos30), layerY + (int)(6 * sin30), bd, bw, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+                } else {
+                    // 8-Pinwheel Layer B (90° Interlocking Cross): 4 quadrants x 2 boxes each
+                    drawIsometricCube(g2, startX - (int)(26 * cos30), layerY - (int)(30 * sin30), bd, bw, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+                    drawIsometricCube(g2, startX - (int)(6 * cos30), layerY - (int)(38 * sin30), bd, bw, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+
+                    drawIsometricCube(g2, startX + (int)(26 * cos30), layerY - (int)(22 * sin30), bw, bd, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+                    drawIsometricCube(g2, startX + (int)(38 * cos30), layerY - (int)(8 * sin30), bw, bd, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+
+                    drawIsometricCube(g2, startX + (int)(26 * cos30), layerY + (int)(30 * sin30), bd, bw, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+                    drawIsometricCube(g2, startX + (int)(6 * cos30), layerY + (int)(38 * sin30), bd, bw, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+
+                    drawIsometricCube(g2, startX - (int)(26 * cos30), layerY + (int)(22 * sin30), bw, bd, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+                    drawIsometricCube(g2, startX - (int)(38 * cos30), layerY + (int)(8 * sin30), bw, bd, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+                }
+            } else {
+                int half = palW / 2 - 2;
+                drawIsometricCube(g2, startX - (int)(half * cos30 / 2), layerY + (int)(half * sin30 / 2), half, half, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+                drawIsometricCube(g2, startX + (int)(half * cos30 / 2), layerY - (int)(half * sin30 / 2), half, half, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+                drawIsometricCube(g2, startX + (int)(half * cos30 / 2), layerY + (int)(half * sin30 / 2), half, half, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+                drawIsometricCube(g2, startX - (int)(half * cos30 / 2), layerY - (int)(half * sin30 / 2), half, half, boxH, topC, leftC, rightC, new Color(180, 83, 9));
+            }
         }
 
         if (hasCornerPost) {
-            g2.setColor(new Color(217, 119, 6)); // 짙은 오렌지 각대
-            g2.setStroke(new BasicStroke(4.0f));
-            int totalH = drawStacks * boxH + palH;
-            int p1X = startX, p1Y = startY + (int)(palW * sin30);
-            int p2X = startX - (int)(palD * cos30), p2Y = startY;
-            int p3X = startX + (int)(palW * cos30), p3Y = startY;
-
-            g2.drawLine(p1X, p1Y, p1X, p1Y - totalH);
-            g2.drawLine(p2X, p2Y, p2X, p2Y - totalH);
-            g2.drawLine(p3X, p3Y, p3X, p3Y - totalH);
-
-            g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 10));
-            g2.drawString("📐 코너 각대(L형)", p1X - 35, p1Y - totalH - 8);
+            g2.setColor(new Color(245, 158, 11));
+            g2.setStroke(new BasicStroke(2.5f));
+            int postH = drawStacks * boxH + palH;
+            int half = palW / 2;
+            g2.drawLine(startX, startY + (int)(half * sin30), startX, startY + (int)(half * sin30) - postH);
+            g2.drawLine(startX + (int)(half * cos30), startY, startX + (int)(half * cos30), startY - postH);
+            g2.drawLine(startX - (int)(half * cos30), startY, startX - (int)(half * cos30), startY - postH);
         }
     }
 
-    private void drawIsometricCube(Graphics2D g2, int cx, int cy, int w, int d, int h, Color topColor, Color leftColor, Color rightColor, Color strokeColor) {
+    private void drawIsometricCube(Graphics2D g2, int x, int y, int w, int d, int h, Color topColor, Color leftColor, Color rightColor, Color strokeColor) {
         double cos30 = 0.866025;
         double sin30 = 0.5;
 
-        int dxW = (int) (w * cos30);
-        int dyW = (int) (w * sin30);
-        int dxD = (int) (d * cos30);
-        int dyD = (int) (d * sin30);
-
-        // 상단 면
+        // Top Face (Rhombus)
         Polygon top = new Polygon();
-        top.addPoint(cx, cy - h);
-        top.addPoint(cx + dxW, cy + dyW - h);
-        top.addPoint(cx + dxW - dxD, cy + dyW + dyD - h);
-        top.addPoint(cx - dxD, cy + dyD - h);
-
+        top.addPoint(x, y);
+        top.addPoint(x + (int)(w * cos30), y - (int)(w * sin30));
+        top.addPoint(x + (int)((w - d) * cos30), y - (int)((w + d) * sin30));
+        top.addPoint(x - (int)(d * cos30), y - (int)(d * sin30));
         g2.setColor(topColor);
         g2.fill(top);
         g2.setColor(strokeColor);
-        g2.setStroke(new BasicStroke(1.0f));
         g2.draw(top);
 
-        // 좌측 면
+        // Left Face
         Polygon left = new Polygon();
-        left.addPoint(cx - dxD, cy + dyD - h);
-        left.addPoint(cx + dxW - dxD, cy + dyW + dyD - h);
-        left.addPoint(cx + dxW - dxD, cy + dyW + dyD);
-        left.addPoint(cx - dxD, cy + dyD);
-
+        left.addPoint(x, y);
+        left.addPoint(x - (int)(d * cos30), y - (int)(d * sin30));
+        left.addPoint(x - (int)(d * cos30), y - (int)(d * sin30) + h);
+        left.addPoint(x, y + h);
         g2.setColor(leftColor);
         g2.fill(left);
         g2.setColor(strokeColor);
         g2.draw(left);
 
-        // 우측 면
+        // Right Face
         Polygon right = new Polygon();
-        right.addPoint(cx + dxW - dxD, cy + dyW + dyD - h);
-        right.addPoint(cx + dxW, cy + dyW - h);
-        right.addPoint(cx + dxW, cy + dyW);
-        right.addPoint(cx + dxW - dxD, cy + dyW + dyD);
-
+        right.addPoint(x, y);
+        right.addPoint(x + (int)(w * cos30), y - (int)(w * sin30));
+        right.addPoint(x + (int)(w * cos30), y - (int)(w * sin30) + h);
+        right.addPoint(x, y + h);
         g2.setColor(rightColor);
         g2.fill(right);
         g2.setColor(strokeColor);
         g2.draw(right);
+    }
+
+    // [3-1. 🖼️ 제품 및 패키지 실물 이미지 (Product & Package Images)]
+    private int renderProductPackageImagesSection(Sheet sheet0, int currentRow, Product product, PackagingSpecification spec, Workbook workbook, org.apache.poi.ss.usermodel.CellStyle headerStyle, org.apache.poi.ss.usermodel.CellStyle subHeaderStyle, org.apache.poi.ss.usermodel.CellStyle labelStyle, org.apache.poi.ss.usermodel.CellStyle dataStyle, org.apache.poi.ss.usermodel.CellStyle wrapDataStyle, org.apache.poi.ss.usermodel.CellStyle centerDataStyle) {
+        createSectionHeader(sheet0, currentRow, "3-1. 🖼️ 제품 및 패키지 실물 이미지 (Product & Package Images)", headerStyle, 7, 28);
+        currentRow++;
+
+        List<String> imagePaths = new ArrayList<>();
+        
+        // 1. 제품 마스터 다중 이미지 리스트
+        if (product.getImagePaths() != null && !product.getImagePaths().isEmpty()) {
+            for (String p : product.getImagePaths()) {
+                if (p != null && !p.trim().isEmpty() && !imagePaths.contains(p.trim())) {
+                    imagePaths.add(p.trim());
+                }
+            }
+        }
+        // 2. 제품 마스터 대표 이미지
+        if (product.getImagePath() != null && !product.getImagePath().trim().isEmpty() && !imagePaths.contains(product.getImagePath().trim())) {
+            imagePaths.add(product.getImagePath().trim());
+        }
+
+        // 3. 포장사양서 엔티티에 등록된 포장재/구성품 실물 이미지들
+        if (spec != null) {
+            String[] specImageCandidates = new String[] {
+                spec.getOutboxLayoutImage(),
+                spec.getPackagingMethodImage(),
+                spec.getMarkingLocationImage(),
+                spec.getInboxLayoutImage(),
+                spec.getOutboxLayoutImageFile(),
+                spec.getPalletLayoutImage()
+            };
+            for (String p : specImageCandidates) {
+                if (p != null && !p.trim().isEmpty() && !imagePaths.contains(p.trim())) {
+                    imagePaths.add(p.trim());
+                }
+            }
+
+            // 4. 포장방법 세부 사진 엔티티 목록 (PackagingMethodImage)
+            if (spec.getId() != null && methodImageRepository != null) {
+                try {
+                    List<com.example.ims.entity.PackagingMethodImage> methodImages = methodImageRepository.findActiveBySpecId(spec.getId());
+                    if (methodImages != null) {
+                        for (com.example.ims.entity.PackagingMethodImage mi : methodImages) {
+                            if (mi.getImageUrl() != null && !mi.getImageUrl().trim().isEmpty() && !imagePaths.contains(mi.getImageUrl().trim())) {
+                                imagePaths.add(mi.getImageUrl().trim());
+                            } else if (mi.getImagePath() != null && !mi.getImagePath().trim().isEmpty() && !imagePaths.contains(mi.getImagePath().trim())) {
+                                imagePaths.add(mi.getImagePath().trim());
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to load packaging method images for spec " + spec.getId(), e);
+                }
+            }
+        }
+
+        if (imagePaths.isEmpty()) {
+            Row emptyRow = sheet0.createRow(currentRow);
+            emptyRow.setHeightInPoints(28);
+            createCell(emptyRow, 0, "등록된 제품 패키지 실물 이미지가 없습니다.", centerDataStyle);
+            for (int col = 1; col <= 7; col++) createCell(emptyRow, col, "", centerDataStyle);
+            sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 0, 7));
+            currentRow++;
+            return currentRow;
+        }
+
+        // 최대 8개까지 이미지 렌더링 (한 행에 최대 4개씩 균등 분할)
+        int imgCount = Math.min(imagePaths.size(), 8);
+        int colsPerRow = imgCount == 1 ? 1 : (imgCount == 2 ? 2 : (imgCount == 3 ? 3 : 4));
+        int colsSpan = 8 / colsPerRow;
+
+        org.apache.poi.ss.usermodel.Drawing<?> sheet0Drawing = sheet0.getDrawingPatriarch() != null ? sheet0.getDrawingPatriarch() : sheet0.createDrawingPatriarch();
+
+        for (int i = 0; i < imgCount; i += colsPerRow) {
+            int currentBatchCount = Math.min(colsPerRow, imgCount - i);
+            
+            // 1. 라벨 헤더 행
+            Row titleRow = sheet0.createRow(currentRow);
+            titleRow.setHeightInPoints(24);
+            for (int j = 0; j < currentBatchCount; j++) {
+                int imgIdx = i + j;
+                int startCol = j * colsSpan;
+                int endCol = (j == currentBatchCount - 1) ? 7 : (startCol + colsSpan - 1);
+                String repLabel = (imagePaths.get(imgIdx).equals(product.getImagePath()) || imgIdx == 0) ? " (대표)" : "";
+                String title = "📷 패키지 이미지 #" + (imgIdx + 1) + repLabel;
+                
+                createCell(titleRow, startCol, title, subHeaderStyle);
+                for (int c = startCol + 1; c <= endCol; c++) createCell(titleRow, c, "", subHeaderStyle);
+                if (startCol < endCol) {
+                    sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, startCol, endCol));
+                }
+            }
+            currentRow++;
+
+            // 2. 이미지 본체 행
+            int imgRowIdx = currentRow;
+            Row imgRow = sheet0.createRow(imgRowIdx);
+            imgRow.setHeightInPoints(180);
+            for (int col = 0; col <= 7; col++) {
+                createCell(imgRow, col, "", dataStyle);
+            }
+
+            for (int j = 0; j < currentBatchCount; j++) {
+                int imgIdx = i + j;
+                int startCol = j * colsSpan;
+                int endCol = (j == currentBatchCount - 1) ? 7 : (startCol + colsSpan - 1);
+                if (startCol < endCol) {
+                    sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(imgRowIdx, imgRowIdx, startCol, endCol));
+                }
+
+                byte[] imgBytes = getImageBytesFromFileOrUrl(imagePaths.get(imgIdx));
+                if (imgBytes != null && imgBytes.length > 0) {
+                    try {
+                        int picIdx = workbook.addPicture(imgBytes, detectPictureType(imgBytes));
+                        org.apache.poi.ss.usermodel.ClientAnchor anchor = workbook.getCreationHelper().createClientAnchor();
+                        anchor.setCol1(startCol); anchor.setRow1(imgRowIdx);
+                        anchor.setCol2(endCol + 1); anchor.setRow2(imgRowIdx + 1);
+                        anchor.setDx1(5 * 10000); anchor.setDy1(5 * 10000);
+                        anchor.setDx2(-5 * 10000); anchor.setDy2(-5 * 10000);
+                        anchor.setAnchorType(org.apache.poi.ss.usermodel.ClientAnchor.AnchorType.MOVE_AND_RESIZE);
+                        sheet0Drawing.createPicture(anchor, picIdx);
+                    } catch (Exception ex) {
+                        log.error("Failed to insert product package image into Sheet 0", ex);
+                    }
+                }
+            }
+            currentRow++;
+        }
+
+        return currentRow;
     }
 }

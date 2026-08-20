@@ -334,14 +334,9 @@ public class ProductionAuditService {
                     try {
                         if (product.getManufacturerInfo() != null) {
                             mfrName = product.getManufacturerInfo().getName();
-                        } else if (product.getManufacturer() != null) {
-                            mfrName = product.getManufacturer();
                         }
                     } catch (Exception e) {
-                        log.warn("Failed to load manufacturerInfo proxy for itemCode: {}, fallback to legacy manufacturer field.", product.getItemCode(), e);
-                        if (product.getManufacturer() != null) {
-                            mfrName = product.getManufacturer();
-                        }
+                        log.warn("Failed to load manufacturerInfo proxy for itemCode: {}", product.getItemCode(), e);
                     }
                     audit.setManufacturerName(mfrName);
                 } else {

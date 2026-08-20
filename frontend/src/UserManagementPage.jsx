@@ -78,17 +78,16 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
         }
     };
 
-    const fetchUsers = async () => {
+    const fetchUsers = React.useCallback(async () => {
         try {
             const response = await getUsers(searchFields);
             setRowData(response.data);
         } catch (error) {
-            alert("사용자 목록을 불러오지 못했습니다. 관리자 권한을 확인하세요.");
+            showAlert("사용자 목록을 불러오지 못했습니다. 관리자 권한을 확인하세요.");
         }
-    };
+    }, [searchFields, showAlert]);
 
-
-    const handleApprove = async (id) => {
+    const handleApprove = React.useCallback(async (id) => {
         showConfirm("이 사용자의 가입을 승인하시겠습니까?", async () => {
             try {
                 await approveUser(id);
@@ -98,7 +97,7 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
                 showAlert("승인 처리에 실패했습니다.");
             }
         });
-    };
+    }, [fetchUsers, showConfirm, showAlert]);
 
     const handleRoleChange = React.useCallback(async (id, newRole) => {
         const roleObj = roles.find(r => r.roleKey === newRole);
@@ -113,7 +112,7 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
                 showAlert("권한 변경에 실패했습니다.");
             }
         });
-    }, [fetchUsers, showConfirm, showAlert]);
+    }, [roles, fetchUsers, showConfirm, showAlert]);
 
     const handleUnlock = React.useCallback(async (id) => {
         showConfirm("이 계정의 잠금을 해제하시겠습니까?", async () => {

@@ -2,18 +2,17 @@ package com.example.ims.service;
 
 import com.example.ims.entity.MailCategory;
 import com.example.ims.repository.MailCategoryRepository;
-import jakarta.annotation.PostConstruct;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class MailCategoryService {
 
-    @Autowired
-    private MailCategoryRepository repository;
+    private final MailCategoryRepository repository;
 
     public void initDefaultCategories() {
         if (repository.findByCategoryCodeAndDeletedFalse("CLAIM").isEmpty()) {

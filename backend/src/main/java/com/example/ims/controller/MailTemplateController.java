@@ -2,7 +2,7 @@ package com.example.ims.controller;
 
 import com.example.ims.entity.MailTemplate;
 import com.example.ims.service.MailTemplateService;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -11,10 +11,10 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/mail-templates")
+@RequiredArgsConstructor
 public class MailTemplateController {
 
-    @Autowired
-    private MailTemplateService mailTemplateService;
+    private final MailTemplateService mailTemplateService;
 
     @GetMapping
     public ResponseEntity<List<MailTemplate>> getAllTemplates() {

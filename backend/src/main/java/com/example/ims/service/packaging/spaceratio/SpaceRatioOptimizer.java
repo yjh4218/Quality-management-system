@@ -1,11 +1,5 @@
 package com.example.ims.service.packaging.spaceratio;
 
-import com.example.ims.entity.Product;
-import com.example.ims.entity.PackagingComponent;
-import com.example.ims.entity.PackagingLayer;
-
-import java.util.List;
-
 public class SpaceRatioOptimizer {
 
     /**

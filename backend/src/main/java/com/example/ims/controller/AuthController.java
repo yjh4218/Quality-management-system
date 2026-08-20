@@ -5,7 +5,6 @@ import com.example.ims.dto.ProfileUpdateRequestDto;
 import com.example.ims.dto.ApiResponse;
 import com.example.ims.entity.User;
 import com.example.ims.repository.UserRepository;
-import com.example.ims.repository.ManufacturerRepository;
 import com.example.ims.repository.RoleRepository;
 import com.example.ims.service.AuthService;
 import jakarta.validation.Valid;
@@ -33,7 +32,6 @@ import java.util.Map;
 public class AuthController {
 
     private final UserRepository userRepository;
-    private final ManufacturerRepository manufacturerRepository;
     private final RoleRepository roleRepository;
     private final AuthService authService;
 

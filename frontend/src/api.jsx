@@ -520,8 +520,12 @@ export const copyMasterPackagingSpec = (productId, masterProductId) =>
 export const downloadPackagingSpecExcel = (productId) => api.get(`/api/packaging-specs/export-excel/${productId}`, { responseType: 'blob' });
 export const downloadPackagingSpecPdf = (productId) => api.get(`/api/packaging-specs/export-pdf/${productId}`, { responseType: 'blob' });
 export const getPackagingMethodImages = (specId) => api.get(`/api/packaging-specs/${specId}/method-images`);
-export const uploadPackagingSpec3DSnapshot = (specId, mode, imageBase64) => 
-    api.post(`/api/packaging-specs/${specId}/3d-snapshot`, { mode, imageBase64 });
+export const copyPackagingMethodImagesFromProduct = (targetSpecId, sourceItemCode) => 
+    api.post(`/api/packaging-specs/${targetSpecId}/method-images/copy-from-product/${encodeURIComponent(sourceItemCode)}`);
+export const aggregateBomByComponents = (components) => 
+    api.post('/api/packaging-specs/components/aggregate-bom', components);
+export const uploadPackagingSpec3DSnapshot = (specId, mode, imageBase64, viewConfig = null) => 
+    api.post(`/api/packaging-specs/${specId}/3d-snapshot`, { mode, imageBase64, viewConfig });
 
 
 // Production Audit (Photo Audit) APIs

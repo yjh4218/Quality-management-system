@@ -5,24 +5,15 @@ import com.example.ims.entity.IngredientLimitDetail;
 import com.example.ims.repository.RegulatoryIngredientRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import jakarta.annotation.PostConstruct;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import org.springframework.http.converter.StringHttpMessageConverter;
-import java.net.URI;
-import java.util.ArrayList;
+import org.springframework.web.client.RestTemplate;
 import java.util.List;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
@@ -160,12 +151,9 @@ public class RegulatoryCrawlerService {
     }
 
     private void saveAsGlobalProhibited(String inciName, String koreanName, boolean isSystemAuto) {
-        String updater = isSystemAuto ? "SYSTEM_AUTO" : "ADMIN";
         List<RegulatoryIngredient> existingList = repository.findByInciName(inciName);
         RegulatoryIngredient ingredient;
-        boolean isNew = false;
         if (existingList.isEmpty()) {
-            isNew = true;
             ingredient = RegulatoryIngredient.builder()
                 .inciName(inciName)
                 .koreanName(koreanName)
@@ -574,13 +562,6 @@ public class RegulatoryCrawlerService {
         }
     }
 
-    private void saveIfNew(String inciName, String koreanName, String cas, String country) {
-        List<RegulatoryIngredient> existing = repository.findByInciName(inciName);
-        if (existing.isEmpty()) {
-            saveOrUpdate(inciName, koreanName, cas, "ALLOWED", null, country, true);
-        }
-    }
-
     private void updateEURegulations(boolean isSystemAuto) {
         syncEuRegulationsFromGithub(isSystemAuto);
         syncEuAnnexIISilently(isSystemAuto);
@@ -723,30 +704,6 @@ public class RegulatoryCrawlerService {
         } catch (Exception e) {
             log.error("Failed to sync Japan regulations", e);
         }
-    }
-
-    private void saveOrUpdateRemarks(String inciName, String koreanName, String cas, String remarks) {
-        List<RegulatoryIngredient> existingList = repository.findByInciName(inciName);
-        RegulatoryIngredient ingredient;
-        if (existingList.isEmpty()) {
-            ingredient = RegulatoryIngredient.builder()
-                .inciName(inciName)
-                .koreanName(koreanName)
-                .sourceApi("MANUAL")
-                .build();
-        } else {
-            ingredient = existingList.get(0);
-        }
-
-        if (koreanName != null) ingredient.setKoreanName(koreanName);
-        if (cas != null && !cas.equals("null")) ingredient.setCasNumber(cas);
-        
-        if (remarks != null && !remarks.isEmpty()) {
-            ingredient.setRemarks(remarks);
-            parseAndSaveDetails(ingredient, remarks);
-        }
-
-        repository.save(ingredient);
     }
 
     private void parseAndSaveDetails(RegulatoryIngredient ingredient, String remarks) {

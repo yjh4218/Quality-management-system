@@ -8,14 +8,11 @@ import org.springframework.scheduling.annotation.Async;
 import com.example.ims.entity.Announcement;
 import com.example.ims.repository.BugReportRepository;
 
-import java.util.*;
-
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class EmailService {
 
-    private final SystemSettingService systemSettingService;
     private final BugReportRepository bugReportRepository;
     private final NotificationService notificationService;
     private final EmailSender emailSender;

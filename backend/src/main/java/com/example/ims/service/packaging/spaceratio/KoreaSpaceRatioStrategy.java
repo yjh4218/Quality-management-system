@@ -3,7 +3,6 @@ package com.example.ims.service.packaging.spaceratio;
 import com.example.ims.entity.Product;
 import com.example.ims.entity.PackagingComponent;
 import com.example.ims.entity.PackagingLayer;
-import com.example.ims.entity.ProductType;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -81,7 +80,6 @@ public class KoreaSpaceRatioStrategy implements PackagingSpaceRatioStrategy {
                 double targetContentVol = lastOuterVolume;
                 if (layer.getUsesCushioningMaterial() != null && layer.getUsesCushioningMaterial()) {
                     // 직육면체 각 변에 +5mm 가산 효과 적용 (부피 간이 가산 계산 반영)
-                    double factor = 1.0;
                     if (i > 0) {
                         PackagingLayer prevLayer = layers.get(i - 1);
                         double cushioningVol = (prevLayer.getOuterLengthMm() + 5.0) 

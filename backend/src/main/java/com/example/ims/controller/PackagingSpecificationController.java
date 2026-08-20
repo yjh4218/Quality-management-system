@@ -32,6 +32,8 @@ public class PackagingSpecificationController {
     private final ProductRepository productRepository;
     private final PackagingSpecExportService exportService;
     private final PackagingSpecService specService;
+    private final com.example.ims.repository.PackagingMethodImageRepository methodImageRepository;
+    private final com.example.ims.service.FileStorageService fileStorageService;
 
     @GetMapping("/product/{productId}")
     public ResponseEntity<List<PackagingSpecification>> getSpecsByProduct(@PathVariable Long productId) {
@@ -219,12 +221,6 @@ public class PackagingSpecificationController {
 
     // --- PackagingMethodImage REST APIs ---
 
-    @Autowired
-    private com.example.ims.repository.PackagingMethodImageRepository methodImageRepository;
-
-    @Autowired
-    private com.example.ims.service.FileStorageService fileStorageService;
-
     @GetMapping("/{specId}/method-images")
     public ResponseEntity<List<com.example.ims.entity.PackagingMethodImage>> getMethodImages(@PathVariable Long specId) {
         List<com.example.ims.entity.PackagingMethodImage> activeList = methodImageRepository.findActiveBySpecId(specId);
@@ -404,6 +400,27 @@ public class PackagingSpecificationController {
         return ResponseEntity.ok(copiedList);
     }
 
+    @PostMapping("/{targetSpecId}/method-images/copy-from-product/{sourceItemCode}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
+    public ResponseEntity<List<com.example.ims.entity.PackagingMethodImage>> copyFromProductItemCode(
+            @PathVariable Long targetSpecId,
+            @PathVariable String sourceItemCode) {
+        String currentUsername = "admin";
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+            currentUsername = auth.getName();
+        }
+        List<com.example.ims.entity.PackagingMethodImage> copiedList = specService.copyMethodImagesByItemCode(targetSpecId, sourceItemCode, currentUsername);
+        return ResponseEntity.ok(copiedList);
+    }
+
+    @PostMapping("/components/aggregate-bom")
+    public ResponseEntity<List<java.util.Map<String, Object>>> aggregateBom(
+            @RequestBody List<java.util.Map<String, Object>> components) {
+        List<java.util.Map<String, Object>> aggregated = specService.aggregateBomByComponents(components);
+        return ResponseEntity.ok(aggregated);
+    }
+
     @PostMapping("/method-images/{id}/restore")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
     public ResponseEntity<com.example.ims.entity.PackagingMethodImage> restoreMethodImage(@PathVariable Long id) {
@@ -423,6 +440,7 @@ public class PackagingSpecificationController {
             @RequestBody java.util.Map<String, String> payload) {
         String mode = payload.get("mode"); // "inbox" | "outbox" | "pallet"
         String base64Image = payload.get("imageBase64");
+        String viewConfig = payload.get("viewConfig");
         if (base64Image == null || base64Image.trim().isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
@@ -437,17 +455,29 @@ public class PackagingSpecificationController {
 
             if ("inbox".equals(mode)) {
                 spec.setInboxLayoutImage(fileUrl);
+                if (viewConfig != null && !viewConfig.isBlank()) {
+                    spec.setInboxViewConfig(viewConfig);
+                }
             } else if ("outbox".equals(mode)) {
                 spec.setOutboxLayoutImageFile(fileUrl);
                 spec.setOutboxLayoutImage(fileUrl);
+                if (viewConfig != null && !viewConfig.isBlank()) {
+                    spec.setOutboxViewConfig(viewConfig);
+                }
             } else { // pallet or pallet-cross or pallet-normal
                 spec.setPalletLayoutImage(fileUrl);
+                if (viewConfig != null && !viewConfig.isBlank()) {
+                    spec.setPalletViewConfig(viewConfig);
+                }
             }
             specRepository.save(spec);
 
             java.util.Map<String, String> response = new java.util.HashMap<>();
             response.put("imagePath", fileUrl);
             response.put("mode", mode);
+            if (viewConfig != null) {
+                response.put("viewConfig", viewConfig);
+            }
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Failed to save 3D snapshot", e);

@@ -13,7 +13,6 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -119,7 +118,7 @@ public class SmokeTest {
     @Test
     @WithMockUser(username = "admin", roles = {"ADMIN"})
     public void testDashboardDataLoadsSuccessfully() throws Exception {
-        com.example.ims.entity.Role adminRole = roleRepository.findByRoleKey("ROLE_ADMIN")
+        roleRepository.findByRoleKey("ROLE_ADMIN")
                 .orElseGet(() -> roleRepository.save(com.example.ims.entity.Role.builder()
                         .roleKey("ROLE_ADMIN")
                         .displayName("관리자")

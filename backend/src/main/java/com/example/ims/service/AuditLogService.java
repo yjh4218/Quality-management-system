@@ -222,12 +222,16 @@ public class AuditLogService {
                 if (snapshot.getManufacturerResponsePdf() == null) snapshot.setManufacturerResponsePdf(existing.getManufacturerResponsePdf());
                 claimRepository.save(snapshot);
             } else if ("WMS_INBOUND".equals(logEntry.getEntityType())) {
-                com.example.ims.entity.WmsInbound existing = wmsInboundRepository.findById(entityId).orElseThrow(() -> new RuntimeException("WMS Inbound not found"));
+                if (!wmsInboundRepository.existsById(entityId)) {
+                    throw new RuntimeException("WMS Inbound not found");
+                }
                 com.example.ims.entity.WmsInbound snapshot = objectMapper.readValue(json, com.example.ims.entity.WmsInbound.class);
                 snapshot.setId(entityId);
                 wmsInboundRepository.save(snapshot);
             } else if ("PRODUCTION_AUDIT".equals(logEntry.getEntityType())) {
-                com.example.ims.entity.ProductionAudit existing = productionAuditRepository.findById(entityId).orElseThrow(() -> new RuntimeException("Production Audit not found"));
+                if (!productionAuditRepository.existsById(entityId)) {
+                    throw new RuntimeException("Production Audit not found");
+                }
                 com.example.ims.entity.ProductionAudit snapshot = objectMapper.readValue(json, com.example.ims.entity.ProductionAudit.class);
                 snapshot.setId(entityId);
                 productionAuditRepository.save(snapshot);

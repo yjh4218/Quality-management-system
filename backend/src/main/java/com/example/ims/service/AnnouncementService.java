@@ -38,7 +38,6 @@ public class AnnouncementService {
     private final ManufacturerRepository manufacturerRepository;
     private final EmailService emailService;
     private final AnnouncementCategoryRepository announcementCategoryRepository;
-    private final com.example.ims.repository.NotificationSettingRepository notificationSettingRepository;
 
     /**
      * 모든 전체공지 목록 조회 (관리자 또는 공지 모니터링 관리 페이지용)

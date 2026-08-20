@@ -81,7 +81,7 @@ public class ResendEmailSender implements EmailSender {
 
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
 
-            ResponseEntity<Map> response = restTemplate.postForEntity(resendApiUrl, request, Map.class);
+            ResponseEntity<String> response = restTemplate.postForEntity(resendApiUrl, request, String.class);
 
             if (!response.getStatusCode().is2xxSuccessful()) {
                 throw new MailSendException("Resend API returned non-2xx status code: " + response.getStatusCode());

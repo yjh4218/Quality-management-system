@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
 import apiDefault, * as api from '../../api';
+import ProductSearchPopup from '../../ProductSearchPopup';
 
 /**
  * 주석 데이터(annotationsJson)가 포함된 이미지를 카드 위에 렌더링하는 소형 캔버스 컴포넌트
@@ -130,6 +131,40 @@ const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, onRegisterSav
     const [canvasColor, setCanvasColor] = useState('#ef4444');
     const [canvasTool, setCanvasTool] = useState('rect'); // 'rect', 'circle', 'text'
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+    const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
+
+    // 타 제품의 포장방법 사진 복사 핸들러
+    const handleCopyFromProduct = async (selectedProd) => {
+        if (!selectedProd || !selectedProd.itemCode) return;
+        setIsProductSearchOpen(false);
+
+        let activeSpecId = specIdRef.current || specId;
+        if (!activeSpecId && onEnsureSpecCreated) {
+            activeSpecId = await onEnsureSpecCreated();
+        }
+        if (!activeSpecId) {
+            toast.error('포장사양서를 먼저 생성해야 사진을 복사해 올 수 있습니다.');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const res = await api.copyPackagingMethodImagesFromProduct(activeSpecId, selectedProd.itemCode);
+            const copied = res.data;
+            const copiedList = Array.isArray(copied) ? copied : (copied?.data && Array.isArray(copied.data) ? copied.data : []);
+            if (copiedList.length > 0) {
+                toast.success(`[${selectedProd.itemCode}] 제품의 포장방법 사진 ${copiedList.length}장을 성공적으로 가져왔습니다.`);
+                await loadImages(activeSpecId);
+            } else {
+                toast.warning(`[${selectedProd.itemCode}] 제품에 등록된 포장방법 사진이 없습니다.`);
+            }
+        } catch (err) {
+            console.error('Failed to copy method images from product', err);
+            toast.error('포장방법 사진을 가져오는 중 오류가 발생했습니다.');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const canvasRef = useRef(null);
     const fabricCanvasRef = useRef(null);
@@ -583,20 +618,33 @@ const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, onRegisterSav
                         포장방법 사진을 등록해보세요
                     </h4>
                     <p style={{ margin: '0 0 24px 0', fontSize: '12px', color: '#64748b', lineHeight: '1.6' }}>
-                        * 사진 추가 후 ✏️ 주석 편집 및 3줄 캡션을 작성하고 [💾 저장하기]를 누르면 저장됩니다.<br />
+                        * 신규 직접 사진 업로드 또는 기존 등록된 타 제품의 포장방법 사진을 복사해 올 수 있습니다.<br />
                         (1장당 최대 10MB 제한 / 1회 최대 20장 / JPG, PNG, WEBP 포맷 지원)
                     </p>
                     
                     {canEdit && (
-                        <div style={{ display: 'inline-block', position: 'relative' }}>
-                            <button className="primary" style={{ background: '#003366', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 20px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}>
-                                ➕ 사진 추가하기
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'inline-block', position: 'relative' }}>
+                                <button className="primary" style={{ background: '#003366', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 20px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}>
+                                    ➕ 신규 사진 추가
+                                </button>
+                                <input 
+                                    type="file" multiple accept="image/jpeg,image/png,image/webp" 
+                                    onChange={handleFileChange}
+                                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
+                                />
+                            </div>
+                            <button 
+                                type="button" 
+                                onClick={() => setIsProductSearchOpen(true)}
+                                style={{ 
+                                    background: '#f8fafc', color: '#2563eb', border: '1.5px solid #93c5fd', 
+                                    borderRadius: '8px', padding: '10px 18px', fontWeight: 'bold', fontSize: '12px', 
+                                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' 
+                                }}
+                            >
+                                📋 타 제품 포장사진 복사
                             </button>
-                            <input 
-                                type="file" multiple accept="image/jpeg,image/png,image/webp" 
-                                onChange={handleFileChange}
-                                style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
-                            />
                         </div>
                     )}
                 </div>
@@ -605,16 +653,41 @@ const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, onRegisterSav
             {/* ── 이미지 목록 카드 그리드 (드래그 앤 드롭 순서 변경 지원) ── */}
             {images.length > 0 && (
                 <div style={{ marginBottom: '24px' }}>
-                    {canEdit && (
-                        <div style={{ marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f1f5f9', padding: '10px 16px', borderRadius: '10px', border: '1px solid #cbd5e1' }}>
-                            <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                🖐️ <strong>순서 변경:</strong> 카드를 마우스로 드래그 앤 드롭하여 배치하거나, ◀ ▶ 버튼으로 순서를 조정하세요.
-                            </span>
+                    <div style={{ marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f1f5f9', padding: '10px 16px', borderRadius: '10px', border: '1px solid #cbd5e1' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            🖐️ <strong>순서 변경:</strong> 카드를 마우스로 드래그 앤 드롭하여 배치하거나, ◀ ▶ 버튼으로 순서를 조정하세요.
+                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569' }}>
                                 총 {images.length}장 등록됨
                             </span>
+                            {canEdit && (
+                                <>
+                                    <div style={{ display: 'inline-block', position: 'relative' }}>
+                                        <button style={{ background: '#003366', color: '#fff', border: 'none', borderRadius: '6px', padding: '6px 12px', fontSize: '11.5px', fontWeight: 'bold', cursor: 'pointer' }}>
+                                            ➕ 사진 추가
+                                        </button>
+                                        <input 
+                                            type="file" multiple accept="image/jpeg,image/png,image/webp" 
+                                            onChange={handleFileChange}
+                                            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
+                                        />
+                                    </div>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setIsProductSearchOpen(true)}
+                                        style={{ 
+                                            background: '#fff', color: '#2563eb', border: '1px solid #93c5fd', 
+                                            borderRadius: '6px', padding: '6px 12px', fontSize: '11.5px', fontWeight: 'bold', 
+                                            cursor: 'pointer' 
+                                        }}
+                                    >
+                                        📋 타 제품 사진 복사
+                                    </button>
+                                </>
+                            )}
                         </div>
-                    )}
+                    </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '20px' }}>
                         {images.map((img, idx) => {
@@ -834,6 +907,16 @@ const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, onRegisterSav
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* 타 제품 포장사진 복사용 제품 검색 팝업 */}
+            {isProductSearchOpen && (
+                <ProductSearchPopup 
+                    isOpen={isProductSearchOpen}
+                    onClose={() => setIsProductSearchOpen(false)}
+                    onSelectProduct={handleCopyFromProduct}
+                    title="📋 포장방법 사진을 복사해 올 제품 검색"
+                />
             )}
         </div>
     );

@@ -4,7 +4,7 @@ import com.example.ims.entity.Product;
 import com.example.ims.entity.ProductTestReport;
 import com.example.ims.repository.ProductRepository;
 import com.example.ims.repository.ProductTestReportRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -15,13 +15,11 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/products")
+@RequiredArgsConstructor
 public class ProductTestReportController {
 
-    @Autowired
-    private ProductTestReportRepository testReportRepository;
-
-    @Autowired
-    private ProductRepository productRepository;
+    private final ProductTestReportRepository testReportRepository;
+    private final ProductRepository productRepository;
 
     @GetMapping("/{id}/test-reports")
     public ResponseEntity<List<ProductTestReport>> getTestReports(@PathVariable Long id) {

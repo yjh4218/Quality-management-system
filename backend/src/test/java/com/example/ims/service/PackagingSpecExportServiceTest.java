@@ -20,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.ByteArrayInputStream;
 import java.util.Collections;
+import java.util.Arrays;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -93,6 +94,142 @@ public class PackagingSpecExportServiceTest {
             Sheet sheet0 = wb.getSheet("포장사양서");
             assertNotNull(sheet0);
             assertEquals("📦 제품 포장 사양서 (Packaging Specification)", sheet0.getRow(0).getCell(0).getStringCellValue());
+
+            // 1. Sheet 0 열 너비 검증
+            assertEquals(4800, sheet0.getColumnWidth(0));
+            assertEquals(10500, sheet0.getColumnWidth(1));
+            assertEquals(4800, sheet0.getColumnWidth(2));
+            assertEquals(10500, sheet0.getColumnWidth(3));
+
+            // 2. Sheet 0 행 높이 및 텍스트 검증
+            // Row 5: 국문/영문 제품명 행 (42pt)
+            assertEquals(42.0f, sheet0.getRow(5).getHeightInPoints());
+            assertEquals("닥터지 레드 블레미쉬 클리어 수딩 크림 70ml", sheet0.getRow(5).getCell(1).getStringCellValue());
+
+            // 포장방법 셀 및 착인기준 3줄 행 탐색 및 검증
+            boolean foundPackageImageSection = false;
+            boolean foundMarkingRow = false;
+            boolean foundMethodRow = false;
+            boolean foundLayout3DRow = false;
+
+            for (int r = 0; r <= sheet0.getLastRowNum(); r++) {
+                org.apache.poi.ss.usermodel.Row row = sheet0.getRow(r);
+                if (row == null) continue;
+                org.apache.poi.ss.usermodel.Cell c0 = row.getCell(0);
+                if (c0 != null) {
+                    String val = c0.getStringCellValue();
+                    if (val.contains("제품 및 패키지 실물 이미지")) {
+                        foundPackageImageSection = true;
+                    } else if (val.contains("용기 착인기준(3줄)")) {
+                        foundMarkingRow = true;
+                        assertEquals(60.0f, row.getHeightInPoints(), "3줄 착인기준 행 높이는 60pt여야 함");
+                    } else if (val.contains("포장방법 (서술)")) {
+                        foundMethodRow = true;
+                        assertEquals(64.0f, row.getHeightInPoints(), "포장방법 서술 행 높이는 64pt여야 함");
+                        org.apache.poi.ss.usermodel.Cell c1 = row.getCell(1);
+                        assertNotNull(c1);
+                        assertTrue(c1.getStringCellValue().contains("포장방법 사진 참조"), "포장방법에는 '포장방법 사진 참조'가 포함되어야 함");
+                    } else if (val.contains("인박스 3D 입수 도면")) {
+                        // 바로 다음 행이 3D 도면 이미지 행
+                        org.apache.poi.ss.usermodel.Row imgRow = sheet0.getRow(r + 1);
+                        assertNotNull(imgRow);
+                        assertEquals(190.0f, imgRow.getHeightInPoints(), "3D 도면 이미지 행 높이는 190pt여야 함");
+                        foundLayout3DRow = true;
+                    }
+                }
+            }
+
+            assertTrue(foundPackageImageSection, "3-1. 제품 및 패키지 실물 이미지 섹션이 존재해야 함");
+            assertTrue(foundMarkingRow, "3줄 착인기준 행이 존재해야 함");
+            assertTrue(foundMethodRow, "포장방법 서술 행이 존재해야 함");
+            assertTrue(foundLayout3DRow, "3D 도면 행이 존재해야 함");
+
+            // 3. Sheet 1 (포장방법 사진) 검증
+            Sheet sheet1 = wb.getSheet("포장방법 사진");
+            assertNotNull(sheet1);
+            assertEquals(15000, sheet1.getColumnWidth(1));
+
+            // 4. Sheet 2, 3, 4 (현품표) 검증
+            Sheet sheet2 = wb.getSheet("인박스 현품표");
+            assertNotNull(sheet2);
+            assertEquals(6500, sheet2.getColumnWidth(0));
+            assertEquals(11000, sheet2.getColumnWidth(1));
+            assertEquals(70.0f, sheet2.getRow(5).getHeightInPoints(), "인박스 현품표 착인기준 행 높이는 70pt여야 함");
+
+            Sheet sheet3 = wb.getSheet("아웃박스 현품표");
+            assertNotNull(sheet3);
+            assertEquals(70.0f, sheet3.getRow(6).getHeightInPoints(), "아웃박스 현품표 착인기준 행 높이는 70pt여야 함");
+
+            Sheet sheet4 = wb.getSheet("팔레트 현품표");
+            assertNotNull(sheet4);
+            assertEquals(70.0f, sheet4.getRow(6).getHeightInPoints(), "팔레트 현품표 착인기준 행 높이는 70pt여야 함");
+
+            // 파일로 저장하여 후속 아티팩트 점검에 활용
+            java.io.File outF = new java.io.File("C:/Users/admin/.gemini/antigravity-ide/brain/fde2fb7a-2f33-484a-8020-ae23e360b711/scratch/verified_packaging_spec.xlsx");
+            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(outF)) {
+                fos.write(excelBytes);
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("제품 이미지 관리의 다중 패키지 이미지가 사양서 시트 3-1 섹션에 정상 렌더링되어야 한다")
+    void testGenerateExcelWithMultiPackageImages() throws Exception {
+        Long productId = 200L;
+        Product product = Product.builder()
+                .id(productId)
+                .itemCode("PRD-PKG-002")
+                .productName("다중 패키지 크림 50ml")
+                .englishProductName("Multi Package Cream 50ml")
+                .imagePath("uploads/rep_package.png")
+                .imagePaths(Arrays.asList("uploads/pkg1.png", "uploads/pkg2.png", "uploads/pkg3.png"))
+                .build();
+
+        PackagingSpecification spec = PackagingSpecification.builder()
+                .id(2L)
+                .product(product)
+                .version(1)
+                .inboxUseYn("O")
+                .inboxQty(6)
+                .outboxQty(36)
+                .build();
+
+        when(productRepository.findById(productId)).thenReturn(Optional.of(product));
+        when(specRepository.findByProductId(productId)).thenReturn(Collections.singletonList(spec));
+
+        byte[] excelBytes = exportService.generateExcel(productId);
+        assertNotNull(excelBytes);
+
+        try (Workbook wb = new XSSFWorkbook(new ByteArrayInputStream(excelBytes))) {
+            Sheet sheet0 = wb.getSheet("포장사양서");
+            assertNotNull(sheet0);
+
+            boolean foundPackageImageHeader = false;
+            boolean foundImageLabels = false;
+
+            for (int r = 0; r <= sheet0.getLastRowNum(); r++) {
+                org.apache.poi.ss.usermodel.Row row = sheet0.getRow(r);
+                if (row == null) continue;
+                org.apache.poi.ss.usermodel.Cell c0 = row.getCell(0);
+                if (c0 != null) {
+                    String val = c0.getStringCellValue();
+                    if (val.contains("3-1. 🖼️ 제품 및 패키지 실물 이미지")) {
+                        foundPackageImageHeader = true;
+                    } else if (val.contains("📷 패키지 이미지 #1")) {
+                        foundImageLabels = true;
+                        // 다음 행은 이미지 행 (높이 180pt)
+                        org.apache.poi.ss.usermodel.Row imgRow = sheet0.getRow(r + 1);
+                        assertNotNull(imgRow);
+                        assertEquals(180.0f, imgRow.getHeightInPoints(), "패키지 이미지 행 높이는 180pt여야 함");
+                    }
+                }
+            }
+
+            assertTrue(foundPackageImageHeader, "3-1 섹션 헤더가 존재해야 함");
+            assertTrue(foundImageLabels, "패키지 이미지 라벨 및 180pt 행이 존재해야 함");
+
+            // 워크북에 등록된 전체 이미지 리스트 검증 (3D 이미지 3개 + 바코드 2개 등 기본 포함)
+            assertTrue(wb.getAllPictures().size() >= 4, "사양서 엑셀 내에 3D 및 바코드 이미지가 포함되어야 함");
         }
     }
 }

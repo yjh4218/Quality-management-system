@@ -833,11 +833,8 @@ public class ProductService {
     }
 
     /**
-     * [성능 최적화] 엔티티를 DTO로 안전하게 변환합니다. 
-     * @deprecated 이제 Repository 레벨에서 직접 Project를 수행하므로 사용하지 않습니다.
+     * 감사 로그나 부가 트리거 없이 제품 엔티티를 조용히 업데이트합니다.
      */
-    
-
     @Transactional
     public void updateProductSilently(Product product) {
         productRepository.save(product);

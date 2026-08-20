@@ -33,8 +33,6 @@ public class ClaimService {
     private final EmailService emailService;
     private final com.example.ims.repository.ManufacturerRepository manufacturerRepository;
     private final MailTemplateService mailTemplateService;
-    private final NotificationService notificationService;
-    private final com.example.ims.repository.NotificationSettingRepository notificationSettingRepository;
 
     @Transactional(readOnly = true)
     public List<Claim> getClaims(String role, String companyName) {
@@ -395,10 +393,6 @@ public class ClaimService {
             updatedData.setSharedWithManufacturer(existing.isSharedWithManufacturer());
             updatedData.setTerminationDate(existing.getTerminationDate());
         }
-        
-        // 제조사가 이전에 대책서(원인분석/재발방지대책)를 제출했었는지 여부 백업
-        boolean wasMfrSubmitted = (existing.getMfrRootCauseAnalysis() != null && !existing.getMfrRootCauseAnalysis().isEmpty())
-                               || (existing.getMfrPreventativeAction() != null && !existing.getMfrPreventativeAction().isEmpty());
         
         // 제조사 기입 내용 수정 변경 여부 체크
         boolean mfrFieldsChanged = false;

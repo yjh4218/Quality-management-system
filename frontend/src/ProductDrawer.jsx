@@ -193,7 +193,6 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
     const [specSubTab, setSpecSubTab] = useState('sheet1');
 
-    // 3D 입수 및 팔레트 적재 시뮬레이션 상태
     const [sim3DTab, setSim3DTab] = useState('outbox'); // 'inbox' | 'outbox' | 'pallet'
     const [pallet3DMode, setPallet3DMode] = useState('pallet-cross'); // 'pallet-cross' | 'pallet-normal'
     const [selectedOutboxArrangement, setSelectedOutboxArrangement] = useState(null);
@@ -203,6 +202,9 @@ const ProductDrawer = ({ product, onClose, user }) => {
     const [customArrangementValidation, setCustomArrangementValidation] = useState(null);
     const [palletCategoryTab, setPalletCategoryTab] = useState('all'); // 'all' | 'pinwheel' | 'grid' | 'brick'
     const [specBaselineInboxUseYn, setSpecBaselineInboxUseYn] = useState(null);
+    const viewer3DRef = useRef(null);
+    const [snapshotUploading, setSnapshotUploading] = useState(false);
+    const [confirmDialogState, setConfirmDialogState] = useState(null); // { icon, title, message, asIs, toBe, onConfirm }
 
     useEffect(() => {
         if (product) {
@@ -708,6 +710,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
             ...prev,
             palletTypeStr: channel.palletType || prev.palletTypeStr,
             palletSpec: channel.palletSpec || prev.palletSpec,
+            palletSize: channel.palletSpec || prev.palletSize,
             palletHeightLimit: maxStack || prev.palletHeightLimit,
             onePalletHeight: maxStack || prev.onePalletHeight,
             containerMarkingExpiryFormat: channel.expDateFormat || prev.containerMarkingExpiryFormat,
@@ -762,9 +765,39 @@ const ProductDrawer = ({ product, onClose, user }) => {
             const specToSave = { ...currentSpec };
             delete specToSave.methodImages;
 
-            const dynamicPalletWt = calcPalletWeight(currentSpec, formData);
+            // 3D 시뮬레이션 사양 자동 확정 연동 (미저장 패턴 자동 채움)
+            if (!specToSave.outboxPackingPattern && selectedOutboxArrangement) {
+                specToSave.outboxPackingPattern = specToSave.inboxUseYn === 'O'
+                    ? `${selectedOutboxArrangement.cols}열×${selectedOutboxArrangement.rows}행×${selectedOutboxArrangement.layers}단 (인박스 ${selectedOutboxArrangement.qty}박스입)`
+                    : `${selectedOutboxArrangement.cols}열×${selectedOutboxArrangement.rows}행×${selectedOutboxArrangement.layers}단 (${selectedOutboxArrangement.qty}개입)`;
+            }
+            if (!specToSave.inboxPackingPattern && selectedInboxArrangement) {
+                specToSave.inboxPackingPattern = `${selectedInboxArrangement.cols}열×${selectedInboxArrangement.rows}행×${selectedInboxArrangement.layers}단 (${selectedInboxArrangement.qty}개입)`;
+            }
+            if (!specToSave.palletStackingPattern && selectedPalletPattern) {
+                specToSave.palletStackingPattern = `${selectedPalletPattern.name} (${pallet3DMode === 'pallet-cross' ? '교차적재' : '일반적재'})`;
+            }
+            if (!specToSave.palletTierQty && selectedPalletPattern?.count) {
+                specToSave.palletTierQty = selectedPalletPattern.count;
+            }
+            if (specToSave.palletTierQty && specToSave.palletTierCount && !specToSave.palletTotalOutboxQty) {
+                specToSave.palletTotalOutboxQty = parseInt(specToSave.palletTierQty) * parseInt(specToSave.palletTierCount);
+            }
+
+            const dynamicPalletWt = calcPalletWeight(specToSave, formData);
             if (dynamicPalletWt) {
                 specToSave.onePalletWeight = dynamicPalletWt;
+            }
+
+            // 현재 활성화된 3D 뷰어의 회전/확대 시점 정보 동기화
+            if (viewer3DRef.current?.getViewConfig) {
+                const curCfg = viewer3DRef.current.getViewConfig();
+                if (curCfg) {
+                    const cfgStr = JSON.stringify(curCfg);
+                    if (sim3DTab === 'inbox') specToSave.inboxViewConfig = cfgStr;
+                    else if (sim3DTab === 'outbox') specToSave.outboxViewConfig = cfgStr;
+                    else specToSave.palletViewConfig = cfgStr;
+                }
             }
 
             const payload = {
@@ -818,6 +851,23 @@ const ProductDrawer = ({ product, onClose, user }) => {
         setSpecRevisions(updated);
     };
 
+    // ── 3D 입수 규격 파싱 및 포맷팅 유틸 ──
+    const parseArrangementPattern = (str) => {
+        if (!str || typeof str !== 'string') return null;
+        const clean = str.trim().replace(/\s+/g, '');
+        const match = clean.match(/(\d+)(?:열|[xX*×/])(\d+)(?:행|[xX*×/])?(\d+)?(?:단)?/);
+        if (match) {
+            const cols = parseInt(match[1], 10) || 1;
+            const rows = parseInt(match[2], 10) || 1;
+            const layers = match[3] ? (parseInt(match[3], 10) || 1) : 1;
+            return { cols, rows, layers, qty: cols * rows * layers };
+        }
+        const parts = clean.split(/[xX*×/]/).map(s => parseInt(s.replace(/\D/g, ''), 10)).filter(n => !isNaN(n) && n > 0);
+        if (parts.length === 2) return { cols: parts[0], rows: parts[1], layers: 1, qty: parts[0] * parts[1] };
+        if (parts.length >= 3) return { cols: parts[0], rows: parts[1], layers: parts[2], qty: parts[0] * parts[1] * parts[2] };
+        return null;
+    };
+
     // ── 3D 치수 파싱 및 스냅샷 유틸 ──
     const get3DUnitBoxDims = () => {
         let w = parseFloat(formData.dimensions?.width) || 0;
@@ -836,7 +886,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
     const get3DOutboxDims = () => {
         const str = currentSpec.outboxSize || (formData.outboxInfo?.outboxLength && `${formData.outboxInfo.outboxLength}x${formData.outboxInfo.outboxWidth}x${formData.outboxInfo.outboxHeight}`);
         if (str) {
-            const parts = String(str).toLowerCase().replace(/mm/g, '').split(/[x*×]/).map(s => parseFloat(s.trim())).filter(n => !isNaN(n) && n > 0);
+            const parts = String(str).toLowerCase().replace(/mm/g, '').replace(/,/g, '').split(/[x*×]/).map(s => parseFloat(s.trim())).filter(n => !isNaN(n) && n > 0);
             if (parts.length >= 3) return { w: parts[0], d: parts[1], h: parts[2] };
         }
         return { w: 300, d: 200, h: 150 };
@@ -845,43 +895,441 @@ const ProductDrawer = ({ product, onClose, user }) => {
     const get3DInboxDims = () => {
         const str = currentSpec.inboxSize || (formData.inboxInfo?.inboxLength && `${formData.inboxInfo.inboxLength}x${formData.inboxInfo.inboxWidth}x${formData.inboxInfo.inboxHeight}`);
         if (str) {
-            const parts = String(str).toLowerCase().replace(/mm/g, '').split(/[x*×]/).map(s => parseFloat(s.trim())).filter(n => !isNaN(n) && n > 0);
+            const parts = String(str).toLowerCase().replace(/mm/g, '').replace(/,/g, '').split(/[x*×]/).map(s => parseFloat(s.trim())).filter(n => !isNaN(n) && n > 0);
             if (parts.length >= 3) return { w: parts[0], d: parts[1], h: parts[2] };
         }
         return { w: 150, d: 100, h: 145 };
     };
 
     const get3DPalletDims = () => {
-        const str = currentSpec.palletSize || (formData.palletInfo?.palletLength && `${formData.palletInfo.palletLength}x${formData.palletInfo.palletWidth}`);
+        const str = currentSpec.palletSpec || currentSpec.palletSize || formData?.channels?.[0]?.palletSpec || (formData.palletInfo?.palletLength && `${formData.palletInfo.palletLength}x${formData.palletInfo.palletWidth}`);
         if (str) {
-            const parts = String(str).toLowerCase().replace(/mm/g, '').split(/[x*×]/).map(s => parseFloat(s.trim())).filter(n => !isNaN(n) && n > 0);
-            if (parts.length >= 2) return { w: parts[0], d: parts[1] };
+            const match = String(str).match(/(\d{1,4}(?:,\d{3})*|\d{3,4})\s*[*xX×/]\s*(\d{1,4}(?:,\d{3})*|\d{3,4})/);
+            if (match) {
+                const w = parseFloat(match[1].replace(/,/g, ''));
+                const d = parseFloat(match[2].replace(/,/g, ''));
+                if (w > 300 && d > 300) return { w, d };
+            }
         }
         return { w: 1100, d: 1100 };
     };
 
+    const formatPalletTypeDisplay = () => {
+        const spec = currentSpec.palletSpec || currentSpec.palletSize || formData?.channels?.[0]?.palletSpec;
+        const type = currentSpec.palletTypeStr || formData?.channels?.[0]?.palletType || formData.palletInfo?.palletType;
+        if (spec) {
+            if (type && !spec.includes(type) && !spec.includes('(')) {
+                return `${type} (${spec})`;
+            }
+            return spec;
+        }
+        if (type) {
+            const dim = (formData.palletInfo?.palletLength && `${formData.palletInfo.palletLength}×${formData.palletInfo.palletWidth}mm`) || '';
+            return dim ? `${type} (${dim})` : type;
+        }
+        return '';
+    };
+
+    const handleUpdateInboxDimensions = (dimKey, rawVal) => {
+        const val = rawVal === '' ? '' : Math.max(1, parseInt(rawVal, 10) || 1);
+        setCurrentSpec(prev => {
+            const curParsed = parseArrangementPattern(prev.inboxPackingPattern) || { cols: 1, rows: 1, layers: 1 };
+            const cols = dimKey === 'cols' ? val : (prev.inboxPackingCols !== undefined && prev.inboxPackingCols !== '' ? prev.inboxPackingCols : curParsed.cols);
+            const rows = dimKey === 'rows' ? val : (prev.inboxPackingRows !== undefined && prev.inboxPackingRows !== '' ? prev.inboxPackingRows : curParsed.rows);
+            const layers = dimKey === 'layers' ? val : (prev.inboxPackingLayers !== undefined && prev.inboxPackingLayers !== '' ? prev.inboxPackingLayers : curParsed.layers);
+
+            const updated = {
+                ...prev,
+                inboxPackingCols: cols,
+                inboxPackingRows: rows,
+                inboxPackingLayers: layers
+            };
+
+            if (cols && rows && layers) {
+                const numCols = parseInt(cols, 10);
+                const numRows = parseInt(rows, 10);
+                const numLayers = parseInt(layers, 10);
+                const inQ = numCols * numRows * numLayers;
+                const patternStr = `${numCols}열×${numRows}행×${numLayers}단 (${inQ}개입)`;
+                updated.inboxPackingPattern = patternStr;
+                updated.inboxQty = inQ;
+                setSelectedInboxArrangement({ cols: numCols, rows: numRows, layers: numLayers, qty: inQ });
+
+                let obInQ = parseInt(prev.outboxInboxQty || 0);
+                if (obInQ <= 0) {
+                    obInQ = 1;
+                    updated.outboxInboxQty = 1;
+                }
+                const tQty = parseInt(prev.palletTierQty || 0);
+                const tCount = parseInt(prev.palletTierCount || 0);
+                const totalOutboxes = (tQty * tCount) || parseInt(prev.palletTotalOutboxQty || 0) || 0;
+                const totalQ = inQ * obInQ;
+                updated.outboxTotalQty = totalQ;
+                updated.outboxQty = totalQ;
+                updated.palletTotalProductQty = totalOutboxes * totalQ;
+                updated.onePalletWeight = calcPalletWeight(updated, formData);
+            }
+            return updated;
+        });
+    };
+
+    const handleUpdateOutboxDimensions = (dimKey, rawVal, hasInbox) => {
+        const val = rawVal === '' ? '' : Math.max(1, parseInt(rawVal, 10) || 1);
+        setCurrentSpec(prev => {
+            const curParsed = parseArrangementPattern(prev.outboxPackingPattern) || { cols: 1, rows: 1, layers: 1 };
+            const cols = dimKey === 'cols' ? val : (prev.outboxPackingCols !== undefined && prev.outboxPackingCols !== '' ? prev.outboxPackingCols : curParsed.cols);
+            const rows = dimKey === 'rows' ? val : (prev.outboxPackingRows !== undefined && prev.outboxPackingRows !== '' ? prev.outboxPackingRows : curParsed.rows);
+            const layers = dimKey === 'layers' ? val : (prev.outboxPackingLayers !== undefined && prev.outboxPackingLayers !== '' ? prev.outboxPackingLayers : curParsed.layers);
+
+            const updated = {
+                ...prev,
+                outboxPackingCols: cols,
+                outboxPackingRows: rows,
+                outboxPackingLayers: layers
+            };
+
+            if (cols && rows && layers) {
+                const numCols = parseInt(cols, 10);
+                const numRows = parseInt(rows, 10);
+                const numLayers = parseInt(layers, 10);
+                const optQty = numCols * numRows * numLayers;
+                setSelectedOutboxArrangement({ cols: numCols, rows: numRows, layers: numLayers, qty: optQty });
+
+                const tQty = parseInt(prev.palletTierQty || 0);
+                const tCount = parseInt(prev.palletTierCount || 0);
+                const totalOutboxes = (tQty * tCount) || parseInt(prev.palletTotalOutboxQty || 0) || 0;
+
+                if (hasInbox) {
+                    let inQ = parseInt(prev.inboxQty || 0);
+                    if (inQ <= 0) {
+                        inQ = 1;
+                        updated.inboxQty = 1;
+                    }
+                    const totalQ = inQ * optQty;
+                    updated.outboxInboxQty = optQty;
+                    updated.outboxPackingPattern = `${numCols}열×${numRows}행×${numLayers}단 (인박스 ${optQty}박스입, 총 ${totalQ}개)`;
+                    updated.outboxTotalQty = totalQ;
+                    updated.outboxQty = totalQ;
+                    updated.palletTotalProductQty = totalOutboxes * totalQ;
+                } else {
+                    updated.outboxPackingPattern = `${numCols}열×${numRows}행×${numLayers}단 (${optQty}개입)`;
+                    updated.outboxQty = optQty;
+                    updated.outboxTotalQty = optQty;
+                    updated.palletTotalProductQty = totalOutboxes * optQty;
+                }
+                updated.onePalletWeight = calcPalletWeight(updated, formData);
+            }
+            return updated;
+        });
+    };
+
     const handleSave3DSnapshot = async (dataUrl, mode) => {
         if (!currentSpec?.id) {
-            toast.warn("사양서를 먼저 한 번 저장한 후 3D 이미지를 저장할 수 있습니다.");
+            toast.warn("사양서를 먼저 한 번 저장한 후 3D 도면을 확정할 수 있습니다.");
             return;
         }
         try {
+            setSnapshotUploading(true);
             const normalizedMode = mode.startsWith('pallet') ? 'pallet' : mode;
-            const res = await api.uploadPackagingSpec3DSnapshot(currentSpec.id, normalizedMode, dataUrl);
+            const viewConfig = viewer3DRef.current?.getViewConfig?.();
+            const viewConfigStr = viewConfig ? JSON.stringify(viewConfig) : null;
+
+            const res = await api.uploadPackagingSpec3DSnapshot(currentSpec.id, normalizedMode, dataUrl, viewConfigStr);
             const savedPath = res.data?.imagePath;
             if (savedPath) {
                 if (normalizedMode === 'inbox') {
-                    setCurrentSpec(prev => ({ ...prev, inboxLayoutImage: savedPath }));
+                    setCurrentSpec(prev => ({ 
+                        ...prev, 
+                        inboxLayoutImage: savedPath,
+                        inboxViewConfig: viewConfigStr || prev.inboxViewConfig
+                    }));
                 } else if (normalizedMode === 'outbox') {
-                    setCurrentSpec(prev => ({ ...prev, outboxLayoutImageFile: savedPath, outboxLayoutImage: savedPath }));
+                    setCurrentSpec(prev => ({ 
+                        ...prev, 
+                        outboxLayoutImageFile: savedPath, 
+                        outboxLayoutImage: savedPath,
+                        outboxViewConfig: viewConfigStr || prev.outboxViewConfig
+                    }));
                 } else {
-                    setCurrentSpec(prev => ({ ...prev, palletLayoutImage: savedPath }));
+                    setCurrentSpec(prev => ({ 
+                        ...prev, 
+                        palletLayoutImage: savedPath,
+                        palletViewConfig: viewConfigStr || prev.palletViewConfig
+                    }));
                 }
-                toast.success(`📸 ${normalizedMode === 'inbox' ? '인박스' : normalizedMode === 'outbox' ? '아웃박스' : '팔레트'} 3D 스냅샷이 저장되었습니다! (엑셀 출력 반영)`);
+                toast.success(`📸 ${normalizedMode === 'inbox' ? '인박스' : normalizedMode === 'outbox' ? '아웃박스' : '팔레트'} 3D 도면이 확정 저장되었습니다! (엑셀 출력 100% 반영)`);
             }
         } catch (err) {
-            toast.error("3D 스냅샷 저장 중 오류가 발생했습니다.");
+            toast.error("3D 도면 저장 중 오류가 발생했습니다.");
             console.error(err);
+        } finally {
+            setSnapshotUploading(false);
+        }
+    };
+
+    const handleCaptureCurrent3D = (mode) => {
+        const curConfirmedImage = mode === 'inbox' 
+            ? currentSpec.inboxLayoutImage 
+            : (mode === 'outbox' ? (currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) : currentSpec.palletLayoutImage);
+
+        const doCapture = () => {
+            if (!viewer3DRef.current?.capture) {
+                toast.warn("3D 뷰어가 아직 준비되지 않았습니다.");
+                return;
+            }
+            try {
+                viewer3DRef.current.capture();
+            } catch (e) {
+                console.error(e);
+                toast.error("3D 스냅샷 캡처 중 오류가 발생했습니다.");
+            }
+        };
+
+        if (curConfirmedImage) {
+            setConfirmDialogState({
+                icon: '📸',
+                title: '확정 도면 수정 확인',
+                message: '이미 확정된 3D 도면이 존재합니다.\n현재 3D 화면으로 정말 수정하시겠습니까?',
+                onConfirm: doCapture
+            });
+        } else {
+            doCapture();
+        }
+    };
+
+    const handleDirectImageUpload = async (file, mode) => {
+        if (!file) return;
+        const curConfirmedImage = mode === 'inbox' 
+            ? currentSpec.inboxLayoutImage 
+            : (mode === 'outbox' ? (currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) : currentSpec.palletLayoutImage);
+
+        const doUpload = async () => {
+            if (!currentSpec?.id) {
+                toast.warn("사양서를 먼저 한 번 저장한 후 도면 이미지를 등록할 수 있습니다.");
+                return;
+            }
+            try {
+                setSnapshotUploading(true);
+                const uploadRes = await uploadFile(file, formData.productName || 'pkg-spec');
+                const fileUrl = uploadRes.data?.fileUrl || uploadRes.data?.url || uploadRes.data;
+                if (fileUrl) {
+                    const normalizedMode = mode.startsWith('pallet') ? 'pallet' : mode;
+                    if (normalizedMode === 'inbox') {
+                        setCurrentSpec(prev => ({ ...prev, inboxLayoutImage: fileUrl }));
+                    } else if (normalizedMode === 'outbox') {
+                        setCurrentSpec(prev => ({ ...prev, outboxLayoutImageFile: fileUrl, outboxLayoutImage: fileUrl }));
+                    } else {
+                        setCurrentSpec(prev => ({ ...prev, palletLayoutImage: fileUrl }));
+                    }
+                    toast.success(`📁 ${normalizedMode === 'inbox' ? '인박스' : normalizedMode === 'outbox' ? '아웃박스' : '팔레트'} 도면 이미지가 등록되었습니다. (사양서 저장 필요)`);
+                }
+            } catch (err) {
+                console.error(err);
+                toast.error("도면 이미지 업로드에 실패했습니다.");
+            } finally {
+                setSnapshotUploading(false);
+            }
+        };
+
+        if (curConfirmedImage) {
+            setConfirmDialogState({
+                icon: '📁',
+                title: '확정 도면 변경 확인',
+                message: '이미 확정된 3D 도면이 존재합니다.\n새 파일로 정말 수정하시겠습니까?',
+                onConfirm: doUpload
+            });
+        } else {
+            doUpload();
+        }
+    };
+
+    const handleRemoveConfirmedImage = (mode) => {
+        setConfirmDialogState({
+            icon: '🔄',
+            title: '자동 모드 복원 확인',
+            message: '확정된 도면을 해제하고 자동 3D 모드로 정말 복원하시겠습니까?',
+            onConfirm: () => {
+                const normalizedMode = mode.startsWith('pallet') ? 'pallet' : mode;
+                if (normalizedMode === 'inbox') {
+                    setCurrentSpec(prev => ({ ...prev, inboxLayoutImage: null }));
+                } else if (normalizedMode === 'outbox') {
+                    setCurrentSpec(prev => ({ ...prev, outboxLayoutImageFile: null, outboxLayoutImage: null }));
+                } else {
+                    setCurrentSpec(prev => ({ ...prev, palletLayoutImage: null }));
+                }
+                toast.info(`🔄 ${normalizedMode === 'inbox' ? '인박스' : normalizedMode === 'outbox' ? '아웃박스' : '팔레트'} 도면이 자동 3D 모드로 복원되었습니다. (사양서 저장 시 적용)`);
+            }
+        });
+    };
+
+    const handleSelectInboxArrangementWithConfirm = (opt, curArrangement) => {
+        const toBe = `${opt.cols}열×${opt.rows}행×${opt.layers}단 (${opt.qty}개입)`;
+        const curPattern = currentSpec.inboxPackingPattern;
+        const asIs = curPattern || (curArrangement ? `${curArrangement.cols}열×${curArrangement.rows}행×${curArrangement.layers}단 (${curArrangement.qty}개입)` : null);
+
+        const uBox = get3DUnitBoxDims();
+        const iBox = get3DInboxDims();
+
+        const vToBe = validateInboxArrangement(uBox, iBox, opt, { w: 0, d: 0, h: 0 });
+        const toBeStatus = vToBe.status === 'ok' ? { label: '✓ 적합', bg: '#dcfce7', color: '#15803d', border: '#86efac' }
+            : (vToBe.status === 'warn' ? { label: '⚠️ 주의', bg: '#fef3c7', color: '#b45309', border: '#fde68a' }
+            : { label: '✕ 초과(부적합)', bg: '#fee2e2', color: '#b91c1c', border: '#fca5a5' });
+
+        let asIsStatus = { label: '✓ 적합', bg: '#dcfce7', color: '#15803d', border: '#86efac' };
+        if (curArrangement) {
+            const vAsIs = validateInboxArrangement(uBox, iBox, curArrangement, { w: 0, d: 0, h: 0 });
+            asIsStatus = vAsIs.status === 'ok' ? { label: '✓ 적합', bg: '#dcfce7', color: '#15803d', border: '#86efac' }
+                : (vAsIs.status === 'warn' ? { label: '⚠️ 주의', bg: '#fef3c7', color: '#b45309', border: '#fde68a' }
+                : { label: '✕ 초과(부적합)', bg: '#fee2e2', color: '#b91c1c', border: '#fca5a5' });
+        }
+
+        const applyOpt = () => {
+            setSelectedInboxArrangement(opt);
+            setCurrentSpec(prev => {
+                const updated = {
+                    ...prev,
+                    inboxPackingPattern: toBe,
+                    inboxPackingCols: opt.cols,
+                    inboxPackingRows: opt.rows,
+                    inboxPackingLayers: opt.layers,
+                    inboxQty: opt.qty
+                };
+                if (prev.outboxInboxQty) {
+                    updated.outboxTotalQty = opt.qty * parseInt(prev.outboxInboxQty);
+                    updated.outboxQty = updated.outboxTotalQty;
+                }
+                return updated;
+            });
+        };
+
+        if (asIs && asIs !== toBe && (curPattern || selectedInboxArrangement)) {
+            setConfirmDialogState({
+                icon: '📥',
+                title: '인박스 입수 규격 변경 확인',
+                message: '인박스 입수 규격을 변경하시겠습니까?',
+                asIs: asIs,
+                asIsStatus: asIsStatus,
+                toBe: toBe,
+                toBeStatus: toBeStatus,
+                onConfirm: applyOpt
+            });
+        } else {
+            applyOpt();
+        }
+    };
+
+    const handleSelectOutboxArrangementWithConfirm = (opt, curArrangement, hasInbox, inboxQty) => {
+        const toBe = hasInbox 
+            ? `${opt.cols}열×${opt.rows}행×${opt.layers}단 (인박스 ${opt.qty}박스입, 총 ${opt.qty * inboxQty}개)`
+            : `${opt.cols}열×${opt.rows}행×${opt.layers}단 (${opt.qty}개입)`;
+        
+        const curPattern = currentSpec.outboxPackingPattern;
+        const asIs = curPattern || (curArrangement ? (hasInbox ? `${curArrangement.cols}열×${curArrangement.rows}행×${curArrangement.layers}단 (인박스 ${curArrangement.qty}박스입)` : `${curArrangement.cols}열×${curArrangement.rows}행×${curArrangement.layers}단 (${curArrangement.qty}개입)`) : null);
+
+        const uBox = get3DUnitBoxDims();
+        const iBox = get3DInboxDims();
+        const oBox = get3DOutboxDims();
+        const outboxUnitBox = hasInbox ? iBox : uBox;
+        const outboxContainerBox = oBox;
+
+        const vToBe = validateArrangement(outboxUnitBox, outboxContainerBox, opt, { w: 0, d: 0, h: 0 });
+        const toBeStatus = vToBe.status === 'ok' ? { label: '✓ 적합', bg: '#dcfce7', color: '#15803d', border: '#86efac' }
+            : (vToBe.status === 'warn' ? { label: '⚠️ 주의', bg: '#fef3c7', color: '#b45309', border: '#fde68a' }
+            : { label: '✕ 초과(부적합)', bg: '#fee2e2', color: '#b91c1c', border: '#fca5a5' });
+
+        let asIsStatus = { label: '✓ 적합', bg: '#dcfce7', color: '#15803d', border: '#86efac' };
+        if (curArrangement) {
+            const vAsIs = validateArrangement(outboxUnitBox, outboxContainerBox, curArrangement, { w: 0, d: 0, h: 0 });
+            asIsStatus = vAsIs.status === 'ok' ? { label: '✓ 적합', bg: '#dcfce7', color: '#15803d', border: '#86efac' }
+                : (vAsIs.status === 'warn' ? { label: '⚠️ 주의', bg: '#fef3c7', color: '#b45309', border: '#fde68a' }
+                : { label: '✕ 초과(부적합)', bg: '#fee2e2', color: '#b91c1c', border: '#fca5a5' });
+        }
+
+        const applyOpt = () => {
+            setSelectedOutboxArrangement(opt);
+            setCurrentSpec(prev => {
+                const updated = {
+                    ...prev,
+                    outboxPackingPattern: toBe,
+                    outboxPackingCols: opt.cols,
+                    outboxPackingRows: opt.rows,
+                    outboxPackingLayers: opt.layers
+                };
+                if (hasInbox) {
+                    updated.outboxInboxQty = opt.qty;
+                    if (prev.inboxQty) {
+                        updated.outboxTotalQty = opt.qty * parseInt(prev.inboxQty);
+                        updated.outboxQty = updated.outboxTotalQty;
+                    }
+                } else {
+                    updated.outboxQty = opt.qty;
+                    updated.outboxTotalQty = opt.qty;
+                }
+                return updated;
+            });
+        };
+
+        if (asIs && asIs !== toBe && (curPattern || selectedOutboxArrangement)) {
+            setConfirmDialogState({
+                icon: '📦',
+                title: '아웃박스 입수 규격 변경 확인',
+                message: '아웃박스 입수 규격을 변경하시겠습니까?',
+                asIs: asIs,
+                asIsStatus: asIsStatus,
+                toBe: toBe,
+                toBeStatus: toBeStatus,
+                onConfirm: applyOpt
+            });
+        } else {
+            applyOpt();
+        }
+    };
+
+    const handleSelectPalletPatternWithConfirm = (pat, pallet3DMode, palletStacks, totalProductQty) => {
+        const totalBoxes = pat.count * palletStacks;
+        const totalProd = totalBoxes * totalProductQty;
+        const toBe = `${pat.name} (${pallet3DMode === 'pallet-cross' ? '교차적재' : '일반적재'})`;
+        const asIs = currentSpec.palletStackingPattern || null;
+
+        const toBeStatus = pat.status === 'ok' ? { label: pat.statusLabel || '✓ 적합', bg: '#dcfce7', color: '#15803d', border: '#86efac' }
+            : (pat.status === 'warn' ? { label: pat.statusLabel || '⚠️ 주의', bg: '#fef3c7', color: '#b45309', border: '#fde68a' }
+            : { label: pat.statusLabel || '✕ 돌출초과', bg: '#fee2e2', color: '#b91c1c', border: '#fca5a5' });
+
+        let asIsStatus = { label: '✓ 적합', bg: '#dcfce7', color: '#15803d', border: '#86efac' };
+        if (selectedPalletPattern) {
+            asIsStatus = selectedPalletPattern.status === 'ok' ? { label: selectedPalletPattern.statusLabel || '✓ 적합', bg: '#dcfce7', color: '#15803d', border: '#86efac' }
+                : (selectedPalletPattern.status === 'warn' ? { label: selectedPalletPattern.statusLabel || '⚠️ 주의', bg: '#fef3c7', color: '#b45309', border: '#fde68a' }
+                : { label: selectedPalletPattern.statusLabel || '✕ 돌출초과', bg: '#fee2e2', color: '#b91c1c', border: '#fca5a5' });
+        }
+
+        const applyPat = () => {
+            setSelectedPalletPattern(pat);
+            setCurrentSpec(prev => {
+                const updated = {
+                    ...prev,
+                    palletTierQty: pat.count,
+                    palletStackingPattern: toBe,
+                    palletTotalOutboxQty: totalBoxes,
+                    palletTotalProductQty: totalProd
+                };
+                updated.onePalletWeight = calcPalletWeight(updated, formData);
+                return updated;
+            });
+        };
+
+        if (asIs && asIs !== toBe && (currentSpec.palletStackingPattern || selectedPalletPattern)) {
+            setConfirmDialogState({
+                icon: '🏗️',
+                title: '팔레트 적재 패턴 변경 확인',
+                message: '팔레트 적재 패턴을 변경하시겠습니까?',
+                asIs: asIs,
+                asIsStatus: asIsStatus,
+                toBe: `${toBe} (1단 ${pat.count}박스)`,
+                toBeStatus: toBeStatus,
+                onConfirm: applyPat
+            });
+        } else {
+            applyPat();
         }
     };
 
@@ -1840,6 +2288,112 @@ const ProductDrawer = ({ product, onClose, user }) => {
         } catch (error) { toast.error("템플릿 로드 실패"); }
     };
 
+    // 유통채널 룰을 현재 사양서(currentSpec)에 즉시 매핑 적용하는 공통 함수
+    const applyChannelRulesToCurrentSpec = (channelToApply = null, isSetOverride = null) => {
+        const rawChan = channelToApply || (formData.channels && formData.channels.length > 0 ? formData.channels[0] : null);
+        if (!rawChan) {
+            toast.info("선택된 유통 채널이 없습니다.");
+            return;
+        }
+        const selectedChannel = salesChannels.find(c => String(c.id) === String(rawChan.id) || c.name === rawChan.name) || rawChan;
+        const isSet = isSetOverride !== null ? isSetOverride : !!(formData.isPlanningSet || formData.productType === '기획세트');
+
+        const uRule = isSet ? (selectedChannel.setUnitBoxMarkingRule || selectedChannel.unitBoxMarkingRule) : selectedChannel.unitBoxMarkingRule;
+        const iRule = isSet ? selectedChannel.setInboxLabelMarkingRule : selectedChannel.inboxLabelMarkingRule;
+        const oRule = isSet ? selectedChannel.setOutboxLabelMarkingRule : selectedChannel.outboxLabelMarkingRule;
+        const pRule = isSet ? selectedChannel.setPalletLabelMarkingRule : selectedChannel.palletLabelMarkingRule;
+        const expFormat = selectedChannel.expDateFormat ? `LOT(제조번호)\nEXP ${selectedChannel.expDateFormat}` : '';
+        const cleanAutoRule = uRule ? uRule.replace(/\[생산배치번호\]/g, 'LOT(제조번호)').replace(/생산배치번호/g, 'LOT(제조번호)') : '';
+        const autoMarkingText = cleanAutoRule
+            ? (selectedChannel.expDateFormat ? `${cleanAutoRule}\n(표기형식: ${selectedChannel.expDateFormat})` : cleanAutoRule)
+            : expFormat;
+
+        const stickerLabel = isSet && selectedChannel.setChannelStickerStandard
+            ? selectedChannel.setChannelStickerStandard
+            : (selectedChannel.channelStickerRequired ? `${selectedChannel.channelCode || selectedChannel.name} 스티커 부착` : '해당 없음');
+        const cushioningLabel = isSet && selectedChannel.setCushioningStandard
+            ? selectedChannel.setCushioningStandard
+            : (selectedChannel.cushioningStandard || '박스 상단 빈공간 비닐 에어캡 완충재 투입');
+        const popLabel = selectedChannel.popRequired
+            ? `${selectedChannel.channelCode || selectedChannel.name} POP 부착/동봉 필수`
+            : '해당 없음';
+        const maxStack = isSet && selectedChannel.setPalletHeightLimit
+            ? selectedChannel.setPalletHeightLimit
+            : (selectedChannel.maxStackHeightMm ? String(selectedChannel.maxStackHeightMm) : '');
+        const containerDisplay = isSet
+            ? (selectedChannel.setContainerMarkingDisplay || '인쇄')
+            : '인쇄';
+
+        if (selectedChannel.expDateFormat === '표기금지' || selectedChannel.name?.includes('JP/OFF')) {
+            setHideExpiryOnLabels(true);
+        }
+
+        setCurrentSpec(prev => ({
+            ...prev,
+            palletTypeStr: selectedChannel.palletType || prev.palletTypeStr || '',
+            palletSpec: selectedChannel.palletSpec || prev.palletSpec || '',
+            palletHeightLimit: maxStack || prev.palletHeightLimit || '',
+            onePalletHeight: maxStack || prev.onePalletHeight || '',
+            outboxChannelStickerStandard: stickerLabel,
+            outboxCushioningStandard: cushioningLabel,
+            popRequiredStandard: popLabel,
+            containerMarkingDisplay: containerDisplay,
+            unitBoxMarkingDisplay: containerDisplay,
+            unitBoxMarkingRule: uRule || prev.unitBoxMarkingRule || '',
+            inboxLabelMarkingRule: iRule || prev.inboxLabelMarkingRule || '',
+            outboxLabelMarkingRule: oRule || prev.outboxLabelMarkingRule || '',
+            palletLabelMarkingRule: pRule || prev.palletLabelMarkingRule || '',
+            inboxDateFormat: selectedChannel.inboxDateFormat || prev.inboxDateFormat || '',
+            outboxDateFormat: selectedChannel.outboxDateFormat || prev.outboxDateFormat || '',
+            palletDateFormat: selectedChannel.palletDateFormat || prev.palletDateFormat || '',
+            containerMarkingText: autoMarkingText || prev.containerMarkingText || '',
+            unitBoxMarkingText: autoMarkingText || prev.unitBoxMarkingText || ''
+        }));
+        toast.success(`[${selectedChannel.name}] ${isSet ? '기획세트' : '단품'} 유통채널 기준이 사양서에 반영되었습니다.`);
+    };
+
+    // 구성품 목록으로부터 BOM 정보를 백엔드에서 자동 취합하여 연동
+    const syncBomFromComponents = async (componentsList) => {
+        if (!componentsList || componentsList.length === 0) {
+            return;
+        }
+        try {
+            const res = await api.aggregateBomByComponents(componentsList);
+            const aggregatedBoms = res.data;
+            const bomList = Array.isArray(aggregatedBoms) ? aggregatedBoms : (aggregatedBoms?.data && Array.isArray(aggregatedBoms.data) ? aggregatedBoms.data : []);
+            
+            if (bomList.length > 0) {
+                setCurrentSpec(prev => ({
+                    ...prev,
+                    bomItems: bomList
+                }));
+                // 구성품들의 용량 및 중량 자동 합산 계산
+                let totalMl = 0;
+                let totalG = 0;
+                componentsList.forEach(c => {
+                    const qty = c.quantity || 1;
+                    const ml = parseFloat(String(c.capacity || '').replace(/[^0-9.]/g, ''));
+                    const g = parseFloat(String(c.weight || '').replace(/[^0-9.]/g, ''));
+                    if (!isNaN(ml)) totalMl += (ml * qty);
+                    if (!isNaN(g)) totalG += (g * qty);
+                });
+
+                if (totalMl > 0 || totalG > 0) {
+                    setFormData(prev => ({
+                        ...prev,
+                        capacity: totalMl > 0 ? String(totalMl) : prev.capacity,
+                        capacityFlOz: totalMl > 0 ? (totalMl * 0.033814).toFixed(2) : prev.capacityFlOz,
+                        weight: totalG > 0 ? String(totalG) : prev.weight,
+                        weightOz: totalG > 0 ? (totalG * 0.035274).toFixed(2) : prev.weightOz
+                    }));
+                }
+                toast.success(`구성품 ${componentsList.length}개의 포장사양서에서 BOM ${bomList.length}건이 자동 연동되었습니다.`);
+            }
+        } catch (err) {
+            console.error('Failed to aggregate BOM from components', err);
+        }
+    };
+
     const handleAddComponent = (p) => {
         const exists = formData.components.find(c => c.itemCode === p.itemCode);
         if (exists) {
@@ -1850,31 +2404,42 @@ const ProductDrawer = ({ product, onClose, user }) => {
         const capacity = p.capacity || '';
         const weight = p.weight || '';
 
+        const updatedComponents = [...formData.components, {
+            itemCode: p.itemCode,
+            productName: p.productName,
+            quantity: 1,
+            capacity: capacity,
+            weight: weight
+        }];
+
         setFormData(prev => ({
             ...prev,
-            components: [...prev.components, {
-                itemCode: p.itemCode,
-                productName: p.productName,
-                quantity: 1,
-                capacity: capacity,
-                weight: weight
-            }]
+            components: updatedComponents
         }));
         setIsSearchOpen(false);
+
+        // 구성품들의 포장사양서에서 BOM 정보 자동 취합 연동
+        syncBomFromComponents(updatedComponents);
     };
 
-
     const removeComponent = (idx) => {
+        const updatedComponents = formData.components.filter((_, i) => i !== idx);
         setFormData(prev => ({
             ...prev,
-            components: prev.components.filter((_, i) => i !== idx)
+            components: updatedComponents
         }));
+        if (updatedComponents.length > 0) {
+            syncBomFromComponents(updatedComponents);
+        } else {
+            setCurrentSpec(prev => ({ ...prev, bomItems: [] }));
+        }
     };
 
     const updateComponentQty = (idx, qty) => {
         const newComponents = [...formData.components];
         newComponents[idx].quantity = parseInt(qty) || 1;
         setFormData(prev => ({ ...prev, components: newComponents }));
+        syncBomFromComponents(newComponents);
     };
 
     const handleSubmit = (e) => {
@@ -2654,7 +3219,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                     </div>
 
                             {/* 카드 2: 기획세트 구성품 관리 (기획세트일 때만 표시) */}
-                            <div style={{ display: formData.productType === '기획세트' ? 'block' : 'none' }}>
+                            <div style={{ display: (formData.productType === '기획세트' || formData.isPlanningSet) ? 'block' : 'none' }}>
                                 <div className="card" style={{ borderLeft: '5px solid #f1c40f' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                                         <h3 style={{ margin: 0 }}>
@@ -3504,27 +4069,50 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                     {/* Action Buttons (Right-aligned, single line, no text wrapping) */}
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                                         {canEdit && specSubTab !== 'sheet2' && (
-                                            <button 
-                                                type="button" 
-                                                onClick={handleSaveFullSpec} 
-                                                className="primary" 
-                                                style={{ 
-                                                    background: '#10b981', 
-                                                    borderColor: '#059669', 
-                                                    color: '#ffffff', 
-                                                    fontSize: '12.5px', 
-                                                    fontWeight: '600',
-                                                    padding: '6px 14px',
-                                                    borderRadius: '7px',
-                                                    whiteSpace: 'nowrap',
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '5px',
-                                                    boxShadow: '0 1px 2px rgba(16, 185, 129, 0.2)'
-                                                }}
-                                            >
-                                                <span>💾</span> 사양서 저장
-                                            </button>
+                                            <>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => applyChannelRulesToCurrentSpec()}
+                                                    style={{ 
+                                                        background: '#f0f9ff', 
+                                                        border: '1px solid #7dd3fc', 
+                                                        color: '#0369a1', 
+                                                        fontSize: '12px', 
+                                                        fontWeight: '600',
+                                                        padding: '6px 12px',
+                                                        borderRadius: '7px',
+                                                        whiteSpace: 'nowrap',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                    title="선택된 유통채널의 착인 기준 및 적재 규격을 사양서에 동기화합니다."
+                                                >
+                                                    <span>⚡</span> 채널기준 적용
+                                                </button>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={handleSaveFullSpec} 
+                                                    className="primary" 
+                                                    style={{ 
+                                                        background: '#10b981', 
+                                                        borderColor: '#059669', 
+                                                        color: '#ffffff', 
+                                                        fontSize: '12.5px', 
+                                                        fontWeight: '600',
+                                                        padding: '6px 14px',
+                                                        borderRadius: '7px',
+                                                        whiteSpace: 'nowrap',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '5px',
+                                                        boxShadow: '0 1px 2px rgba(16, 185, 129, 0.2)'
+                                                    }}
+                                                >
+                                                    <span>💾</span> 사양서 저장
+                                                </button>
+                                            </>
                                         )}
                                         {product && (
                                             <>
@@ -4317,6 +4905,45 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                     placeholder="수량 입력 (ea)"
                                                                 />
                                                             </div>
+                                                            <div className="form-group" style={{ marginBottom: '8px' }}>
+                                                                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#6d28d9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                                    <span>📥 인박스 입수 규격 (열 × 행 × 단)</span>
+                                                                    <span style={{ fontSize: '11px', color: '#7c3aed', fontWeight: 'normal' }}>
+                                                                        단상자 {currentSpec.inboxQty || (currentSpec.inboxPackingCols && currentSpec.inboxPackingRows && currentSpec.inboxPackingLayers ? currentSpec.inboxPackingCols * currentSpec.inboxPackingRows * currentSpec.inboxPackingLayers : 0)}개입
+                                                                    </span>
+                                                                </label>
+                                                                <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>
+                                                                    💡 인박스 내에 단상자를 가로(열)×세로(행)×높이(단)으로 적재하는 규격입니다.
+                                                                </div>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                    <input 
+                                                                        type="number" 
+                                                                        placeholder="열(가로)"
+                                                                        value={currentSpec.inboxPackingCols !== undefined && currentSpec.inboxPackingCols !== null && currentSpec.inboxPackingCols !== '' ? currentSpec.inboxPackingCols : (parseArrangementPattern(currentSpec.inboxPackingPattern)?.cols ?? '')}
+                                                                        onChange={e => handleUpdateInboxDimensions('cols', e.target.value)}
+                                                                        disabled={!canEdit}
+                                                                        style={{ flex: 1, minWidth: 0, fontSize: '13px', padding: '6px 8px', textAlign: 'center', borderColor: '#c4b5fd' }}
+                                                                    />
+                                                                    <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: 'bold' }}>×</span>
+                                                                    <input 
+                                                                        type="number" 
+                                                                        placeholder="행(세로)"
+                                                                        value={currentSpec.inboxPackingRows !== undefined && currentSpec.inboxPackingRows !== null && currentSpec.inboxPackingRows !== '' ? currentSpec.inboxPackingRows : (parseArrangementPattern(currentSpec.inboxPackingPattern)?.rows ?? '')}
+                                                                        onChange={e => handleUpdateInboxDimensions('rows', e.target.value)}
+                                                                        disabled={!canEdit}
+                                                                        style={{ flex: 1, minWidth: 0, fontSize: '13px', padding: '6px 8px', textAlign: 'center', borderColor: '#c4b5fd' }}
+                                                                    />
+                                                                    <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: 'bold' }}>×</span>
+                                                                    <input 
+                                                                        type="number" 
+                                                                        placeholder="단(높이)"
+                                                                        value={currentSpec.inboxPackingLayers !== undefined && currentSpec.inboxPackingLayers !== null && currentSpec.inboxPackingLayers !== '' ? currentSpec.inboxPackingLayers : (parseArrangementPattern(currentSpec.inboxPackingPattern)?.layers ?? '')}
+                                                                        onChange={e => handleUpdateInboxDimensions('layers', e.target.value)}
+                                                                        disabled={!canEdit}
+                                                                        style={{ flex: 1, minWidth: 0, fontSize: '13px', padding: '6px 8px', textAlign: 'center', borderColor: '#c4b5fd' }}
+                                                                    />
+                                                                </div>
+                                                            </div>
                                                         </>
                                                     )}
 
@@ -4483,36 +5110,116 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                     placeholder="인박스 입수량 (ea)"
                                                                 />
                                                             </div>
+                                                            <div className="form-group" style={{ marginBottom: '8px' }}>
+                                                                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                                    <span>📦 아웃박스 내 인박스 입수 규격 (열 × 행 × 단)</span>
+                                                                    <span style={{ fontSize: '11px', color: '#2563eb', fontWeight: 'normal' }}>
+                                                                        인박스 {currentSpec.outboxInboxQty || (currentSpec.outboxPackingCols && currentSpec.outboxPackingRows && currentSpec.outboxPackingLayers ? currentSpec.outboxPackingCols * currentSpec.outboxPackingRows * currentSpec.outboxPackingLayers : 0)}박스입
+                                                                    </span>
+                                                                </label>
+                                                                <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>
+                                                                    💡 아웃박스 안에 인박스를 가로(열)×세로(행)×높이(단)으로 적재하는 규격입니다.
+                                                                </div>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                    <input 
+                                                                        type="number" 
+                                                                        placeholder="열(가로)"
+                                                                        value={currentSpec.outboxPackingCols !== undefined && currentSpec.outboxPackingCols !== null && currentSpec.outboxPackingCols !== '' ? currentSpec.outboxPackingCols : (parseArrangementPattern(currentSpec.outboxPackingPattern)?.cols ?? '')}
+                                                                        onChange={e => handleUpdateOutboxDimensions('cols', e.target.value, true)}
+                                                                        disabled={!canEdit}
+                                                                        style={{ flex: 1, minWidth: 0, fontSize: '13px', padding: '6px 8px', textAlign: 'center', borderColor: '#93c5fd' }}
+                                                                    />
+                                                                    <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: 'bold' }}>×</span>
+                                                                    <input 
+                                                                        type="number" 
+                                                                        placeholder="행(세로)"
+                                                                        value={currentSpec.outboxPackingRows !== undefined && currentSpec.outboxPackingRows !== null && currentSpec.outboxPackingRows !== '' ? currentSpec.outboxPackingRows : (parseArrangementPattern(currentSpec.outboxPackingPattern)?.rows ?? '')}
+                                                                        onChange={e => handleUpdateOutboxDimensions('rows', e.target.value, true)}
+                                                                        disabled={!canEdit}
+                                                                        style={{ flex: 1, minWidth: 0, fontSize: '13px', padding: '6px 8px', textAlign: 'center', borderColor: '#93c5fd' }}
+                                                                    />
+                                                                    <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: 'bold' }}>×</span>
+                                                                    <input 
+                                                                        type="number" 
+                                                                        placeholder="단(높이)"
+                                                                        value={currentSpec.outboxPackingLayers !== undefined && currentSpec.outboxPackingLayers !== null && currentSpec.outboxPackingLayers !== '' ? currentSpec.outboxPackingLayers : (parseArrangementPattern(currentSpec.outboxPackingPattern)?.layers ?? '')}
+                                                                        onChange={e => handleUpdateOutboxDimensions('layers', e.target.value, true)}
+                                                                        disabled={!canEdit}
+                                                                        style={{ flex: 1, minWidth: 0, fontSize: '13px', padding: '6px 8px', textAlign: 'center', borderColor: '#93c5fd' }}
+                                                                    />
+                                                                </div>
+                                                            </div>
                                                         </>
                                                     ) : (
-                                                        <div className="form-group" style={{ marginBottom: '8px' }}>
-                                                            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>총 입수량 (ea)</label>
-                                                            <input 
-                                                                type="text" 
-                                                                value={formatComma(currentSpec.outboxQty || currentSpec.outboxTotalQty) || ''} 
-                                                                onChange={e => {
-                                                                    const raw = e.target.value.replace(/,/g, '').trim();
-                                                                    if (/^\d*$/.test(raw)) {
-                                                                        const totalQ = raw !== '' ? parseInt(raw) : 0;
-                                                                        const tQty = parseInt(currentSpec.palletTierQty || 0);
-                                                                        const tCount = parseInt(currentSpec.palletTierCount || 0);
-                                                                        const totalOutboxes = (tQty * tCount) || parseInt(currentSpec.palletTotalOutboxQty || 0) || 0;
-                                                                        const calcProd = totalOutboxes * totalQ;
-                                                                        const updated = {
-                                                                            ...currentSpec,
-                                                                            outboxQty: raw !== '' ? parseInt(raw) : '',
-                                                                            outboxTotalQty: raw !== '' ? parseInt(raw) : '',
-                                                                            palletTotalProductQty: calcProd
-                                                                        };
-                                                                        const calcWt = calcPalletWeight(updated, formData);
-                                                                        setCurrentSpec({ ...updated, onePalletWeight: calcWt });
-                                                                    }
-                                                                }} 
-                                                                disabled={!canEdit} 
-                                                                style={{ fontSize: '13px', padding: '6px 8px' }} 
-                                                                placeholder="총 입수량 (ea)"
-                                                            />
-                                                        </div>
+                                                        <>
+                                                            <div className="form-group" style={{ marginBottom: '8px' }}>
+                                                                <label style={{ fontSize: '13px', fontWeight: 'bold' }}>총 입수량 (ea)</label>
+                                                                <input 
+                                                                    type="text" 
+                                                                    value={formatComma(currentSpec.outboxQty || currentSpec.outboxTotalQty) || ''} 
+                                                                    onChange={e => {
+                                                                        const raw = e.target.value.replace(/,/g, '').trim();
+                                                                        if (/^\d*$/.test(raw)) {
+                                                                            const totalQ = raw !== '' ? parseInt(raw) : 0;
+                                                                            const tQty = parseInt(currentSpec.palletTierQty || 0);
+                                                                            const tCount = parseInt(currentSpec.palletTierCount || 0);
+                                                                            const totalOutboxes = (tQty * tCount) || parseInt(currentSpec.palletTotalOutboxQty || 0) || 0;
+                                                                            const calcProd = totalOutboxes * totalQ;
+                                                                            const updated = {
+                                                                                ...currentSpec,
+                                                                                outboxQty: raw !== '' ? parseInt(raw) : '',
+                                                                                outboxTotalQty: raw !== '' ? parseInt(raw) : '',
+                                                                                palletTotalProductQty: calcProd
+                                                                            };
+                                                                            const calcWt = calcPalletWeight(updated, formData);
+                                                                            setCurrentSpec({ ...updated, onePalletWeight: calcWt });
+                                                                        }
+                                                                    }} 
+                                                                    disabled={!canEdit} 
+                                                                    style={{ fontSize: '13px', padding: '6px 8px' }} 
+                                                                    placeholder="총 입수량 (ea)"
+                                                                />
+                                                            </div>
+                                                            <div className="form-group" style={{ marginBottom: '8px' }}>
+                                                                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                                    <span>📦 아웃박스 내 단상자 입수 규격 (열 × 행 × 단)</span>
+                                                                    <span style={{ fontSize: '11px', color: '#2563eb', fontWeight: 'normal' }}>
+                                                                        단상자 {currentSpec.outboxQty || (currentSpec.outboxPackingCols && currentSpec.outboxPackingRows && currentSpec.outboxPackingLayers ? currentSpec.outboxPackingCols * currentSpec.outboxPackingRows * currentSpec.outboxPackingLayers : 0)}개입
+                                                                    </span>
+                                                                </label>
+                                                                <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>
+                                                                    💡 인박스 없이 아웃박스 내에 단상자를 가로(열)×세로(행)×높이(단)으로 직적재하는 규격입니다.
+                                                                </div>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                    <input 
+                                                                        type="number" 
+                                                                        placeholder="열(가로)"
+                                                                        value={currentSpec.outboxPackingCols !== undefined && currentSpec.outboxPackingCols !== null && currentSpec.outboxPackingCols !== '' ? currentSpec.outboxPackingCols : (parseArrangementPattern(currentSpec.outboxPackingPattern)?.cols ?? '')}
+                                                                        onChange={e => handleUpdateOutboxDimensions('cols', e.target.value, false)}
+                                                                        disabled={!canEdit}
+                                                                        style={{ flex: 1, minWidth: 0, fontSize: '13px', padding: '6px 8px', textAlign: 'center', borderColor: '#93c5fd' }}
+                                                                    />
+                                                                    <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: 'bold' }}>×</span>
+                                                                    <input 
+                                                                        type="number" 
+                                                                        placeholder="행(세로)"
+                                                                        value={currentSpec.outboxPackingRows !== undefined && currentSpec.outboxPackingRows !== null && currentSpec.outboxPackingRows !== '' ? currentSpec.outboxPackingRows : (parseArrangementPattern(currentSpec.outboxPackingPattern)?.rows ?? '')}
+                                                                        onChange={e => handleUpdateOutboxDimensions('rows', e.target.value, false)}
+                                                                        disabled={!canEdit}
+                                                                        style={{ flex: 1, minWidth: 0, fontSize: '13px', padding: '6px 8px', textAlign: 'center', borderColor: '#93c5fd' }}
+                                                                    />
+                                                                    <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: 'bold' }}>×</span>
+                                                                    <input 
+                                                                        type="number" 
+                                                                        placeholder="단(높이)"
+                                                                        value={currentSpec.outboxPackingLayers !== undefined && currentSpec.outboxPackingLayers !== null && currentSpec.outboxPackingLayers !== '' ? currentSpec.outboxPackingLayers : (parseArrangementPattern(currentSpec.outboxPackingPattern)?.layers ?? '')}
+                                                                        onChange={e => handleUpdateOutboxDimensions('layers', e.target.value, false)}
+                                                                        disabled={!canEdit}
+                                                                        style={{ flex: 1, minWidth: 0, fontSize: '13px', padding: '6px 8px', textAlign: 'center', borderColor: '#93c5fd' }}
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        </>
                                                     )}
 
                                                     <div className="form-group" style={{ marginBottom: '8px' }}>
@@ -4650,7 +5357,13 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                     <strong style={{ fontSize: '13px', color: '#0f172a', display: 'block', marginBottom: '10px' }}>🧱 팔레트 적재 (Pallet Spec)</strong>
                                                     <div className="form-group" style={{ marginBottom: '8px' }}>
                                                         <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e3a8a' }}>종류 (채널 자동 연동 - 수정 불가)</label>
-                                                        <input type="text" value={currentSpec.palletTypeStr || ''} readOnly style={{ fontSize: '13px', padding: '6px 8px', background: '#e2e8f0', color: '#334155', fontWeight: 'bold', cursor: 'not-allowed' }} placeholder="채널 선택 시 자동 반영" />
+                                                        <input 
+                                                            type="text" 
+                                                            value={formatPalletTypeDisplay()} 
+                                                            readOnly 
+                                                            style={{ fontSize: '13px', padding: '6px 8px', background: '#e2e8f0', color: '#1e293b', fontWeight: 'bold', cursor: 'not-allowed' }} 
+                                                            placeholder="채널 선택 시 자동 반영" 
+                                                        />
                                                     </div>
                                                     <div className="form-group" style={{ marginBottom: '8px' }}>
                                                         <label style={{ fontSize: '13px', fontWeight: 'bold' }}>1단 적재 수량 (아웃박스 ea)</label>
@@ -4915,7 +5628,16 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
                                             // 팔레트 적재 패턴 목록
                                             const allPalletPatterns = calcAllPalletPatterns(oBox.w, oBox.d, pBox.w, pBox.d);
-                                            const savedPalletMatch = currentSpec.palletStackingPattern ? allPalletPatterns.find(p => currentSpec.palletStackingPattern.includes(p.name)) : null;
+                                            const savedPalletMatch = currentSpec.palletStackingPattern 
+                                                ? allPalletPatterns.find(p => 
+                                                    currentSpec.palletStackingPattern.includes(p.name) || 
+                                                    currentSpec.palletStackingPattern.includes(p.label) ||
+                                                    (currentSpec.palletStackingPattern.includes('8방') && p.id === '8pin') ||
+                                                    (currentSpec.palletStackingPattern.includes('4방') && p.id === '4pin') ||
+                                                    (currentSpec.palletStackingPattern.includes('벽돌') && p.id === 'brick') ||
+                                                    (currentSpec.palletStackingPattern.includes('격자') && p.id.includes('grid'))
+                                                  ) 
+                                                : null;
                                             const bestPalletOpt = allPalletPatterns.find(p => p.status === 'ok') || allPalletPatterns[0] || null;
                                             const curPalletPattern = selectedPalletPattern || savedPalletMatch || bestPalletOpt;
 
@@ -5035,16 +5757,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                                 <button
                                                                                     key={idx}
                                                                                     type="button"
-                                                                                    onClick={() => {
-                                                                                        setSelectedOutboxArrangement(opt);
-                                                                                        const patternText = hasInbox 
-                                                                                            ? `${opt.cols}열×${opt.rows}행×${opt.layers}단 (인박스 ${opt.qty}박스입, 총 ${opt.qty * inboxQty}개)`
-                                                                                            : `${opt.cols}열×${opt.rows}행×${opt.layers}단 (${opt.qty}개입)`;
-                                                                                        setCurrentSpec(prev => ({
-                                                                                            ...prev,
-                                                                                            outboxPackingPattern: patternText
-                                                                                        }));
-                                                                                    }}
+                                                                                    onClick={() => handleSelectOutboxArrangementWithConfirm(opt, curOutboxArrangement, hasInbox, inboxQty)}
                                                                                     style={{
                                                                                         textAlign: 'left',
                                                                                         padding: '8px 10px',
@@ -5079,82 +5792,6 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                         })}
                                                                     </div>
 
-                                                                    {/* 직접 입력 (열 x 행 x 단) */}
-                                                                    <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
-                                                                        <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '6px' }}>
-                                                                            ✏️ {hasInbox ? '인박스' : '단상자'} 배열 직접 지정 (Custom Arrangement)
-                                                                        </div>
-                                                                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                                                                            <input
-                                                                                type="number"
-                                                                                placeholder="열(가로)"
-                                                                                value={customOutboxArrangement.cols}
-                                                                                onChange={e => {
-                                                                                    const c = parseInt(e.target.value, 10) || '';
-                                                                                    const next = { ...customOutboxArrangement, cols: c };
-                                                                                    setCustomArrangement(next);
-                                                                                    if (next.cols && next.rows && next.layers) {
-                                                                                        const customOpt = { cols: next.cols, rows: next.rows, layers: next.layers, qty: next.cols * next.rows * next.layers };
-                                                                                        setSelectedOutboxArrangement(customOpt);
-                                                                                        const patternText = hasInbox 
-                                                                                            ? `${customOpt.cols}열×${customOpt.rows}행×${customOpt.layers}단 (인박스 ${customOpt.qty}박스입, 총 ${customOpt.qty * inboxQty}개)`
-                                                                                            : `${customOpt.cols}열×${customOpt.rows}행×${customOpt.layers}단 (${customOpt.qty}개입)`;
-                                                                                        setCurrentSpec(prev => ({
-                                                                                            ...prev,
-                                                                                            outboxPackingPattern: patternText
-                                                                                        }));
-                                                                                    }
-                                                                                }}
-                                                                                style={{ width: '70px', padding: '4px 6px', fontSize: '12px', textAlign: 'center' }}
-                                                                            />
-                                                                            <span style={{ fontSize: '12px', color: '#94a3b8' }}>×</span>
-                                                                            <input
-                                                                                type="number"
-                                                                                placeholder="행(세로)"
-                                                                                value={customOutboxArrangement.rows}
-                                                                                onChange={e => {
-                                                                                    const r = parseInt(e.target.value, 10) || '';
-                                                                                    const next = { ...customOutboxArrangement, rows: r };
-                                                                                    setCustomArrangement(next);
-                                                                                    if (next.cols && next.rows && next.layers) {
-                                                                                        const customOpt = { cols: next.cols, rows: next.rows, layers: next.layers, qty: next.cols * next.rows * next.layers };
-                                                                                        setSelectedOutboxArrangement(customOpt);
-                                                                                        const patternText = hasInbox 
-                                                                                            ? `${customOpt.cols}열×${customOpt.rows}행×${customOpt.layers}단 (인박스 ${customOpt.qty}박스입, 총 ${customOpt.qty * inboxQty}개)`
-                                                                                            : `${customOpt.cols}열×${customOpt.rows}행×${customOpt.layers}단 (${customOpt.qty}개입)`;
-                                                                                        setCurrentSpec(prev => ({
-                                                                                            ...prev,
-                                                                                            outboxPackingPattern: patternText
-                                                                                        }));
-                                                                                    }
-                                                                                }}
-                                                                                style={{ width: '70px', padding: '4px 6px', fontSize: '12px', textAlign: 'center' }}
-                                                                            />
-                                                                            <span style={{ fontSize: '12px', color: '#94a3b8' }}>×</span>
-                                                                            <input
-                                                                                type="number"
-                                                                                placeholder="단(높이)"
-                                                                                value={customOutboxArrangement.layers}
-                                                                                onChange={e => {
-                                                                                    const l = parseInt(e.target.value, 10) || '';
-                                                                                    const next = { ...customOutboxArrangement, layers: l };
-                                                                                    setCustomArrangement(next);
-                                                                                    if (next.cols && next.rows && next.layers) {
-                                                                                        const customOpt = { cols: next.cols, rows: next.rows, layers: next.layers, qty: next.cols * next.rows * next.layers };
-                                                                                        setSelectedOutboxArrangement(customOpt);
-                                                                                        const patternText = hasInbox 
-                                                                                            ? `${customOpt.cols}열×${customOpt.rows}행×${customOpt.layers}단 (인박스 ${customOpt.qty}박스입, 총 ${customOpt.qty * inboxQty}개)`
-                                                                                            : `${customOpt.cols}열×${customOpt.rows}행×${customOpt.layers}단 (${customOpt.qty}개입)`;
-                                                                                        setCurrentSpec(prev => ({
-                                                                                            ...prev,
-                                                                                            outboxPackingPattern: patternText
-                                                                                        }));
-                                                                                    }
-                                                                                }}
-                                                                                style={{ width: '70px', padding: '4px 6px', fontSize: '12px', textAlign: 'center' }}
-                                                                            />
-                                                                        </div>
-                                                                    </div>
 
                                                                     {/* 유효성 검증 메시지 */}
                                                                     <div style={{ marginTop: '12px' }}>
@@ -5193,13 +5830,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                                 <button
                                                                                     key={idx}
                                                                                     type="button"
-                                                                                    onClick={() => {
-                                                                                        setSelectedInboxArrangement(opt);
-                                                                                        setCurrentSpec(prev => ({
-                                                                                            ...prev,
-                                                                                            inboxPackingPattern: `${opt.cols}열×${opt.rows}행×${opt.layers}단 (${opt.qty}개입)`
-                                                                                        }));
-                                                                                    }}
+                                                                                    onClick={() => handleSelectInboxArrangementWithConfirm(opt, curInboxArrangement)}
                                                                                     style={{
                                                                                         textAlign: 'left',
                                                                                         padding: '8px 10px',
@@ -5331,22 +5962,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                                     key={idx}
                                                                                     type="button"
                                                                                     disabled={pat.status === 'ng'}
-                                                                                    onClick={() => {
-                                                                                        setSelectedPalletPattern(pat);
-                                                                                        const totalBoxes = pat.count * palletStacks;
-                                                                                        const totalProd = totalBoxes * totalProductQty;
-                                                                                        setCurrentSpec(prev => {
-                                                                                            const updated = {
-                                                                                                ...prev,
-                                                                                                palletTierQty: pat.count,
-                                                                                                palletStackingPattern: `${pat.name} (${pallet3DMode === 'pallet-cross' ? '교차적재' : '일반적재'})`,
-                                                                                                palletTotalOutboxQty: totalBoxes,
-                                                                                                palletTotalProductQty: totalProd
-                                                                                            };
-                                                                                            updated.onePalletWeight = calcPalletWeight(updated, formData);
-                                                                                            return updated;
-                                                                                        });
-                                                                                    }}
+                                                                                    onClick={() => handleSelectPalletPatternWithConfirm(pat, pallet3DMode, palletStacks, totalProductQty)}
                                                                                     style={{
                                                                                         textAlign: 'left',
                                                                                         padding: '8px',
@@ -5514,18 +6130,180 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                             </div>
                                                         </div>
 
-                                                        {/* 오른쪽: 3D 뷰어 캔버스 (인박스 설정 변경 시 블러 & 새로고침 안내) */}
+                                                        {/* 오른쪽: 3D 뷰어 캔버스 및 도면 확정 제어 바 */}
                                                         {(() => {
                                                             const isInboxUseYnChanged = specBaselineInboxUseYn !== null && specBaselineInboxUseYn !== currentSpec.inboxUseYn;
+                                                            
+                                                            // 현재 활성화된 시뮬레이션 모드의 도면 정보
+                                                            const curConfirmedImage = sim3DTab === 'inbox' 
+                                                                ? currentSpec.inboxLayoutImage 
+                                                                : (sim3DTab === 'outbox' 
+                                                                    ? (currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) 
+                                                                    : currentSpec.palletLayoutImage);
+                                                            const hasConfirmedImage = Boolean(curConfirmedImage);
+                                                            const tabName = sim3DTab === 'inbox' ? '인박스' : (sim3DTab === 'outbox' ? '아웃박스' : '팔레트');
+
                                                             return (
-                                                                <div style={{ position: 'relative', minHeight: '420px' }}>
+                                                                <div style={{ position: 'relative', minHeight: '460px' }}>
                                                                     <div style={{
                                                                         filter: isInboxUseYnChanged ? 'blur(6px)' : 'none',
                                                                         pointerEvents: isInboxUseYnChanged ? 'none' : 'auto',
                                                                         opacity: isInboxUseYnChanged ? 0.35 : 1,
                                                                         transition: 'filter 0.25s ease, opacity 0.25s ease'
                                                                     }}>
+                                                                        {/* 3D 도면 확정 컨트롤 헤더 바 */}
+                                                                        <div style={{
+                                                                            display: 'flex',
+                                                                            justifyContent: 'space-between',
+                                                                            alignItems: 'center',
+                                                                            background: '#f8fafc',
+                                                                            padding: '8px 12px',
+                                                                            borderRadius: '8px 8px 0 0',
+                                                                            border: '1px solid #e2e8f0',
+                                                                            borderBottom: 'none',
+                                                                            flexWrap: 'wrap',
+                                                                            gap: '8px'
+                                                                        }}>
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                                <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e293b' }}>
+                                                                                    {sim3DTab === 'inbox' ? '📥 인박스 3D' : (sim3DTab === 'outbox' ? '📦 아웃박스 3D' : '🏗️ 팔레트 3D')}
+                                                                                </span>
+                                                                                {hasConfirmedImage ? (
+                                                                                    <span style={{
+                                                                                        fontSize: '11px',
+                                                                                        padding: '2px 8px',
+                                                                                        borderRadius: '12px',
+                                                                                        background: '#dcfce7',
+                                                                                        color: '#15803d',
+                                                                                        border: '1px solid #86efac',
+                                                                                        fontWeight: 'bold',
+                                                                                        display: 'flex',
+                                                                                        alignItems: 'center',
+                                                                                        gap: '3px'
+                                                                                    }}>
+                                                                                        <span>✓</span> <span>확정 도면 적용중</span>
+                                                                                    </span>
+                                                                                ) : (
+                                                                                    <span style={{
+                                                                                        fontSize: '11px',
+                                                                                        padding: '2px 8px',
+                                                                                        borderRadius: '12px',
+                                                                                        background: '#e0f2fe',
+                                                                                        color: '#0369a1',
+                                                                                        border: '1px solid #bae6fd',
+                                                                                        fontWeight: 500
+                                                                                    }}>
+                                                                                        ⚡ 자동 3D 도면 모드
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+
+                                                                            {/* 도면 확정 및 관리 액션 버튼들 */}
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                {/* 1. 현재 3D 뷰 확정/저장 버튼 */}
+                                                                                <button
+                                                                                    type="button"
+                                                                                    disabled={snapshotUploading}
+                                                                                    onClick={() => handleCaptureCurrent3D(sim3DTab)}
+                                                                                    style={{
+                                                                                        display: 'flex',
+                                                                                        alignItems: 'center',
+                                                                                        gap: '4px',
+                                                                                        padding: '5px 12px',
+                                                                                        borderRadius: '6px',
+                                                                                        fontSize: '12px',
+                                                                                        fontWeight: 'bold',
+                                                                                        background: hasConfirmedImage ? '#2563eb' : '#059669',
+                                                                                        color: '#ffffff',
+                                                                                        border: 'none',
+                                                                                        cursor: snapshotUploading ? 'wait' : 'pointer',
+                                                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.08)'
+                                                                                    }}
+                                                                                    title="현재 회전/확대된 3D 상태를 포장사양서 정식 도면으로 확정 저장합니다."
+                                                                                >
+                                                                                    <span>📸</span>
+                                                                                    <span>{hasConfirmedImage ? '현재 3D 뷰로 재확정' : `현재 ${tabName} 3D 도면 확정/저장`}</span>
+                                                                                </button>
+
+                                                                                {/* 2. 도면 이미지 파일 직접 업로드 */}
+                                                                                <label
+                                                                                    style={{
+                                                                                        display: 'flex',
+                                                                                        alignItems: 'center',
+                                                                                        gap: '3px',
+                                                                                        padding: '5px 8px',
+                                                                                        borderRadius: '6px',
+                                                                                        fontSize: '11px',
+                                                                                        fontWeight: 600,
+                                                                                        background: '#ffffff',
+                                                                                        color: '#475569',
+                                                                                        border: '1px solid #cbd5e1',
+                                                                                        cursor: 'pointer'
+                                                                                    }}
+                                                                                    title="외부에서 제작한 3D 도면 이미지 파일(PNG/JPG)을 직접 등록합니다."
+                                                                                >
+                                                                                    <span>📁</span>
+                                                                                    <span>파일 등록</span>
+                                                                                    <input
+                                                                                        type="file"
+                                                                                        accept="image/*"
+                                                                                        style={{ display: 'none' }}
+                                                                                        onChange={(e) => {
+                                                                                            if (e.target.files?.[0]) {
+                                                                                                handleDirectImageUpload(e.target.files[0], sim3DTab);
+                                                                                            }
+                                                                                        }}
+                                                                                    />
+                                                                                </label>
+
+                                                                                {/* 3. 확정 도면 삭제 / 자동 3D 도면으로 복원 */}
+                                                                                {hasConfirmedImage && (
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => handleRemoveConfirmedImage(sim3DTab)}
+                                                                                        style={{
+                                                                                            display: 'flex',
+                                                                                            alignItems: 'center',
+                                                                                            gap: '3px',
+                                                                                            padding: '5px 8px',
+                                                                                            borderRadius: '6px',
+                                                                                            fontSize: '11px',
+                                                                                            fontWeight: 500,
+                                                                                            background: '#ffffff',
+                                                                                            color: '#dc2626',
+                                                                                            border: '1px solid #fca5a5',
+                                                                                            cursor: 'pointer'
+                                                                                        }}
+                                                                                        title="확정된 스냅샷을 삭제하고 자동 3D 도면 모드로 복귀합니다."
+                                                                                    >
+                                                                                        <span>🔄</span>
+                                                                                        <span>자동모드 복원</span>
+                                                                                    </button>
+                                                                                )}
+
+                                                                                {/* 4. 뷰 초기화 */}
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => viewer3DRef.current?.resetView?.()}
+                                                                                    style={{
+                                                                                        padding: '5px 8px',
+                                                                                        borderRadius: '6px',
+                                                                                        fontSize: '11px',
+                                                                                        fontWeight: 500,
+                                                                                        background: '#ffffff',
+                                                                                        color: '#64748b',
+                                                                                        border: '1px solid #cbd5e1',
+                                                                                        cursor: 'pointer'
+                                                                                    }}
+                                                                                    title="카메라 각도를 기본 등각투시도로 초기화합니다."
+                                                                                >
+                                                                                    🎯 초기화
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+
                                                                         <PackagingViewer3D
+                                                                            ref={viewer3DRef}
                                                                             mode={sim3DTab === 'pallet' ? pallet3DMode : sim3DTab}
                                                                             unitBox={uBox}
                                                                             inbox={iBox}
@@ -5543,31 +6321,126 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                                 pattern: curPalletPattern,
                                                                                 stacks: palletStacks
                                                                             }}
+                                                                            savedViewConfig={
+                                                                                sim3DTab === 'inbox' 
+                                                                                    ? currentSpec.inboxViewConfig 
+                                                                                    : (sim3DTab === 'outbox' ? currentSpec.outboxViewConfig : currentSpec.palletViewConfig)
+                                                                            }
                                                                             onCapture={(dataUrl, renderedMode) => handleSave3DSnapshot(dataUrl, renderedMode)}
                                                                             height={410}
                                                                         />
 
-                                                                        {/* 저장된 스냅샷 미리보기 썸네일 표시 */}
-                                                                        <div style={{ display: 'flex', gap: '10px', marginTop: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                                                                            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b' }}>저장된 3D 스냅샷:</span>
-                                                                            {currentSpec.inboxLayoutImage && (
-                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#f5f3ff', padding: '2px 8px', borderRadius: '6px', border: '1px solid #ddd6fe' }}>
-                                                                                    <span style={{ fontSize: '11px', color: '#6d28d9', fontWeight: 600 }}>📥 인박스</span>
-                                                                                    <img src={getFileUrl(currentSpec.inboxLayoutImage)} alt="인박스 3D" style={{ width: '22px', height: '22px', objectFit: 'cover', borderRadius: '3px' }} />
+                                                                        {/* 3D 사양서 도면 3대 영역 확정 현황 패널 */}
+                                                                        <div style={{
+                                                                            marginTop: '10px',
+                                                                            padding: '10px 12px',
+                                                                            background: '#f8fafc',
+                                                                            borderRadius: '8px',
+                                                                            border: '1px solid #e2e8f0'
+                                                                        }}>
+                                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                                                                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569' }}>
+                                                                                    📑 포장사양서(엑셀) 반영 도면 현황
+                                                                                </span>
+                                                                                <span style={{ fontSize: '10px', color: '#64748b' }}>
+                                                                                    (확정된 이미지는 엑셀 Section 5-1에 100% 삽입됩니다)
+                                                                                </span>
+                                                                            </div>
+
+                                                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                                                                                {/* 1. 인박스 */}
+                                                                                <div style={{
+                                                                                    background: '#ffffff',
+                                                                                    padding: '6px 8px',
+                                                                                    borderRadius: '6px',
+                                                                                    border: currentSpec.inboxLayoutImage ? '1px solid #ddd6fe' : '1px dashed #cbd5e1',
+                                                                                    display: 'flex',
+                                                                                    alignItems: 'center',
+                                                                                    gap: '6px'
+                                                                                }}>
+                                                                                    {currentSpec.inboxLayoutImage ? (
+                                                                                        <img
+                                                                                            src={getFileUrl(currentSpec.inboxLayoutImage)}
+                                                                                            alt="인박스 도면"
+                                                                                            style={{ width: '32px', height: '32px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #e2e8f0' }}
+                                                                                        />
+                                                                                    ) : (
+                                                                                        <div style={{ width: '32px', height: '32px', background: '#f5f3ff', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>
+                                                                                            📥
+                                                                                        </div>
+                                                                                    )}
+                                                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                                                        <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#6d28d9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                                            1. 인박스 도면
+                                                                                        </div>
+                                                                                        <div style={{ fontSize: '10px', color: currentSpec.inboxLayoutImage ? '#15803d' : '#94a3b8' }}>
+                                                                                            {currentSpec.inboxLayoutImage ? '✓ 도면 확정됨' : '자동 3D 도면'}
+                                                                                        </div>
+                                                                                    </div>
                                                                                 </div>
-                                                                            )}
-                                                                            {(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) && (
-                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#eff6ff', padding: '2px 8px', borderRadius: '6px', border: '1px solid #bfdbfe' }}>
-                                                                                    <span style={{ fontSize: '11px', color: '#1d4ed8', fontWeight: 600 }}>📦 아웃박스</span>
-                                                                                    <img src={getFileUrl(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage)} alt="아웃박스 3D" style={{ width: '22px', height: '22px', objectFit: 'cover', borderRadius: '3px' }} />
+
+                                                                                {/* 2. 아웃박스 */}
+                                                                                <div style={{
+                                                                                    background: '#ffffff',
+                                                                                    padding: '6px 8px',
+                                                                                    borderRadius: '6px',
+                                                                                    border: (currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) ? '1px solid #bfdbfe' : '1px dashed #cbd5e1',
+                                                                                    display: 'flex',
+                                                                                    alignItems: 'center',
+                                                                                    gap: '6px'
+                                                                                }}>
+                                                                                    {(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) ? (
+                                                                                        <img
+                                                                                            src={getFileUrl(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage)}
+                                                                                            alt="아웃박스 도면"
+                                                                                            style={{ width: '32px', height: '32px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #e2e8f0' }}
+                                                                                        />
+                                                                                    ) : (
+                                                                                        <div style={{ width: '32px', height: '32px', background: '#eff6ff', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>
+                                                                                            📦
+                                                                                        </div>
+                                                                                    )}
+                                                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                                                        <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#1d4ed8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                                            2. 아웃박스 도면
+                                                                                        </div>
+                                                                                        <div style={{ fontSize: '10px', color: (currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) ? '#15803d' : '#94a3b8' }}>
+                                                                                            {(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) ? '✓ 도면 확정됨' : '자동 3D 도면'}
+                                                                                        </div>
+                                                                                    </div>
                                                                                 </div>
-                                                                            )}
-                                                                            {currentSpec.palletLayoutImage && (
-                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#fef3c7', padding: '2px 8px', borderRadius: '6px', border: '1px solid #fde68a' }}>
-                                                                                    <span style={{ fontSize: '11px', color: '#b45309', fontWeight: 600 }}>🏗️ 팔레트</span>
-                                                                                    <img src={getFileUrl(currentSpec.palletLayoutImage)} alt="팔레트 3D" style={{ width: '22px', height: '22px', objectFit: 'cover', borderRadius: '3px' }} />
+
+                                                                                {/* 3. 팔레트 */}
+                                                                                <div style={{
+                                                                                    background: '#ffffff',
+                                                                                    padding: '6px 8px',
+                                                                                    borderRadius: '6px',
+                                                                                    border: currentSpec.palletLayoutImage ? '1px solid #fde68a' : '1px dashed #cbd5e1',
+                                                                                    display: 'flex',
+                                                                                    alignItems: 'center',
+                                                                                    gap: '6px'
+                                                                                }}>
+                                                                                    {currentSpec.palletLayoutImage ? (
+                                                                                        <img
+                                                                                            src={getFileUrl(currentSpec.palletLayoutImage)}
+                                                                                            alt="팔레트 도면"
+                                                                                            style={{ width: '32px', height: '32px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #e2e8f0' }}
+                                                                                        />
+                                                                                    ) : (
+                                                                                        <div style={{ width: '32px', height: '32px', background: '#fef3c7', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>
+                                                                                            🏗️
+                                                                                        </div>
+                                                                                    )}
+                                                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                                                        <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#b45309', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                                            3. 팔레트 도면
+                                                                                        </div>
+                                                                                        <div style={{ fontSize: '10px', color: currentSpec.palletLayoutImage ? '#15803d' : '#94a3b8' }}>
+                                                                                            {currentSpec.palletLayoutImage ? '✓ 도면 확정됨' : '자동 3D 도면'}
+                                                                                        </div>
+                                                                                    </div>
                                                                                 </div>
-                                                                            )}
+                                                                            </div>
                                                                         </div>
                                                                     </div>
 
@@ -6132,6 +7005,86 @@ const ProductDrawer = ({ product, onClose, user }) => {
                             ) : (
                                 <img src={previewStickerFile.url} alt="Sticker Preview" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 3D 사양/도면 수정 확인 모달 */}
+            {confirmDialogState && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.65)', zIndex: 999999, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(4px)' }}>
+                    <div style={{ width: '440px', backgroundColor: '#ffffff', borderRadius: '16px', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.04)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <span style={{ fontSize: '24px' }}>{confirmDialogState.icon || '⚠️'}</span>
+                            <h4 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#0f172a' }}>{confirmDialogState.title || '확인'}</h4>
+                        </div>
+                        <div style={{ fontSize: '14px', color: '#475569', lineHeight: '1.5', whiteSpace: 'pre-line' }}>
+                            {confirmDialogState.message}
+                        </div>
+                        {confirmDialogState.asIs && confirmDialogState.toBe && (
+                            <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                                        <span style={{ padding: '2px 8px', background: '#fee2e2', color: '#b91c1c', borderRadius: '4px', fontWeight: 'bold', fontSize: '11px', flexShrink: 0 }}>AS-IS</span>
+                                        <span style={{ color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{confirmDialogState.asIs}</span>
+                                    </div>
+                                    {confirmDialogState.asIsStatus && (
+                                        <span style={{
+                                            fontSize: '11px',
+                                            padding: '2px 8px',
+                                            borderRadius: '4px',
+                                            fontWeight: 'bold',
+                                            background: confirmDialogState.asIsStatus.bg,
+                                            color: confirmDialogState.asIsStatus.color,
+                                            border: `1px solid ${confirmDialogState.asIsStatus.border || '#cbd5e1'}`,
+                                            flexShrink: 0
+                                        }}>
+                                            {confirmDialogState.asIsStatus.label}
+                                        </span>
+                                    )}
+                                </div>
+                                <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: '13px', lineHeight: 1 }}>⬇️</div>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                                        <span style={{ padding: '2px 8px', background: '#dcfce7', color: '#15803d', borderRadius: '4px', fontWeight: 'bold', fontSize: '11px', flexShrink: 0 }}>TO-BE</span>
+                                        <span style={{ color: '#0f172a', fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{confirmDialogState.toBe}</span>
+                                    </div>
+                                    {confirmDialogState.toBeStatus && (
+                                        <span style={{
+                                            fontSize: '11px',
+                                            padding: '2px 8px',
+                                            borderRadius: '4px',
+                                            fontWeight: 'bold',
+                                            background: confirmDialogState.toBeStatus.bg,
+                                            color: confirmDialogState.toBeStatus.color,
+                                            border: `1px solid ${confirmDialogState.toBeStatus.border || '#cbd5e1'}`,
+                                            flexShrink: 0
+                                        }}>
+                                            {confirmDialogState.toBeStatus.label}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '6px' }}>
+                            <button
+                                type="button"
+                                onClick={() => setConfirmDialogState(null)}
+                                style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#ffffff', color: '#475569', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
+                            >
+                                취소
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const action = confirmDialogState.onConfirm;
+                                    setConfirmDialogState(null);
+                                    if (action) action();
+                                }}
+                                style={{ padding: '8px 18px', borderRadius: '8px', border: 'none', background: '#2563eb', color: '#ffffff', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer', boxShadow: '0 1px 2px rgba(37, 99, 235, 0.3)' }}
+                            >
+                                확인
+                            </button>
                         </div>
                     </div>
                 </div>

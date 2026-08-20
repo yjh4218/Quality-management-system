@@ -2,9 +2,8 @@ package com.example.ims.service;
 
 import com.example.ims.entity.*;
 import com.example.ims.repository.*;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
@@ -14,6 +13,7 @@ import java.util.Optional;
  * 전역 설정 및 마스터 데이터 관리 서비스 (Feature 2, 3, 4, 8, 11)
  */
 @Service
+@RequiredArgsConstructor
 @Slf4j
 public class MasterDataService {
 
@@ -22,26 +22,6 @@ public class MasterDataService {
     private final ChannelStickerImageRepository stickerRepository;
     private final com.example.ims.repository.UserRepository userRepository;
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
-    private PackagingSpecService packagingSpecService;
-
-    @Autowired
-    public MasterDataService(
-            PackagingMethodTemplateRepository templateRepository,
-            MasterPackagingMaterialRepository materialRepository,
-            ChannelStickerImageRepository stickerRepository,
-            com.example.ims.repository.UserRepository userRepository,
-            org.springframework.context.ApplicationEventPublisher eventPublisher) {
-        this.templateRepository = templateRepository;
-        this.materialRepository = materialRepository;
-        this.stickerRepository = stickerRepository;
-        this.userRepository = userRepository;
-        this.eventPublisher = eventPublisher;
-    }
-
-    @Autowired
-    public void setPackagingSpecService(@Lazy PackagingSpecService packagingSpecService) {
-        this.packagingSpecService = packagingSpecService;
-    }
 
     // --- Packaging Method Template (Feature 2) ---
     @Transactional(readOnly = true)

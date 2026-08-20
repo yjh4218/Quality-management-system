@@ -10,7 +10,6 @@ import com.example.ims.dto.PackagingSpecFullDto;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 import java.util.Comparator;
 import java.util.stream.Collectors;
 
@@ -118,6 +117,9 @@ public class PackagingSpecService {
                 .zipperBagSpec(masterSpec.getZipperBagSpec())
                 .outboxSpec(masterSpec.getOutboxSpec())
                 .palletStackingSpec(masterSpec.getPalletStackingSpec())
+                .inboxViewConfig(masterSpec.getInboxViewConfig())
+                .outboxViewConfig(masterSpec.getOutboxViewConfig())
+                .palletViewConfig(masterSpec.getPalletViewConfig())
                 .lastModifiedBy(username)
                 .build();
 
@@ -562,6 +564,16 @@ public class PackagingSpecService {
             existingToUpdate.setPopHeight(spec.getPopHeight());
             existingToUpdate.setAirCapUseYn(spec.getAirCapUseYn());
             existingToUpdate.setCornerPostUseYn(spec.getCornerPostUseYn());
+            existingToUpdate.setInboxPackingCols(spec.getInboxPackingCols());
+            existingToUpdate.setInboxPackingRows(spec.getInboxPackingRows());
+            existingToUpdate.setInboxPackingLayers(spec.getInboxPackingLayers());
+            existingToUpdate.setOutboxPackingCols(spec.getOutboxPackingCols());
+            existingToUpdate.setOutboxPackingRows(spec.getOutboxPackingRows());
+            existingToUpdate.setOutboxPackingLayers(spec.getOutboxPackingLayers());
+
+            existingToUpdate.setInboxViewConfig(spec.getInboxViewConfig());
+            existingToUpdate.setOutboxViewConfig(spec.getOutboxViewConfig());
+            existingToUpdate.setPalletViewConfig(spec.getPalletViewConfig());
 
             targetSpec = existingToUpdate;
         }
@@ -696,18 +708,6 @@ public class PackagingSpecService {
         return new PackagingSpecFullDto(latestSpec, revisions, components, activeImages);
     }
 
-    private Integer parseIntSafe(String s) {
-        if (s == null || s.isBlank()) return null;
-        try { return Integer.parseInt(s.trim()); }
-        catch (NumberFormatException e) { return null; }
-    }
-
-    private Double parseDoubleSafe(String s) {
-        if (s == null || s.isBlank()) return null;
-        try { return Double.parseDouble(s.trim()); }
-        catch (NumberFormatException e) { return null; }
-    }
-
     private boolean hasAllDimensions(Double len, Double width, Double height) {
         if (len == null) return false;
         if (width == null) return false;
@@ -787,5 +787,148 @@ public class PackagingSpecService {
                 applyChannelRulesToSpec(spec, channel);
             }
         }
+    }
+
+    /**
+     * 특정 품목코드(Item Code)의 최신 포장사양서로부터 포장방법 사진 복사
+     */
+    @Transactional
+    public List<PackagingMethodImage> copyMethodImagesByItemCode(Long targetSpecId, String sourceItemCode, String username) {
+        log.info(">>>> [METHOD-IMAGES] COPY-FROM-ITEM-CODE targetSpecId={}, sourceItemCode={}", targetSpecId, sourceItemCode);
+        if (sourceItemCode == null || sourceItemCode.trim().isEmpty()) {
+            throw new IllegalArgumentException("Source item code must not be empty");
+        }
+
+        Product sourceProduct = productRepository.findByItemCode(sourceItemCode.trim())
+                .orElseThrow(() -> new RuntimeException("Source product not found: " + sourceItemCode));
+
+        List<PackagingSpecification> sourceSpecs = specRepository.findByProductId(sourceProduct.getId());
+        if (sourceSpecs.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+
+        // 최신 버전 사양서 선택
+        PackagingSpecification latestSourceSpec = sourceSpecs.stream()
+                .max(Comparator.comparingInt(s -> s.getVersion() != null ? s.getVersion() : 0))
+                .orElse(sourceSpecs.get(0));
+
+        List<PackagingMethodImage> sourceImages = methodImageRepository.findActiveBySpecId(latestSourceSpec.getId());
+        if (sourceImages.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+
+        String currentUsername = username != null ? username : "admin";
+        List<PackagingMethodImage> copiedList = new java.util.ArrayList<>();
+        for (PackagingMethodImage src : sourceImages) {
+            PackagingMethodImage copy = PackagingMethodImage.builder()
+                    .packagingSpecId(targetSpecId)
+                    .imageUrl(src.getImageUrl())
+                    .imagePath(src.getImagePath())
+                    .thumbnailUrl(src.getThumbnailUrl())
+                    .displayOrder(src.getDisplayOrder())
+                    .layoutWidthPx(src.getLayoutWidthPx())
+                    .layoutHeightPx(src.getLayoutHeightPx())
+                    .annotationsJson(src.getAnnotationsJson())
+                    .captionText(src.getCaptionText())
+                    .createdBy(currentUsername)
+                    .build();
+            copiedList.add(methodImageRepository.save(copy));
+        }
+
+        return copiedList;
+    }
+
+    /**
+     * 기획세트 구성품 목록으로부터 각 구성품의 BOM 정보 취합 반환
+     */
+    @Transactional(readOnly = true)
+    public List<java.util.Map<String, Object>> aggregateBomByComponents(List<java.util.Map<String, Object>> components) {
+        if (components == null || components.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+
+        List<java.util.Map<String, Object>> result = new java.util.ArrayList<>();
+        int sortIndex = 1;
+
+        for (java.util.Map<String, Object> comp : components) {
+            String itemCode = (String) comp.get("itemCode");
+            String compName = (String) comp.get("productName");
+            Number qtyNum = (Number) comp.get("quantity");
+            int quantity = qtyNum != null ? qtyNum.intValue() : 1;
+
+            if (itemCode == null || itemCode.trim().isEmpty()) continue;
+
+            Product product = productRepository.findByItemCode(itemCode.trim()).orElse(null);
+            if (product == null) continue;
+
+            List<PackagingSpecification> specs = specRepository.findByProductId(product.getId());
+            PackagingSpecification latestSpec = specs.stream()
+                    .max(Comparator.comparingInt(s -> s.getVersion() != null ? s.getVersion() : 0))
+                    .orElse(null);
+
+            if (latestSpec != null && latestSpec.getBomItems() != null && !latestSpec.getBomItems().isEmpty()) {
+                for (PackagingSpecBomItem bomItem : latestSpec.getBomItems()) {
+                    MasterPackagingMaterial mat = bomItem.getMasterMaterial();
+                    double baseUsage = bomItem.getUsageCount() != null ? bomItem.getUsageCount() : 1.0;
+                    double totalUsage = baseUsage * quantity;
+
+                    java.util.Map<String, Object> itemMap = new java.util.HashMap<>();
+                    itemMap.put("id", null);
+                    itemMap.put("sortOrder", sortIndex++);
+                    itemMap.put("usageCount", totalUsage);
+                    itemMap.put("specification", bomItem.getSpecification());
+                    itemMap.put("parentComponentCode", itemCode);
+                    itemMap.put("parentComponentName", compName != null ? compName : product.getProductName());
+
+                    if (mat != null) {
+                        java.util.Map<String, Object> matMap = new java.util.HashMap<>();
+                        matMap.put("id", mat.getId());
+                        matMap.put("bomCode", mat.getBomCode());
+                        matMap.put("type", mat.getType());
+                        matMap.put("detailedType", mat.getDetailedType());
+                        matMap.put("componentName", mat.getComponentName());
+                        matMap.put("material", mat.getMaterial());
+                        matMap.put("detailedMaterial", mat.getDetailedMaterial());
+                        matMap.put("specification", mat.getSpecification());
+                        matMap.put("weight", mat.getWeight());
+                        matMap.put("manufacturer", mat.getManufacturer());
+                        matMap.put("imagePath", mat.getImagePath());
+                        itemMap.put("masterMaterial", matMap);
+                    }
+                    result.add(itemMap);
+                }
+            } else if (product.getPackagingMaterial() != null) {
+                // 포장재 정보로부터 기본 BOM 아이템 가공
+                PackagingMaterial pm = product.getPackagingMaterial();
+                String[] types = {"용기(본체)", "캡(뚜껑)", "단상자", "라벨", "펌프"};
+                String[] materials = {pm.getMaterialBody(), pm.getMaterialCap(), pm.getMaterialOuterBox(), pm.getMaterialLabel(), pm.getMaterialPump()};
+                String[] manufacturers = {pm.getManufacturerContainer(), pm.getManufacturerOuterBox(), pm.getManufacturerOuterBox(), pm.getManufacturerLabel(), pm.getManufacturerContainer()};
+
+                for (int i = 0; i < types.length; i++) {
+                    if (materials[i] != null && !materials[i].trim().isEmpty()) {
+                        java.util.Map<String, Object> itemMap = new java.util.HashMap<>();
+                        itemMap.put("id", null);
+                        itemMap.put("sortOrder", sortIndex++);
+                        itemMap.put("usageCount", (double) quantity);
+                        itemMap.put("specification", materials[i]);
+                        itemMap.put("parentComponentCode", itemCode);
+                        itemMap.put("parentComponentName", compName != null ? compName : product.getProductName());
+
+                        java.util.Map<String, Object> matMap = new java.util.HashMap<>();
+                        matMap.put("id", null);
+                        matMap.put("bomCode", itemCode + "-" + (i + 1));
+                        matMap.put("type", types[i]);
+                        matMap.put("componentName", (compName != null ? compName : product.getProductName()) + " " + types[i]);
+                        matMap.put("material", materials[i]);
+                        matMap.put("manufacturer", manufacturers[i] != null ? manufacturers[i] : "");
+                        itemMap.put("masterMaterial", matMap);
+
+                        result.add(itemMap);
+                    }
+                }
+            }
+        }
+
+        return result;
     }
 }

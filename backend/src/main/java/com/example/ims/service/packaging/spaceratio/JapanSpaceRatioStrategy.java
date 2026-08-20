@@ -3,7 +3,6 @@ package com.example.ims.service.packaging.spaceratio;
 import com.example.ims.entity.Product;
 import com.example.ims.entity.PackagingComponent;
 import com.example.ims.entity.PackagingLayer;
-import com.example.ims.entity.MaterialType;
 
 import java.util.ArrayList;
 import java.util.List;

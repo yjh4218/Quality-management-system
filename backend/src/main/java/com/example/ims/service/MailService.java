@@ -5,8 +5,11 @@ package com.example.ims.service;
 @lombok.extern.slf4j.Slf4j
 public class MailService {
 
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private org.springframework.mail.javamail.JavaMailSender mailSender;
+    private final org.springframework.mail.javamail.JavaMailSender mailSender;
+
+    public MailService(@org.springframework.beans.factory.annotation.Autowired(required = false) org.springframework.mail.javamail.JavaMailSender mailSender) {
+        this.mailSender = mailSender;
+    }
 
     @org.springframework.beans.factory.annotation.Value("${spring.mail.username:noreply@example.com}")
     private String fromEmail;

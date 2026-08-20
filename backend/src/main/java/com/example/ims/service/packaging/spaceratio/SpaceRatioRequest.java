@@ -1,7 +1,6 @@
 package com.example.ims.service.packaging.spaceratio;
 
 import com.example.ims.entity.ContentType;
-import java.util.List;
 
 public class SpaceRatioRequest {
     private Double contentVolumeMl;

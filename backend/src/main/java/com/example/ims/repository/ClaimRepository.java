@@ -3,12 +3,10 @@ package com.example.ims.repository;
 import com.example.ims.entity.Claim;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
-import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
 
-@Repository
 public interface ClaimRepository extends JpaRepository<Claim, Long>, JpaSpecificationExecutor<Claim> {
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"claimPhotos"})
     List<Claim> findByManufacturer(String manufacturer);

@@ -82,7 +82,7 @@ public class PermissionService {
         try {
             String json = role.getAllowedMenus().trim();
             if (json.startsWith("{")) {
-                Map<String, Object> map = objectMapper.readValue(json, Map.class);
+                Map<String, Object> map = objectMapper.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
                 Object val = map.get(menuKey);
                 if (val instanceof List) {
                     return ((List<?>) val).contains(action);

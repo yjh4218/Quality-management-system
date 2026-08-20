@@ -412,8 +412,8 @@ export function calcAllPalletPatterns(bw, bd, palW = 1100, palD = 1100) {
   const pv = getPIValues(palW, palD);
 
   const patternGenerators = [
-    { key: '4pin', fn: () => check4Pin(bw, bd, palW, palD), category: 'pinwheel', label: '4방 핀휠' },
-    { key: '8pin', fn: () => check8Pin(bw, bd, palW, palD), category: 'pinwheel', label: '8방 핀휠' },
+    { key: '4pin', fn: () => checkNPin(bw, bd, 4, palW, palD) || check4Pin(bw, bd, palW, palD), category: 'pinwheel', label: '4방 핀휠' },
+    { key: '8pin', fn: () => checkNPin(bw, bd, 8, palW, palD) || check8Pin(bw, bd, palW, palD), category: 'pinwheel', label: '8방 핀휠' },
     { key: '12pin', fn: () => checkNPin(bw, bd, 12, palW, palD), category: 'pinwheel', label: '12방 핀휠' },
     { key: '16pin', fn: () => checkNPin(bw, bd, 16, palW, palD), category: 'pinwheel', label: '16방 핀휠' },
     { key: '20pin', fn: () => checkNPin(bw, bd, 20, palW, palD), category: 'pinwheel', label: '20방 핀휠' },
