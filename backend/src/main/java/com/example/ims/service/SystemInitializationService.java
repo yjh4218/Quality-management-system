@@ -89,6 +89,7 @@ public class SystemInitializationService {
         runIsolated("appendChannelSuffixToProductNames", this::appendChannelSuffixToProductNames);
         runIsolated("seedNotificationSettings", this::seedNotificationSettings);
         runIsolated("seedSampleBomMaterials", this::seedSampleBomMaterials);
+        runIsolated("seedMasterProductBomsAndPlanningSets", this::seedMasterProductBomsAndPlanningSets);
 
         log.info(">>>> [SYSTEM INIT] Data Seeding & Repair Completed.");
         runIsolated("performDataAudit", this::performDataAudit);
@@ -1523,5 +1524,299 @@ public class SystemInitializationService {
                 "SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, CURRENT_TIMESTAMP " +
                 "WHERE NOT EXISTS (SELECT 1 FROM master_packaging_materials WHERE bom_code = ?)";
         jdbcTemplate.update(sql, bomCode, componentName, type, detailedType, detailedMaterial, material, weight, thickness, specification, manufacturer, bomCode);
+    }
+
+    /**
+     * [고도화] 마스터 제품의 BOM(포장사양서 사양 및 구성품, 전성분 배합비 100%)과 기획세트 품목들의 상세정보(구성품, 규격, 박스/팔레트)를 완벽하게 자동 구축/채움.
+     */
+    private void seedMasterProductBomsAndPlanningSets() {
+        log.info(">>>> [SYSTEM INIT] Starting seedMasterProductBomsAndPlanningSets...");
+        try {
+            Long brandId = jdbcTemplate.queryForObject("SELECT id FROM brands WHERE name = '아누아' LIMIT 1", Long.class);
+            if (brandId == null) {
+                brandId = jdbcTemplate.queryForObject("SELECT id FROM brands LIMIT 1", Long.class);
+            }
+            Long mfrId = jdbcTemplate.queryForObject("SELECT id FROM manufacturers WHERE name = '한국콜마' LIMIT 1", Long.class);
+            if (mfrId == null) {
+                mfrId = jdbcTemplate.queryForObject("SELECT id FROM manufacturers LIMIT 1", Long.class);
+            }
+
+            // =========================================================================
+            // 1. 마스터 제품 1: PARENT-001 ([기준 마스터] 프리미엄 센텔라 수분 크림) BOM & 성분 완성
+            // =========================================================================
+            Long parentProdId = jdbcTemplate.queryForObject("SELECT id FROM products WHERE item_code = 'PARENT-001' LIMIT 1", Long.class);
+            if (parentProdId != null) {
+                // 포장사양서 ID 목록 조회
+                var specIds = jdbcTemplate.queryForList("SELECT id FROM packaging_specifications WHERE product_id = ?", Long.class, parentProdId);
+                for (Long specId : specIds) {
+                    // 1-1. packaging_spec_components 테이블에 7종 부자재 BOM 채우기
+                    jdbcTemplate.update("DELETE FROM packaging_spec_components WHERE spec_id = ?", specId);
+
+                    Object[][] p1Components = new Object[][]{
+                        {"MAT-CNT-0001", "250mL 투명 PET 원형 보틀", "[용기/PET병] PET (단일수지)", "Ø55 × 145mm (24/410)", 28.5, 1, "(주)삼화패키징", "친환경 투명 단일재질 적용"},
+                        {"MAT-CAP-0001", "24파이 플립 원터치캡 (화이트)", "[캡·펌프/원터치캡] PP (단일수지)", "24/410 Ø27 × 22mm", 4.2, 1, "(주)우성플라테크", "누액 방지 2중 실링 구조"},
+                        {"MAT-BOX-0001", "250mL 원형용기 단상자 CCP 350g", "[단상자·라벨/단상자(CCP)] CCP 350g/m²", "58 × 58 × 150mm", 18.0, 1, "(주)신우지앤피", "FSC 인증 친환경 지류 및 대두유 잉크 4도 인쇄"},
+                        {"MAT-BOX-0002", "250mL 보틀 전면 방수 유포지 라벨", "[단상자·라벨/수축/점착 라벨] PP 유포지 (방수코팅)", "120 × 90mm", 1.2, 1, "태양라벨인쇄", "수분 접촉 시 들뜸 방지 코팅"},
+                        {"MAT-ETC-0001", "PE 에어캡 완충 패드", "[부속품/완충재(에어캡, 패드)] LDPE", "300 × 300mm 2겹", 6.5, 1, "(주)에어플러스", "용기 스크래치 방지 완충재"},
+                        {"MAT-SHP-0001", "250mL 10구 골판지 인박스", "[인박스·아웃박스/인박스(골판지)] E골(골판지)", "295 × 120 × 155mm", 85.0, 1, "(주)대양제지", "10개입 인박스 포장"},
+                        {"MAT-SHP-0002", "250mL 40개입 표준 골판지 아웃박스", "[인박스·아웃박스/아웃박스(골판지)] A골(골판지 DW)", "605 × 255 × 325mm", 420.0, 1, "(주)대양제지", "40개입 표준 수출용 아웃박스"}
+                    };
+
+                    for (Object[] comp : p1Components) {
+                        jdbcTemplate.update(
+                            "INSERT INTO packaging_spec_components (spec_id, bom_code, component_name, spec_details, size_dimension, weight, quantity, supplier, remarks) " +
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            specId, comp[0], comp[1], comp[2], comp[3], comp[4], comp[5], comp[6], comp[7]
+                        );
+                    }
+                }
+                log.info(">>>> [SYSTEM INIT] Seeded 7 BOM packaging spec components for PARENT-001 across all specs.");
+
+                // 1-2. product_ingredients 전성분 9종 (배합비율 100%) 등록
+                jdbcTemplate.update("DELETE FROM product_ingredients WHERE product_id = ?", parentProdId);
+                Object[][] p1Ingredients = new Object[][]{
+                    {"정제수", "Water", "65.5%", "WATER", null, "용제"},
+                    {"병풀추출물", "Centella Asiatica Extract", "15.0%", "CENTELLA ASIATICA EXTRACT", null, "피부컨디셔닝제"},
+                    {"부틸렌글라이콜", "Butylene Glycol", "8.0%", "BUTYLENE GLYCOL", null, "보습제"},
+                    {"글리세린", "Glycerin", "6.0%", "GLYCERIN", null, "보습제"},
+                    {"나이아신아마이드", "Niacinamide", "2.0%", "NIACINAMIDE", null, "미백기능성"},
+                    {"1,2-헥산다이올", "1,2-Hexanediol", "2.0%", "1,2-HEXANEDIOL", null, "방부보조제"},
+                    {"세라마이드엔피", "Ceramide NP", "1.0%", "CERAMIDE NP", null, "피부장벽강화"},
+                    {"소듐하이알루로네이트", "Sodium Hyaluronate", "0.46%", "SODIUM HYALURONATE", null, "수분공급"},
+                    {"아데노신", "Adenosine", "0.04%", "ADENOSINE", null, "주름개선기능성"}
+                };
+
+                for (Object[] ing : p1Ingredients) {
+                    jdbcTemplate.update(
+                        "INSERT INTO product_ingredients (product_id, kor_name, eng_name, content_percent, inci_name, allergen_mark, limit_class) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        parentProdId, ing[0], ing[1], ing[2], ing[3], ing[4], ing[5]
+                    );
+                }
+
+                jdbcTemplate.update(
+                    "UPDATE products SET ingredients = '정제수(65.5%), 병풀추출물(15.0%), 부틸렌글라이콜(8.0%), 글리세린(6.0%), 나이아신아마이드(2.0%), 1,2-헥산다이올(2.0%), 세라마이드엔피(1.0%), 소듐하이알루로네이트(0.46%), 아데노신(0.04%)' WHERE id = ?",
+                    parentProdId
+                );
+                log.info(">>>> [SYSTEM INIT] Seeded 9 ingredients for PARENT-001.");
+            }
+
+            // =========================================================================
+            // 2. 마스터 제품 2: KOLMAR-MASTER-001 ([마스터] 한국콜마 에센스) BOM & 성분 완성
+            // =========================================================================
+            Long kolmarProdId = jdbcTemplate.queryForObject("SELECT id FROM products WHERE item_code = 'KOLMAR-MASTER-001' LIMIT 1", Long.class);
+            if (kolmarProdId != null) {
+                // 포장사양서 ID 조회 또는 생성
+                var specIds = jdbcTemplate.queryForList("SELECT id FROM packaging_specifications WHERE product_id = ?", Long.class, kolmarProdId);
+                if (specIds.isEmpty()) {
+                    jdbcTemplate.update(
+                        "INSERT INTO packaging_specifications (product_id, barcode, lab_number, planner_name, designer_name, qc_name, management_type, barcode_manager, " +
+                        "marking_method, marking_standard, container_marking_display, container_marking_location, container_marking_text, container_marking_expiry_format, " +
+                        "unit_box_marking_display, unit_box_marking_location, unit_box_marking_text, unit_box_marking_expiry_format, " +
+                        "inbox_use_yn, inbox_packaging_type, inbox_tape_method, inbox_qty, inbox_size, inbox_material, " +
+                        "outbox_type, outbox_qty, outbox_size, outbox_material, outbox_channel_sticker_standard, outbox_cushioning_standard, pop_required_standard, " +
+                        "pallet_type_str, pallet_spec, pallet_height_limit, one_pallet_height, one_pallet_weight, pallet_precautions, remarks, is_deleted, created_at, last_modified_at, version) " +
+                        "VALUES (?, '8809998881023', 'LAB-2026-002', '이연구', '최디자인', '정품질', '러닝', '박바코드', " +
+                        "'인쇄', '표준 2줄 착인', '인쇄', '용기 하단 2줄 착인', 'LOT(제조번호)\nEXP YYYYMMDD 까지', 'YYYYMMDD', " +
+                        "'인쇄', '단상자 하단 2줄 착인', 'LOT(제조번호)\nEXP YYYYMMDD 까지', 'YYYYMMDD', " +
+                        "'O', 'A형 박스', '일자 테이핑(H)', 10, '200x300x120', 'SK.S.S.K.K', " +
+                        "'A형 박스', 40, '420x320x260', 'KLB.S.S.K.K', '채널 전용 스티커 부착 필수', '상단 에어캡 완충재 투입', 'POP 부착 필수', " +
+                        "'AJU 11형 플라스틱', '1100x1100x150', '1200', 1200.0, 220.0, '패드 및 각대 부착 필수', '한국콜마 에센스 표준 사양서', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)",
+                        kolmarProdId
+                    );
+                    specIds = jdbcTemplate.queryForList("SELECT id FROM packaging_specifications WHERE product_id = ?", Long.class, kolmarProdId);
+                }
+
+                for (Long specId : specIds) {
+                    jdbcTemplate.update("DELETE FROM packaging_spec_components WHERE spec_id = ?", specId);
+                    Object[][] kolmarComponents = new Object[][]{
+                        {"MAT-CNT-0002", "30mL 앰플용 초자 유리병 (투명)", "[용기/초자(유리)] 유리(Glass)", "Ø38 × 78mm (18/415)", 62.0, 1, "(주)연우패키지", "내충격 강화 초자 유리 적용"},
+                        {"MAT-CAP-0002", "18파이 NBR 고무 스포이드 캡", "[캡·펌프/스포이드(드로퍼)] PP + NBR 고무 + 유리관", "18/415 Ø22 × 82mm", 8.5, 1, "(주)진코스텍", "정밀 토출 드로퍼 설계"},
+                        {"MAT-BOX-0003", "30mL 앰플 단상자 로얄아이보리 350g", "[단상자·라벨/단상자(RIV)] RIV 350g/m²", "42 × 42 × 85mm", 12.5, 1, "(주)신우지앤피", "유리병 파손 방지 2중 내벽 구조"},
+                        {"MAT-BOX-0004", "30mL 앰플 배면 투명 라벨", "[단상자·라벨/수축/점착 라벨] 투명 PET지", "80 × 45mm", 0.6, 1, "태양라벨인쇄", "투명 고접착 라벨"},
+                        {"MAT-SHP-0003", "30mL 50개입 완충 일체형 아웃박스", "[인박스·아웃박스/아웃박스(골판지)] B골(골판지 SW)", "440 × 225 × 190mm", 280.0, 1, "(주)대양제지", "격자형 완충 패드 내장 아웃박스"}
+                    };
+
+                    for (Object[] comp : kolmarComponents) {
+                        jdbcTemplate.update(
+                            "INSERT INTO packaging_spec_components (spec_id, bom_code, component_name, spec_details, size_dimension, weight, quantity, supplier, remarks) " +
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            specId, comp[0], comp[1], comp[2], comp[3], comp[4], comp[5], comp[6], comp[7]
+                        );
+                    }
+                }
+                log.info(">>>> [SYSTEM INIT] Seeded 5 BOM packaging spec components for KOLMAR-MASTER-001.");
+
+                // 2-2. product_ingredients 전성분 7종 (배합비율 100%) 등록
+                jdbcTemplate.update("DELETE FROM product_ingredients WHERE product_id = ?", kolmarProdId);
+                Object[][] kolmarIngredients = new Object[][]{
+                    {"정제수", "Water", "70.0%", "WATER", null, "용제"},
+                    {"프로판다이올", "Propanediol", "10.0%", "PROPANEDIOL", null, "보습제"},
+                    {"병풀추출물", "Centella Asiatica Extract", "7.0%", "CENTELLA ASIATICA EXTRACT", null, "피부진정"},
+                    {"나이아신아마이드", "Niacinamide", "5.0%", "NIACINAMIDE", null, "미백기능성"},
+                    {"판테놀", "Panthenol", "5.0%", "PANTHENOL", null, "보습장벽강화"},
+                    {"1,2-헥산다이올", "1,2-Hexanediol", "2.0%", "1,2-HEXANEDIOL", null, "보존제"},
+                    {"소듐하이알루로네이트", "Sodium Hyaluronate", "1.0%", "SODIUM HYALURONATE", null, "보습제"}
+                };
+
+                for (Object[] ing : kolmarIngredients) {
+                    jdbcTemplate.update(
+                        "INSERT INTO product_ingredients (product_id, kor_name, eng_name, content_percent, inci_name, allergen_mark, limit_class) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        kolmarProdId, ing[0], ing[1], ing[2], ing[3], ing[4], ing[5]
+                    );
+                }
+
+                jdbcTemplate.update(
+                    "UPDATE products SET ingredients = '정제수(70.0%), 프로판다이올(10.0%), 병풀추출물(7.0%), 나이아신아마이드(5.0%), 판테놀(5.0%), 1,2-헥산다이올(2.0%), 소듐하이알루로네이트(1.0%)' WHERE id = ?",
+                    kolmarProdId
+                );
+                log.info(">>>> [SYSTEM INIT] Seeded 7 ingredients for KOLMAR-MASTER-001.");
+            }
+
+            // =========================================================================
+            // 3. 기획세트 품목 상세정보 시딩 및 구성품 완성
+            // =========================================================================
+
+            // 3-1. 기획세트 1: SET-CENTELLA-SPECIAL-01 ([기획세트] 센텔라 수분크림 1+1 기획세트_GENERAL)
+            Integer set1Count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM products WHERE item_code = 'SET-CENTELLA-SPECIAL-01'", Integer.class);
+            if (set1Count == null || set1Count == 0) {
+                jdbcTemplate.update(
+                    "INSERT INTO products (item_code, product_name, english_product_name, brand_id, manufacturer_id, " +
+                    "product_type, is_planning_set, is_parent, is_master, status, active, is_deleted, created_at, updated_at, version, " +
+                    "capacity, weight, width, length, height, width_inch, length_inch, height_inch, " +
+                    "material_body, material_outer_box, material_remarks, manufacturer_container, manufacturer_outer_box, " +
+                    "recycle_grade, recycle_eval_no, recycle_material, has_inbox, " +
+                    "inbox_quantity, inbox_width, inbox_length, inbox_height, inbox_weight, " +
+                    "outbox_quantity, outbox_width, outbox_length, outbox_height, outbox_weight, " +
+                    "pallet_quantity, pallet_width, pallet_length, pallet_height, opened_shelf_life_months, shelf_life_months, photo_audit_disclosed) " +
+                    "VALUES (?, ?, ?, ?, ?, '기획세트', true, true, false, '양산', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1, " +
+                    "'100ml+100ml', '320g', 105.0, 52.0, 145.0, 4.13, 2.05, 5.71, " +
+                    "'PET-G/PP', 'CCP 종이(350g/m²)', '센텔라 수분크림 2개입 1+1 스페셜 기획세트 패키지', '연우', '태양당인쇄', " +
+                    "'우수', '2026-RE-301', 'PET-G/PP/종이', true, " +
+                    "5, 230, 280, 155, 1.8, " +
+                    "20, 480, 300, 330, 7.2, " +
+                    "600, 1100, 1100, 1200, 12, 36, true)",
+                    "SET-CENTELLA-SPECIAL-01", "[기획세트] 센텔라 수분크림 1+1 기획세트_GENERAL", "Centella Cream 1+1 Special Set", brandId, mfrId
+                );
+            }
+
+            Long set1Id = jdbcTemplate.queryForObject("SELECT id FROM products WHERE item_code = 'SET-CENTELLA-SPECIAL-01' LIMIT 1", Long.class);
+            if (set1Id != null) {
+                // 구성품 테이블 (product_components) 동기화: PARENT-001 수량 2개
+                jdbcTemplate.update("DELETE FROM product_components WHERE product_id = ?", set1Id);
+                jdbcTemplate.update(
+                    "INSERT INTO product_components (product_id, item_code, product_name, quantity, capacity, weight) " +
+                    "VALUES (?, 'PARENT-001', '[기준 마스터] 프리미엄 센텔라 수분 크림_JP-OFF', 2, '100ml', '120g')",
+                    set1Id
+                );
+                // 채널 매핑 (일반)
+                Long genChanId = jdbcTemplate.queryForObject("SELECT id FROM sales_channels WHERE name = '일반(GENERAL)' LIMIT 1", Long.class);
+                if (genChanId != null) {
+                    jdbcTemplate.update(
+                        "INSERT INTO product_sales_channels (product_id, channel_id) " +
+                        "SELECT ?, ? WHERE NOT EXISTS (SELECT 1 FROM product_sales_channels WHERE product_id = ? AND channel_id = ?)",
+                        set1Id, genChanId, set1Id, genChanId
+                    );
+                }
+                log.info(">>>> [SYSTEM INIT] Seeded/Aligned SET-CENTELLA-SPECIAL-01 with 2 components.");
+            }
+
+            // 3-2. 기획세트 2: SET-KOLMAR-DUO-01 ([기획세트] 프리미엄 스킨케어 2종 듀오 세트_GENERAL)
+            Integer set2Count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM products WHERE item_code = 'SET-KOLMAR-DUO-01'", Integer.class);
+            if (set2Count == null || set2Count == 0) {
+                jdbcTemplate.update(
+                    "INSERT INTO products (item_code, product_name, english_product_name, brand_id, manufacturer_id, " +
+                    "product_type, is_planning_set, is_parent, is_master, status, active, is_deleted, created_at, updated_at, version, " +
+                    "capacity, weight, width, length, height, width_inch, length_inch, height_inch, " +
+                    "material_body, material_outer_box, material_remarks, manufacturer_container, manufacturer_outer_box, " +
+                    "recycle_grade, recycle_eval_no, recycle_material, has_inbox, " +
+                    "inbox_quantity, inbox_width, inbox_length, inbox_height, inbox_weight, " +
+                    "outbox_quantity, outbox_width, outbox_length, outbox_height, outbox_weight, " +
+                    "pallet_quantity, pallet_width, pallet_length, pallet_height, opened_shelf_life_months, shelf_life_months, photo_audit_disclosed) " +
+                    "VALUES (?, ?, ?, ?, ?, '기획세트', true, true, false, '양산', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1, " +
+                    "'100ml+50ml', '295g', 130.0, 55.0, 150.0, 5.12, 2.17, 5.91, " +
+                    "'PET-G/초자유리', 'CCP 종이(350g/m²)', '수분크림 본품 + 한국콜마 에센스 결합 2종 듀오 기획세트', '연우/삼화', '두원팩', " +
+                    "'우수', '2026-RE-302', 'PET-G/초자/종이', true, " +
+                    "5, 250, 300, 160, 1.7, " +
+                    "20, 520, 320, 340, 6.8, " +
+                    "600, 1100, 1100, 1200, 12, 36, true)",
+                    "SET-KOLMAR-DUO-01", "[기획세트] 프리미엄 스킨케어 2종 듀오 세트_GENERAL", "Premium Skincare 2-Piece Duo Set", brandId, mfrId
+                );
+            }
+
+            Long set2Id = jdbcTemplate.queryForObject("SELECT id FROM products WHERE item_code = 'SET-KOLMAR-DUO-01' LIMIT 1", Long.class);
+            if (set2Id != null) {
+                // 구성품 테이블 (product_components) 동기화: PARENT-001(1개) + KOLMAR-MASTER-001(1개)
+                jdbcTemplate.update("DELETE FROM product_components WHERE product_id = ?", set2Id);
+                jdbcTemplate.update(
+                    "INSERT INTO product_components (product_id, item_code, product_name, quantity, capacity, weight) " +
+                    "VALUES (?, 'PARENT-001', '[기준 마스터] 프리미엄 센텔라 수분 크림_JP-OFF', 1, '100ml', '120g')",
+                    set2Id
+                );
+                jdbcTemplate.update(
+                    "INSERT INTO product_components (product_id, item_code, product_name, quantity, capacity, weight) " +
+                    "VALUES (?, 'KOLMAR-MASTER-001', '[마스터] 한국콜마 에센스_JP-OFF', 1, '50ml', '95g')",
+                    set2Id
+                );
+                // 채널 매핑
+                Long genChanId = jdbcTemplate.queryForObject("SELECT id FROM sales_channels WHERE name = '일반(GENERAL)' LIMIT 1", Long.class);
+                if (genChanId != null) {
+                    jdbcTemplate.update(
+                        "INSERT INTO product_sales_channels (product_id, channel_id) " +
+                        "SELECT ?, ? WHERE NOT EXISTS (SELECT 1 FROM product_sales_channels WHERE product_id = ? AND channel_id = ?)",
+                        set2Id, genChanId, set2Id, genChanId
+                    );
+                }
+                log.info(">>>> [SYSTEM INIT] Seeded/Aligned SET-KOLMAR-DUO-01 with 2 components.");
+            }
+
+            // 3-3. 기존에 등록된 모든 기획세트(is_planning_set = true 또는 product_type = '기획세트')의 상세정보 보정
+            jdbcTemplate.update(
+                "UPDATE products SET " +
+                "product_type = '기획세트', is_planning_set = true, is_parent = true, " +
+                "capacity = COALESCE(capacity, '100ml+50ml'), " +
+                "weight = COALESCE(weight, '295g'), " +
+                "width = COALESCE(width, 130.0), length = COALESCE(length, 55.0), height = COALESCE(height, 150.0), " +
+                "width_inch = COALESCE(width_inch, 5.12), length_inch = COALESCE(length_inch, 2.17), height_inch = COALESCE(height_inch, 5.91), " +
+                "material_body = COALESCE(material_body, 'PET-G/초자유리'), " +
+                "material_outer_box = COALESCE(material_outer_box, 'CCP 종이(350g/m²)'), " +
+                "recycle_grade = COALESCE(recycle_grade, '우수'), " +
+                "recycle_eval_no = COALESCE(recycle_eval_no, '2026-RE-300'), " +
+                "recycle_material = COALESCE(recycle_material, 'PET/유리/종이'), " +
+                "has_inbox = true, " +
+                "inbox_quantity = COALESCE(inbox_quantity, 5), " +
+                "inbox_width = COALESCE(inbox_width, 250), inbox_length = COALESCE(inbox_length, 300), inbox_height = COALESCE(inbox_height, 160), inbox_weight = COALESCE(inbox_weight, 1.7), " +
+                "outbox_quantity = COALESCE(outbox_quantity, 20), " +
+                "outbox_width = COALESCE(outbox_width, 520), outbox_length = COALESCE(outbox_length, 320), outbox_height = COALESCE(outbox_height, 340), outbox_weight = COALESCE(outbox_weight, 6.8), " +
+                "pallet_quantity = COALESCE(pallet_quantity, 600), " +
+                "pallet_width = COALESCE(pallet_width, 1100), pallet_length = COALESCE(pallet_length, 1100), pallet_height = COALESCE(pallet_height, 1200) " +
+                "WHERE (is_planning_set = true OR product_type = '기획세트') AND (is_deleted = false OR is_deleted IS NULL)"
+            );
+
+            // 구성품이 없는 기획세트에 기본 구성품 매핑
+            var planSetIds = jdbcTemplate.queryForList(
+                "SELECT id FROM products WHERE (is_planning_set = true OR product_type = '기획세트') AND (is_deleted = false OR is_deleted IS NULL) " +
+                "AND NOT EXISTS (SELECT 1 FROM product_components pc WHERE pc.product_id = products.id)",
+                Long.class
+            );
+
+            for (Long psId : planSetIds) {
+                jdbcTemplate.update(
+                    "INSERT INTO product_components (product_id, item_code, product_name, quantity, capacity, weight) " +
+                    "VALUES (?, 'PARENT-001', '[기준 마스터] 프리미엄 센텔라 수분 크림_JP-OFF', 1, '100ml', '120g')",
+                    psId
+                );
+                jdbcTemplate.update(
+                    "INSERT INTO product_components (product_id, item_code, product_name, quantity, capacity, weight) " +
+                    "VALUES (?, 'KOLMAR-MASTER-001', '[마스터] 한국콜마 에센스_JP-OFF', 1, '50ml', '95g')",
+                    psId
+                );
+            }
+            log.info(">>>> [SYSTEM INIT] Completed auto-filling BOM and planning set details for all products.");
+
+        } catch (Exception e) {
+            log.error(">>>> [SYSTEM INIT] [ERROR] Failed to seed master BOM and planning sets: {}", e.getMessage(), e);
+        }
     }
 }

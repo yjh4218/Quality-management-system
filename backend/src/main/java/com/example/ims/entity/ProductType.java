@@ -1,12 +1,15 @@
 package com.example.ims.entity;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.Getter;
 
 /**
- * 9가지 제품 유형 (Feature 1)
+ * 제품 유형 (Feature 1)
  */
 @Getter
 public enum ProductType {
+    SET("기획세트"),
     PET_REGULAR("PET병 - 막캡"),
     PET_ONE_TOUCH("PET병 - 원터치캡"),
     TUBE("튜브 형태"),
@@ -22,4 +25,26 @@ public enum ProductType {
     ProductType(String description) {
         this.description = description;
     }
+
+    @JsonValue
+    public String getDescription() {
+        return this.description;
+    }
+
+    @JsonCreator
+    public static ProductType fromString(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return ETC;
+        }
+        String trimmed = value.trim();
+        for (ProductType type : ProductType.values()) {
+            if (type.name().equalsIgnoreCase(trimmed) || 
+                type.description.equalsIgnoreCase(trimmed) ||
+                (trimmed.contains("기획세트") && type == SET)) {
+                return type;
+            }
+        }
+        return ETC;
+    }
 }
+

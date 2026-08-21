@@ -614,10 +614,23 @@ export const logPageView = (data) => api.post('/api/logs/access/page-move', data
 export const getAccessLogs = () => api.get('/api/logs/access').then(res => res.data);
 
 // Bug Reports
-export const submitBugReport = (report) => {
+export const submitBugReport = (report = {}) => {
     const reporterInfo = getFormattedReporterInfo();
+    const screenName = report?.screenName || report?.pageName || window.__QMS_ACTIVE_PAGE__ || window.location.pathname || '시스템 공통';
+    const url = report?.url || report?.pageUrl || window.location.href || 'http://localhost:5173/';
+    const description = report?.description || report?.errorMessage || '오류가 발생했습니다.';
+    const serverError = report?.serverError || (report?.errorMessage ? `[에러메시지] ${report.errorMessage}` : null);
+    const steps = report?.steps || report?.stackTrace || '시스템 전역에서 예외 상황이 감지되었습니다.';
+
     const payload = {
         ...report,
+        screenName: String(screenName).trim() || '시스템 공통',
+        url: String(url).slice(0, 1000),
+        description: String(description).trim().slice(0, 5000) || '오류 발생',
+        serverError: serverError ? String(serverError).slice(0, 2000) : null,
+        steps: steps ? String(steps).slice(0, 3000) : null,
+        severity: report?.severity || 'HIGH',
+        errorCategory: report?.errorCategory || 'API_400_SAVE_ERROR',
         reporterName: (report?.reporterName && report?.reporterName !== 'ANONYMOUS_USER' && !report?.reporterName.includes('null'))
             ? report.reporterName
             : reporterInfo.name,

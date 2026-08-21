@@ -1,8 +1,10 @@
 package com.example.ims.service;
 
+import com.example.ims.entity.Manufacturer;
 import com.example.ims.entity.PackagingMaterial;
 import com.example.ims.entity.Product;
 import com.example.ims.entity.ProductHistory;
+import com.example.ims.entity.ProductType;
 import com.example.ims.entity.User;
 import com.example.ims.repository.BrandRepository;
 import com.example.ims.repository.ManufacturerRepository;
@@ -174,6 +176,27 @@ public class ProductService {
             throw new RuntimeException("유통 채널 정보는 필수입니다. 최소 1개 이상의 채널을 선택해 주세요.");
         }
 
+        // 유통 채널 영속성 엔티티 룩업 (ID 또는 이름 기반)
+        java.util.List<com.example.ims.entity.SalesChannel> persistentChannels = new java.util.ArrayList<>();
+        for (com.example.ims.entity.SalesChannel ch : product.getChannels()) {
+            if (ch != null) {
+                com.example.ims.entity.SalesChannel matchedChannel = null;
+                if (ch.getId() != null) {
+                    matchedChannel = salesChannelRepository.findById(ch.getId()).orElse(null);
+                }
+                if (matchedChannel == null && ch.getName() != null && !ch.getName().trim().isEmpty()) {
+                    matchedChannel = salesChannelRepository.findByNameAndIsDeletedFalse(ch.getName().trim()).orElse(null);
+                }
+                if (matchedChannel != null && !persistentChannels.contains(matchedChannel)) {
+                    persistentChannels.add(matchedChannel);
+                }
+            }
+        }
+        if (persistentChannels.isEmpty()) {
+            throw new IllegalArgumentException("선택하신 유통 채널 정보가 유효하지 않습니다.");
+        }
+        product.setChannels(persistentChannels);
+
         // 선택된 채널 정보를 기반으로 제품명 뒤에 _채널코드 접미사 자동 반영
         formatProductNameWithChannel(product);
         
@@ -190,23 +213,49 @@ public class ProductService {
             product.setBrand(brandRepository.findByName("아누아").orElse(null));
         }
 
-        // Handle Manufacturer verification
+        // Handle Manufacturer verification with graceful fallback for Sets/New products
         if (product.getManufacturerInfo() != null && product.getManufacturerInfo().getId() != null) {
             product.setManufacturerInfo(manufacturerRepository.findById(product.getManufacturerInfo().getId())
-                    .orElseThrow(() -> new IllegalArgumentException("선택하신 제조사 정보(ID: " + product.getManufacturerInfo().getId() + ")를 찾을 수 없습니다.")));
+                    .orElseGet(() -> manufacturerRepository.findByName("한국콜마").orElse(null)));
         } else if (product.getManufacturerInfo() != null && product.getManufacturerInfo().getName() != null && !product.getManufacturerInfo().getName().isEmpty()) {
             String mfrName = product.getManufacturerInfo().getName();
             product.setManufacturerInfo(manufacturerRepository.findByName(mfrName)
-                    .orElseThrow(() -> new RuntimeException("등록되지 않은 제조사입니다: " + mfrName + ". 먼저 제조사를 등록해 주세요.")));
+                    .orElseGet(() -> manufacturerRepository.findByName("한국콜마").orElse(null)));
         } else {
-            throw new RuntimeException("Manufacturer information is required.");
+            // 구성품이 있는 기획세트인 경우 첫 번째 구성품의 등록 제조사 룩업 시도
+            Manufacturer resolvedMfr = null;
+            if (product.getComponents() != null && !product.getComponents().isEmpty()) {
+                for (ProductComponent pc : product.getComponents()) {
+                    if (pc.getItemCode() != null) {
+                        resolvedMfr = productRepository.findByItemCode(pc.getItemCode())
+                                .map(Product::getManufacturerInfo)
+                                .orElse(null);
+                        if (resolvedMfr != null) break;
+                    }
+                }
+            }
+            if (resolvedMfr == null) {
+                resolvedMfr = manufacturerRepository.findByName("한국콜마").orElse(null);
+                if (resolvedMfr == null) {
+                    java.util.List<Manufacturer> actives = manufacturerRepository.findByActiveTrue();
+                    if (actives != null && !actives.isEmpty()) {
+                        resolvedMfr = actives.get(0);
+                    }
+                }
+            }
+            product.setManufacturerInfo(resolvedMfr);
         }
 
-        if (product.getComponents() != null) {
-            for (ProductComponent pc : product.getComponents()) {
-                if (pc.getItemCode() != null && productRepository.existsByItemCode(pc.getItemCode())) {
-                    throw new RuntimeException("구성품의 품목코드 " + pc.getItemCode() + " 는 이미 시스템에 등록되어 재사용이 불가능합니다.");
-                }
+        if (product.getManufacturerInfo() == null) {
+            throw new RuntimeException("제조사 정보는 필수 항목입니다. 제조사를 선택해 주세요.");
+        }
+
+        // 기획세트 여부 자동 판별 (구성품이 있거나 productType이 기획세트인 경우)
+        if (product.getProductType() == ProductType.SET || (product.getComponents() != null && !product.getComponents().isEmpty())) {
+            product.setPlanningSet(true);
+            product.setParent(true);
+            if (product.getProductType() == null) {
+                product.setProductType(ProductType.SET);
             }
         }
         

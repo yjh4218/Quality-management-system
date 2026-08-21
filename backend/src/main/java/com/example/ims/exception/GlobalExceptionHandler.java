@@ -39,11 +39,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, String>> handleValidationExceptions(MethodArgumentNotValidException ex) {
         Map<String, String> errors = new HashMap<>();
+        StringBuilder summary = new StringBuilder();
         ex.getBindingResult().getAllErrors().forEach((error) -> {
             String fieldName = ((FieldError) error).getField();
             String errorMessage = error.getDefaultMessage();
             errors.put(fieldName, errorMessage);
+            if (summary.length() > 0) summary.append(", ");
+            summary.append(errorMessage);
         });
+        errors.put("message", summary.length() > 0 ? summary.toString() : "입력값 검증에 실패하였습니다.");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errors);
     }
 

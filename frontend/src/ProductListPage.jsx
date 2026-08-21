@@ -29,6 +29,7 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
         (end) => setSearchFields(prev => ({ ...prev, endDate: end }))
     );
     const [showOnlyMaster, setShowOnlyMaster] = useState(false);
+    const [showOnlyPlanningSet, setShowOnlyPlanningSet] = useState(false);
     const [showSearchPopup, setShowSearchPopup] = useState(false);
     const [loading, setLoading] = useState(false);
     const [exporting, setExporting] = useState(false);
@@ -125,9 +126,15 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
     };
 
     const filteredRowData = useMemo(() => {
-        if (!showOnlyMaster) return rowData;
-        return rowData.filter(p => p.isMaster);
-    }, [rowData, showOnlyMaster]);
+        let list = rowData;
+        if (showOnlyMaster) {
+            list = list.filter(p => p.isMaster);
+        }
+        if (showOnlyPlanningSet) {
+            list = list.filter(p => p.isPlanningSet || p.productType === '기획세트');
+        }
+        return list;
+    }, [rowData, showOnlyMaster, showOnlyPlanningSet]);
 
     const handleExportExcel = async () => {
         if (!rowData || rowData.length === 0) {
@@ -386,7 +393,10 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
                         <button
-                            onClick={() => setShowOnlyMaster(!showOnlyMaster)}
+                            onClick={() => {
+                                setShowOnlyMaster(!showOnlyMaster);
+                                if (!showOnlyMaster) setShowOnlyPlanningSet(false);
+                            }}
                             className="outline"
                             style={{
                                 border: `1px solid ${showOnlyMaster ? '#ef4444' : '#f59e0b'}`,
@@ -396,6 +406,21 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
                             }}
                         >
                             {showOnlyMaster ? '👀 전체 조회' : '⭐ 마스터 조회'}
+                        </button>
+                        <button
+                            onClick={() => {
+                                setShowOnlyPlanningSet(!showOnlyPlanningSet);
+                                if (!showOnlyPlanningSet) setShowOnlyMaster(false);
+                            }}
+                            className="outline"
+                            style={{
+                                border: `1px solid ${showOnlyPlanningSet ? '#ef4444' : '#8b5cf6'}`,
+                                backgroundColor: showOnlyPlanningSet ? '#fef2f2' : '#f5f3ff',
+                                color: showOnlyPlanningSet ? '#dc2626' : '#6d28d9',
+                                fontWeight: 'bold'
+                            }}
+                        >
+                            {showOnlyPlanningSet ? '👀 전체 조회' : '🎁 기획세트 조회'}
                         </button>
                         {canView('products') && (
                             <button
@@ -417,7 +442,12 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
                         </button>
                         <button
                             className="outline"
-                            onClick={() => { setSearchFields({ itemCode: '', productName: '', brand: '', manufacturer: '', ingredients: '' }); setSelectedChannels([]); }}
+                            onClick={() => {
+                                setSearchFields({ itemCode: '', productName: '', brand: '', manufacturer: '', ingredients: '' });
+                                setSelectedChannels([]);
+                                setShowOnlyMaster(false);
+                                setShowOnlyPlanningSet(false);
+                            }}
                             style={{ padding: '10px 16px', fontSize: '14px' }}
                         >
                             ♻️ 초기화

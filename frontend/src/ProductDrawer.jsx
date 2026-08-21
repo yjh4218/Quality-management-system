@@ -45,7 +45,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
         productBarcode: '',
         inboxBarcode: '',
         outboxBarcode: '',
-        productType: '단품',
+        productType: 'PET_REGULAR',
         capacity: '',
         capacityFlOz: '',
         weight: '',
@@ -1475,7 +1475,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                         itemCode: fullProduct.itemCode || '',
                         productName: fullProduct.productName || '',
                         englishProductName: fullProduct.englishProductName || '',
-                        productType: fullProduct.productType || (fullProduct.isPlanningSet ? '기획세트' : '단품'),
+                        productType: fullProduct.productType || (fullProduct.isPlanningSet ? '기획세트' : 'PET_REGULAR'),
                         brand: fullProduct.brand || { id: null },
                         manufacturerInfo: fullProduct.manufacturerInfo || { id: null },
                         shelfLifeMonths: fullProduct.shelfLifeMonths || '',
@@ -1519,7 +1519,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                         itemCode: product.itemCode || '',
                         productName: product.productName || '',
                         englishProductName: product.englishProductName || '',
-                        productType: product.productType || (product.isPlanningSet ? '기획세트' : '단품'),
+                        productType: product.productType || (product.isPlanningSet ? '기획세트' : 'PET_REGULAR'),
                         brand: product.brand || { id: null },
                         manufacturerInfo: product.manufacturerInfo || { id: null },
                         shelfLifeMonths: product.shelfLifeMonths || '',
@@ -1558,6 +1558,14 @@ const ProductDrawer = ({ product, onClose, user }) => {
             fetchFullProduct();
             fetchHistory(product.id);
             fetchTestReports(product.id);
+        } else if (product) {
+            resetForm();
+            setFormData(prev => ({
+                ...prev,
+                ...product,
+                productType: product.productType || (product.isPlanningSet ? '기획세트' : 'PET_REGULAR'),
+                isPlanningSet: !!(product.isPlanningSet || product.productType === '기획세트')
+            }));
         } else {
             resetForm();
         }
@@ -1591,7 +1599,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
             itemCode: '',
             productName: '',
             englishProductName: '',
-            productType: '단품',
+            productType: 'PET_REGULAR',
             brand: { id: null },
             manufacturerInfo: { id: null },
             capacity: '',
@@ -2288,73 +2296,13 @@ const ProductDrawer = ({ product, onClose, user }) => {
         } catch (error) { toast.error("템플릿 로드 실패"); }
     };
 
-    // 유통채널 룰을 현재 사양서(currentSpec)에 즉시 매핑 적용하는 공통 함수
-    const applyChannelRulesToCurrentSpec = (channelToApply = null, isSetOverride = null) => {
-        const rawChan = channelToApply || (formData.channels && formData.channels.length > 0 ? formData.channels[0] : null);
-        if (!rawChan) {
-            toast.info("선택된 유통 채널이 없습니다.");
-            return;
-        }
-        const selectedChannel = salesChannels.find(c => String(c.id) === String(rawChan.id) || c.name === rawChan.name) || rawChan;
-        const isSet = isSetOverride !== null ? isSetOverride : !!(formData.isPlanningSet || formData.productType === '기획세트');
 
-        const uRule = isSet ? (selectedChannel.setUnitBoxMarkingRule || selectedChannel.unitBoxMarkingRule) : selectedChannel.unitBoxMarkingRule;
-        const iRule = isSet ? selectedChannel.setInboxLabelMarkingRule : selectedChannel.inboxLabelMarkingRule;
-        const oRule = isSet ? selectedChannel.setOutboxLabelMarkingRule : selectedChannel.outboxLabelMarkingRule;
-        const pRule = isSet ? selectedChannel.setPalletLabelMarkingRule : selectedChannel.palletLabelMarkingRule;
-        const expFormat = selectedChannel.expDateFormat ? `LOT(제조번호)\nEXP ${selectedChannel.expDateFormat}` : '';
-        const cleanAutoRule = uRule ? uRule.replace(/\[생산배치번호\]/g, 'LOT(제조번호)').replace(/생산배치번호/g, 'LOT(제조번호)') : '';
-        const autoMarkingText = cleanAutoRule
-            ? (selectedChannel.expDateFormat ? `${cleanAutoRule}\n(표기형식: ${selectedChannel.expDateFormat})` : cleanAutoRule)
-            : expFormat;
-
-        const stickerLabel = isSet && selectedChannel.setChannelStickerStandard
-            ? selectedChannel.setChannelStickerStandard
-            : (selectedChannel.channelStickerRequired ? `${selectedChannel.channelCode || selectedChannel.name} 스티커 부착` : '해당 없음');
-        const cushioningLabel = isSet && selectedChannel.setCushioningStandard
-            ? selectedChannel.setCushioningStandard
-            : (selectedChannel.cushioningStandard || '박스 상단 빈공간 비닐 에어캡 완충재 투입');
-        const popLabel = selectedChannel.popRequired
-            ? `${selectedChannel.channelCode || selectedChannel.name} POP 부착/동봉 필수`
-            : '해당 없음';
-        const maxStack = isSet && selectedChannel.setPalletHeightLimit
-            ? selectedChannel.setPalletHeightLimit
-            : (selectedChannel.maxStackHeightMm ? String(selectedChannel.maxStackHeightMm) : '');
-        const containerDisplay = isSet
-            ? (selectedChannel.setContainerMarkingDisplay || '인쇄')
-            : '인쇄';
-
-        if (selectedChannel.expDateFormat === '표기금지' || selectedChannel.name?.includes('JP/OFF')) {
-            setHideExpiryOnLabels(true);
-        }
-
-        setCurrentSpec(prev => ({
-            ...prev,
-            palletTypeStr: selectedChannel.palletType || prev.palletTypeStr || '',
-            palletSpec: selectedChannel.palletSpec || prev.palletSpec || '',
-            palletHeightLimit: maxStack || prev.palletHeightLimit || '',
-            onePalletHeight: maxStack || prev.onePalletHeight || '',
-            outboxChannelStickerStandard: stickerLabel,
-            outboxCushioningStandard: cushioningLabel,
-            popRequiredStandard: popLabel,
-            containerMarkingDisplay: containerDisplay,
-            unitBoxMarkingDisplay: containerDisplay,
-            unitBoxMarkingRule: uRule || prev.unitBoxMarkingRule || '',
-            inboxLabelMarkingRule: iRule || prev.inboxLabelMarkingRule || '',
-            outboxLabelMarkingRule: oRule || prev.outboxLabelMarkingRule || '',
-            palletLabelMarkingRule: pRule || prev.palletLabelMarkingRule || '',
-            inboxDateFormat: selectedChannel.inboxDateFormat || prev.inboxDateFormat || '',
-            outboxDateFormat: selectedChannel.outboxDateFormat || prev.outboxDateFormat || '',
-            palletDateFormat: selectedChannel.palletDateFormat || prev.palletDateFormat || '',
-            containerMarkingText: autoMarkingText || prev.containerMarkingText || '',
-            unitBoxMarkingText: autoMarkingText || prev.unitBoxMarkingText || ''
-        }));
-        toast.success(`[${selectedChannel.name}] ${isSet ? '기획세트' : '단품'} 유통채널 기준이 사양서에 반영되었습니다.`);
-    };
 
     // 구성품 목록으로부터 BOM 정보를 백엔드에서 자동 취합하여 연동
     const syncBomFromComponents = async (componentsList) => {
         if (!componentsList || componentsList.length === 0) {
+            setSpecComponents([]);
+            setCurrentSpec(prev => ({ ...prev, bomItems: [] }));
             return;
         }
         try {
@@ -2363,11 +2311,39 @@ const ProductDrawer = ({ product, onClose, user }) => {
             const bomList = Array.isArray(aggregatedBoms) ? aggregatedBoms : (aggregatedBoms?.data && Array.isArray(aggregatedBoms.data) ? aggregatedBoms.data : []);
             
             if (bomList.length > 0) {
+                // 1. currentSpec.bomItems 갱신
                 setCurrentSpec(prev => ({
                     ...prev,
                     bomItems: bomList
                 }));
-                // 구성품들의 용량 및 중량 자동 합산 계산
+
+                // 2. Sheet 1 구성품 테이블(specComponents) 갱신 (PackagingSpecComponent 포맷 매핑)
+                const mappedComponents = bomList.map(b => {
+                    const mat = b.masterMaterial || {};
+                    const usage = b.usageCount != null ? Math.round(b.usageCount) : 1;
+                    const itemWeight = mat.weight != null ? parseFloat(mat.weight) : 0;
+                    const specDetails = [mat.type, mat.detailedType, mat.material, mat.detailedMaterial].filter(Boolean).join(' / ') || b.specification || '';
+                    const sizeDim = mat.specification || b.specification || '';
+                    const supplier = mat.manufacturer || '';
+                    const compName = mat.componentName || b.parentComponentName || '';
+                    const bomCode = mat.bomCode || b.parentComponentCode || '';
+                    const imagePath = mat.imagePath || '';
+
+                    return {
+                        bomCode: bomCode,
+                        componentName: compName,
+                        specDetails: specDetails,
+                        sizeDimension: sizeDim,
+                        weight: itemWeight,
+                        quantity: usage,
+                        supplier: supplier,
+                        remarks: b.parentComponentName ? `[${b.parentComponentName}] 구성품 부자재` : '',
+                        imagePath: imagePath
+                    };
+                });
+                setSpecComponents(mappedComponents);
+
+                // 3. 구성품들의 용량 및 중량 자동 합산 계산
                 let totalMl = 0;
                 let totalG = 0;
                 componentsList.forEach(c => {
@@ -2387,7 +2363,10 @@ const ProductDrawer = ({ product, onClose, user }) => {
                         weightOz: totalG > 0 ? (totalG * 0.035274).toFixed(2) : prev.weightOz
                     }));
                 }
-                toast.success(`구성품 ${componentsList.length}개의 포장사양서에서 BOM ${bomList.length}건이 자동 연동되었습니다.`);
+                toast.success(`구성품 ${componentsList.length}개의 포장사양서에서 BOM ${mappedComponents.length}건이 Sheet 1 사양서에 자동 연동되었습니다.`);
+            } else {
+                setSpecComponents([]);
+                setCurrentSpec(prev => ({ ...prev, bomItems: [] }));
             }
         } catch (err) {
             console.error('Failed to aggregate BOM from components', err);
@@ -2431,6 +2410,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
         if (updatedComponents.length > 0) {
             syncBomFromComponents(updatedComponents);
         } else {
+            setSpecComponents([]);
             setCurrentSpec(prev => ({ ...prev, bomItems: [] }));
         }
     };
@@ -2444,6 +2424,16 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
     const handleSubmit = (e) => {
         if (e) e.preventDefault();
+
+        if (!formData.itemCode || !formData.itemCode.trim()) {
+            alert("⚠️ 품목코드는 필수 입력 항목입니다.");
+            return;
+        }
+
+        if (!formData.productName || !formData.productName.trim()) {
+            alert("⚠️ 제품명은 필수 입력 항목입니다.");
+            return;
+        }
 
         // 채널 정보가 선택되지 않은 경우 필수 안내 알림 및 진행 차단
         if (!formData.channels || formData.channels.length === 0) {
@@ -2480,6 +2470,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                 if (isSpecLoaded) {
                     const specToSave = { ...currentSpec };
                     delete specToSave.methodImages;
+                    delete specToSave.bomItems;
 
                     const dynamicPalletWt = calcPalletWeight(currentSpec, formData);
                     if (dynamicPalletWt) {
@@ -2511,7 +2502,29 @@ const ProductDrawer = ({ product, onClose, user }) => {
             onClose(true);
         } catch (error) {
             console.error("Batch save error:", error);
-            alert("저장 중 오류가 발생했습니다.");
+            let serverMsg = error.response?.data?.message || (typeof error.response?.data === 'string' ? error.response.data : null);
+            if (!serverMsg && error.response?.data && typeof error.response.data === 'object') {
+                serverMsg = Object.entries(error.response.data).map(([k, v]) => `${k}: ${v}`).join(', ');
+            }
+            serverMsg = serverMsg || error.message || "서버 통신 오류";
+            alert(`저장 중 오류가 발생했습니다.\n사유: ${serverMsg}`);
+
+            // [오류 추적 및 버그 리포트] 저장 실패 시 시스템 버그 리포트에 자동 적재
+            try {
+                await api.submitBugReport({
+                    screenName: '제품코드 마스터 (ProductDrawer)',
+                    url: window.location.href,
+                    errorCategory: 'API_400_SAVE_ERROR',
+                    errorMessage: `제품 저장 실패 (itemCode: ${formData.itemCode || '미입력'}): ${serverMsg}`,
+                    description: `제품 저장 실패 (itemCode: ${formData.itemCode || '미입력'}). 사유: ${serverMsg}`,
+                    serverError: typeof error.response?.data === 'object' ? JSON.stringify(error.response.data) : (error.response?.data || error.message),
+                    steps: error.stack || 'No Stack Trace',
+                    severity: 'HIGH'
+                });
+                console.log("[QMS] Bug report auto-submitted for save error.");
+            } catch (reportErr) {
+                console.warn("[QMS] Failed to submit bug report on save error:", reportErr);
+            }
         }
     };
 
@@ -2561,9 +2574,6 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
     return (
         <div className="drawer-overlay">
-            {isSearchOpen && <ProductSearchPopup onClose={() => setIsSearchOpen(false)} onSelect={handleAddComponent} />}
-            {isMasterSearchOpen && <ProductSearchPopup onClose={() => setIsMasterSearchOpen(false)} onSelect={handleMasterSelect} />}
-
             <div className="drawer" onClick={(e) => e.stopPropagation()}>
                 <div className="drawer-header">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
@@ -3000,23 +3010,63 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                 <div style={{ padding: '15px', background: '#f8fafc', borderRadius: '12px', marginBottom: '20px', border: '1px solid #e2e8f0' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '10px' }}>
                                 <label style={{ fontWeight: 'bold' }}>🔗 품목코드(Product Num) 및 중복 확인</label>
-                                {canEdit && (
-                                    <button 
-                                        type="button" 
-                                        onClick={handleMasterLoad} 
-                                        className="secondary" 
-                                        disabled={formData.isMaster}
-                                        style={{ 
-                                            padding: '2px 10px', 
-                                            fontSize: '12px',
-                                            opacity: formData.isMaster ? 0.45 : 1,
-                                            cursor: formData.isMaster ? 'not-allowed' : 'pointer'
-                                        }}
-                                        title={formData.isMaster ? '마스터 제품으로 설정된 경우 타 마스터 제품 정보를 불러올 수 없습니다.' : '마스터 제품 불러오기'}
-                                    >
-                                        마스터 제품 불러오기
-                                    </button>
-                                )}
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    {canEdit && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const nextIsSet = !(formData.isPlanningSet || formData.productType === '기획세트');
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    isPlanningSet: nextIsSet,
+                                                    productType: nextIsSet ? '기획세트' : (prev.productType === '기획세트' ? 'PET_REGULAR' : prev.productType)
+                                                }));
+                                                if (formData.channels && formData.channels.length > 0) {
+                                                    syncChannelRulesToSpec(formData.channels[0], true);
+                                                }
+                                                if (nextIsSet) {
+                                                    toast.info("🎁 기획세트 모드로 전환되었습니다. 하단 구성품 관리 카드에서 구성품을 추가하세요.");
+                                                } else {
+                                                    toast.info("단품 모드로 전환되었습니다.");
+                                                }
+                                            }}
+                                            style={{
+                                                padding: '4px 12px',
+                                                fontSize: '12px',
+                                                fontWeight: 'bold',
+                                                borderRadius: '6px',
+                                                border: (formData.isPlanningSet || formData.productType === '기획세트') ? '1.5px solid #d97706' : '1px solid #cbd5e1',
+                                                background: (formData.isPlanningSet || formData.productType === '기획세트') ? '#fef3c7' : '#ffffff',
+                                                color: (formData.isPlanningSet || formData.productType === '기획세트') ? '#b45309' : '#334155',
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                            }}
+                                            title="단품과 기획세트(구성품 포함) 등록 모드를 전환합니다."
+                                        >
+                                            <span>{(formData.isPlanningSet || formData.productType === '기획세트') ? '🎁 기획세트 해제' : '🎁 기획세트 만들기'}</span>
+                                        </button>
+                                    )}
+                                    {!product && canEdit && (
+                                        <button 
+                                            type="button" 
+                                            onClick={handleMasterLoad}
+                                            className="secondary"
+                                            disabled={formData.isMaster}
+                                            style={{ 
+                                                padding: '2px 10px', 
+                                                fontSize: '12px',
+                                                opacity: formData.isMaster ? 0.45 : 1,
+                                                cursor: formData.isMaster ? 'not-allowed' : 'pointer'
+                                            }}
+                                            title={formData.isMaster ? '마스터 제품으로 설정된 경우 타 마스터 제품 정보를 불러올 수 없습니다.' : '마스터 제품 불러오기'}
+                                        >
+                                            마스터 제품 불러오기
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                             <div className="form-group" style={{ marginBottom: 0 }}>
                                 <div style={{ display: 'flex', gap: '10px' }}>
@@ -3025,7 +3075,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                 </div>
                             </div>
 
-                            <div style={{ marginTop: '10px' }}>
+                            <div style={{ marginTop: '10px', display: 'flex', gap: '20px', alignItems: 'center' }}>
                                 <label style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px', cursor: canEdit ? 'pointer' : 'default' }}>
                                     <input 
                                         type="checkbox" 
@@ -3043,6 +3093,26 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                     />
                                     이 제품을 마스터 제품으로 등록
                                 </label>
+                                <label style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px', cursor: canEdit ? 'pointer' : 'default', color: (formData.isPlanningSet || formData.productType === '기획세트') ? '#b45309' : 'inherit', fontWeight: (formData.isPlanningSet || formData.productType === '기획세트') ? 'bold' : 'normal' }}>
+                                    <input 
+                                        type="checkbox" 
+                                        name="isPlanningSet" 
+                                        checked={formData.isPlanningSet || formData.productType === '기획세트'} 
+                                        onChange={(e) => {
+                                            const checked = e.target.checked;
+                                            setFormData(prev => ({ 
+                                                ...prev, 
+                                                isPlanningSet: checked,
+                                                productType: checked ? '기획세트' : (prev.productType === '기획세트' ? 'PET_REGULAR' : prev.productType)
+                                            }));
+                                            if (formData.channels && formData.channels.length > 0) {
+                                                syncChannelRulesToSpec(formData.channels[0], true);
+                                            }
+                                        }} 
+                                        disabled={!canEdit} 
+                                    />
+                                    🎁 이 제품을 기획세트로 등록 (Planning Set)
+                                </label>
                             </div>
                         </div>
 
@@ -3058,8 +3128,16 @@ const ProductDrawer = ({ product, onClose, user }) => {
                         </div>
 
                         <div className="form-group" style={{ marginBottom: '15px' }}>
-                            <label>제품구분</label>
-                            <select name="productType" value={formData.productType} onChange={handleChange} disabled={!canEdit} style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}>
+                            <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span>제품구분</span>
+                                {(formData.isPlanningSet || formData.productType === '기획세트') && (
+                                    <span style={{ fontSize: '11px', color: '#b45309', fontWeight: 'bold', background: '#fef3c7', padding: '2px 6px', borderRadius: '4px' }}>
+                                        🎁 기획세트 모드 활성화됨
+                                    </span>
+                                )}
+                            </label>
+                            <select name="productType" value={formData.productType} onChange={handleChange} disabled={!canEdit} style={{ width: '100%', padding: '8px', borderRadius: '4px', border: (formData.isPlanningSet || formData.productType === '기획세트') ? '2px solid #f59e0b' : '1px solid #ccc', backgroundColor: (formData.isPlanningSet || formData.productType === '기획세트') ? '#fffbeb' : '#fff' }}>
+                                <option value="기획세트">🎁 기획세트 (Planning Set - 복합 구성품)</option>
                                 <option value="PET_REGULAR">PET병 - 막캡</option>
                                 <option value="PET_ONE_TOUCH">PET병 - 원터치캡</option>
                                 <option value="TUBE">튜브 형태</option>
@@ -3071,6 +3149,138 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                 <option value="ETC">기타</option>
                             </select>
                         </div>
+
+                        {/* 기획세트 구성품 관리 섹션 (기획세트 활성화 시 제품구분 바로 아래에 즉시 표시) */}
+                        {(formData.productType === '기획세트' || formData.isPlanningSet) && (
+                            <div style={{ 
+                                marginBottom: '20px', 
+                                padding: '16px', 
+                                background: '#fffbeb', 
+                                borderRadius: '10px', 
+                                border: '2px solid #f59e0b',
+                                boxShadow: '0 2px 6px rgba(245, 158, 11, 0.12)'
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span style={{ fontSize: '18px' }}>📦</span>
+                                        <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#92400e' }}>
+                                            기획세트 구성품 관리 ({formData.components?.length || 0}개 등록됨)
+                                        </h4>
+                                    </div>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setIsSearchOpen(true)} 
+                                        style={{ 
+                                            padding: '6px 14px', 
+                                            fontSize: '12.5px', 
+                                            fontWeight: 'bold',
+                                            backgroundColor: '#d97706', 
+                                            color: '#ffffff',
+                                            border: 'none',
+                                            borderRadius: '6px',
+                                            cursor: canEdit ? 'pointer' : 'not-allowed',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '5px',
+                                            boxShadow: '0 2px 4px rgba(217, 119, 6, 0.3)'
+                                        }}
+                                        disabled={!canEdit}
+                                    >
+                                        <span>+ 🎁 구성품 검색 및 추가</span>
+                                    </button>
+                                </div>
+
+                                <div style={{ background: '#ffffff', borderRadius: '8px', border: '1px solid #fde68a', overflow: 'hidden' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                                        <thead>
+                                            <tr style={{ background: '#fef3c7', borderBottom: '1.5px solid #fcd34d', color: '#78350f' }}>
+                                                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 'bold' }}>품목코드</th>
+                                                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 'bold' }}>구성품명</th>
+                                                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 'bold' }}>용량 / 중량</th>
+                                                <th style={{ padding: '8px 10px', width: '110px', textAlign: 'center', fontWeight: 'bold' }}>수량 (ea)</th>
+                                                {canEdit && <th style={{ padding: '8px 10px', width: '40px', textAlign: 'center' }}></th>}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {(!formData.components || formData.components.length === 0) ? (
+                                                <tr>
+                                                    <td colSpan={canEdit ? 5 : 4} style={{ padding: '24px', textAlign: 'center', color: '#92400e' }}>
+                                                        <div style={{ marginBottom: '8px', fontSize: '14px', fontWeight: '600' }}>
+                                                            등록된 기획세트 구성품이 없습니다.
+                                                        </div>
+                                                        {canEdit && (
+                                                            <button 
+                                                                type="button" 
+                                                                onClick={() => setIsSearchOpen(true)}
+                                                                style={{
+                                                                    padding: '5px 12px',
+                                                                    fontSize: '12px',
+                                                                    backgroundColor: '#f59e0b',
+                                                                    color: '#fff',
+                                                                    border: 'none',
+                                                                    borderRadius: '5px',
+                                                                    cursor: 'pointer',
+                                                                    fontWeight: 'bold'
+                                                                }}
+                                                            >
+                                                                + 🎁 첫 번째 구성품 추가하기
+                                                            </button>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                formData.components.map((c, i) => (
+                                                    <tr key={i} style={{ borderBottom: '1px solid #fef3c7', transition: 'background-color 0.15s' }}>
+                                                        <td style={{ padding: '8px 10px', fontWeight: 'bold', color: '#1d4ed8' }}>{c.itemCode}</td>
+                                                        <td style={{ padding: '8px 10px', fontWeight: '500' }}>{c.productName}</td>
+                                                        <td style={{ padding: '8px 10px', color: '#475569' }}>
+                                                            {c.capacity ? `${c.capacity}mL` : '-'} / {c.weight ? `${c.weight}g` : '-'}
+                                                        </td>
+                                                        <td style={{ padding: '6px 10px', textAlign: 'center' }}>
+                                                            <input
+                                                                type="text"
+                                                                value={formatComma(c.quantity) || ''}
+                                                                onChange={(e) => {
+                                                                    const raw = e.target.value.replace(/,/g, '').trim();
+                                                                    if (/^\d*$/.test(raw)) {
+                                                                        updateComponentQty(i, raw);
+                                                                    }
+                                                                }}
+                                                                disabled={!canEdit}
+                                                                style={{ width: '60px', padding: '4px', textAlign: 'center', borderRadius: '4px', border: '1px solid #cbd5e1', fontWeight: 'bold' }}
+                                                            />
+                                                        </td>
+                                                        {canEdit && (
+                                                            <td style={{ padding: '6px 10px', textAlign: 'center' }}>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => removeComponent(i)}
+                                                                    style={{
+                                                                        background: 'none',
+                                                                        border: 'none',
+                                                                        color: '#ef4444',
+                                                                        fontSize: '18px',
+                                                                        cursor: 'pointer',
+                                                                        lineHeight: 1,
+                                                                        padding: '2px 6px'
+                                                                    }}
+                                                                    title="구성품 삭제"
+                                                                >
+                                                                    🗑️
+                                                                </button>
+                                                            </td>
+                                                        )}
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div style={{ marginTop: '8px', fontSize: '12px', color: '#92400e', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <span>💡</span> 구성품을 추가하거나 수량을 변경하면 <strong>Sheet 1 사양서의 부자재 BOM 목록 및 총 용량/중량이 자동으로 취합·계산</strong>됩니다.
+                                </div>
+                            </div>
+                        )}
 
                         {/* Channel Selection Checkboxes */}
                         <div style={{ marginBottom: '20px' }}>
@@ -3218,80 +3428,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                         </div>
                     </div>
 
-                            {/* 카드 2: 기획세트 구성품 관리 (기획세트일 때만 표시) */}
-                            <div style={{ display: (formData.productType === '기획세트' || formData.isPlanningSet) ? 'block' : 'none' }}>
-                                <div className="card" style={{ borderLeft: '5px solid #f1c40f' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                                        <h3 style={{ margin: 0 }}>
-                                            <span style={{ color: '#f1c40f' }}>📦</span> 기획세트 구성품 관리 (Planning Set)
-                                        </h3>
-                                        <button 
-                                            type="button" 
-                                            className="primary" 
-                                            onClick={() => setIsSearchOpen(true)} 
-                                            style={{ padding: '4px 12px', fontSize: '12px', opacity: canEdit ? 1 : 0.5 }}
-                                            disabled={!canEdit}
-                                        >
-                                            🎁 구성품 추가
-                                        </button>
-                                    </div>
 
-                                    <div style={{ marginTop: '10px' }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', background: '#fff' }}>
-                                            <thead>
-                                                <tr style={{ background: '#f8f9fa', borderBottom: '2px solid #ddd' }}>
-                                                    <th style={{ padding: '8px', textAlign: 'left' }}>품목코드</th>
-                                                    <th style={{ padding: '8px', textAlign: 'left' }}>제품명</th>
-                                                    <th style={{ padding: '8px', textAlign: 'left' }}>용량/중량</th>
-                                                    <th style={{ padding: '8px', width: '100px', textAlign: 'center' }}>수량 (ea)</th>
-                                                    {canEdit && <th style={{ padding: '8px', width: '40px', textAlign: 'center' }}></th>}
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {formData.components.length === 0 && (
-                                                    <tr><td colSpan="5" style={{ padding: '20px', textAlign: 'center', color: '#999' }}>구성품이 없습니다. 상단 버튼으로 추가해주세요.</td></tr>
-                                                )}
-                                                {formData.components.map((c, i) => (
-                                                    <tr key={i} style={{ borderBottom: '1px solid #eee' }}>
-                                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>{c.itemCode}</td>
-                                                        <td style={{ padding: '8px' }}>{c.productName}</td>
-                                                        <td style={{ padding: '8px' }}>{c.capacity || '-'}/{c.weight || '-'}</td>
-                                                        <td style={{ padding: '8px', textAlign: 'center' }}>
-                                                            <input
-                                                                type="text"
-                                                                value={formatComma(c.quantity) || ''}
-                                                                onChange={(e) => {
-                                                                    const raw = e.target.value.replace(/,/g, '').trim();
-                                                                    if (/^\d*$/.test(raw)) {
-                                                                        updateComponentQty(i, raw);
-                                                                    }
-                                                                }}
-                                                                disabled={!canEdit}
-                                                                style={{ width: '70px', padding: '4px', textAlign: 'center' }}
-                                                            />
-                                                            {c.quantity && <div style={{ fontSize: '10px', color: '#2563eb' }}>{formatComma(c.quantity)} ea</div>}
-                                                        </td>
-                                                        <td style={{ padding: '8px', textAlign: 'center' }}>
-                                                            <span 
-                                                                onClick={() => canEdit && removeComponent(i)} 
-                                                                style={{ 
-                                                                    color: 'red', 
-                                                                    cursor: canEdit ? 'pointer' : 'not-allowed', 
-                                                                    fontWeight: 'bold',
-                                                                    fontSize: '16px',
-                                                                    opacity: canEdit ? 1 : 0.3 
-                                                                }}
-                                                            >
-                                                                ×
-                                                            </span>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
 
                             {/* 카드 3: 규격 및 체적 정보 (용량, 중량, 박스규격) */}
                             <div className="card" style={{ borderLeft: '5px solid #2ecc71' }}>
@@ -4072,7 +4209,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                             <>
                                                 <button 
                                                     type="button" 
-                                                    onClick={() => applyChannelRulesToCurrentSpec()}
+                                                    onClick={() => syncChannelRulesToSpec(formData.channels && formData.channels[0], true)}
                                                     style={{ 
                                                         background: '#f0f9ff', 
                                                         border: '1px solid #7dd3fc', 
@@ -6529,6 +6666,10 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                         onRegisterReloadHandler={(fn) => { packagingMethodReloadRef.current = fn; }}
                                         onRegisterInheritHandler={(fn) => { packagingMethodInheritRef.current = fn; }}
                                         onEnsureSpecCreated={async () => {
+                                            if (!product || !product.id) {
+                                                toast.warn("제품 기본 정보를 먼저 저장해주세요.");
+                                                return null;
+                                            }
                                             const specToSave = { ...currentSpec };
                                             delete specToSave.methodImages;
 
@@ -6541,9 +6682,19 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                 components: specComponents,
                                                 methodImages: null
                                             };
-                                            const res = await api.saveFullPackagingSpec(payload);
-                                            const savedSpec = res.data?.spec || res.data;
-                                            return savedSpec?.id || res.data?.id;
+                                            try {
+                                                const res = await api.saveFullPackagingSpec(payload);
+                                                const savedSpec = res.data?.spec || res.data;
+                                                const savedId = savedSpec?.id || res.data?.id || currentSpec?.id;
+                                                if (savedId) {
+                                                    setCurrentSpec(prev => ({ ...prev, ...savedSpec, id: savedId }));
+                                                    fetchPackagingSpecs(product.id);
+                                                }
+                                                return savedId;
+                                            } catch (e) {
+                                                console.error("Failed to auto-create spec", e);
+                                                return null;
+                                            }
                                         }}
                                     />
                                 </div>
@@ -6865,8 +7016,8 @@ const ProductDrawer = ({ product, onClose, user }) => {
             {isSearchOpen && (
                 <ProductSearchPopup
                     onClose={() => setIsSearchOpen(false)}
-                    onSelect={handleLoadProduct}
-                    title="내부 품목 검색 (ItemCode/ProductName)"
+                    onSelect={handleAddComponent}
+                    title="기획세트 구성품 검색 및 추가 (ItemCode/ProductName)"
                 />
             )}
 

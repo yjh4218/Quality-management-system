@@ -576,6 +576,15 @@ public class PackagingSpecService {
             existingToUpdate.setPalletViewConfig(spec.getPalletViewConfig());
 
             targetSpec = existingToUpdate;
+        } else {
+            // New spec entity: ensure managed product association and clear transient bomItems
+            if (spec.getProduct() != null && spec.getProduct().getId() != null) {
+                Product managedProd = productRepository.findById(spec.getProduct().getId()).orElse(spec.getProduct());
+                targetSpec.setProduct(managedProd);
+            }
+            if (targetSpec.getBomItems() != null) {
+                targetSpec.getBomItems().clear();
+            }
         }
         
         PackagingSpecification savedSpec = specRepository.save(targetSpec);

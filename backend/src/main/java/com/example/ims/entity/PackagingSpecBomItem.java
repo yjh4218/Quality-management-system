@@ -23,11 +23,11 @@ public class PackagingSpecBomItem {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "packaging_spec_id", nullable = false)
+    @JoinColumn(name = "packaging_spec_id")
     private PackagingSpecification packagingSpec;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "master_material_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
+    @JoinColumn(name = "master_material_id")
     private MasterPackagingMaterial masterMaterial;
 
     private String specification; // 규격 (개별 수정 가능)

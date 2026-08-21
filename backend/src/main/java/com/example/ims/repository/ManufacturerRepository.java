@@ -7,6 +7,8 @@ import java.util.Optional;
 public interface ManufacturerRepository extends JpaRepository<Manufacturer, Long> {
     Optional<Manufacturer> findByName(String name);
 
+    java.util.List<Manufacturer> findByActiveTrue();
+
     org.springframework.data.domain.Page<Manufacturer> findByActiveTrueAndIsDeletedFalse(org.springframework.data.domain.Pageable pageable);
 
     // [휴지통] 삭제된 항목 조회
