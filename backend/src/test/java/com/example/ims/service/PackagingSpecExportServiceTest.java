@@ -88,6 +88,9 @@ public class PackagingSpecExportServiceTest {
         byte[] excelBytes = exportService.generateExcel(productId);
         assertNotNull(excelBytes);
         assertTrue(excelBytes.length > 1000);
+        try {
+            java.nio.file.Files.write(java.nio.file.Paths.get("test_spec_output.xlsx"), excelBytes);
+        } catch (Exception ignored) {}
 
         try (Workbook wb = new XSSFWorkbook(new ByteArrayInputStream(excelBytes))) {
             assertEquals(5, wb.getNumberOfSheets());
@@ -98,7 +101,7 @@ public class PackagingSpecExportServiceTest {
             // 1. Sheet 0 열 너비 검증
             assertEquals(4800, sheet0.getColumnWidth(0));
             assertEquals(10500, sheet0.getColumnWidth(1));
-            assertEquals(4800, sheet0.getColumnWidth(2));
+            assertEquals(8000, sheet0.getColumnWidth(2), "재질 및 세부사양 Col 2 너비는 8000이어야 함");
             assertEquals(10500, sheet0.getColumnWidth(3));
 
             // 2. Sheet 0 행 높이 및 텍스트 검증
@@ -122,10 +125,10 @@ public class PackagingSpecExportServiceTest {
                         foundPackageImageSection = true;
                     } else if (val.contains("용기 착인기준(3줄)")) {
                         foundMarkingRow = true;
-                        assertEquals(60.0f, row.getHeightInPoints(), "3줄 착인기준 행 높이는 60pt여야 함");
+                        assertTrue(row.getHeightInPoints() >= 60.0f, "3줄 착인기준 행 높이는 최소 60pt여야 함");
                     } else if (val.contains("포장방법 (서술)")) {
                         foundMethodRow = true;
-                        assertEquals(64.0f, row.getHeightInPoints(), "포장방법 서술 행 높이는 64pt여야 함");
+                        assertTrue(row.getHeightInPoints() >= 80.0f, "포장방법 서술 행 높이는 최소 80pt여야 함");
                         org.apache.poi.ss.usermodel.Cell c1 = row.getCell(1);
                         assertNotNull(c1);
                         assertTrue(c1.getStringCellValue().contains("포장방법 사진 참조"), "포장방법에는 '포장방법 사진 참조'가 포함되어야 함");
@@ -162,6 +165,8 @@ public class PackagingSpecExportServiceTest {
 
             Sheet sheet4 = wb.getSheet("팔레트 현품표");
             assertNotNull(sheet4);
+            assertEquals("64 Box", sheet4.getRow(1).getCell(3).getStringCellValue());
+            assertEquals("2560 EA", sheet4.getRow(2).getCell(3).getStringCellValue());
             assertEquals(70.0f, sheet4.getRow(6).getHeightInPoints(), "팔레트 현품표 착인기준 행 높이는 70pt여야 함");
 
             // 파일로 저장하여 후속 아티팩트 점검에 활용

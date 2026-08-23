@@ -7,7 +7,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -48,11 +47,9 @@ public class AdminSystemController {
 
     /**
      * 전체 데이터 임포트 실행 (ADMIN 권한 필요)
-     * [무결성] @Transactional을 적용하여 전체 프로세스 성공 시에만 최종 반영되도록 보장합니다.
      */
     @PostMapping("/import-from-file")
     @PreAuthorize("hasRole('ADMIN')")
-    @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<Map<String, String>> importFromFile() {
         Map<String, String> response = new HashMap<>();
         String filePath = "h2_migration_data.json";
@@ -81,9 +78,9 @@ public class AdminSystemController {
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("Bulk import failed", e);
+            log.error("Bulk import failed: {}", e.getMessage(), e);
             response.put("status", "Failed");
-            response.put("message", e.getMessage());
+            response.put("message", "데이터 임포트 중 오류가 발생했습니다.");
             return ResponseEntity.status(500).body(response);
         }
     }
@@ -99,7 +96,6 @@ public class AdminSystemController {
      */
     @PostMapping("/page-guides/migrate")
     @PreAuthorize("hasRole('ADMIN')")
-    @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<Map<String, Object>> migratePageGuides(@RequestBody List<SystemPageGuide> guides) {
         Map<String, Object> response = new HashMap<>();
         try {
@@ -108,9 +104,9 @@ public class AdminSystemController {
             response.put("message", "Page guides replaced and migrated.");
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            log.error("Page guide migration failed", e);
+            log.error("Page guide migration failed: {}", e.getMessage(), e);
             response.put("status", "failed");
-            response.put("message", e.getMessage());
+            response.put("message", "페이지 가이드 마이그레이션 중 오류가 발생했습니다.");
             return ResponseEntity.status(500).body(response);
         }
     }
@@ -122,10 +118,10 @@ public class AdminSystemController {
             Map<String, Object> result = migrationService.upsertPageGuides(guides);
             return ResponseEntity.ok(result);
         } catch (Exception e) {
-            log.error("Page guide upsert failed", e);
+            log.error("Page guide upsert failed: {}", e.getMessage(), e);
             Map<String, Object> error = new HashMap<>();
             error.put("status", "failed");
-            error.put("message", e.getMessage());
+            error.put("message", "페이지 가이드 저장 중 오류가 발생했습니다.");
             return ResponseEntity.status(500).body(error);
         }
     }

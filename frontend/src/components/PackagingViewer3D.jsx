@@ -328,16 +328,16 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
     return group;
   };
 
-  // ── Helper: Pallet Corner Posts (4모서리 절대좌표 정밀 피팅 + Z-Fighting 방지 + 밴딩 제거) ──
-  const makeCornerPostsAndStraps = (scene, palW, palD, totalHeight, baseY, sc) => {
-    const angleWidth = 0.120; // 120mm L-flange width
-    const angleThickness = 0.016; // 16mm board thickness
+  // ── Helper: Pallet Corner Posts (실제 적재 박스타워 4모서리 절대좌표 정밀 밀착 피팅 + Z-Fighting 방지) ──
+  const makeCornerPostsAndStraps = (scene, boundMinX, boundMaxX, boundMinZ, boundMaxZ, totalHeight, baseY, sc) => {
+    const stackWidth = boundMaxX - boundMinX;
+    const stackDepth = boundMaxZ - boundMinZ;
+    const angleWidth = Math.min(0.080, Math.max(0.030, Math.min(stackWidth, stackDepth) * 0.22)); // 적재 박스에 비례한 L-flange 너비
+    const angleThickness = 0.010; // 10mm board thickness
     const postH = totalHeight;
     const postColor = 0xF59E0B; // Vibrant safety gold kraft
-    const eps = 0.0025; // 2.5mm outward offset to eliminate Z-fighting completely
+    const eps = 0.0015; // 1.5mm outward offset to eliminate Z-fighting completely
 
-    const halfW = palW / 2;
-    const halfD = palD / 2;
     const W = angleWidth;
     const T = angleThickness;
 
@@ -362,33 +362,33 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
 
     // 4 Corner configurations (Front-Left, Front-Right, Rear-Right, Rear-Left)
     const corners = [
-      // 1. Front-Left (FL: x = -halfW, z = -halfD)
+      // 1. Front-Left (FL: x = boundMinX, z = boundMinZ)
       {
-        fx: { x: -halfW + W / 2 - T / 2, y: baseY + postH / 2, z: -halfD - T / 2 - eps, w: W + T, h: postH, d: T },
-        fz: { x: -halfW - T / 2 - eps, y: baseY + postH / 2, z: -halfD + W / 2 - T / 2, w: T, h: postH, d: W + T },
-        cap1: { x: -halfW + W / 2 - T / 2, y: baseY + postH - capH / 2, z: -halfD - T / 2 - eps, w: W + T + 0.004, h: capH, d: T + 0.004 },
-        cap2: { x: -halfW - T / 2 - eps, y: baseY + postH - capH / 2, z: -halfD + W / 2 - T / 2, w: T + 0.004, h: capH, d: W + T + 0.004 }
+        fx: { x: boundMinX + W / 2 - T / 2, y: baseY + postH / 2, z: boundMinZ - T / 2 - eps, w: W + T, h: postH, d: T },
+        fz: { x: boundMinX - T / 2 - eps, y: baseY + postH / 2, z: boundMinZ + W / 2 - T / 2, w: T, h: postH, d: W + T },
+        cap1: { x: boundMinX + W / 2 - T / 2, y: baseY + postH - capH / 2, z: boundMinZ - T / 2 - eps, w: W + T + 0.004, h: capH, d: T + 0.004 },
+        cap2: { x: boundMinX - T / 2 - eps, y: baseY + postH - capH / 2, z: boundMinZ + W / 2 - T / 2, w: T + 0.004, h: capH, d: W + T + 0.004 }
       },
-      // 2. Front-Right (FR: x = +halfW, z = -halfD)
+      // 2. Front-Right (FR: x = boundMaxX, z = boundMinZ)
       {
-        fx: { x: halfW - W / 2 + T / 2, y: baseY + postH / 2, z: -halfD - T / 2 - eps, w: W + T, h: postH, d: T },
-        fz: { x: halfW + T / 2 + eps, y: baseY + postH / 2, z: -halfD + W / 2 - T / 2, w: T, h: postH, d: W + T },
-        cap1: { x: halfW - W / 2 + T / 2, y: baseY + postH - capH / 2, z: -halfD - T / 2 - eps, w: W + T + 0.004, h: capH, d: T + 0.004 },
-        cap2: { x: halfW + T / 2 + eps, y: baseY + postH - capH / 2, z: -halfD + W / 2 - T / 2, w: T + 0.004, h: capH, d: W + T + 0.004 }
+        fx: { x: boundMaxX - W / 2 + T / 2, y: baseY + postH / 2, z: boundMinZ - T / 2 - eps, w: W + T, h: postH, d: T },
+        fz: { x: boundMaxX + T / 2 + eps, y: baseY + postH / 2, z: boundMinZ + W / 2 - T / 2, w: T, h: postH, d: W + T },
+        cap1: { x: boundMaxX - W / 2 + T / 2, y: baseY + postH - capH / 2, z: boundMinZ - T / 2 - eps, w: W + T + 0.004, h: capH, d: T + 0.004 },
+        cap2: { x: boundMaxX + T / 2 + eps, y: baseY + postH - capH / 2, z: boundMinZ + W / 2 - T / 2, w: T + 0.004, h: capH, d: W + T + 0.004 }
       },
-      // 3. Rear-Right (BR: x = +halfW, z = +halfD)
+      // 3. Rear-Right (BR: x = boundMaxX, z = boundMaxZ)
       {
-        fx: { x: halfW - W / 2 + T / 2, y: baseY + postH / 2, z: halfD + T / 2 + eps, w: W + T, h: postH, d: T },
-        fz: { x: halfW + T / 2 + eps, y: baseY + postH / 2, z: halfD - W / 2 + T / 2, w: T, h: postH, d: W + T },
-        cap1: { x: halfW - W / 2 + T / 2, y: baseY + postH - capH / 2, z: halfD + T / 2 + eps, w: W + T + 0.004, h: capH, d: T + 0.004 },
-        cap2: { x: halfW + T / 2 + eps, y: baseY + postH - capH / 2, z: halfD - W / 2 + T / 2, w: T + 0.004, h: capH, d: W + T + 0.004 }
+        fx: { x: boundMaxX - W / 2 + T / 2, y: baseY + postH / 2, z: boundMaxZ + T / 2 + eps, w: W + T, h: postH, d: T },
+        fz: { x: boundMaxX + T / 2 + eps, y: baseY + postH / 2, z: boundMaxZ - W / 2 + T / 2, w: T, h: postH, d: W + T },
+        cap1: { x: boundMaxX - W / 2 + T / 2, y: baseY + postH - capH / 2, z: boundMaxZ + T / 2 + eps, w: W + T + 0.004, h: capH, d: T + 0.004 },
+        cap2: { x: boundMaxX + T / 2 + eps, y: baseY + postH - capH / 2, z: boundMaxZ - W / 2 + T / 2, w: T + 0.004, h: capH, d: W + T + 0.004 }
       },
-      // 4. Rear-Left (BL: x = -halfW, z = +halfD)
+      // 4. Rear-Left (BL: x = boundMinX, z = boundMaxZ)
       {
-        fx: { x: -halfW + W / 2 - T / 2, y: baseY + postH / 2, z: halfD + T / 2 + eps, w: W + T, h: postH, d: T },
-        fz: { x: -halfW - T / 2 - eps, y: baseY + postH / 2, z: halfD - W / 2 + T / 2, w: T, h: postH, d: W + T },
-        cap1: { x: -halfW + W / 2 - T / 2, y: baseY + postH - capH / 2, z: halfD + T / 2 + eps, w: W + T + 0.004, h: capH, d: T + 0.004 },
-        cap2: { x: -halfW - T / 2 - eps, y: baseY + postH - capH / 2, z: halfD - W / 2 + T / 2, w: T + 0.004, h: capH, d: W + T + 0.004 }
+        fx: { x: boundMinX + W / 2 - T / 2, y: baseY + postH / 2, z: boundMaxZ + T / 2 + eps, w: W + T, h: postH, d: T },
+        fz: { x: boundMinX - T / 2 - eps, y: baseY + postH / 2, z: boundMaxZ - W / 2 + T / 2, w: T, h: postH, d: W + T },
+        cap1: { x: boundMinX + W / 2 - T / 2, y: baseY + postH - capH / 2, z: boundMaxZ + T / 2 + eps, w: W + T + 0.004, h: capH, d: T + 0.004 },
+        cap2: { x: boundMinX - T / 2 - eps, y: baseY + postH - capH / 2, z: boundMaxZ - W / 2 + T / 2, w: T + 0.004, h: capH, d: W + T + 0.004 }
       }
     ];
 
@@ -879,28 +879,37 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
           tapeMesh.position.set(bx + bw / 2, layerY + obh + 0.001, bz + bd / 2);
           s.scene.add(tapeMesh);
         });
-
-        // Stretch Wrap Film (전체 팔레트 랩핑 필름)
-        if (layer > 0 && layer % 2 === 0) {
-          const wrapGeo = new THREE.BoxGeometry(pw * sc + 0.015, obh * 0.85, pd * sc + 0.015);
-          const wrapMat = new THREE.MeshStandardMaterial({
-            color: 0x60A5FA,
-            transparent: true,
-            opacity: 0.10,
-            roughness: 0.1,
-            metalness: 0.3,
-            depthWrite: false
-          });
-          const wrapMesh = new THREE.Mesh(wrapGeo, wrapMat);
-          wrapMesh.position.set(0, layerY + obh * 0.5, 0);
-          s.scene.add(wrapMesh);
-        }
       }
 
-      // Pallet Corner Posts (코너 각대: 4개 모서리에 오렌지/옐로우 보호대 장착)
+      // Pallet Corner Posts (코너 각대: 실제 적재 박스타워 4모서리에 오렌지/옐로우 보호대 밀착 장착)
       if (useCornerPost) {
+        let boundMinX = Infinity, boundMaxX = -Infinity;
+        let boundMinZ = Infinity, boundMaxZ = -Infinity;
+
+        tierPositions.forEach((box) => {
+          boundMinX = Math.min(boundMinX, box.x);
+          boundMaxX = Math.max(boundMaxX, box.x + box.w);
+          boundMinZ = Math.min(boundMinZ, box.z);
+          boundMaxZ = Math.max(boundMaxZ, box.z + box.d);
+
+          if (isCross) {
+            const interlocked = getInterlockedBox(box.x, box.z, box.w, box.d, palletConfig?.pattern?.category, pw * sc, pd * sc);
+            boundMinX = Math.min(boundMinX, interlocked.x);
+            boundMaxX = Math.max(boundMaxX, interlocked.x + interlocked.w);
+            boundMinZ = Math.min(boundMinZ, interlocked.z);
+            boundMaxZ = Math.max(boundMaxZ, interlocked.z + interlocked.d);
+          }
+        });
+
+        if (!isFinite(boundMinX)) {
+          boundMinX = -pw * sc / 2;
+          boundMaxX = pw * sc / 2;
+          boundMinZ = -pd * sc / 2;
+          boundMaxZ = pd * sc / 2;
+        }
+
         const totalHeight = stacks * obh;
-        makeCornerPostsAndStraps(s.scene, pw * sc, pd * sc, totalHeight, baseY, sc);
+        makeCornerPostsAndStraps(s.scene, boundMinX, boundMaxX, boundMinZ, boundMaxZ, totalHeight, baseY, sc);
       }
 
       const totalH = baseY + stacks * obh;
@@ -1105,7 +1114,7 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
 
   const handleZoomOut = () => {
     const s = stateRef.current;
-    s.tgtDist = Math.min(20, s.tgtDist * 1.22);
+    s.tgtDist = Math.min(80, s.tgtDist * 1.25);
     s.hasCustomAngle = true;
     if (onViewChange) {
       onViewChange({ theta: s.tgtTheta, phi: s.tgtPhi, dist: s.tgtDist, lookY: s.tgtLookY });
@@ -1271,7 +1280,7 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
 
     const onWheel = (e) => {
       e.preventDefault();
-      stateRef.current.tgtDist = Math.max(0.8, Math.min(18, stateRef.current.tgtDist + e.deltaY * 0.004));
+      stateRef.current.tgtDist = Math.max(0.4, Math.min(80, stateRef.current.tgtDist + e.deltaY * 0.004));
       stateRef.current.hasCustomAngle = true;
       if (onViewChange) {
         onViewChange({
@@ -1320,7 +1329,7 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
           e.touches[0].clientY - e.touches[1].clientY
         );
         if (stateRef.current.touchDist) {
-          stateRef.current.tgtDist = Math.max(0.8, Math.min(18, stateRef.current.tgtDist - (d - stateRef.current.touchDist) * 0.01));
+          stateRef.current.tgtDist = Math.max(0.4, Math.min(80, stateRef.current.tgtDist - (d - stateRef.current.touchDist) * 0.01));
           stateRef.current.hasCustomAngle = true;
           if (onViewChange) {
             onViewChange({

@@ -4,15 +4,17 @@ import com.example.ims.entity.User;
 import com.example.ims.repository.UserRepository;
 import com.example.ims.service.DashboardService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import org.springframework.security.access.prepost.PreAuthorize;
-
+@Slf4j
 @RestController
 @RequestMapping("/api/dashboard")
 @RequiredArgsConstructor
@@ -23,36 +25,24 @@ public class DashboardController {
     private final UserRepository userRepository;
 
     @GetMapping
-    public ResponseEntity<?> getDashboard() {
-        try {
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            if (auth == null || !auth.isAuthenticated()) {
-                return ResponseEntity.status(401).body("Not authenticated");
-            }
-            User user = userRepository.findByUsername(auth.getName())
-                    .orElseThrow(() -> new RuntimeException("User not found: " + auth.getName()));
-            
-            return ResponseEntity.ok(dashboardService.getDashboardData(user));
-        } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.status(500).body("시스템 대시보드 데이터를 수집하는 중 오류가 발생했습니다.");
+    public ResponseEntity<?> getDashboard(@AuthenticationPrincipal UserDetails userDetails) {
+        if (userDetails == null) {
+            return ResponseEntity.status(401).body("인증이 필요합니다.");
         }
+        User user = userRepository.findByUsername(userDetails.getUsername())
+                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + userDetails.getUsername()));
+        
+        return ResponseEntity.ok(dashboardService.getDashboardData(user));
     }
 
     @GetMapping("/stats")
-    public ResponseEntity<?> getDashboardStats() {
-        try {
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            if (auth == null || !auth.isAuthenticated()) {
-                return ResponseEntity.status(401).body("Not authenticated");
-            }
-            User user = userRepository.findByUsername(auth.getName())
-                    .orElseThrow(() -> new RuntimeException("User not found: " + auth.getName()));
-            
-            return ResponseEntity.ok(dashboardService.getDashboardStats(user));
-        } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.status(500).body("통계 데이터를 조회하는 중 오류가 발생했습니다.");
+    public ResponseEntity<?> getDashboardStats(@AuthenticationPrincipal UserDetails userDetails) {
+        if (userDetails == null) {
+            return ResponseEntity.status(401).body("인증이 필요합니다.");
         }
+        User user = userRepository.findByUsername(userDetails.getUsername())
+                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + userDetails.getUsername()));
+        
+        return ResponseEntity.ok(dashboardService.getDashboardStats(user));
     }
 }

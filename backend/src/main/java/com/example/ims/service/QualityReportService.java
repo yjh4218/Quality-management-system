@@ -8,12 +8,14 @@ import com.example.ims.repository.QualityReportRepository;
 import com.example.ims.repository.WmsInboundHistoryRepository;
 import com.example.ims.repository.WmsInboundRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import com.example.ims.repository.UserRepository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class QualityReportService {
@@ -67,19 +69,14 @@ public class QualityReportService {
         java.time.LocalDateTime end = targetDate.atTime(23, 59, 59, 999999999).atZone(kst).toOffsetDateTime().toLocalDateTime();
 
         // 1. inboundDate 일시 범위로 검색
-        List<WmsInbound> listByInboundDate = inboundRepository.findByInboundDateBetween(start, end);
+        List<WmsInbound> listByInboundDate = new java.util.ArrayList<>(inboundRepository.findByInboundDateBetween(start, end));
         
-        // 2. 전체 목록 중 coaDecisionDate 또는 inboundDate가 해당 날짜 문자열과 일치하는 내역도 추가 수집
-        List<WmsInbound> allList = inboundRepository.findAll();
+        // 2. coaDecisionDate 일치 내역도 추가 수집
+        List<WmsInbound> listByDecisionDate = inboundRepository.findByQualityDecisionDate(targetDateStr);
         java.util.Set<Long> existingIds = listByInboundDate.stream().map(WmsInbound::getId).collect(java.util.stream.Collectors.toSet());
 
-        for (WmsInbound item : allList) {
-            if (existingIds.contains(item.getId())) continue;
-            
-            boolean matchesCoaDate = item.getCoaDecisionDate() != null && item.getCoaDecisionDate().startsWith(targetDateStr);
-            boolean matchesInboundString = item.getInboundDate() != null && item.getInboundDate().toString().startsWith(targetDateStr);
-            
-            if (matchesCoaDate || matchesInboundString) {
+        for (WmsInbound item : listByDecisionDate) {
+            if (!existingIds.contains(item.getId())) {
                 listByInboundDate.add(item);
                 existingIds.add(item.getId());
             }
@@ -206,7 +203,7 @@ public class QualityReportService {
 
             return saved;
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Failed to update quality report for inbound ID {}: {}", id, e.getMessage(), e);
             throw new RuntimeException("수정 중 오류 발생: " + e.getMessage(), e);
         }
     }

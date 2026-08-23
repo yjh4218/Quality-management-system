@@ -25,6 +25,7 @@ import java.io.ByteArrayOutputStream;
 import java.util.stream.Collectors;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.awt.Graphics2D;
 import java.awt.Color;
 import java.awt.BasicStroke;
@@ -164,7 +165,9 @@ public class PackagingSpecExportService {
             String capacityInfo = product.getCapacity() != null && !product.getCapacity().isEmpty() ? " " + product.getCapacity() : "";
             String weightInfo = product.getWeight() != null && !product.getWeight().isEmpty() ? " (" + product.getWeight() + ")" : "";
             String productNameWithSpecs = product.getProductName() + capacityInfo + weightInfo;
-            String englishProductNameWithSpecs = (product.getEnglishProductName() != null ? product.getEnglishProductName() : "") + capacityInfo;
+            String englishProductNameWithSpecs = (product.getEnglishProductName() != null && !product.getEnglishProductName().isBlank()) 
+                ? (product.getEnglishProductName() + capacityInfo) 
+                : "-";
             String channelNames = product.getChannels() != null && !product.getChannels().isEmpty() 
                 ? product.getChannels().stream().map(com.example.ims.entity.SalesChannel::getName).collect(Collectors.joining(", "))
                 : "미지정";
@@ -214,7 +217,11 @@ public class PackagingSpecExportService {
             createCell(r5, 6, "제품구분", labelStyle);
             createCell(r5, 7, product.getProductType() != null ? product.getProductType().toString() : "-", dataStyle);
 
-            addRow(sheet0, 6, 28f, labelStyle, dataStyle, "사용기한", (product.getShelfLifeMonths() != null ? "제조일로부터 " + product.getShelfLifeMonths() + "개월" : "-"), "개봉후기한", (product.getOpenedShelfLifeMonths() != null ? "개봉 후 " + product.getOpenedShelfLifeMonths() + "개월" : "-"), "제품 바코드", (product.getProductBarcode() != null ? product.getProductBarcode() : "-"), "아웃박스 바코드", (product.getOutboxBarcode() != null ? product.getOutboxBarcode() : "-"));
+            String effectiveProductBarcode = (product.getProductBarcode() != null && !product.getProductBarcode().isBlank()) 
+                ? product.getProductBarcode() 
+                : (spec.getBarcode() != null && !spec.getBarcode().isBlank() ? spec.getBarcode() : "-");
+            String effectiveOutboxBarcode = (product.getOutboxBarcode() != null && !product.getOutboxBarcode().isBlank()) ? product.getOutboxBarcode() : "-";
+            addRow(sheet0, 6, 28f, labelStyle, dataStyle, "사용기한", (product.getShelfLifeMonths() != null ? "제조일로부터 " + product.getShelfLifeMonths() + "개월" : "-"), "개봉후기한", (product.getOpenedShelfLifeMonths() != null ? "개봉 후 " + product.getOpenedShelfLifeMonths() + "개월" : "-"), "제품 바코드", effectiveProductBarcode, "아웃박스 바코드", effectiveOutboxBarcode);
             addRow(sheet0, 7, 28f, labelStyle, dataStyle, "기획 담당", (spec.getPlannerName() != null ? spec.getPlannerName() : "-"), "디자인 담당", (spec.getDesignerName() != null ? spec.getDesignerName() : "-"), "품질관리 담당", (spec.getQcName() != null ? spec.getQcName() : "-"), "바코드 담당자", (spec.getBarcodeManager() != null ? spec.getBarcodeManager() : "-"));
 
             // 여백 행 (Row 8)
@@ -295,11 +302,24 @@ public class PackagingSpecExportService {
                 createCell(r, 7, "-", dataStyle);
                 currentRow++;
             } else {
+                double totalBomWeight = 0.0;
+                int totalBomQty = 0;
                 for (PackagingSpecComponent comp : components) {
                     Row r = sheet0.createRow(currentRow);
-                    r.setHeightInPoints(32);
+                    
+                    // 세부사양 및 구성품명의 글자 수/줄바꿈 수 기반 동적 행 높이 산출 (최소 32pt)
+                    int specLen = comp.getSpecDetails() != null ? comp.getSpecDetails().length() : 0;
+                    int compLen = comp.getComponentName() != null ? comp.getComponentName().length() : 0;
+                    int lines = Math.max(1, Math.max((specLen / 22) + 1, (compLen / 25) + 1));
+                    if (comp.getSpecDetails() != null && comp.getSpecDetails().contains("\n")) {
+                        lines = Math.max(lines, comp.getSpecDetails().split("\\r?\\n").length);
+                    }
+                    r.setHeightInPoints(Math.max(32f, lines * 18f));
+
                     double w = comp.getWeight() != null ? comp.getWeight() : 0.0;
                     int q = comp.getQuantity() != null ? comp.getQuantity() : 1;
+                    totalBomWeight += (w * q);
+                    totalBomQty += q;
                     String wStr = w > 0 ? String.format("%.2fg", w) : "-";
                     String totalWStr = w > 0 ? String.format("%.2fg", w * q) : "-";
                     String supplierRemarks = (comp.getSupplier() != null ? comp.getSupplier() : "-") + 
@@ -315,6 +335,18 @@ public class PackagingSpecExportService {
                     createCell(r, 7, supplierRemarks, wrapDataStyle);
                     currentRow++;
                 }
+
+                // [추가] BOM 구성품 합계 행 (Total Row)
+                Row bomTotalRow = sheet0.createRow(currentRow++);
+                bomTotalRow.setHeightInPoints(28);
+                createCell(bomTotalRow, 0, "합계 (Total)", subHeaderStyle);
+                createCell(bomTotalRow, 1, "구성품 총 " + components.size() + "종", subHeaderStyle);
+                createCell(bomTotalRow, 2, "-", centerDataStyle);
+                createCell(bomTotalRow, 3, "-", centerDataStyle);
+                createCell(bomTotalRow, 4, "-", centerDataStyle);
+                createCell(bomTotalRow, 5, totalBomQty + " ea", subHeaderStyle);
+                createCell(bomTotalRow, 6, totalBomWeight > 0 ? String.format("%.2fg", totalBomWeight) : "-", subHeaderStyle);
+                createCell(bomTotalRow, 7, "단품 패키징 총 중량 합계", wrapDataStyle);
             }
 
             // 여백 행
@@ -338,9 +370,12 @@ public class PackagingSpecExportService {
                     ? spec.getUnitBoxMarkingText().replace("LOT [생산배치번호]", "LOT(제조번호)").replace("[생산배치번호]", "LOT(제조번호)").replace("생산배치번호", "LOT(제조번호)") 
                     : "-";
 
-            // 3줄 착인기준 전용 행 (높이 60pt로 3줄 모두 수직 잘림 없이 온전히 노출)
+            // 3줄 착인기준 전용 행 (줄 수에 따른 동적 높이 계산으로 수직 잘림 원천 방지)
+            int cLines = containerText.split("\\r?\\n").length;
+            int uLines = unitBoxText.split("\\r?\\n").length;
+            int maxMarkingLines = Math.max(3, Math.max(cLines, uLines));
             Row markingRow = sheet0.createRow(currentRow++);
-            markingRow.setHeightInPoints(60);
+            markingRow.setHeightInPoints(Math.max(60f, maxMarkingLines * 18f));
             createCell(markingRow, 0, "용기 착인기준(3줄)", labelStyle);
             createCell(markingRow, 1, containerText, wrapDataStyle);
             createCell(markingRow, 2, "단상자 착인기준(3줄)", labelStyle);
@@ -350,15 +385,17 @@ public class PackagingSpecExportService {
             createCell(markingRow, 6, "-", labelStyle);
             createCell(markingRow, 7, "-", dataStyle);
 
-            // [요청 반영] 포장방법 영역에 '포장방법 사진 참조' 표준 문구 자동 표기
+            // [요청 반영] 포장방법 영역에 '포장방법 사진 참조' 표준 문구 및 중복 접두어 정제 표기 (줄 수에 따른 동적 높이 산출)
+            String rawMethodDesc = spec.getPackagingMethodText() != null ? spec.getPackagingMethodText().trim() : "";
+            String cleanedMethodText = cleanPackagingMethodText(rawMethodDesc);
             String methodDesc = "포장방법 사진 참조";
-            if (spec.getPackagingMethodText() != null && !spec.getPackagingMethodText().isBlank() 
-                    && !"등록된 포장방법 설명이 없습니다.".equals(spec.getPackagingMethodText().trim())) {
-                methodDesc = "포장방법 사진 참조\n\n" + spec.getPackagingMethodText().trim();
+            if (!cleanedMethodText.isBlank() && !"등록된 포장방법 설명이 없습니다.".equals(cleanedMethodText)) {
+                methodDesc = "포장방법 사진 참조\n\n" + cleanedMethodText;
             }
 
+            int methodLines = methodDesc.split("\\r?\\n").length;
             Row methodRow = sheet0.createRow(currentRow);
-            methodRow.setHeightInPoints(64);
+            methodRow.setHeightInPoints(Math.max(80f, Math.min(300f, methodLines * 18f)));
             createCell(methodRow, 0, "포장방법 (서술)", labelStyle);
             createCell(methodRow, 1, methodDesc, wrapDataStyle);
             for (int col = 2; col <= 7; col++) createCell(methodRow, col, "", wrapDataStyle);
@@ -438,10 +475,46 @@ public class PackagingSpecExportService {
             // [5. 체적/적재 사양 및 검증 기준]
             createSectionHeader(sheet0, currentRow, "5. 🚚 체적/적재 사양 및 검증 기준 (Volume & Loading Spec)", headerStyle, 7, 28);
             currentRow++;
-            addRow(sheet0, currentRow++, 28f, labelStyle, dataStyle, "인박스 구분", spec.getInboxType() != null ? spec.getInboxType() : "인박스", "인박스 입수량", spec.getInboxQty() != null ? spec.getInboxQty() + " ea" : "-", "인박스 규격", spec.getInboxSize() != null ? spec.getInboxSize() : "-", "인박스 재질", spec.getInboxMaterial() != null ? spec.getInboxMaterial() : "-");
-            addRow(sheet0, currentRow++, 28f, labelStyle, dataStyle, "아웃박스 구분", spec.getOutboxType() != null ? spec.getOutboxType() : "아웃박스", "아웃박스 입수량", spec.getOutboxQty() != null ? spec.getOutboxQty() + " ea" : "-", "아웃박스 규격", spec.getOutboxSize() != null ? spec.getOutboxSize() : "-", "아웃박스 재질", spec.getOutboxMaterial() != null ? spec.getOutboxMaterial() : "-");
-            addRow(sheet0, currentRow++, 28f, labelStyle, dataStyle, "팔레트 종류", spec.getPalletTypeStr() != null ? spec.getPalletTypeStr() : "-", "적재 방법", spec.getPalletStackingMethod() != null ? spec.getPalletStackingMethod() : "-", "팔레트 규격", spec.getPalletSize() != null ? spec.getPalletSize() : "-", "높이 제한", spec.getPalletHeightLimit() != null ? spec.getPalletHeightLimit() : "-");
-            addRow(sheet0, currentRow++, 28f, labelStyle, dataStyle, "1아웃박스 중량 [제한12kg]", (spec.getOneOutboxWeight() != null ? spec.getOneOutboxWeight() + " kg" : "-"), "1팔레트 중량 [제한630kg]", (spec.getOnePalletWeight() != null ? spec.getOnePalletWeight() + " kg" : "-"), "1팔레트 높이 [제한1500mm]", (spec.getOnePalletHeight() != null ? spec.getOnePalletHeight() + " mm" : "-"), "검증 상태", "정상 규격");
+
+            // 인박스/아웃박스/팔레트 규격 및 수량 (사양서 값 우선, 없으면 마스터 체적정보 자동 반영)
+            String effInboxType = (spec.getInboxType() != null && !spec.getInboxType().isBlank()) ? spec.getInboxType() : "인박스";
+            String effInboxQty = spec.getInboxQty() != null ? spec.getInboxQty() + " ea" 
+                : (product.getInboxInfo() != null && product.getInboxInfo().getInboxQuantity() != null && product.getInboxInfo().getInboxQuantity() > 0 ? product.getInboxInfo().getInboxQuantity() + " ea" : "-");
+            String effInboxSize = (spec.getInboxSize() != null && !spec.getInboxSize().isBlank()) ? spec.getInboxSize()
+                : (product.getInboxInfo() != null && product.getInboxInfo().getInboxWidth() != null && product.getInboxInfo().getInboxLength() != null && product.getInboxInfo().getInboxHeight() != null ? String.format("%sx%sx%s", product.getInboxInfo().getInboxWidth(), product.getInboxInfo().getInboxLength(), product.getInboxInfo().getInboxHeight()) : "-");
+            String effInboxMat = (spec.getInboxMaterial() != null && !spec.getInboxMaterial().isBlank()) ? spec.getInboxMaterial() : "-";
+
+            String effOutboxType = (spec.getOutboxType() != null && !spec.getOutboxType().isBlank()) ? spec.getOutboxType() : "아웃박스";
+            String effOutboxQty = spec.getOutboxQty() != null ? spec.getOutboxQty() + " ea" 
+                : (product.getOutboxInfo() != null && product.getOutboxInfo().getOutboxQuantity() != null && product.getOutboxInfo().getOutboxQuantity() > 0 ? product.getOutboxInfo().getOutboxQuantity() + " ea" : "-");
+            String effOutboxSize = (spec.getOutboxSize() != null && !spec.getOutboxSize().isBlank()) ? spec.getOutboxSize()
+                : (product.getOutboxInfo() != null && product.getOutboxInfo().getOutboxWidth() != null && product.getOutboxInfo().getOutboxLength() != null && product.getOutboxInfo().getOutboxHeight() != null ? String.format("%sx%sx%s", product.getOutboxInfo().getOutboxWidth(), product.getOutboxInfo().getOutboxLength(), product.getOutboxInfo().getOutboxHeight()) : "-");
+            String effOutboxMat = (spec.getOutboxMaterial() != null && !spec.getOutboxMaterial().isBlank()) ? spec.getOutboxMaterial() : "KLB.S.S.K.K";
+
+            String effPalletType = (spec.getPalletTypeStr() != null && !spec.getPalletTypeStr().isBlank()) ? spec.getPalletTypeStr() : "-";
+            String effStackMethod = (spec.getPalletStackingMethod() != null && !spec.getPalletStackingMethod().isBlank() && !"-".equals(spec.getPalletStackingMethod().trim())) 
+                ? spec.getPalletStackingMethod() 
+                : ((spec.getPalletStackingPattern() != null && !spec.getPalletStackingPattern().isBlank() && !"-".equals(spec.getPalletStackingPattern().trim())) 
+                    ? spec.getPalletStackingPattern() 
+                    : "핀휠 교차 적재");
+            String effPalletSize = (spec.getPalletSize() != null && !spec.getPalletSize().isBlank()) ? spec.getPalletSize()
+                : (product.getPalletInfo() != null && product.getPalletInfo().getPalletWidth() != null && product.getPalletInfo().getPalletLength() != null ? String.format("%sx%s", product.getPalletInfo().getPalletWidth(), product.getPalletInfo().getPalletLength()) : "-");
+            String rawHeightLimit = (spec.getPalletHeightLimit() != null && !spec.getPalletHeightLimit().isBlank()) ? spec.getPalletHeightLimit()
+                : (product.getPalletInfo() != null && product.getPalletInfo().getPalletHeight() != null ? product.getPalletInfo().getPalletHeight().toString() : "-");
+            String effPalletHeightLimit = (rawHeightLimit != null && !rawHeightLimit.equals("-") && !rawHeightLimit.toLowerCase().endsWith("mm")) 
+                ? (rawHeightLimit + " mm") 
+                : rawHeightLimit;
+
+            String effOneOutboxWt = (spec.getOneOutboxWeight() != null) ? spec.getOneOutboxWeight() + " kg"
+                : (product.getOutboxInfo() != null && product.getOutboxInfo().getOutboxWeight() != null ? product.getOutboxInfo().getOutboxWeight() + " kg" : "-");
+            String effOnePalletWt = (spec.getOnePalletWeight() != null) ? spec.getOnePalletWeight() + " kg" : "-";
+            String effOnePalletHt = (spec.getOnePalletHeight() != null) ? spec.getOnePalletHeight() + " mm"
+                : (product.getPalletInfo() != null && product.getPalletInfo().getPalletHeight() != null ? product.getPalletInfo().getPalletHeight() + " mm" : "-");
+
+            addRow(sheet0, currentRow++, 28f, labelStyle, dataStyle, "인박스 구분", effInboxType, "인박스 입수량", effInboxQty, "인박스 규격", effInboxSize, "인박스 재질", effInboxMat);
+            addRow(sheet0, currentRow++, 28f, labelStyle, dataStyle, "아웃박스 구분", effOutboxType, "아웃박스 입수량", effOutboxQty, "아웃박스 규격", effOutboxSize, "아웃박스 재질", effOutboxMat);
+            addRow(sheet0, currentRow++, 28f, labelStyle, dataStyle, "팔레트 종류", effPalletType, "적재 방법", effStackMethod, "팔레트 규격", effPalletSize, "높이 제한", effPalletHeightLimit);
+            addRow(sheet0, currentRow++, 28f, labelStyle, dataStyle, "1아웃박스 중량 [제한12kg]", effOneOutboxWt, "1팔레트 중량 [제한630kg]", effOnePalletWt, "1팔레트 높이 [제한1500mm]", effOnePalletHt, "검증 상태", "정상 규격");
 
             // [5-1. 3D 입수 및 팔레트 적재 형태 (3D Loading Layout)]
             currentRow = renderLoadingLayoutSection(sheet0, currentRow, spec, product, workbook, headerStyle, subHeaderStyle, labelStyle, dataStyle, wrapDataStyle);
@@ -452,17 +525,19 @@ public class PackagingSpecExportService {
             // [6. 사양서 특이사항]
             createSectionHeader(sheet0, currentRow, "6. 📝 사양서 특이사항 (Remarks)", headerStyle, 7, 28);
             currentRow++;
+            String remText = spec.getRemarks() != null ? spec.getRemarks() : "등록된 특이사항이 없습니다.";
+            int remLines = remText.split("\\r?\\n").length;
             Row remRow = sheet0.createRow(currentRow);
-            remRow.setHeightInPoints(60);
+            remRow.setHeightInPoints(Math.max(60f, Math.min(300f, remLines * 18f)));
             createCell(remRow, 0, "특이사항", labelStyle);
-            createCell(remRow, 1, spec.getRemarks() != null ? spec.getRemarks() : "등록된 특이사항이 없습니다.", wrapDataStyle);
+            createCell(remRow, 1, remText, wrapDataStyle);
             for (int col = 2; col <= 7; col++) createCell(remRow, col, "", wrapDataStyle);
             sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 1, 7));
 
-            // 컬럼 너비 최적화 (레이블: 4800, 데이터: 9000~10500)
+            // 컬럼 너비 최적화 (레이블: 4800, Col 2 재질/세부사양: 8000, 데이터: 9000~10500)
             sheet0.setColumnWidth(0, 4800);
             sheet0.setColumnWidth(1, 10500);
-            sheet0.setColumnWidth(2, 4800);
+            sheet0.setColumnWidth(2, 8000); // 4800 -> 8000 확장으로 재질/세부사양 가로 잘림 해결
             sheet0.setColumnWidth(3, 10500);
             sheet0.setColumnWidth(4, 4800);
             sheet0.setColumnWidth(5, 9500);
@@ -484,8 +559,15 @@ public class PackagingSpecExportService {
             org.apache.poi.ss.usermodel.Drawing<?> drawing = sheet1.createDrawingPatriarch();
 
             List<com.example.ims.entity.PackagingMethodImage> methodImages = methodImageRepository.findActiveBySpecId(spec.getId());
+            List<com.example.ims.entity.PackagingMethodImage> validMethodImages = methodImages != null 
+                ? methodImages.stream()
+                    .filter(img -> (img.getImageUrl() != null && !img.getImageUrl().isBlank()) || 
+                                   (img.getCaptionText() != null && !img.getCaptionText().isBlank() && !"-".equals(img.getCaptionText().trim())))
+                    .collect(Collectors.toList())
+                : Collections.emptyList();
+
             int imgRow = 2;
-            if (methodImages == null || methodImages.isEmpty()) {
+            if (validMethodImages.isEmpty()) {
                 Row r = sheet1.createRow(imgRow);
                 r.setHeightInPoints(24);
                 createCell(r, 0, "-", centerDataStyle);
@@ -494,8 +576,8 @@ public class PackagingSpecExportService {
                 createCell(r, 3, "", dataStyle);
                 sheet1.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(imgRow, imgRow, 2, 3));
             } else {
-                for (int i = 0; i < methodImages.size(); i++) {
-                    com.example.ims.entity.PackagingMethodImage imgEntity = methodImages.get(i);
+                for (int i = 0; i < validMethodImages.size(); i++) {
+                    com.example.ims.entity.PackagingMethodImage imgEntity = validMethodImages.get(i);
                     Row r = sheet1.createRow(imgRow);
                     r.setHeightInPoints(320); // [요청 반영] 기존 160pt에서 2배로 확대 (320pt)
                     createCell(r, 0, "NO." + (i + 1), centerDataStyle);
@@ -605,13 +687,31 @@ public class PackagingSpecExportService {
             // --- Sheet 5: 팔레트 현품표 ---
             Sheet sheet4 = workbook.createSheet("팔레트 현품표");
             createSectionHeader(sheet4, 0, "[ 팔 레 트 현 품 표 / PALLET LABEL ]", headerStyle, 3, 30);
-            Integer pBoxQty = (product.getPalletInfo() != null) ? product.getPalletInfo().getPalletQuantity() : null;
-            String palletBoxQtyStr = (pBoxQty != null) ? String.valueOf(pBoxQty) : null;
-            String totalPcsStr = "- EA";
-            if (pBoxQty != null && spec.getOutboxQty() != null) {
-                totalPcsStr = String.valueOf(pBoxQty * spec.getOutboxQty()) + " EA";
+            
+            // [지능형 계산] 1팔레트 적재 박스 수량 및 총 낱개 수량
+            int effPalletTierCount = (spec.getPalletTierCount() != null && spec.getPalletTierCount() > 0) ? spec.getPalletTierCount() : 5;
+            int effPalletTierQty = (spec.getPalletTierQty() != null && spec.getPalletTierQty() > 0) ? spec.getPalletTierQty() : 8;
+            int calculatedPalletBoxQty = effPalletTierCount * effPalletTierQty; // 기본 40 Box
+
+            Integer pBoxQty = null;
+            if (spec.getPalletTotalOutboxQty() != null && spec.getPalletTotalOutboxQty() > 0) {
+                pBoxQty = spec.getPalletTotalOutboxQty();
+            } else if (spec.getPalletTierCount() != null && spec.getPalletTierQty() != null && spec.getPalletTierCount() > 0 && spec.getPalletTierQty() > 0) {
+                pBoxQty = spec.getPalletTierCount() * spec.getPalletTierQty();
+            } else if (product.getPalletInfo() != null && product.getPalletInfo().getPalletQuantity() != null && product.getPalletInfo().getPalletQuantity() > 0 && product.getPalletInfo().getPalletQuantity() <= 200) {
+                pBoxQty = product.getPalletInfo().getPalletQuantity();
+            } else {
+                pBoxQty = calculatedPalletBoxQty;
             }
-            addRow(sheet4, 1, 28f, labelStyle, dataStyle, "품목코드 (Product Code)", product.getItemCode(), "적재 박스 수량 (Box Qty/Pallet)", (palletBoxQtyStr != null ? palletBoxQtyStr + " Box" : "- Box"));
+
+            int effOutQtyForPallet = (spec.getOutboxQty() != null && spec.getOutboxQty() > 0) 
+                ? spec.getOutboxQty() 
+                : (product.getOutboxInfo() != null && product.getOutboxInfo().getOutboxQuantity() != null && product.getOutboxInfo().getOutboxQuantity() > 0 ? product.getOutboxInfo().getOutboxQuantity() : 40);
+
+            String palletBoxQtyStr = (pBoxQty != null) ? (pBoxQty + " Box") : "- Box";
+            String totalPcsStr = (pBoxQty != null) ? (pBoxQty * effOutQtyForPallet + " EA") : "- EA";
+
+            addRow(sheet4, 1, 28f, labelStyle, dataStyle, "품목코드 (Product Code)", product.getItemCode(), "적재 박스 수량 (Box Qty/Pallet)", palletBoxQtyStr);
             addRow(sheet4, 2, 28f, labelStyle, dataStyle, "국문 제품명 (Product Name KOR)", product.getProductName(), "적재 낱개 수량 (Total Pcs/Pallet)", totalPcsStr);
             addRow(sheet4, 3, 28f, labelStyle, dataStyle, "영문 제품명 (Product Name ENG)", (product.getEnglishProductName() != null ? product.getEnglishProductName() : "-"), "제조일자 (Mfg. Date)", extractMfgDateDisplay(palletDateFormatStr, firstChannel));
             addRow(sheet4, 4, 28f, labelStyle, dataStyle, "제조번호 (Lot No.)", "LOT(제조번호)", "사용기한 (Exp. Date)", extractExpDateDisplay(palletDateFormatStr, firstChannel));
@@ -691,10 +791,6 @@ public class PackagingSpecExportService {
         createCell(row, 7, v4, dataStyle);
     }
 
-    private void addRow(Sheet sheet, int rowIdx, org.apache.poi.ss.usermodel.CellStyle labelStyle, org.apache.poi.ss.usermodel.CellStyle dataStyle, String l1, String v1, String l2, String v2, String l3, String v3, String l4, String v4) {
-        addRow(sheet, rowIdx, 28f, labelStyle, dataStyle, l1, v1, l2, v2, l3, v3, l4, v4);
-    }
-
     private void addRow(Sheet sheet, int rowIdx, float heightInPoints, org.apache.poi.ss.usermodel.CellStyle labelStyle, org.apache.poi.ss.usermodel.CellStyle dataStyle, String l1, String v1, String l2, String v2) {
         Row row = sheet.createRow(rowIdx);
         row.setHeightInPoints(heightInPoints);
@@ -702,10 +798,6 @@ public class PackagingSpecExportService {
         createCell(row, 1, v1, dataStyle);
         createCell(row, 2, l2, labelStyle);
         createCell(row, 3, v2, dataStyle);
-    }
-
-    private void addRow(Sheet sheet, int rowIdx, org.apache.poi.ss.usermodel.CellStyle labelStyle, org.apache.poi.ss.usermodel.CellStyle dataStyle, String l1, String v1, String l2, String v2) {
-        addRow(sheet, rowIdx, 28f, labelStyle, dataStyle, l1, v1, l2, v2);
     }
 
     private void createCell(Row row, int colIdx, String value, org.apache.poi.ss.usermodel.CellStyle style) {
@@ -1599,6 +1691,24 @@ public class PackagingSpecExportService {
         return badgeW;
     }
 
+    private String cleanPackagingMethodText(String rawText) {
+        if (rawText == null || rawText.isBlank()) return "";
+        StringBuilder sb = new StringBuilder();
+        String[] lines = rawText.split("\\r?\\n");
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty()) {
+                sb.append("\n");
+                continue;
+            }
+            // "Step 1: Step 1: 내용" 또는 "Step 1:  Step 1: 내용" 등 이중 접두어 제거
+            String cleaned = trimmed.replaceAll("(?i)^Step\\s*(\\d+)\\s*:\\s*Step\\s*\\1\\s*:\\s*", "Step $1: ");
+            cleaned = cleaned.replaceAll("(?i)^Step\\s*(\\d+)\\s*:\\s*Step\\s*\\d+\\s*:\\s*", "Step $1: ");
+            sb.append(cleaned).append("\n");
+        }
+        return sb.toString().trim();
+    }
+
     private byte[] generateIsometricInboxLayoutImage(Product product, PackagingSpecification spec) {
         try {
             int width = 500, height = 420;
@@ -1966,7 +2076,7 @@ public class PackagingSpecExportService {
 
         List<String> imagePaths = new ArrayList<>();
         
-        // 1. 제품 마스터 다중 이미지 리스트
+        // 1. 제품 마스터 다중 이미지 리스트 (제품 및 단상자 패키지 실물 사진)
         if (product.getImagePaths() != null && !product.getImagePaths().isEmpty()) {
             for (String p : product.getImagePaths()) {
                 if (p != null && !p.trim().isEmpty() && !imagePaths.contains(p.trim())) {
@@ -1979,37 +2089,14 @@ public class PackagingSpecExportService {
             imagePaths.add(product.getImagePath().trim());
         }
 
-        // 3. 포장사양서 엔티티에 등록된 포장재/구성품 실물 이미지들
+        // 3. 포장사양서 단품 패키지 실물/착인 위치 사진 (포장방법 공정 사진 및 3D 적재 도면은 제외)
         if (spec != null) {
             String[] specImageCandidates = new String[] {
-                spec.getOutboxLayoutImage(),
-                spec.getPackagingMethodImage(),
-                spec.getMarkingLocationImage(),
-                spec.getInboxLayoutImage(),
-                spec.getOutboxLayoutImageFile(),
-                spec.getPalletLayoutImage()
+                spec.getMarkingLocationImage()
             };
             for (String p : specImageCandidates) {
                 if (p != null && !p.trim().isEmpty() && !imagePaths.contains(p.trim())) {
                     imagePaths.add(p.trim());
-                }
-            }
-
-            // 4. 포장방법 세부 사진 엔티티 목록 (PackagingMethodImage)
-            if (spec.getId() != null && methodImageRepository != null) {
-                try {
-                    List<com.example.ims.entity.PackagingMethodImage> methodImages = methodImageRepository.findActiveBySpecId(spec.getId());
-                    if (methodImages != null) {
-                        for (com.example.ims.entity.PackagingMethodImage mi : methodImages) {
-                            if (mi.getImageUrl() != null && !mi.getImageUrl().trim().isEmpty() && !imagePaths.contains(mi.getImageUrl().trim())) {
-                                imagePaths.add(mi.getImageUrl().trim());
-                            } else if (mi.getImagePath() != null && !mi.getImagePath().trim().isEmpty() && !imagePaths.contains(mi.getImagePath().trim())) {
-                                imagePaths.add(mi.getImagePath().trim());
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    log.warn("Failed to load packaging method images for spec " + spec.getId(), e);
                 }
             }
         }

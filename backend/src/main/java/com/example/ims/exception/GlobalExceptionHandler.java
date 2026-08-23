@@ -119,9 +119,6 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 런타임 예외 처리.
-     * 클라이언트 측 오류(IllegalArgument)와 서버 측 내부 오류를 구분합니다.
-    /**
      * ResponseStatusException 전용 예외 처리기.
      * 컨트롤러/서비스에서 직접 던진 HTTP 상태 코드와 명확한 메시지를 마스킹 없이 전달합니다.
      */
@@ -131,6 +128,18 @@ public class GlobalExceptionHandler {
         Map<String, String> response = new HashMap<>();
         response.put("message", ex.getReason() != null ? ex.getReason() : ex.getMessage());
         return ResponseEntity.status(ex.getStatusCode()).body(response);
+    }
+
+    /**
+     * 비즈니스 로직 및 유효성 검증 예외 처리 (400 Bad Request).
+     */
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<Map<String, String>> handleBusinessException(BusinessException ex) {
+        log.warn("Business Exception (400): {}", ex.getMessage());
+        Map<String, String> response = new HashMap<>();
+        response.put("error", "BusinessRuleViolation");
+        response.put("message", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
     /**

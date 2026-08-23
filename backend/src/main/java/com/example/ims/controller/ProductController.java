@@ -54,7 +54,7 @@ public class ProductController {
                     .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                     .body(excelFile);
         } catch (IOException e) {
-            e.printStackTrace();
+            log.error("Failed to generate ingredient template: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError().build();
         }
     }
@@ -76,7 +76,7 @@ public class ProductController {
 
     @GetMapping("/check-duplicate/{itemCode}")
     public ResponseEntity<Boolean> checkDuplicate(@PathVariable String itemCode) {
-        System.out.println("DEBUG: Checking duplicate for itemCode: " + itemCode);
+        log.debug("Checking duplicate for itemCode: {}", itemCode);
         return ResponseEntity.ok(productService.checkItemCodeDuplicate(itemCode));
     }
 
@@ -84,10 +84,7 @@ public class ProductController {
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
     public ResponseEntity<Product> updateProduct(@PathVariable Long id, @jakarta.validation.Valid @RequestBody Product product,
             @AuthenticationPrincipal UserDetails userDetails) {
-        System.out.println(">>>> [CONTROLLER DEBUG] ID: " + id + ", Payload Product Name: " + product.getProductName() + ", Channels: " + (product.getChannels() != null ? product.getChannels().size() : "NULL"));
-        if (product.getChannels() != null) {
-            product.getChannels().forEach(c -> System.out.println(">>>> [CONTROLLER CHANNEL] id=" + c.getId() + ", name=" + c.getName()));
-        }
+        log.debug(">>>> [CONTROLLER] ID: {}, Product: {}, Channels count: {}", id, product.getProductName(), (product.getChannels() != null ? product.getChannels().size() : 0));
         return ResponseEntity.ok(productService.updateProduct(id, product, userDetails.getUsername()));
     }
 
@@ -120,12 +117,11 @@ public class ProductController {
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES', 'QUALITY_TEAM')")
     public ResponseEntity<List<ProductIngredientDto>> uploadIngredientsFile(@RequestParam("file") MultipartFile file) {
         try {
-            System.out.println("Processing Excel file for ingredients upload: " + file.getOriginalFilename());
+            log.info("Processing Excel file for ingredients upload: {}", file.getOriginalFilename());
             List<com.example.ims.dto.ProductIngredientDto> parsedIngredients = productService.parseIngredientsExcel(file);
             return ResponseEntity.ok(parsedIngredients);
         } catch (Exception e) {
-            System.err.println("Error parsing Excel file: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Error parsing Excel file: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError().build();
         }
     }

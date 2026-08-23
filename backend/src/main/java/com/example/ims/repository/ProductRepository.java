@@ -17,6 +17,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     List<Product> findByIsMasterTrue();
     boolean existsByItemCode(String itemCode);
     List<Product> findByActiveTrue();
+    List<Product> findByActiveTrueAndManufacturer(String manufacturer);
 
     @Query("SELECT DISTINCT p.manufacturerInfo.id FROM Product p WHERE p.active = true AND p.isMaster = true AND p.manufacturerInfo IS NOT NULL")
     List<Long> findActiveManufacturerIdsWithMasterProducts();

@@ -765,15 +765,65 @@ const ProductDrawer = ({ product, onClose, user }) => {
             const specToSave = { ...currentSpec };
             delete specToSave.methodImages;
 
-            // 3D 시뮬레이션 사양 자동 확정 연동 (미저장 패턴 자동 채움)
-            if (!specToSave.outboxPackingPattern && selectedOutboxArrangement) {
-                specToSave.outboxPackingPattern = specToSave.inboxUseYn === 'O'
-                    ? `${selectedOutboxArrangement.cols}열×${selectedOutboxArrangement.rows}행×${selectedOutboxArrangement.layers}단 (인박스 ${selectedOutboxArrangement.qty}박스입)`
-                    : `${selectedOutboxArrangement.cols}열×${selectedOutboxArrangement.rows}행×${selectedOutboxArrangement.layers}단 (${selectedOutboxArrangement.qty}개입)`;
+            let autoFilledBoxes = false;
+
+            // 1. 인박스 입수 규격 미입력 시 3D 시뮬레이션 계산 규격 자동 보정 (인박스 사용 시)
+            if (specToSave.inboxUseYn === 'O') {
+                const uBox = get3DUnitBoxDims();
+                const iBox = get3DInboxDims();
+                const inboxQtyVal = parseInt(specToSave.inboxQty || 10, 10) || 10;
+                const inboxOptions = generateArrangementOptions(inboxQtyVal, 5, uBox, iBox);
+                const bestInboxOpt = selectedInboxArrangement || inboxOptions.find(o => o.status === 'ok') || inboxOptions[0] || { cols: 2, rows: 5, layers: 1, qty: 10 };
+
+                if (!specToSave.inboxQty) {
+                    specToSave.inboxQty = bestInboxOpt.qty || 10;
+                    autoFilledBoxes = true;
+                }
+                if (!specToSave.inboxSize) {
+                    specToSave.inboxSize = `${iBox.w}x${iBox.d}x${iBox.h}`;
+                    autoFilledBoxes = true;
+                }
+                if (!specToSave.inboxPackingPattern) {
+                    specToSave.inboxPackingPattern = `${bestInboxOpt.cols}열×${bestInboxOpt.rows}행×${bestInboxOpt.layers}단 (${bestInboxOpt.qty}개입)`;
+                    autoFilledBoxes = true;
+                }
             }
-            if (!specToSave.inboxPackingPattern && selectedInboxArrangement) {
-                specToSave.inboxPackingPattern = `${selectedInboxArrangement.cols}열×${selectedInboxArrangement.rows}행×${selectedInboxArrangement.layers}단 (${selectedInboxArrangement.qty}개입)`;
+
+            // 2. 아웃박스 입수 규격 미입력 시 3D 시뮬레이션 계산 규격 자동 보정
+            const hasInboxForSave = specToSave.inboxUseYn === 'O';
+            const uBoxForSave = get3DUnitBoxDims();
+            const iBoxForSave = get3DInboxDims();
+            const oBoxForSave = get3DOutboxDims();
+            const totalProductQtyForSave = parseInt(specToSave.outboxQty || specToSave.outboxTotalQty || 40, 10) || 40;
+            const curInboxQtyForSave = parseInt(specToSave.inboxQty || 10, 10) || 10;
+            const outboxInboxesQtyForSave = hasInboxForSave ? Math.max(1, Math.round(totalProductQtyForSave / curInboxQtyForSave)) : totalProductQtyForSave;
+            const outboxUnitBoxForSave = hasInboxForSave ? iBoxForSave : uBoxForSave;
+            const outboxOptionsForSave = generateArrangementOptions(outboxInboxesQtyForSave, 5, outboxUnitBoxForSave, oBoxForSave);
+            const bestOutboxOpt = selectedOutboxArrangement || outboxOptionsForSave.find(o => o.status === 'ok') || outboxOptionsForSave[0] || (hasInboxForSave ? { cols: 2, rows: 2, layers: 1, qty: 4 } : { cols: 4, rows: 5, layers: 2, qty: 40 });
+
+            if (!specToSave.outboxQty && !specToSave.outboxTotalQty) {
+                const calcOutQty = hasInboxForSave ? (bestOutboxOpt.qty * curInboxQtyForSave) : bestOutboxOpt.qty;
+                specToSave.outboxQty = calcOutQty;
+                specToSave.outboxTotalQty = calcOutQty;
+                autoFilledBoxes = true;
             }
+            if (!specToSave.outboxSize) {
+                specToSave.outboxSize = `${oBoxForSave.w}x${oBoxForSave.d}x${oBoxForSave.h}`;
+                autoFilledBoxes = true;
+            }
+            if (!specToSave.outboxPackingPattern) {
+                const calcOutQty = hasInboxForSave ? (bestOutboxOpt.qty * curInboxQtyForSave) : bestOutboxOpt.qty;
+                specToSave.outboxPackingPattern = hasInboxForSave
+                    ? `${bestOutboxOpt.cols}열×${bestOutboxOpt.rows}행×${bestOutboxOpt.layers}단 (인박스 ${bestOutboxOpt.qty}박스입, 총 ${calcOutQty}개)`
+                    : `${bestOutboxOpt.cols}열×${bestOutboxOpt.rows}행×${bestOutboxOpt.layers}단 (${bestOutboxOpt.qty}개입)`;
+                autoFilledBoxes = true;
+            }
+
+            if (autoFilledBoxes) {
+                toast.info("📦 인박스/아웃박스 입수 규격이 미입력되어 있어, 현재 3D 시뮬레이션 계산 규격으로 자동 입력 및 저장되었습니다.");
+            }
+
+            // 3. 팔레트 사양 자동 확정 연동 (미저장 패턴 자동 채움)
             if (!specToSave.palletStackingPattern && selectedPalletPattern) {
                 specToSave.palletStackingPattern = `${selectedPalletPattern.name} (${pallet3DMode === 'pallet-cross' ? '교차적재' : '일반적재'})`;
             }
@@ -893,7 +943,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
     };
 
     const get3DInboxDims = () => {
-        const str = currentSpec.inboxSize || (formData.inboxInfo?.inboxLength && `${formData.inboxInfo.inboxLength}x${formData.inboxInfo.inboxWidth}x${formData.inboxInfo.inboxHeight}`);
+        const str = currentSpec.inboxSize || (formData.inboxInfo?.inboxWidth && `${formData.inboxInfo.inboxWidth}x${formData.inboxInfo.inboxLength}x${formData.inboxInfo.inboxHeight}`);
         if (str) {
             const parts = String(str).toLowerCase().replace(/mm/g, '').replace(/,/g, '').split(/[x*×]/).map(s => parseFloat(s.trim())).filter(n => !isNaN(n) && n > 0);
             if (parts.length >= 3) return { w: parts[0], d: parts[1], h: parts[2] };
@@ -902,7 +952,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
     };
 
     const get3DPalletDims = () => {
-        const str = currentSpec.palletSpec || currentSpec.palletSize || formData?.channels?.[0]?.palletSpec || (formData.palletInfo?.palletLength && `${formData.palletInfo.palletLength}x${formData.palletInfo.palletWidth}`);
+        const str = currentSpec.palletSpec || currentSpec.palletSize || formData?.channels?.[0]?.palletSpec || (formData.palletInfo?.palletWidth && `${formData.palletInfo.palletWidth}x${formData.palletInfo.palletLength}`);
         if (str) {
             const match = String(str).match(/(\d{1,4}(?:,\d{3})*|\d{3,4})\s*[*xX×/]\s*(\d{1,4}(?:,\d{3})*|\d{3,4})/);
             if (match) {
@@ -1028,9 +1078,17 @@ const ProductDrawer = ({ product, onClose, user }) => {
             toast.warn("사양서를 먼저 한 번 저장한 후 3D 도면을 확정할 수 있습니다.");
             return;
         }
+        const normalizedMode = mode.startsWith('pallet') ? 'pallet' : mode;
+        if (normalizedMode === 'pallet') {
+            const tierQty = parseInt(currentSpec?.palletTierQty || 0, 10);
+            const tierCount = parseInt(currentSpec?.palletTierCount || 0, 10);
+            if (tierQty <= 0 || tierCount <= 0) {
+                toast.warn("🧱 팔레트 적재 사양(1단 적재 수량 및 총 적재 단수)을 먼저 입력해야 팔레트 3D 도면을 확정 저장할 수 있습니다.");
+                return;
+            }
+        }
         try {
             setSnapshotUploading(true);
-            const normalizedMode = mode.startsWith('pallet') ? 'pallet' : mode;
             const viewConfig = viewer3DRef.current?.getViewConfig?.();
             const viewConfigStr = viewConfig ? JSON.stringify(viewConfig) : null;
 
@@ -1068,9 +1126,19 @@ const ProductDrawer = ({ product, onClose, user }) => {
     };
 
     const handleCaptureCurrent3D = (mode) => {
-        const curConfirmedImage = mode === 'inbox' 
+        const normalizedMode = mode.startsWith('pallet') ? 'pallet' : mode;
+        if (normalizedMode === 'pallet') {
+            const tierQty = parseInt(currentSpec?.palletTierQty || 0, 10);
+            const tierCount = parseInt(currentSpec?.palletTierCount || 0, 10);
+            if (tierQty <= 0 || tierCount <= 0) {
+                toast.warn("🧱 팔레트 적재 사양(1단 적재 수량 및 총 적재 단수)을 먼저 입력해야 팔레트 3D 도면을 확정 저장할 수 있습니다.");
+                return;
+            }
+        }
+
+        const curConfirmedImage = normalizedMode === 'inbox' 
             ? currentSpec.inboxLayoutImage 
-            : (mode === 'outbox' ? (currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) : currentSpec.palletLayoutImage);
+            : (normalizedMode === 'outbox' ? (currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) : currentSpec.palletLayoutImage);
 
         const doCapture = () => {
             if (!viewer3DRef.current?.capture) {
@@ -1368,6 +1436,45 @@ const ProductDrawer = ({ product, onClose, user }) => {
         updated[idx] = { ...updated[idx], [field]: val };
         setSpecComponents(updated);
     };
+
+    // 🎁 기획세트 구성품(단품) 연결 BOM 일괄 취합 핸들러
+    const handleFetchComponentsBom = async () => {
+        const comps = formData.components || [];
+        if (comps.length === 0) {
+            toast.warning("기획세트에 등록된 구성품(단품)이 없습니다. 먼저 '상세 정보' 탭의 구성품 관리에서 단품을 추가해 주세요.");
+            return;
+        }
+
+        try {
+            toast.info("🎁 기획세트 구성품들의 포장 부자재 BOM 목록을 조회 중입니다...");
+            const res = await api.aggregateBomByComponents(comps);
+            const aggregated = res.data;
+            const bomList = Array.isArray(aggregated) ? aggregated : (aggregated?.data && Array.isArray(aggregated.data) ? aggregated.data : []);
+
+            if (bomList.length === 0) {
+                toast.warning("등록된 구성품(단품)에 연결된 포장 부자재 BOM 정보가 없습니다.");
+                return;
+            }
+
+            const mappedComponents = bomList.map(item => ({
+                bomCode: item.bomCode || '',
+                componentName: item.componentName || '',
+                specDetails: item.specDetails || '',
+                sizeDimension: item.sizeDimension || '',
+                weight: item.weight || 0,
+                quantity: item.quantity || item.usageCount || 1,
+                supplier: item.supplier || '',
+                imagePath: item.imagePath || '',
+                remarks: item.remarks || (item.parentComponentName ? `[구성품: ${item.parentComponentName}]` : '')
+            }));
+
+            setSpecComponents(mappedComponents);
+            toast.success(`🎁 ${comps.length}개 구성품(단품)의 포장 부자재 BOM 총 ${mappedComponents.length}종을 성공적으로 불러왔습니다!`);
+        } catch (error) {
+            console.error("Failed to aggregate components BOM:", error);
+            toast.error("기획세트 단품 BOM 취합 중 오류가 발생했습니다.");
+        }
+    };
     const { canEdit: canEditProduct, canDelete: canDeleteProduct, isAdmin } = usePermissions(user);
     const canEdit = canEditProduct('products');
     const isDimensionsConfirmed = formData.dimensions?.status === '확정';
@@ -1524,6 +1631,9 @@ const ProductDrawer = ({ product, onClose, user }) => {
                         manufacturerInfo: product.manufacturerInfo || { id: null },
                         shelfLifeMonths: product.shelfLifeMonths || '',
                         openedShelfLifeMonths: product.openedShelfLifeMonths || '',
+                        productBarcode: product.productBarcode || product.barcode || '',
+                        inboxBarcode: product.inboxBarcode || '',
+                        outboxBarcode: product.outboxBarcode || '',
                         capacity: product.capacity ? String(product.capacity).replace(/[^0-9.]/g, '') : '',
                         capacityFlOz: product.capacityFlOz || '',
                         weight: product.weight ? String(product.weight).replace(/[^0-9.]/g, '') : '',
@@ -1657,28 +1767,48 @@ const ProductDrawer = ({ product, onClose, user }) => {
                     if (prod) {
                         const updatedSpec = { ...spec };
                         
-                        if (!updatedSpec.inboxQty && prod.inboxInfo?.inboxQuantity) {
+                        // 바코드 3종 (상세 정보 -> 사양서 자동 연동)
+                        updatedSpec.barcode = prod.productBarcode || prod.barcode || updatedSpec.barcode || '';
+                        updatedSpec.inboxBarcode = prod.inboxBarcode || updatedSpec.inboxBarcode || '';
+                        updatedSpec.outboxBarcode = prod.outboxBarcode || updatedSpec.outboxBarcode || '';
+
+                        // 인박스 사용유무 및 규격/수량 연동
+                        const hasInbox = prod.inboxInfo?.hasInbox !== undefined 
+                            ? !!prod.inboxInfo.hasInbox 
+                            : (parseInt(prod.inboxInfo?.inboxQuantity || 0) > 0 || (prod.inboxInfo?.inboxWidth && prod.inboxInfo?.inboxLength && prod.inboxInfo?.inboxHeight));
+                        updatedSpec.inboxUseYn = hasInbox ? 'O' : 'X';
+
+                        if (prod.inboxInfo?.inboxQuantity) {
                             updatedSpec.inboxQty = prod.inboxInfo.inboxQuantity;
                         }
-                        if (!updatedSpec.inboxSize && prod.inboxInfo?.inboxLength && prod.inboxInfo?.inboxWidth && prod.inboxInfo?.inboxHeight) {
-                            updatedSpec.inboxSize = `${prod.inboxInfo.inboxLength}x${prod.inboxInfo.inboxWidth}x${prod.inboxInfo.inboxHeight}`;
+                        if (prod.inboxInfo?.inboxWidth && prod.inboxInfo?.inboxLength && prod.inboxInfo?.inboxHeight) {
+                            updatedSpec.inboxSize = `${prod.inboxInfo.inboxWidth}x${prod.inboxInfo.inboxLength}x${prod.inboxInfo.inboxHeight}`;
                         }
-                        if (!updatedSpec.outboxQty && prod.outboxInfo?.outboxQuantity) {
+
+                        // 아웃박스 수량, 규격, 중량 (마스터 데이터 우선 연동)
+                        if (prod.outboxInfo?.outboxQuantity) {
                             updatedSpec.outboxQty = prod.outboxInfo.outboxQuantity;
+                            updatedSpec.outboxTotalQty = prod.outboxInfo.outboxQuantity;
                         }
-                        if (!updatedSpec.outboxSize && prod.outboxInfo?.outboxLength && prod.outboxInfo?.outboxWidth && prod.outboxInfo?.outboxHeight) {
-                            updatedSpec.outboxSize = `${prod.outboxInfo.outboxLength}x${prod.outboxInfo.outboxWidth}x${prod.outboxInfo.outboxHeight}`;
+                        if (prod.outboxInfo?.outboxWidth && prod.outboxInfo?.outboxLength && prod.outboxInfo?.outboxHeight) {
+                            updatedSpec.outboxSize = `${prod.outboxInfo.outboxWidth}x${prod.outboxInfo.outboxLength}x${prod.outboxInfo.outboxHeight}`;
                         }
-                        if (!updatedSpec.oneOutboxWeight && prod.outboxInfo?.outboxWeight) {
+                        if (prod.outboxInfo?.outboxWeight) {
                             updatedSpec.oneOutboxWeight = prod.outboxInfo.outboxWeight;
                         }
-                        if (!updatedSpec.palletSize && prod.palletInfo?.palletLength && prod.palletInfo?.palletWidth) {
-                            updatedSpec.palletSize = `${prod.palletInfo.palletLength}x${prod.palletInfo.palletWidth}`;
+                        
+                        // 인박스 사용 시 아웃박스 내 인박스 수량 지능형 계산 (총수량 / 인박스입수량)
+                        const inQ = parseInt(prod.inboxInfo?.inboxQuantity || updatedSpec.inboxQty || 0);
+                        const outQ = parseInt(prod.outboxInfo?.outboxQuantity || updatedSpec.outboxTotalQty || 0);
+                        if (hasInbox && inQ > 0 && outQ > 0) {
+                            updatedSpec.outboxInboxQty = Math.max(1, Math.round(outQ / inQ));
                         }
-                        if (!updatedSpec.onePalletHeight && prod.palletInfo?.palletHeight) {
+
+                        if (prod.palletInfo?.palletWidth && prod.palletInfo?.palletLength) {
+                            updatedSpec.palletSize = `${prod.palletInfo.palletWidth}x${prod.palletInfo.palletLength}`;
+                        }
+                        if (prod.palletInfo?.palletHeight) {
                             updatedSpec.onePalletHeight = prod.palletInfo.palletHeight;
-                        }
-                        if (!updatedSpec.palletHeightLimit && prod.palletInfo?.palletHeight) {
                             updatedSpec.palletHeightLimit = prod.palletInfo.palletHeight;
                         }
                         const dynamicPalletWt = calcPalletWeight(updatedSpec, prod);
@@ -1869,6 +1999,11 @@ const ProductDrawer = ({ product, onClose, user }) => {
                     ? { ...prev.inboxInfo, hasInbox: true }
                     : { hasInbox: false, inboxWidth: 0, inboxLength: 0, inboxHeight: 0, inboxWidthInch: 0, inboxLengthInch: 0, inboxHeightInch: 0, inboxQuantity: 0, inboxWeight: 0, inboxWeightLbs: 0 }
             }));
+            setCurrentSpec(prev => ({
+                ...prev,
+                inboxUseYn: hasInbox ? 'O' : 'X',
+                ...(hasInbox ? {} : { inboxQty: '', inboxSize: '' })
+            }));
             return;
         }
 
@@ -1909,10 +2044,35 @@ const ProductDrawer = ({ product, onClose, user }) => {
             if (['width', 'length', 'height', 'inboxWidth', 'inboxLength', 'inboxHeight', 'outboxWidth', 'outboxLength', 'outboxHeight', 'palletWidth', 'palletLength', 'palletHeight'].includes(child)) {
                 const inchField = `${child}Inch`;
                 const inchValue = (!isNaN(numValue) && actualValue !== '') ? (numValue * 0.03937).toFixed(2) : '';
-                setFormData(prev => ({
-                    ...prev,
-                    [parent]: { ...prev[parent], [child]: actualValue, [inchField]: inchValue }
-                }));
+                setFormData(prev => {
+                    const updatedParent = { ...prev[parent], [child]: actualValue, [inchField]: inchValue };
+                    
+                    // 사양서(currentSpec) 실시간 동기화
+                    if (parent === 'inboxInfo') {
+                        const w = child === 'inboxWidth' ? actualValue : updatedParent.inboxWidth;
+                        const l = child === 'inboxLength' ? actualValue : updatedParent.inboxLength;
+                        const h = child === 'inboxHeight' ? actualValue : updatedParent.inboxHeight;
+                        if (w && l && h) {
+                            setCurrentSpec(s => ({ ...s, inboxSize: `${w}x${l}x${h}`, inboxUseYn: 'O' }));
+                        }
+                    } else if (parent === 'outboxInfo') {
+                        const w = child === 'outboxWidth' ? actualValue : updatedParent.outboxWidth;
+                        const l = child === 'outboxLength' ? actualValue : updatedParent.outboxLength;
+                        const h = child === 'outboxHeight' ? actualValue : updatedParent.outboxHeight;
+                        if (w && l && h) {
+                            setCurrentSpec(s => ({ ...s, outboxSize: `${w}x${l}x${h}` }));
+                        }
+                    } else if (parent === 'palletInfo') {
+                        const w = child === 'palletWidth' ? actualValue : updatedParent.palletWidth;
+                        const l = child === 'palletLength' ? actualValue : updatedParent.palletLength;
+                        const h = child === 'palletHeight' ? actualValue : updatedParent.palletHeight;
+                        if (w && l) {
+                            setCurrentSpec(s => ({ ...s, palletSize: `${w}x${l}`, ...(h ? { onePalletHeight: h, palletHeightLimit: h } : {}) }));
+                        }
+                    }
+
+                    return { ...prev, [parent]: updatedParent };
+                });
                 return;
             }
 
@@ -1920,11 +2080,24 @@ const ProductDrawer = ({ product, onClose, user }) => {
             if (['inboxWeight', 'outboxWeight'].includes(child)) {
                 const lbsField = `${child}Lbs`;
                 const lbsValue = (!isNaN(numValue) && actualValue !== '') ? (numValue * 2.20462).toFixed(2) : '';
-                setFormData(prev => ({
-                    ...prev,
-                    [parent]: { ...prev[parent], [child]: actualValue, [lbsField]: lbsValue }
-                }));
+                setFormData(prev => {
+                    const updatedParent = { ...prev[parent], [child]: actualValue, [lbsField]: lbsValue };
+                    if (parent === 'outboxInfo') {
+                        setCurrentSpec(s => ({ ...s, oneOutboxWeight: actualValue }));
+                    }
+                    return { ...prev, [parent]: updatedParent };
+                });
                 return;
+            }
+
+            if (parent === 'inboxInfo' && child === 'inboxQuantity') {
+                if (actualValue) {
+                    setCurrentSpec(s => ({ ...s, inboxQty: actualValue, inboxUseYn: 'O' }));
+                }
+            } else if (parent === 'outboxInfo' && child === 'outboxQuantity') {
+                if (actualValue) {
+                    setCurrentSpec(s => ({ ...s, outboxQty: actualValue, outboxTotalQty: actualValue }));
+                }
             }
 
             setFormData(prev => ({
@@ -1933,6 +2106,15 @@ const ProductDrawer = ({ product, onClose, user }) => {
             }));
         } else {
             const updates = { [name]: actualValue };
+            if (name === 'productBarcode') {
+                setCurrentSpec(prev => ({ ...prev, barcode: actualValue }));
+            }
+            if (name === 'inboxBarcode') {
+                setCurrentSpec(prev => ({ ...prev, inboxBarcode: actualValue }));
+            }
+            if (name === 'outboxBarcode') {
+                setCurrentSpec(prev => ({ ...prev, outboxBarcode: actualValue }));
+            }
             if (name === 'productType') {
                 const isSet = actualValue === '기획세트';
                 updates.isPlanningSet = isSet;
@@ -2044,37 +2226,119 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
     const handleDownloadSpecExcel = async () => {
         if (!product || !product.id) return;
-        try {
-            // 현재 입력 중인 최신 사양서 정보 자동 저장 후 다운로드
-            await handleSaveFullSpec(true);
-            const response = await downloadPackagingSpecExcel(product.id);
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', `포장사양서_${formData.itemCode || product.itemCode || product.id}.xlsx`);
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-        } catch (error) {
-            toast.error("엑셀 다운로드에 실패했습니다.");
+
+        const hasInbox = currentSpec.inboxUseYn === 'O';
+        const missingInbox = hasInbox && !currentSpec.inboxLayoutImage;
+        const missingOutbox = !(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage);
+        const missingPallet = !currentSpec.palletLayoutImage;
+
+        const executeDownload = async (captureCurrent = false) => {
+            try {
+                if (captureCurrent && viewer3DRef.current?.capture) {
+                    const curMode = sim3DTab.startsWith('pallet') ? 'pallet' : sim3DTab;
+                    if (curMode === 'pallet') {
+                        const tierQty = parseInt(currentSpec?.palletTierQty || 0, 10);
+                        const tierCount = parseInt(currentSpec?.palletTierCount || 0, 10);
+                        if (tierQty <= 0 || tierCount <= 0) {
+                            toast.warn("🧱 팔레트 적재 사양(1단 적재 수량 및 총 적재 단수)이 미입력되어 팔레트 도면은 자동 저장에서 제외됩니다.");
+                        } else {
+                            viewer3DRef.current.capture();
+                        }
+                    } else {
+                        viewer3DRef.current.capture();
+                    }
+                    await new Promise(r => setTimeout(r, 600));
+                }
+
+                // 현재 입력 중인 최신 사양서 정보 자동 저장 후 다운로드
+                await handleSaveFullSpec(true);
+                const response = await downloadPackagingSpecExcel(product.id);
+                const url = window.URL.createObjectURL(new Blob([response.data]));
+                const link = document.createElement('a');
+                link.href = url;
+                link.setAttribute('download', `포장사양서_${formData.itemCode || product.itemCode || product.id}.xlsx`);
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+            } catch (error) {
+                toast.error("엑셀 다운로드에 실패했습니다.");
+                console.error(error);
+            }
+        };
+
+        if (missingInbox || missingOutbox || missingPallet) {
+            const missingList = [];
+            if (missingInbox) missingList.push('인박스');
+            if (missingOutbox) missingList.push('아웃박스');
+            if (missingPallet) missingList.push('팔레트');
+
+            setConfirmDialogState({
+                icon: '📸',
+                title: '3D 도면 저장 및 엑셀 다운로드',
+                message: `포장사양서 3D 도면 중 [${missingList.join(', ')}] 도면이 아직 확정 저장되지 않았습니다.\n\n현재 3D 뷰어 화면의 도면을 자동으로 확정 저장한 후 엑셀을 다운로드하시겠습니까?`,
+                onConfirm: () => executeDownload(true)
+            });
+        } else {
+            await executeDownload(false);
         }
     };
 
     const handleDownloadSpecPdf = async () => {
         if (!product || !product.id) return;
-        try {
-            // 현재 입력 중인 최신 사양서 정보 자동 저장 후 다운로드
-            await handleSaveFullSpec(true);
-            const response = await downloadPackagingSpecPdf(product.id);
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', `포장사양서_${formData.itemCode || product.itemCode || product.id}.pdf`);
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-        } catch (error) {
-            toast.error("PDF 다운로드에 실패했습니다.");
+
+        const hasInbox = currentSpec.inboxUseYn === 'O';
+        const missingInbox = hasInbox && !currentSpec.inboxLayoutImage;
+        const missingOutbox = !(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage);
+        const missingPallet = !currentSpec.palletLayoutImage;
+
+        const executeDownload = async (captureCurrent = false) => {
+            try {
+                if (captureCurrent && viewer3DRef.current?.capture) {
+                    const curMode = sim3DTab.startsWith('pallet') ? 'pallet' : sim3DTab;
+                    if (curMode === 'pallet') {
+                        const tierQty = parseInt(currentSpec?.palletTierQty || 0, 10);
+                        const tierCount = parseInt(currentSpec?.palletTierCount || 0, 10);
+                        if (tierQty <= 0 || tierCount <= 0) {
+                            toast.warn("🧱 팔레트 적재 사양(1단 적재 수량 및 총 적재 단수)이 미입력되어 팔레트 도면은 자동 저장에서 제외됩니다.");
+                        } else {
+                            viewer3DRef.current.capture();
+                        }
+                    } else {
+                        viewer3DRef.current.capture();
+                    }
+                    await new Promise(r => setTimeout(r, 600));
+                }
+
+                // 현재 입력 중인 최신 사양서 정보 자동 저장 후 다운로드
+                await handleSaveFullSpec(true);
+                const response = await downloadPackagingSpecPdf(product.id);
+                const url = window.URL.createObjectURL(new Blob([response.data]));
+                const link = document.createElement('a');
+                link.href = url;
+                link.setAttribute('download', `포장사양서_${formData.itemCode || product.itemCode || product.id}.pdf`);
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+            } catch (error) {
+                toast.error("PDF 다운로드에 실패했습니다.");
+                console.error(error);
+            }
+        };
+
+        if (missingInbox || missingOutbox || missingPallet) {
+            const missingList = [];
+            if (missingInbox) missingList.push('인박스');
+            if (missingOutbox) missingList.push('아웃박스');
+            if (missingPallet) missingList.push('팔레트');
+
+            setConfirmDialogState({
+                icon: '📸',
+                title: '3D 도면 저장 및 PDF 다운로드',
+                message: `포장사양서 3D 도면 중 [${missingList.join(', ')}] 도면이 아직 확정 저장되지 않았습니다.\n\n현재 3D 뷰어 화면의 도면을 자동으로 확정 저장한 후 PDF를 다운로드하시겠습니까?`,
+                onConfirm: () => executeDownload(true)
+            });
+        } else {
+            await executeDownload(false);
         }
     };
 
@@ -2471,6 +2735,17 @@ const ProductDrawer = ({ product, onClose, user }) => {
                     const specToSave = { ...currentSpec };
                     delete specToSave.methodImages;
                     delete specToSave.bomItems;
+
+                    // 바코드 fallback 보장
+                    if (!specToSave.barcode && (formData.productBarcode || formData.barcode)) {
+                        specToSave.barcode = formData.productBarcode || formData.barcode;
+                    }
+                    if (!specToSave.inboxBarcode && formData.inboxBarcode) {
+                        specToSave.inboxBarcode = formData.inboxBarcode;
+                    }
+                    if (!specToSave.outboxBarcode && formData.outboxBarcode) {
+                        specToSave.outboxBarcode = formData.outboxBarcode;
+                    }
 
                     const dynamicPalletWt = calcPalletWeight(currentSpec, formData);
                     if (dynamicPalletWt) {
@@ -4389,8 +4664,20 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                     <input type="text" readOnly value={`${formData.shelfLifeMonths || '-'}개월 / ${formData.openedShelfLifeMonths || '-'}개월`} style={{ background: '#f8fafc', fontSize: '14px' }} />
                                                 </div>
                                                 <div className="form-group">
-                                                    <label style={{ fontSize: '12px', color: '#475569' }}>바코드</label>
-                                                    <input type="text" value={currentSpec.barcode || ''} onChange={e => setCurrentSpec({...currentSpec, barcode: e.target.value})} disabled={!canEdit} style={{ fontSize: '14px' }} />
+                                                    <label style={{ fontSize: '12px', color: '#475569', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <span>바코드</span>
+                                                        <span style={{ fontSize: '11px', color: '#0369a1', background: '#e0f2fe', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                                            🔒 상세정보 연동
+                                                        </span>
+                                                    </label>
+                                                    <input 
+                                                        type="text" 
+                                                        readOnly
+                                                        value={formData.productBarcode || formData.barcode || currentSpec.barcode || ''} 
+                                                        style={{ background: '#f8fafc', fontSize: '14px', color: '#1e293b', fontWeight: '600', cursor: 'not-allowed' }} 
+                                                        placeholder="상세 정보 탭 바코드 자동 반영"
+                                                        title="제품 바코드는 '상세 정보' 탭의 제품 바코드 항목에서 관리됩니다."
+                                                    />
                                                 </div>
                                                 <div className="form-group">
                                                     <label style={{ fontSize: '12px', color: '#475569' }}>랩 넘버</label>
@@ -4490,7 +4777,30 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                     </span>
                                                 </div>
                                                 {canEdit && (
-                                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                        {(formData.isPlanningSet || formData.productType === '기획세트') && (
+                                                            <button 
+                                                                type="button" 
+                                                                onClick={handleFetchComponentsBom} 
+                                                                style={{ 
+                                                                    fontSize: '12px', 
+                                                                    padding: '7px 14px', 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center', 
+                                                                    gap: '6px',
+                                                                    fontWeight: '700',
+                                                                    borderRadius: '6px',
+                                                                    background: '#fffbeb',
+                                                                    border: '1.5px solid #f59e0b',
+                                                                    color: '#b45309',
+                                                                    cursor: 'pointer',
+                                                                    boxShadow: '0 1px 2px rgba(245, 158, 11, 0.15)'
+                                                                }}
+                                                                title="상세 정보 탭에 등록된 기획세트 구성품(단품)들의 부자재 BOM 목록을 일괄 취합하여 사양서로 불러옵니다."
+                                                            >
+                                                                <span>🎁</span> 기획세트 단품 BOM 전체 가져오기
+                                                            </button>
+                                                        )}
                                                         <button 
                                                             type="button" 
                                                             onClick={handleOpenBomModalForAdd} 
@@ -4691,14 +5001,37 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                     <div style={{ fontSize: '14px', fontWeight: '600', color: '#334155', marginBottom: '4px' }}>등록된 BOM 부자재 구성품이 없습니다.</div>
                                                                     <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '14px' }}>표준화된 포장 부자재 마스터에서 부자재를 선택하여 등록하세요.</div>
                                                                     {canEdit && (
-                                                                        <button 
-                                                                            type="button" 
-                                                                            onClick={handleOpenBomModalForAdd} 
-                                                                            className="primary" 
-                                                                            style={{ fontSize: '12px', padding: '6px 14px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                                                                        >
-                                                                            <span>🔍</span> BOM 마스터에서 부자재 가져오기
-                                                                        </button>
+                                                                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                                                                            {(formData.isPlanningSet || formData.productType === '기획세트') && (
+                                                                                <button 
+                                                                                    type="button" 
+                                                                                    onClick={handleFetchComponentsBom} 
+                                                                                    style={{ 
+                                                                                        fontSize: '12px', 
+                                                                                        padding: '6px 14px', 
+                                                                                        display: 'inline-flex', 
+                                                                                        alignItems: 'center', 
+                                                                                        gap: '6px',
+                                                                                        fontWeight: '700',
+                                                                                        borderRadius: '6px',
+                                                                                        background: '#fffbeb',
+                                                                                        border: '1.5px solid #f59e0b',
+                                                                                        color: '#b45309',
+                                                                                        cursor: 'pointer'
+                                                                                    }}
+                                                                                >
+                                                                                    <span>🎁</span> 기획세트 단품 BOM 전체 가져오기
+                                                                                </button>
+                                                                            )}
+                                                                            <button 
+                                                                                type="button" 
+                                                                                onClick={handleOpenBomModalForAdd} 
+                                                                                className="primary" 
+                                                                                style={{ fontSize: '12px', padding: '6px 14px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                                                                            >
+                                                                                <span>🔍</span> BOM 마스터에서 부자재 가져오기
+                                                                            </button>
+                                                                        </div>
                                                                     )}
                                                                 </td>
                                                             </tr>
@@ -4841,17 +5174,25 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                         className="outline"
                                                         style={{ fontSize: '13px', padding: '4px 10px', height: 'auto', border: '1px solid #2563eb', color: '#2563eb', borderRadius: '6px', background: 'transparent', cursor: 'pointer' }}
                                                         onClick={() => {
-                                                            const inboxSz = formData.inboxInfo?.inboxLength && formData.inboxInfo?.inboxWidth && formData.inboxInfo?.inboxHeight 
-                                                                ? `${formData.inboxInfo.inboxLength}x${formData.inboxInfo.inboxWidth}x${formData.inboxInfo.inboxHeight}` 
+                                                            const hasInb = formData.inboxInfo?.hasInbox !== undefined 
+                                                                ? !!formData.inboxInfo.hasInbox 
+                                                                : (parseInt(formData.inboxInfo?.inboxQuantity || 0) > 0 || (formData.inboxInfo?.inboxWidth && formData.inboxInfo?.inboxLength && formData.inboxInfo?.inboxHeight));
+                                                            const inboxSz = formData.inboxInfo?.inboxWidth && formData.inboxInfo?.inboxLength && formData.inboxInfo?.inboxHeight 
+                                                                ? `${formData.inboxInfo.inboxWidth}x${formData.inboxInfo.inboxLength}x${formData.inboxInfo.inboxHeight}` 
                                                                 : currentSpec.inboxSize;
-                                                            const outboxSz = formData.outboxInfo?.outboxLength && formData.outboxInfo?.outboxWidth && formData.outboxInfo?.outboxHeight 
-                                                                ? `${formData.outboxInfo.outboxLength}x${formData.outboxInfo.outboxWidth}x${formData.outboxInfo.outboxHeight}` 
+                                                            const outboxSz = formData.outboxInfo?.outboxWidth && formData.outboxInfo?.outboxLength && formData.outboxInfo?.outboxHeight 
+                                                                ? `${formData.outboxInfo.outboxWidth}x${formData.outboxInfo.outboxLength}x${formData.outboxInfo.outboxHeight}` 
                                                                 : currentSpec.outboxSize;
-                                                            const palletSz = formData.palletInfo?.palletLength && formData.palletInfo?.palletWidth 
-                                                                ? `${formData.palletInfo.palletLength}x${formData.palletInfo.palletWidth}` 
+                                                            const palletSz = formData.palletInfo?.palletWidth && formData.palletInfo?.palletLength 
+                                                                ? `${formData.palletInfo.palletWidth}x${formData.palletInfo.palletLength}` 
                                                                 : currentSpec.palletSize;
                                                                 
                                                             const outQty = parseInt(formData.outboxInfo?.outboxQuantity || currentSpec.outboxQty || currentSpec.outboxTotalQty || 0);
+                                                            const inQty = parseInt(formData.inboxInfo?.inboxQuantity || currentSpec.inboxQty || 0);
+                                                            let obInbQty = parseInt(currentSpec.outboxInboxQty || 0);
+                                                            if (hasInb && inQty > 0 && outQty > 0) {
+                                                                obInbQty = Math.max(1, Math.round(outQty / inQty));
+                                                            }
                                                             const pltTierQty = parseInt(currentSpec.palletTierQty || 0);
                                                             const pltTierCount = parseInt(currentSpec.palletTierCount || 0);
                                                             let calcTotalOutbox = pltTierQty * pltTierCount;
@@ -4868,9 +5209,12 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
                                                             setCurrentSpec({
                                                                 ...currentSpec,
-                                                                inboxQty: formData.inboxInfo?.inboxQuantity || currentSpec.inboxQty,
+                                                                inboxUseYn: hasInb ? 'O' : 'X',
+                                                                inboxQty: inQty || currentSpec.inboxQty,
                                                                 inboxSize: inboxSz,
+                                                                outboxInboxQty: obInbQty || currentSpec.outboxInboxQty,
                                                                 outboxQty: outQty || currentSpec.outboxQty,
+                                                                outboxTotalQty: outQty || currentSpec.outboxTotalQty,
                                                                 outboxSize: outboxSz,
                                                                 palletSize: palletSz,
                                                                 onePalletHeight: formData.palletInfo?.palletHeight || currentSpec.onePalletHeight,
@@ -4958,7 +5302,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                         </select>
                                                     </div>
 
-                                                    {currentSpec.inboxUseYn === 'O' && (
+                                                    {currentSpec.inboxUseYn === 'O' ? (
                                                         <>
                                                             <div className="form-group" style={{ marginBottom: '8px' }}>
                                                                 <label style={{ fontSize: '13px', color: '#475569', fontWeight: 'bold' }}>포장 유형</label>
@@ -5001,6 +5345,24 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                             <div className="form-group" style={{ marginBottom: '8px' }}>
                                                                 <label style={{ fontSize: '13px', color: '#64748b' }}>재질 (자동)</label>
                                                                 <input type="text" value={currentSpec.inboxMaterial || ''} readOnly style={{ fontSize: '13px', padding: '6px 8px', background: '#e2e8f0', color: '#334155' }} />
+                                                            </div>
+                                                            <div className="form-group" style={{ marginBottom: '8px' }}>
+                                                                <label style={{ fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                    <span style={{ fontWeight: 'bold' }}>사이즈 (장x폭x고 mm)</span>
+                                                                    {formData.inboxInfo?.inboxWidth && formData.inboxInfo?.inboxLength && formData.inboxInfo?.inboxHeight && (
+                                                                        <span style={{ fontSize: '11px', color: '#2563eb', fontWeight: 'normal' }}>
+                                                                            (상세정보: {formData.inboxInfo.inboxWidth}x{formData.inboxInfo.inboxLength}x{formData.inboxInfo.inboxHeight})
+                                                                        </span>
+                                                                    )}
+                                                                </label>
+                                                                <input 
+                                                                    type="text" 
+                                                                    value={currentSpec.inboxSize || ''} 
+                                                                    onChange={e => setCurrentSpec({...currentSpec, inboxSize: e.target.value})} 
+                                                                    disabled={!canEdit} 
+                                                                    style={{ fontSize: '13px', padding: '6px 8px' }} 
+                                                                    placeholder="예: 300x200x150" 
+                                                                />
                                                             </div>
                                                             <div className="form-group" style={{ marginBottom: '8px' }}>
                                                                 <label style={{ fontSize: '13px', fontWeight: 'bold' }}>인박스 포장 수량 (ea)</label>
@@ -5081,83 +5443,87 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                     />
                                                                 </div>
                                                             </div>
+
+                                                            <div className="form-group" style={{ marginBottom: '8px' }}>
+                                                                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#1d4ed8' }}>🏷️ 인박스 현품표 착인/기재 사항</label>
+                                                                <select
+                                                                    value=""
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value;
+                                                                        if (val) {
+                                                                            setCurrentSpec(prev => ({
+                                                                                ...prev,
+                                                                                inboxLabelMarkingRule: applyLabelRulePreset(prev.inboxLabelMarkingRule, val)
+                                                                            }));
+                                                                        }
+                                                                    }}
+                                                                    disabled={!canEdit}
+                                                                    style={{ width: '100%', borderRadius: '4px', padding: '4px 6px', border: '1px solid #93c5fd', fontSize: '13px', marginBottom: '4px', backgroundColor: '#fff' }}
+                                                                >
+                                                                    <option value="">-- 📥 인박스 현품표 프리셋 --</option>
+                                                                    <option value="인박스 측면 현품표 스티커 부착 (제품명, 입수량, LOT, 사용기한 기재)">인박스 측면 현품표 스티커 부착 (제품명, 입수량, LOT, 사용기한 기재)</option>
+                                                                    <option value="현품표 사용기한(Exp. Date) 항목 표기 안함">현품표 사용기한(Exp. Date) 항목 표기 안함</option>
+                                                                    <option value="그 외">그 외 (직접 입력)</option>
+                                                                </select>
+                                                                <textarea value={currentSpec.inboxLabelMarkingRule || ''} onChange={e => setCurrentSpec({...currentSpec, inboxLabelMarkingRule: e.target.value})} disabled={!canEdit} rows={2} style={{ fontSize: '13px', padding: '6px 8px', width: '100%', borderRadius: '6px', border: '1px solid #cbd5e1' }} placeholder="인박스 현품표 부착/착인 기준" />
+                                                            </div>
+
+                                                            <div className="form-group" style={{ marginBottom: '8px' }}>
+                                                                <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#1d4ed8' }}>📥 인박스 날짜 표기양식 (제조일자/사용기한)</label>
+                                                                <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
+                                                                    <select
+                                                                        value={extractDateFormatPart(currentSpec.inboxDateFormat, 'mfg') || ''}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value;
+                                                                            if (val) {
+                                                                                setCurrentSpec(prev => ({
+                                                                                    ...prev,
+                                                                                    inboxDateFormat: applyDateFormatPreset(prev.inboxDateFormat, 'mfg', val)
+                                                                                }));
+                                                                            }
+                                                                        }}
+                                                                        disabled={!canEdit}
+                                                                        style={{ flex: 1, borderRadius: '4px', padding: '4px', border: '1px solid #93c5fd', fontSize: '13px', backgroundColor: '#fff' }}
+                                                                    >
+                                                                        <option value="">-- Mfg Date 프리셋 --</option>
+                                                                        <option value="YYYY.MM.DD">YYYY.MM.DD</option>
+                                                                        <option value="MM-DD-YYYY">MM-DD-YYYY</option>
+                                                                        <option value="DD.MM.YYYY">DD.MM.YYYY</option>
+                                                                    </select>
+                                                                    <select
+                                                                        value={extractDateFormatPart(currentSpec.inboxDateFormat, 'exp') || ''}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value;
+                                                                            if (val) {
+                                                                                setCurrentSpec(prev => ({
+                                                                                    ...prev,
+                                                                                    inboxDateFormat: applyDateFormatPreset(prev.inboxDateFormat, 'exp', val)
+                                                                                }));
+                                                                            }
+                                                                        }}
+                                                                        disabled={!canEdit}
+                                                                        style={{ flex: 1, borderRadius: '4px', padding: '4px', border: '1px solid #93c5fd', fontSize: '13px', backgroundColor: '#fff' }}
+                                                                    >
+                                                                        <option value="">-- Exp Date 프리셋 --</option>
+                                                                        <option value="YYYY.MM.DD까지">YYYY.MM.DD까지</option>
+                                                                        <option value="MM-DD-YYYY까지">MM-DD-YYYY까지</option>
+                                                                        <option value="DD.MM.YYYY까지">DD.MM.YYYY까지</option>
+                                                                        <option value="현품표 사용기한(Exp. Date) 항목 표기 안함">현품표 사용기한(Exp. Date) 항목 표기 안함</option>
+                                                                    </select>
+                                                                </div>
+                                                                <textarea value={currentSpec.inboxDateFormat || ''} onChange={e => setCurrentSpec({...currentSpec, inboxDateFormat: e.target.value})} disabled={!canEdit} rows={3} style={{ fontSize: '13px', padding: '6px 8px', width: '100%', borderRadius: '6px', border: '1px solid #cbd5e1' }} placeholder="인박스 현품표 날짜 표기양식 (3줄 작성)" />
+                                                            </div>
+
+                                                            <div className="form-group" style={{ marginBottom: '8px' }}>
+                                                                <label style={{ fontSize: '13px' }}>비고 (3줄 규격)</label>
+                                                                <textarea value={currentSpec.inboxRemarks || ''} onChange={e => setCurrentSpec({...currentSpec, inboxRemarks: e.target.value})} disabled={!canEdit} rows={3} style={{ fontSize: '13px', padding: '6px 8px', width: '100%', borderRadius: '6px', border: '1px solid #cbd5e1' }} placeholder="인박스 관련 특이사항 (3줄 작성)" />
+                                                            </div>
                                                         </>
-                                                    )}
-
-                                                    <div className="form-group" style={{ marginBottom: '8px' }}>
-                                                        <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#1d4ed8' }}>🏷️ 인박스 현품표 착인/기재 사항</label>
-                                                        <select
-                                                            value=""
-                                                            onChange={(e) => {
-                                                                const val = e.target.value;
-                                                                if (val) {
-                                                                    setCurrentSpec(prev => ({
-                                                                        ...prev,
-                                                                        inboxLabelMarkingRule: applyLabelRulePreset(prev.inboxLabelMarkingRule, val)
-                                                                    }));
-                                                                }
-                                                            }}
-                                                            disabled={!canEdit}
-                                                            style={{ width: '100%', borderRadius: '4px', padding: '4px 6px', border: '1px solid #93c5fd', fontSize: '13px', marginBottom: '4px', backgroundColor: '#fff' }}
-                                                        >
-                                                            <option value="">-- 📥 인박스 현품표 프리셋 --</option>
-                                                            <option value="인박스 측면 현품표 스티커 부착 (제품명, 입수량, LOT, 사용기한 기재)">인박스 측면 현품표 스티커 부착 (제품명, 입수량, LOT, 사용기한 기재)</option>
-                                                            <option value="현품표 사용기한(Exp. Date) 항목 표기 안함">현품표 사용기한(Exp. Date) 항목 표기 안함</option>
-                                                            <option value="그 외">그 외 (직접 입력)</option>
-                                                        </select>
-                                                        <textarea value={currentSpec.inboxLabelMarkingRule || ''} onChange={e => setCurrentSpec({...currentSpec, inboxLabelMarkingRule: e.target.value})} disabled={!canEdit} rows={2} style={{ fontSize: '13px', padding: '6px 8px', width: '100%', borderRadius: '6px', border: '1px solid #cbd5e1' }} placeholder="인박스 현품표 부착/착인 기준" />
-                                                    </div>
-
-                                                    <div className="form-group" style={{ marginBottom: '8px' }}>
-                                                        <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#1d4ed8' }}>📥 인박스 날짜 표기양식 (제조일자/사용기한)</label>
-                                                        <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
-                                                            <select
-                                                                value={extractDateFormatPart(currentSpec.inboxDateFormat, 'mfg') || ''}
-                                                                onChange={(e) => {
-                                                                    const val = e.target.value;
-                                                                    if (val) {
-                                                                        setCurrentSpec(prev => ({
-                                                                            ...prev,
-                                                                            inboxDateFormat: applyDateFormatPreset(prev.inboxDateFormat, 'mfg', val)
-                                                                        }));
-                                                                    }
-                                                                }}
-                                                                disabled={!canEdit}
-                                                                style={{ flex: 1, borderRadius: '4px', padding: '4px', border: '1px solid #93c5fd', fontSize: '13px', backgroundColor: '#fff' }}
-                                                            >
-                                                                <option value="">-- Mfg Date 프리셋 --</option>
-                                                                <option value="YYYY.MM.DD">YYYY.MM.DD</option>
-                                                                <option value="MM-DD-YYYY">MM-DD-YYYY</option>
-                                                                <option value="DD.MM.YYYY">DD.MM.YYYY</option>
-                                                            </select>
-                                                            <select
-                                                                value={extractDateFormatPart(currentSpec.inboxDateFormat, 'exp') || ''}
-                                                                onChange={(e) => {
-                                                                    const val = e.target.value;
-                                                                    if (val) {
-                                                                        setCurrentSpec(prev => ({
-                                                                            ...prev,
-                                                                            inboxDateFormat: applyDateFormatPreset(prev.inboxDateFormat, 'exp', val)
-                                                                        }));
-                                                                    }
-                                                                }}
-                                                                disabled={!canEdit}
-                                                                style={{ flex: 1, borderRadius: '4px', padding: '4px', border: '1px solid #93c5fd', fontSize: '13px', backgroundColor: '#fff' }}
-                                                            >
-                                                                <option value="">-- Exp Date 프리셋 --</option>
-                                                                <option value="YYYY.MM.DD까지">YYYY.MM.DD까지</option>
-                                                                <option value="MM-DD-YYYY까지">MM-DD-YYYY까지</option>
-                                                                <option value="DD.MM.YYYY까지">DD.MM.YYYY까지</option>
-                                                                <option value="현품표 사용기한(Exp. Date) 항목 표기 안함">현품표 사용기한(Exp. Date) 항목 표기 안함</option>
-                                                            </select>
+                                                    ) : (
+                                                        <div style={{ padding: '12px 14px', background: '#f1f5f9', borderRadius: '6px', color: '#64748b', fontSize: '12.5px', marginTop: '6px', border: '1px dashed #cbd5e1' }}>
+                                                            💡 <strong>인박스 미사용(X)</strong> 설정 품목입니다. (인박스 포장수량 및 현품표/날짜 표기양식 항목이 비활성화됩니다.)
                                                         </div>
-                                                        <textarea value={currentSpec.inboxDateFormat || ''} onChange={e => setCurrentSpec({...currentSpec, inboxDateFormat: e.target.value})} disabled={!canEdit} rows={3} style={{ fontSize: '13px', padding: '6px 8px', width: '100%', borderRadius: '6px', border: '1px solid #cbd5e1' }} placeholder="인박스 현품표 날짜 표기양식 (3줄 작성)" />
-                                                    </div>
-
-                                                    <div className="form-group" style={{ marginBottom: '8px' }}>
-                                                        <label style={{ fontSize: '13px' }}>비고 (3줄 규격)</label>
-                                                        <textarea value={currentSpec.inboxRemarks || ''} onChange={e => setCurrentSpec({...currentSpec, inboxRemarks: e.target.value})} disabled={!canEdit} rows={3} style={{ fontSize: '13px', padding: '6px 8px', width: '100%', borderRadius: '6px', border: '1px solid #cbd5e1' }} placeholder="인박스 관련 특이사항 (3줄 작성)" />
-                                                    </div>
+                                                    )}
                                                 </div>
 
                                                 {/* 2. 아웃박스 섹션 */}
@@ -5360,7 +5726,14 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                     )}
 
                                                     <div className="form-group" style={{ marginBottom: '8px' }}>
-                                                        <label style={{ fontSize: '13px' }}>사이즈 (장x폭x고 mm)</label>
+                                                        <label style={{ fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                            <span>사이즈 (장x폭x고 mm)</span>
+                                                            {formData.outboxInfo?.outboxWidth && formData.outboxInfo?.outboxLength && formData.outboxInfo?.outboxHeight && (
+                                                                <span style={{ fontSize: '11px', color: '#2563eb', fontWeight: 'normal' }}>
+                                                                    (상세정보: {formData.outboxInfo.outboxWidth}x{formData.outboxInfo.outboxLength}x{formData.outboxInfo.outboxHeight})
+                                                                </span>
+                                                            )}
+                                                        </label>
                                                         <input type="text" value={currentSpec.outboxSize || ''} onChange={e => setCurrentSpec({...currentSpec, outboxSize: e.target.value})} disabled={!canEdit} style={{ fontSize: '13px', padding: '6px 8px' }} placeholder="예: 600x400x300" />
                                                     </div>
                                                     <div className="form-group" style={{ marginBottom: '8px' }}>

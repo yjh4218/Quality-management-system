@@ -42,23 +42,19 @@ public class LotRootCauseAnalysisService {
             LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : LocalDateTime.now().minusMonths(6);
             LocalDateTime endDateTime = endDate != null ? endDate.atTime(23, 59, 59) : LocalDateTime.now();
 
-        // 1. 기간 내 WmsInbound (입고 정보) 조회
-        List<WmsInbound> inbounds = wmsInboundRepository.findAll().stream()
+        // 1. 기간 내 WmsInbound (입고 정보) 조회 - DB 조건 쿼리 활용
+        List<WmsInbound> inbounds = wmsInboundRepository.findByInboundDateBetween(startDateTime, endDateTime).stream()
                 .filter(i -> !i.isDeleted())
-                .filter(i -> i.getInboundDate() != null &&
-                        !i.getInboundDate().isBefore(startDateTime) &&
-                        !i.getInboundDate().isAfter(endDateTime))
                 .filter(i -> itemCode == null || itemCode.trim().isEmpty() || itemCode.trim().equalsIgnoreCase(i.getItemCode()))
                 .filter(i -> productName == null || productName.trim().isEmpty() || (i.getProductName() != null && i.getProductName().toLowerCase().contains(productName.trim().toLowerCase())))
                 .filter(i -> lotNumber == null || lotNumber.trim().isEmpty() || (i.getLotNumber() != null && i.getLotNumber().toLowerCase().contains(lotNumber.trim().toLowerCase())))
                 .collect(Collectors.toList());
 
-        // 2. 기간 내 Claim (클레임 정보) 조회
-        List<Claim> claims = claimRepository.findAll().stream()
+        // 2. 기간 내 Claim (클레임 정보) 조회 - DB 조건 쿼리 활용
+        LocalDate claimStartDate = startDate != null ? startDate : LocalDate.now().minusMonths(6);
+        LocalDate claimEndDate = endDate != null ? endDate : LocalDate.now();
+        List<Claim> claims = claimRepository.findByReceiptDateBetween(claimStartDate, claimEndDate).stream()
                 .filter(c -> !c.isDeleted())
-                .filter(c -> c.getReceiptDate() != null &&
-                        !c.getReceiptDate().atStartOfDay().isBefore(startDateTime) &&
-                        !c.getReceiptDate().atStartOfDay().isAfter(endDateTime))
                 .filter(c -> itemCode == null || itemCode.trim().isEmpty() || itemCode.trim().equalsIgnoreCase(c.getItemCode()))
                 .filter(c -> productName == null || productName.trim().isEmpty() || (c.getProductName() != null && c.getProductName().toLowerCase().contains(productName.trim().toLowerCase())))
                 .filter(c -> lotNumber == null || lotNumber.trim().isEmpty() || (c.getLotNumber() != null && c.getLotNumber().toLowerCase().contains(lotNumber.trim().toLowerCase())))
@@ -219,19 +215,15 @@ public class LotRootCauseAnalysisService {
             LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : LocalDateTime.now().minusMonths(6);
             LocalDateTime endDateTime = endDate != null ? endDate.atTime(23, 59, 59) : LocalDateTime.now();
 
-        // 1. Inbounds & Claims 조회
-        List<WmsInbound> inbounds = wmsInboundRepository.findAll().stream()
+        // 1. Inbounds & Claims 조회 - DB 조건 쿼리 활용
+        List<WmsInbound> inbounds = wmsInboundRepository.findByInboundDateBetween(startDateTime, endDateTime).stream()
                 .filter(i -> !i.isDeleted())
-                .filter(i -> i.getInboundDate() != null &&
-                        !i.getInboundDate().isBefore(startDateTime) &&
-                        !i.getInboundDate().isAfter(endDateTime))
                 .collect(Collectors.toList());
 
-        List<Claim> claims = claimRepository.findAll().stream()
+        LocalDate claimStartDate = startDate != null ? startDate : LocalDate.now().minusMonths(6);
+        LocalDate claimEndDate = endDate != null ? endDate : LocalDate.now();
+        List<Claim> claims = claimRepository.findByReceiptDateBetween(claimStartDate, claimEndDate).stream()
                 .filter(c -> !c.isDeleted())
-                .filter(c -> c.getReceiptDate() != null &&
-                        !c.getReceiptDate().atStartOfDay().isBefore(startDateTime) &&
-                        !c.getReceiptDate().atStartOfDay().isAfter(endDateTime))
                 .collect(Collectors.toList());
 
         // 2. 월별 입고/클레임 집계 (YYYY-MM)

@@ -30,12 +30,12 @@ public interface ProductionAuditRepository extends JpaRepository<ProductionAudit
             "AND NOT EXISTS (SELECT a FROM ProductionAudit a WHERE a.itemCode = p.itemCode AND (a.deleted = false OR a.deleted IS NULL))")
     List<com.example.ims.entity.Product> findPendingProductsByManufacturerAndIsDisclosedTrue(String manufacturerName);
 
-    // Dashboard Queries - 네이티브 쿼리로 변환 (필드명 변경 대응)
-    @org.springframework.data.jpa.repository.Query(value = "SELECT * FROM production_audit WHERE (is_deleted = false OR is_deleted IS NULL) AND status = :status ORDER BY upload_date DESC LIMIT 50", nativeQuery = true)
-    List<ProductionAudit> findTop50ByStatusAndIsDeletedFalseOrderByUploadDateDesc(String status);
+    // Dashboard Queries - 표준 JPQL로 변환 (DB 교차 호환성 확보)
+    @org.springframework.data.jpa.repository.Query("SELECT a FROM ProductionAudit a WHERE a.status = :status ORDER BY a.uploadDate DESC")
+    List<ProductionAudit> findTop50ByStatusAndIsDeletedFalseOrderByUploadDateDesc(@org.springframework.data.repository.query.Param("status") String status);
     
-    @org.springframework.data.jpa.repository.Query(value = "SELECT * FROM production_audit WHERE (is_deleted = false OR is_deleted IS NULL) AND manufacturer_name = :manufacturerName AND status = :status AND is_disclosed = true ORDER BY upload_date DESC LIMIT 50", nativeQuery = true)
-    List<ProductionAudit> findTop50ByManufacturerNameAndStatusAndIsDisclosedTrueAndIsDeletedFalseOrderByUploadDateDesc(String manufacturerName, String status);
+    @org.springframework.data.jpa.repository.Query("SELECT a FROM ProductionAudit a WHERE a.manufacturerName = :manufacturerName AND a.status = :status AND a.isDisclosed = true ORDER BY a.uploadDate DESC")
+    List<ProductionAudit> findTop50ByManufacturerNameAndStatusAndIsDisclosedTrueAndIsDeletedFalseOrderByUploadDateDesc(@org.springframework.data.repository.query.Param("manufacturerName") String manufacturerName, @org.springframework.data.repository.query.Param("status") String status);
 
     @org.springframework.data.jpa.repository.Query(value = "SELECT * FROM production_audit WHERE is_deleted = true ORDER BY upload_date DESC", nativeQuery = true)
     List<ProductionAudit> findDeletedAudits();

@@ -95,6 +95,15 @@ public class ProductService {
     
     @Transactional(readOnly = true)
     public List<Product> getProducts(String username) {
+        if (username != null && !username.trim().isEmpty()) {
+            User user = userRepository.findByUsername(username).orElse(null);
+            if (user != null && (user.getRole().contains("ROLE_MANUFACTURER") || "제조사".equals(user.getDepartment()))) {
+                String companyName = user.getCompanyName();
+                if (companyName != null && !companyName.trim().isEmpty()) {
+                    return productRepository.findByActiveTrueAndManufacturer(companyName);
+                }
+            }
+        }
         return productRepository.findByActiveTrue();
     }
 
@@ -396,6 +405,9 @@ public class ProductService {
         existingProduct.setBrand(updatedProduct.getBrand());
         existingProduct.setManufacturerInfo(manufacturerInfo); // Use the validated manufacturerInfo from step 1
 
+        existingProduct.setProductBarcode(updatedProduct.getProductBarcode());
+        existingProduct.setInboxBarcode(updatedProduct.getInboxBarcode());
+        existingProduct.setOutboxBarcode(updatedProduct.getOutboxBarcode());
         existingProduct.setParentItemCode(updatedProduct.getParentItemCode());
         existingProduct.setParent(updatedProduct.isParent());
         existingProduct.setMaster(updatedProduct.isMaster());

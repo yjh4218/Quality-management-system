@@ -206,19 +206,9 @@ public class ClaimController {
         User user = getUser(userDetails);
         String modifierName = user.getName() != null ? user.getName() : user.getUsername();
         
-        System.out.println("DEBUG: Incoming update request for Claim ID: " + id + " by " + modifierName);
-        System.out.println("DEBUG: Received Claim Data: " + claim);
-        
-        try {
-            // [수정] ClaimService.updateClaim 시 User 객체를 직접 전달하여 타입 불일치 및 오류 해결
-            Claim updated = claimService.updateClaim(id, claim, user);
-            return ResponseEntity.ok(updated);
-        } catch (Exception e) {
-            System.err.println("CRITICAL ERROR: Failed to update claim ID " + id);
-            e.printStackTrace();
-            // 에러 메시지를 포함하여 500 응답 발생
-            throw new RuntimeException("현재 시스템 내부 검증 중 예기치 못한 상태 오류가 감지되었습니다: " + e.getMessage());
-        }
+        log.debug("Incoming update request for Claim ID: {} by {}", id, modifierName);
+        Claim updated = claimService.updateClaim(id, claim, user);
+        return ResponseEntity.ok(updated);
     }
 
     @GetMapping("/{id}/history")

@@ -134,7 +134,7 @@ public class ClaimService {
                         predicates.add(cb.between(root.get("receiptDate"), LocalDate.parse(startDate),
                                 LocalDate.parse(endDate)));
                     } catch (Exception e) {
-                        System.err.println("Date Parse Error: " + startDate + " ~ " + endDate);
+                        log.warn("Date parse error: {} ~ {}", startDate, endDate);
                     }
                 }
 
@@ -175,8 +175,7 @@ public class ClaimService {
                 query.orderBy(cb.desc(root.get("receiptDate")));
                 return cb.and(predicates.toArray(new Predicate[0]));
             } catch (Exception e) {
-                System.err.println("CRITICAL ERROR inside Specification lambda:");
-                e.printStackTrace();
+                log.error("CRITICAL ERROR inside Specification lambda: {}", e.getMessage(), e);
                 throw e;
             }
         };

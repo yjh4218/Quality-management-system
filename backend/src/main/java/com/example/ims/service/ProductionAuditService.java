@@ -91,16 +91,9 @@ public class ProductionAuditService {
             }
         } else {
             // 제조사는 본인 업체 미진행 중 '공개요청'된 것만 조회
-            log.info(">>>> [AUDIT DEBUG] Pending Audits request. User: '{}', User Company: '{}'", username, user.getCompanyName());
+            log.info(">>>> [AUDIT] Pending Audits request. User: '{}', User Company: '{}'", username, user.getCompanyName());
             products = repository.findPendingProductsByManufacturerAndIsDisclosedTrue(cleanCompanyName(user.getCompanyName()));
-            log.info(">>>> [AUDIT DEBUG] Found Pending count: {}", products.size());
-            if (products.isEmpty()) {
-                List<Product> allProds = productRepository.findAll();
-                log.info(">>>> [AUDIT DEBUG] DB Products total size: {}. All Products: {}",
-                    allProds.size(),
-                    allProds.stream().map(p -> "[" + p.getItemCode() + ", name=" + p.getProductName() + ", mfr=" + p.getManufacturer() + ", info=" + (p.getManufacturerInfo() != null ? p.getManufacturerInfo().getName() : "null") + ", discl=" + p.isPhotoAuditDisclosed() + ", active=" + p.isActive() + "]").collect(Collectors.toList())
-                );
-            }
+            log.debug(">>>> [AUDIT] Found Pending count: {}", products.size());
         }
         
         return products.stream().map(p -> {

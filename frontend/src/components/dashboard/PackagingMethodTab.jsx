@@ -914,6 +914,7 @@ const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, onRegisterSav
                 <ProductSearchPopup 
                     isOpen={isProductSearchOpen}
                     onClose={() => setIsProductSearchOpen(false)}
+                    onSelect={handleCopyFromProduct}
                     onSelectProduct={handleCopyFromProduct}
                     title="📋 포장방법 사진을 복사해 올 제품 검색"
                 />

@@ -18,7 +18,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.List;
 
@@ -149,7 +148,7 @@ public class PackagingSpecificationController {
                     .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                     .body(resource);
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Failed to export packaging spec to excel: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError().build();
         }
     }
@@ -174,6 +173,7 @@ public class PackagingSpecificationController {
                     .contentType(MediaType.APPLICATION_PDF)
                     .body(resource);
         } catch (Exception e) {
+            log.error("Failed to export packaging spec to pdf: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError().build();
         }
     }
@@ -184,7 +184,7 @@ public class PackagingSpecificationController {
             PackagingSpecFullDto fullDto = specService.getFullSpecByProductId(productId);
             return ResponseEntity.ok(fullDto);
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Failed to get full packaging spec for product {}: {}", productId, e.getMessage(), e);
             return ResponseEntity.internalServerError().build();
         }
     }
@@ -198,13 +198,13 @@ public class PackagingSpecificationController {
             PackagingSpecFullDto saved = specService.saveFullSpec(dto, username);
             return ResponseEntity.ok(saved);
         } catch (RuntimeException e) {
-            e.printStackTrace();
+            log.warn("Business validation error saving packaging spec: {}", e.getMessage());
             throw new org.springframework.web.server.ResponseStatusException(
                 org.springframework.http.HttpStatus.BAD_REQUEST, 
                 e.getMessage(), e
             );
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Internal error saving packaging spec: {}", e.getMessage(), e);
             throw new org.springframework.web.server.ResponseStatusException(
                 org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR, 
                 "포장사양서 저장 중 오류 발생: " + e.getMessage(), e
@@ -315,7 +315,7 @@ public class PackagingSpecificationController {
                 currentOrder += step;
             } catch (Exception e) {
                 // 개별 업로드 진행률 지원 및 일부 실패 시에도 로깅 후 진행
-                e.printStackTrace();
+                log.error("Failed to process method image upload: {}", e.getMessage(), e);
             }
         }
 
