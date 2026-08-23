@@ -1,6 +1,7 @@
 import React from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import { compressImageToWebP } from './utils/imageCompressor';
 
 // [고도화 1] 환경 변수(.env) 기반 주소 관리
 export const getBaseURL = () => {
@@ -403,15 +404,26 @@ export const updateInboundData = (id, data) => api.put(`/api/quality/inbound/${i
 export const completeInboundInspection = (id) => api.post(`/api/quality/inbound/${id}/complete`);
 export const getInboundHistory = (id) => api.get(`/api/quality/inbound/${id}/history`, { skipToast: true }).catch(() => ({ data: [] }));
 export const deleteInbound = (id) => api.delete(`/api/quality/inbound/${id}`);
-export const uploadCoaFile = (file, productName = '') => {
+export const uploadCoaFile = async (file, productName = '') => {
+    const processedFile = await compressImageToWebP(file);
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', processedFile);
     return api.post(`/api/quality/inbound/upload-coa?productName=${encodeURIComponent(productName)}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
     });
 };
 export const submitQualityReport = (report) => api.post('/api/quality/report', report);
 export const triggerWmsFetch = () => api.post('/api/quality/fetch-wms');
+export const getLotPpmAnalysis = (params = {}) => {
+    const query = new URLSearchParams();
+    if (params.itemCode) query.append('itemCode', params.itemCode);
+    if (params.productName) query.append('productName', params.productName);
+    if (params.lotNumber) query.append('lotNumber', params.lotNumber);
+    if (params.startDate) query.append('startDate', params.startDate);
+    if (params.endDate) query.append('endDate', params.endDate);
+    if (params.groupByMaster !== undefined) query.append('groupByMaster', params.groupByMaster);
+    return api.get(`/api/quality-analytics/lot-ppm?${query.toString()}`);
+};
 export const exportInboundExcel = (params) => {
     const queryParams = new URLSearchParams();
     if (params.startDate) queryParams.append('startDate', params.startDate);
@@ -455,9 +467,10 @@ export const getProducts = () => api.get('/api/products');
 export const createProduct = (product) => api.post('/api/products', product);
 export const updateProduct = (id, product) => api.put(`/api/products/${id}`, product);
 export const getProductById = (id) => api.get(`/api/products/${id}`);
-export const uploadFile = (file, productName = '') => {
+export const uploadFile = async (file, productName = '') => {
+    const processedFile = await compressImageToWebP(file);
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', processedFile);
     return api.post(`/api/products/upload?productName=${encodeURIComponent(productName)}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
     });
@@ -506,6 +519,8 @@ export const exportProductsExcel = (params) => {
     if (params.ingredients) queryParams.append('ingredients', params.ingredients);
     return api.get(`/api/products/export?${queryParams.toString()}`, { responseType: 'blob' });
 };
+export const scanComplianceIngredients = (payload) => api.post('/api/compliance/scan', payload);
+export const evaluateIngredientPrecautions = (payload) => api.post('/api/compliance/evaluate-precautions', payload);
 export const downloadIngredientTemplate = () => api.get('/api/products/ingredient-template', { responseType: 'blob' });
 
 // Packaging Spec APIs
@@ -577,9 +592,10 @@ export const deleteSalesChannel = (id) => api.delete(`/api/admin/master-data/sal
 export const getChannelSpecialNotes = (channelId) => api.get(`/api/sales-channels/${channelId}/special-notes`, { skipToast: true }).catch(() => ({ data: { notes: [] } }));
 
 // Master Data Upload (Common)
-export const uploadMasterFile = (file, prefix = 'MASTER') => {
+export const uploadMasterFile = async (file, prefix = 'MASTER') => {
+    const processedFile = await compressImageToWebP(file);
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', processedFile);
     formData.append('prefix', prefix);
     return api.post('/api/admin/master-data/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }

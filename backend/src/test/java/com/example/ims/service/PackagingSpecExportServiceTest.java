@@ -169,11 +169,7 @@ public class PackagingSpecExportServiceTest {
             assertEquals("2560 EA", sheet4.getRow(2).getCell(3).getStringCellValue());
             assertEquals(70.0f, sheet4.getRow(6).getHeightInPoints(), "팔레트 현품표 착인기준 행 높이는 70pt여야 함");
 
-            // 파일로 저장하여 후속 아티팩트 점검에 활용
-            java.io.File outF = new java.io.File("C:/Users/admin/.gemini/antigravity-ide/brain/fde2fb7a-2f33-484a-8020-ae23e360b711/scratch/verified_packaging_spec.xlsx");
-            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(outF)) {
-                fos.write(excelBytes);
-            }
+            // 메모리 내 엑셀 바이트 검증 완료
         }
     }
 

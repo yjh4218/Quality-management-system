@@ -13,7 +13,9 @@ import {
     downloadPackagingSpecExcel,
     downloadPackagingSpecPdf,
     getFileUrl,
-    getPackagingMethodImages
+    getPackagingMethodImages,
+    scanComplianceIngredients,
+    evaluateIngredientPrecautions
 } from './api';
 import * as api from './api';
 import { toast } from 'react-toastify';
@@ -220,6 +222,82 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
     const [spaceRatioResults, setSpaceRatioResults] = useState(null);
     const [spaceRatioLoading, setSpaceRatioLoading] = useState(false);
+
+    // 글로벌 전성분 규제 스캔 상태
+    const [complianceResults, setComplianceResults] = useState(null);
+    const [isComplianceModalOpen, setIsComplianceModalOpen] = useState(false);
+    const [complianceLoading, setComplianceLoading] = useState(false);
+
+    // 함량별 법적 의무 기재 주의사항 평가 상태
+    const [precautionResults, setPrecautionResults] = useState(null);
+    const [precautionLoading, setPrecautionLoading] = useState(false);
+
+    const triggerEvaluatePrecautions = async (ingredientsList) => {
+        const list = ingredientsList || formData.productIngredients || [];
+        if (!list || list.length === 0) {
+            setPrecautionResults(null);
+            return;
+        }
+
+        try {
+            setPrecautionLoading(true);
+            const payload = {
+                ingredients: list.map(item => ({
+                    korName: item.korName || '',
+                    engName: item.engName || '',
+                    inciName: item.inciName || '',
+                    contentPercent: item.contentPercent ? parseFloat(String(item.contentPercent).replace(/,/g, '')) : null,
+                    contentPpm: item.contentPpm ? parseFloat(String(item.contentPpm).replace(/,/g, '')) : null,
+                    contentPpb: item.contentPpb ? parseFloat(String(item.contentPpb).replace(/,/g, '')) : null
+                })),
+                productCategory: 'ALL'
+            };
+            const res = await evaluateIngredientPrecautions(payload);
+            setPrecautionResults(res.data);
+        } catch (err) {
+            console.error("주의사항 자동 평가 오류:", err);
+        } finally {
+            setPrecautionLoading(false);
+        }
+    };
+
+    const handleScanCompliance = async () => {
+        const ingredients = formData.productIngredients || [];
+        const ingredientsText = formData.ingredients || '';
+
+        let targetText = '';
+        if (ingredients.length > 0) {
+            targetText = ingredients.map(i => i.korName || i.engName || i.inciName).filter(Boolean).join(', ');
+        } else if (ingredientsText.trim()) {
+            targetText = ingredientsText.trim();
+        }
+
+        if (!targetText) {
+            toast.warn("등록된 전성분 데이터가 없습니다. 전성분을 입력하거나 엑셀을 업로드해주세요.");
+            return;
+        }
+
+        setComplianceLoading(true);
+        try {
+            const res = await scanComplianceIngredients({
+                ingredientsText: targetText,
+                countries: ['KR', 'EU', 'US', 'CN', 'JP'],
+                productType: 'GENERAL'
+            });
+            setComplianceResults(res.data);
+            setIsComplianceModalOpen(true);
+            if (res.data?.compliant) {
+                toast.success("글로벌 5개국(KR/EU/US/CN/JP) 규제 검사 결과: 위반 및 금지 성분 없음 (적합)");
+            } else {
+                toast.warn("주의: 규제 성분 또는 배합한도 주의 항목이 검출되었습니다. 검사 결과를 확인하세요.");
+            }
+        } catch (err) {
+            console.error("규제 검사 스캔 실패:", err);
+            toast.error("전성분 규제 스캔 중 오류가 발생했습니다: " + (err.response?.data?.message || err.message));
+        } finally {
+            setComplianceLoading(false);
+        }
+    };
 
     // 1차 본체 용기 제원 상태 (공간비율 정밀 산출용)
     const [primaryContainer, setPrimaryContainer] = useState({
@@ -879,6 +957,26 @@ const ProductDrawer = ({ product, onClose, user }) => {
             console.error(error);
             return false;
         }
+    };
+
+    const handleAutoGenerateRevision = () => {
+        const nextNo = (specRevisions.length > 0 ? Math.max(...specRevisions.map(r => r.revisionNo || 0)) : 0) + 1;
+        const outW = formData.outboxInfo?.outboxWidth || '0';
+        const outL = formData.outboxInfo?.outboxLength || '0';
+        const outH = formData.outboxInfo?.outboxHeight || '0';
+        const outQty = formData.outboxInfo?.outboxQuantity || '0';
+        const palPat = selectedPalletPattern?.name || '기본 적재';
+        const palLayers = customOutboxArrangement?.layers || '0';
+
+        const autoSummary = `[사양변경] 아웃박스(${outW}x${outL}x${outH}mm, ${outQty}ea) / 팔레트(${palPat}, ${palLayers}단)`;
+
+        setSpecRevisions([...specRevisions, {
+            revisionNo: nextNo,
+            content: autoSummary,
+            revisionDate: new Date().toISOString().substring(0, 10),
+            revisionAuthor: user?.name || user?.username || ''
+        }]);
+        toast.info(`개정 이력 ${nextNo}번(현재 포장 제원 자동 요약)이 추가되었습니다.`);
     };
 
     const handleAddRevision = () => {
@@ -1659,9 +1757,13 @@ const ProductDrawer = ({ product, onClose, user }) => {
                         palletInfo: product.palletInfo || { palletWidth: '', palletLength: '', palletHeight: '', palletWidthInch: '', palletLengthInch: '', palletHeightInch: '', palletQuantity: '' },
                         packagingMaterial: product.packagingMaterial || { manufacturerContainer: '', manufacturerLabel: '', manufacturerOuterBox: '', manufacturerEtc: '', materialBody: '', materialLabel: '', materialCap: '', materialSealing: '', materialPump: '', materialOuterBox: '', materialTool: '', materialEtc: '', materialRemarks: '' },
                         packagingCertificates: product.packagingCertificates || [],
-                        productIngredients: product.productIngredients || [],
+                        productIngredients: fullProduct.productIngredients || product.productIngredients || [],
                         photoAuditDisclosed: product.photoAuditDisclosed || false
                     }));
+                    const ingList = fullProduct.productIngredients || product.productIngredients;
+                    if (ingList && ingList.length > 0) {
+                        triggerEvaluatePrecautions(ingList);
+                    }
                     fetchPackagingSpecs(product.id, product);
                 }
             };
@@ -2145,12 +2247,14 @@ const ProductDrawer = ({ product, onClose, user }) => {
         try {
             if (field === 'ingredientsExcel') {
                 const res = await api.uploadIngredients(files[0]);
+                const parsedList = Array.isArray(res.data) ? res.data : [];
                 setFormData(prev => ({
                     ...prev,
-                    productIngredients: Array.isArray(res.data) ? res.data : [],
+                    productIngredients: parsedList,
                     ingredients: '엑셀 업로드 완료'
                 }));
-                alert(`성공적으로 파싱되어 ${res.data.length}건의 전성분이 불러와졌습니다.`);
+                triggerEvaluatePrecautions(parsedList);
+                alert(`성공적으로 파싱되어 ${parsedList.length}건의 전성분이 불러와졌습니다. (함량별 법적 주의사항 자동 분석 완료)`);
             } else if (isProductImage) {
                 // 다중 이미지 처리
                 const currentCount = formData.imagePaths?.length || 0;
@@ -4037,149 +4141,274 @@ const ProductDrawer = ({ product, onClose, user }) => {
                     </div>
 
 
-                            {/* 카드 4: 전성분 관리 */}
-                            <div className="card" style={{ borderLeft: '5px solid #1abc9c' }}>
-                                <h3>
-                                    <span style={{ color: '#1abc9c' }}>🌱</span> 전성분 (Ingredients)
-                                </h3>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                                <label style={{ fontWeight: '700', fontSize: '15px', margin: 0, color: formData.isPlanningSet ? '#999' : '#155724' }}>
-                                    🌱 전성분 (Ingredients) {formData.isPlanningSet && '(기획세트 품목은 비활성화됩니다)'}
-                                </label>
-                                {!formData.isPlanningSet && canEdit && (
-                                    <div style={{ display: 'flex', gap: '10px' }}>
-                                        {/* TODO: 템플릿 파일(packaging_spec_template.xlsx) 재도입 시 아래 버튼 활성화
-                                        <button type="button" onClick={handleDownloadTemplate} className="button secondary" style={{ fontSize: '12px', padding: '4px 10px', textDecoration: 'none', background: '#e2e3e5', color: '#383d41', display: 'flex', alignItems: 'center', border: 'none', cursor: 'pointer' }}>
-                                            📥 양식 다운로드
-                                        </button>
-                                        */}
-                                        <label className="button primary" style={{ cursor: 'pointer', fontSize: '12px', padding: '4px 10px', margin: 0, background: '#28a745', border: 'none' }}>
-                                            📤 엑셀 업로드
-                                            <input type="file" accept=".xlsx, .xls" style={{ display: 'none' }} onChange={(e) => handleFileUpload(e, 'ingredientsExcel')} />
+                            {/* 카드 4: 전성분 관리 (단품 품목일 때만 노출, 기획세트일 때는 완전 숨김) */}
+                            {!formData.isPlanningSet && (
+                                <div className="card" style={{ borderLeft: '5px solid #1abc9c' }}>
+                                    <h3>
+                                        <span style={{ color: '#1abc9c' }}>🌱</span> 전성분 (Ingredients)
+                                    </h3>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                                        <label style={{ fontWeight: '700', fontSize: '15px', margin: 0, color: '#155724' }}>
+                                            🌱 전성분 및 성분 안전성 관리
                                         </label>
+                                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                            <button 
+                                                type="button" 
+                                                onClick={() => triggerEvaluatePrecautions()} 
+                                                disabled={precautionLoading}
+                                                className="secondary" 
+                                                style={{ 
+                                                    fontSize: '12px', 
+                                                    padding: '4px 10px', 
+                                                    background: '#fffbeb', 
+                                                    border: '1.5px solid #fcd34d', 
+                                                    color: '#92400e', 
+                                                    fontWeight: 'bold',
+                                                    borderRadius: '6px',
+                                                    cursor: precautionLoading ? 'not-allowed' : 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px'
+                                                }}
+                                                title="함량에 따라 포장재/단상자에 반드시 기재해야 하는 화장품법상 사용상 주의사항 재분석"
+                                            >
+                                                <span>{precautionLoading ? '⏳' : '⚠️'}</span> {precautionLoading ? '분석 중...' : '함량별 주의사항 재분석'}
+                                            </button>
+                                            <button 
+                                                type="button" 
+                                                onClick={handleScanCompliance} 
+                                                disabled={complianceLoading}
+                                                className="secondary" 
+                                                style={{ 
+                                                    fontSize: '12px', 
+                                                    padding: '4px 10px', 
+                                                    background: '#ecfdf5', 
+                                                    border: '1.5px solid #6ee7b7', 
+                                                    color: '#065f46', 
+                                                    fontWeight: 'bold',
+                                                    borderRadius: '6px',
+                                                    cursor: complianceLoading ? 'not-allowed' : 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px'
+                                                }}
+                                                title="등록된 전성분의 글로벌 규제(KR/EU/US/CN/JP) 금지성분 및 배합한도 실시간 스캔"
+                                            >
+                                                <span>{complianceLoading ? '⏳' : '🛡️'}</span> {complianceLoading ? '스캔 중...' : '실시간 글로벌 규제 스캔'}
+                                            </button>
+                                            {canEdit && (
+                                                <label className="button primary" style={{ cursor: 'pointer', fontSize: '12px', padding: '4px 10px', margin: 0, background: '#28a745', border: 'none', borderRadius: '6px' }}>
+                                                    📤 엑셀 업로드
+                                                    <input type="file" accept=".xlsx, .xls" style={{ display: 'none' }} onChange={(e) => handleFileUpload(e, 'ingredientsExcel')} />
+                                                </label>
+                                            )}
+                                        </div>
                                     </div>
-                                )}
-                            </div>
 
-                            {/* Data Grid for Ingredients */}
-                            <div style={{ overflowX: 'auto', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
-                                <table style={{ width: '100%', minWidth: '800px', borderCollapse: 'collapse', fontSize: '13px' }}>
-                                    <thead>
-                                        <tr style={{ background: '#f8fafc', borderBottom: '2px solid #1abc9c' }}>
-                                            <th style={{ padding: '10px', textAlign: 'left', color: '#155724' }}>국문 전성분</th>
-                                            <th style={{ padding: '10px', textAlign: 'left', color: '#155724' }}>영문 전성분</th>
-                                            <th style={{ padding: '10px', textAlign: 'left', color: '#155724' }}>함량(%)</th>
-                                            <th style={{ padding: '10px', textAlign: 'left', color: '#155724' }}>함량(ppm)</th>
-                                            <th style={{ padding: '10px', textAlign: 'left', color: '#155724' }}>함량(ppb)</th>
-                                            <th style={{ padding: '10px', textAlign: 'left', color: '#155724' }}>INCI명</th>
-                                            <th style={{ padding: '10px', textAlign: 'left', color: '#155724' }}>알러젠 표시</th>
-                                            <th style={{ padding: '10px', textAlign: 'left', color: '#155724' }}>배합 한도 성분 분류</th>
-                                            {!formData.isPlanningSet && canEdit && <th style={{ padding: '10px', width: '40px', textAlign: 'center' }}>삭제</th>}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {(!formData.productIngredients || formData.productIngredients.length === 0) ? (
-                                            <tr>
-                                                <td colSpan={canEdit && !formData.isPlanningSet ? 9 : 8} style={{ padding: '20px', textAlign: 'center', color: '#6c757d' }}>
-                                                    업로드된 전성분 데이터가 없습니다. 엑셀 업로드를 하거나 행을 추가해주세요.
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            formData.productIngredients.map((ing, idx) => (
-                                                <tr key={idx} style={{ borderBottom: '1px solid #e9ecef', ':hover': { background: '#f8f9fa' } }}>
-                                                    <td style={{ padding: '4px 8px' }}>
-                                                        <input value={ing.korName || ''} onChange={(e) => updateIngredient(idx, 'korName', e.target.value)} disabled={!canEdit || formData.isPlanningSet} style={{ width: '100%', border: 'none', background: 'transparent' }} />
-                                                    </td>
-                                                    <td style={{ padding: '4px 8px' }}>
-                                                        <input value={ing.engName || ''} onChange={(e) => updateIngredient(idx, 'engName', e.target.value)} disabled={!canEdit || formData.isPlanningSet} style={{ width: '100%', border: 'none', background: 'transparent' }} />
-                                                    </td>
-                                                    <td style={{ padding: '4px 8px' }}>
-                                                        <input
-                                                            type="text"
-                                                            value={ing.contentPercent != null ? Number(ing.contentPercent).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}
-                                                            onChange={(e) => {
-                                                                const rawValue = e.target.value.replace(/,/g, '');
-                                                                if (!isNaN(rawValue)) updateIngredient(idx, 'contentPercent', rawValue);
-                                                            }}
-                                                            disabled={!canEdit || formData.isPlanningSet}
-                                                            style={{ width: '100%', border: 'none', background: 'transparent', textAlign: 'right' }}
-                                                        />
-                                                    </td>
-                                                    <td style={{ padding: '4px 8px' }}>
-                                                        <input
-                                                            type="text"
-                                                            value={ing.contentPpm != null ? Number(ing.contentPpm).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}
-                                                            onChange={(e) => {
-                                                                const rawValue = e.target.value.replace(/,/g, '');
-                                                                if (!isNaN(rawValue)) updateIngredient(idx, 'contentPpm', rawValue);
-                                                            }}
-                                                            disabled={!canEdit || formData.isPlanningSet}
-                                                            style={{ width: '100%', border: 'none', background: 'transparent', textAlign: 'right' }}
-                                                        />
-                                                    </td>
-                                                    <td style={{ padding: '4px 8px' }}>
-                                                        <input
-                                                            type="text"
-                                                            value={ing.contentPpb != null ? Number(ing.contentPpb).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}
-                                                            onChange={(e) => {
-                                                                const rawValue = e.target.value.replace(/,/g, '');
-                                                                if (!isNaN(rawValue)) updateIngredient(idx, 'contentPpb', rawValue);
-                                                            }}
-                                                            disabled={!canEdit || formData.isPlanningSet}
-                                                            style={{ width: '100%', border: 'none', background: 'transparent', textAlign: 'right' }}
-                                                        />
-                                                    </td>
-                                                    <td style={{ padding: '4px 8px' }}>
-                                                        <input value={ing.inciName || ''} onChange={(e) => updateIngredient(idx, 'inciName', e.target.value)} disabled={!canEdit || formData.isPlanningSet} style={{ width: '100%', border: 'none', background: 'transparent' }} />
-                                                    </td>
-                                                    <td style={{ padding: '4px 8px' }}>
-                                                        <input value={ing.allergenMark || ''} onChange={(e) => updateIngredient(idx, 'allergenMark', e.target.value)} disabled={!canEdit || formData.isPlanningSet} style={{ width: '100%', border: 'none', background: 'transparent' }} />
-                                                    </td>
-                                                    <td style={{ padding: '4px 8px' }}>
-                                                        <input value={ing.limitClass || ''} onChange={(e) => updateIngredient(idx, 'limitClass', e.target.value)} disabled={!canEdit || formData.isPlanningSet} style={{ width: '100%', border: 'none', background: 'transparent' }} />
-                                                    </td>
-                                                    {!formData.isPlanningSet && canEdit && (
-                                                        <td style={{ padding: '4px 8px', textAlign: 'center' }}>
-                                                            <button type="button" onClick={() => removeIngredient(idx)} style={{ background: 'transparent', border: 'none', color: '#dc3545', cursor: 'pointer', fontSize: '16px', padding: 0 }}>×</button>
-                                                        </td>
-                                                    )}
+                                    {/* ⚠️ 법적 의무 기재 주의사항 안내 섹션 */}
+                                    {precautionResults && precautionResults.matchedPrecautionCount > 0 && (
+                                        <div style={{
+                                            marginBottom: '16px',
+                                            padding: '16px',
+                                            borderRadius: '10px',
+                                            background: '#fffbeb',
+                                            border: '1.5px solid #fde68a',
+                                            boxShadow: '0 2px 6px rgba(245, 158, 11, 0.08)'
+                                        }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <span style={{ fontSize: '18px' }}>⚠️</span>
+                                                    <strong style={{ fontSize: '14px', color: '#92400e' }}>
+                                                        함량별 법적 의무 기재 주의사항 및 표시 권고 ({precautionResults.matchedPrecautionCount}건)
+                                                    </strong>
+                                                </div>
+                                                <span style={{ fontSize: '11px', color: '#b45309', background: '#fef3c7', padding: '2px 8px', borderRadius: '12px', fontWeight: 'bold' }}>
+                                                    화장품법 시행규칙 [별표 3] 연계
+                                                </span>
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                {precautionResults.precautions.map((prec, pIdx) => (
+                                                    <div key={pIdx} style={{
+                                                        padding: '10px 12px',
+                                                        borderRadius: '8px',
+                                                        background: '#ffffff',
+                                                        border: '1px solid #fed7aa',
+                                                        fontSize: '12px'
+                                                    }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                <span style={{
+                                                                    padding: '1px 6px',
+                                                                    borderRadius: '4px',
+                                                                    fontSize: '10px',
+                                                                    fontWeight: 'bold',
+                                                                    background: prec.precautionType === 'MANDATORY_WARNING' ? '#fee2e2' : '#e0e7ff',
+                                                                    color: prec.precautionType === 'MANDATORY_WARNING' ? '#991b1b' : '#3730a3'
+                                                                }}>
+                                                                    {prec.precautionType === 'MANDATORY_WARNING' ? '의무 기재 주의사항' : '성분 표시 의무'}
+                                                                </span>
+                                                                <strong style={{ color: '#1e293b' }}>{prec.ingredientName}</strong>
+                                                                {prec.inputPercent !== null && (
+                                                                    <span style={{ color: '#64748b' }}>(입력 함량: {prec.inputPercent}%)</span>
+                                                                )}
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    navigator.clipboard.writeText(prec.precautionContent);
+                                                                    toast.success(`[${prec.ingredientName}] 주의사항 문구가 클립보드에 복사되었습니다.`);
+                                                                }}
+                                                                style={{
+                                                                    background: '#f1f5f9',
+                                                                    border: '1px solid #cbd5e1',
+                                                                    borderRadius: '4px',
+                                                                    padding: '2px 6px',
+                                                                    fontSize: '11px',
+                                                                    cursor: 'pointer',
+                                                                    color: '#475569'
+                                                                }}
+                                                                title="표시 문구 복사"
+                                                            >
+                                                                📋 문구 복사
+                                                            </button>
+                                                        </div>
+                                                        <div style={{ color: '#b91c1c', fontWeight: '600', marginBottom: '2px' }}>
+                                                            {prec.precautionTitle}
+                                                        </div>
+                                                        <div style={{ color: '#334155', lineHeight: '1.4', background: '#f8fafc', padding: '6px 8px', borderRadius: '4px' }}>
+                                                            {prec.precautionContent}
+                                                        </div>
+                                                        {prec.regulationSource && (
+                                                            <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px', textAlign: 'right' }}>
+                                                                근거 법령: {prec.regulationSource}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Data Grid for Ingredients */}
+                                    <div style={{ overflowX: 'auto', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+                                        <table style={{ width: '100%', minWidth: '800px', borderCollapse: 'collapse', fontSize: '13px' }}>
+                                            <thead>
+                                                <tr style={{ background: '#f8fafc', borderBottom: '2px solid #1abc9c' }}>
+                                                    <th style={{ padding: '10px', textAlign: 'left', color: '#155724' }}>국문 전성분</th>
+                                                    <th style={{ padding: '10px', textAlign: 'left', color: '#155724' }}>영문 전성분</th>
+                                                    <th style={{ padding: '10px', textAlign: 'left', color: '#155724' }}>함량(%)</th>
+                                                    <th style={{ padding: '10px', textAlign: 'left', color: '#155724' }}>함량(ppm)</th>
+                                                    <th style={{ padding: '10px', textAlign: 'left', color: '#155724' }}>함량(ppb)</th>
+                                                    <th style={{ padding: '10px', textAlign: 'left', color: '#155724' }}>INCI명</th>
+                                                    <th style={{ padding: '10px', textAlign: 'left', color: '#155724' }}>알러젠 표시</th>
+                                                    <th style={{ padding: '10px', textAlign: 'left', color: '#155724' }}>배합 한도 성분 분류</th>
+                                                    {canEdit && <th style={{ padding: '10px', width: '40px', textAlign: 'center' }}>삭제</th>}
                                                 </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
+                                            </thead>
+                                            <tbody>
+                                                {(!formData.productIngredients || formData.productIngredients.length === 0) ? (
+                                                    <tr>
+                                                        <td colSpan={canEdit ? 9 : 8} style={{ padding: '20px', textAlign: 'center', color: '#6c757d' }}>
+                                                            업로드된 전성분 데이터가 없습니다. 엑셀 업로드를 하거나 행을 추가해주세요.
+                                                        </td>
+                                                    </tr>
+                                                ) : (
+                                                    formData.productIngredients.map((ing, idx) => (
+                                                        <tr key={idx} style={{ borderBottom: '1px solid #e9ecef', ':hover': { background: '#f8f9fa' } }}>
+                                                            <td style={{ padding: '4px 8px' }}>
+                                                                <input value={ing.korName || ''} onChange={(e) => updateIngredient(idx, 'korName', e.target.value)} disabled={!canEdit} style={{ width: '100%', border: 'none', background: 'transparent' }} />
+                                                            </td>
+                                                            <td style={{ padding: '4px 8px' }}>
+                                                                <input value={ing.engName || ''} onChange={(e) => updateIngredient(idx, 'engName', e.target.value)} disabled={!canEdit} style={{ width: '100%', border: 'none', background: 'transparent' }} />
+                                                            </td>
+                                                            <td style={{ padding: '4px 8px' }}>
+                                                                <input
+                                                                    type="text"
+                                                                    value={ing.contentPercent != null ? Number(ing.contentPercent).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}
+                                                                    onChange={(e) => {
+                                                                        const rawValue = e.target.value.replace(/,/g, '');
+                                                                        if (!isNaN(rawValue)) updateIngredient(idx, 'contentPercent', rawValue);
+                                                                    }}
+                                                                    disabled={!canEdit}
+                                                                    style={{ width: '100%', border: 'none', background: 'transparent', textAlign: 'right' }}
+                                                                />
+                                                            </td>
+                                                            <td style={{ padding: '4px 8px' }}>
+                                                                <input
+                                                                    type="text"
+                                                                    value={ing.contentPpm != null ? Number(ing.contentPpm).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}
+                                                                    onChange={(e) => {
+                                                                        const rawValue = e.target.value.replace(/,/g, '');
+                                                                        if (!isNaN(rawValue)) updateIngredient(idx, 'contentPpm', rawValue);
+                                                                    }}
+                                                                    disabled={!canEdit}
+                                                                    style={{ width: '100%', border: 'none', background: 'transparent', textAlign: 'right' }}
+                                                                />
+                                                            </td>
+                                                            <td style={{ padding: '4px 8px' }}>
+                                                                <input
+                                                                    type="text"
+                                                                    value={ing.contentPpb != null ? Number(ing.contentPpb).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}
+                                                                    onChange={(e) => {
+                                                                        const rawValue = e.target.value.replace(/,/g, '');
+                                                                        if (!isNaN(rawValue)) updateIngredient(idx, 'contentPpb', rawValue);
+                                                                    }}
+                                                                    disabled={!canEdit}
+                                                                    style={{ width: '100%', border: 'none', background: 'transparent', textAlign: 'right' }}
+                                                                />
+                                                            </td>
+                                                            <td style={{ padding: '4px 8px' }}>
+                                                                <input value={ing.inciName || ''} onChange={(e) => updateIngredient(idx, 'inciName', e.target.value)} disabled={!canEdit} style={{ width: '100%', border: 'none', background: 'transparent' }} />
+                                                            </td>
+                                                            <td style={{ padding: '4px 8px' }}>
+                                                                <input value={ing.allergenMark || ''} onChange={(e) => updateIngredient(idx, 'allergenMark', e.target.value)} disabled={!canEdit} style={{ width: '100%', border: 'none', background: 'transparent' }} />
+                                                            </td>
+                                                            <td style={{ padding: '4px 8px' }}>
+                                                                <input value={ing.limitClass || ''} onChange={(e) => updateIngredient(idx, 'limitClass', e.target.value)} disabled={!canEdit} style={{ width: '100%', border: 'none', background: 'transparent' }} />
+                                                            </td>
+                                                            {canEdit && (
+                                                                <td style={{ padding: '4px 8px', textAlign: 'center' }}>
+                                                                    <button type="button" onClick={() => removeIngredient(idx)} style={{ background: 'transparent', border: 'none', color: '#dc3545', cursor: 'pointer', fontSize: '16px', padding: 0 }}>×</button>
+                                                                </td>
+                                                            )}
+                                                        </tr>
+                                                    ))
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
 
-                            {!formData.isPlanningSet && canEdit && (
-                                <div style={{ marginTop: '10px', textAlign: 'right' }}>
-                                    <button type="button" onClick={addIngredientRow} className="secondary" style={{ fontSize: '11px', padding: '4px 10px' }}>+ 행 추가</button>
+                                    {canEdit && (
+                                        <div style={{ marginTop: '10px', textAlign: 'right' }}>
+                                            <button type="button" onClick={addIngredientRow} className="secondary" style={{ fontSize: '11px', padding: '4px 10px' }}>+ 행 추가</button>
+                                        </div>
+                                    )}
+
+                                    {/* Legacy textarea (hidden or read-only backup) */}
+                                    <div style={{ marginTop: '15px' }}>
+                                        <label style={{ fontSize: '11px', color: '#6c757d', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }} onClick={() => {
+                                            const el = document.getElementById('legacyIngredients');
+                                            if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+                                        }}>
+                                            전성분 리스트 {formData.ingredients && (!formData.productIngredients || formData.productIngredients.length === 0) ? '(이전 데이터 표시 중)' : ''}
+                                        </label>
+                                        <div id="legacyIngredients" style={{ display: 'block', marginTop: '5px' }}>
+                                            <textarea
+                                                name="ingredients"
+                                                value={
+                                                    (formData.productIngredients && formData.productIngredients.length > 0)
+                                                        ? formData.productIngredients.map(ing => ing.korName).filter(Boolean).join(', ')
+                                                        : formData.ingredients || ''
+                                                }
+                                                onChange={handleChange}
+                                                disabled={!canEdit || (formData.productIngredients && formData.productIngredients.length > 0)}
+                                                placeholder="제품 전체 성분을 입력하세요."
+                                                style={{ width: '100%', height: '60px', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '11px', backgroundColor: (formData.productIngredients && formData.productIngredients.length > 0) ? '#f8f9fa' : '#fff' }}
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             )}
-
-                            {/* Legacy textarea (hidden or read-only backup) */}
-                            <div style={{ marginTop: '15px' }}>
-                                <label style={{ fontSize: '11px', color: '#6c757d', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }} onClick={() => {
-                                    const el = document.getElementById('legacyIngredients');
-                                    if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
-                                }}>
-                                    전성분 리스트 {formData.ingredients && (!formData.productIngredients || formData.productIngredients.length === 0) ? '(이전 데이터 표시 중)' : ''}
-                                </label>
-                                <div id="legacyIngredients" style={{ display: 'block', marginTop: '5px' }}>
-                                    <textarea
-                                        name="ingredients"
-                                        value={
-                                            (formData.productIngredients && formData.productIngredients.length > 0)
-                                                ? formData.productIngredients.map(ing => ing.korName).filter(Boolean).join(', ')
-                                                : formData.ingredients || ''
-                                        }
-                                        onChange={handleChange}
-                                        disabled={!canEdit || formData.isPlanningSet || (formData.productIngredients && formData.productIngredients.length > 0)}
-                                        placeholder="제품 전체 성분을 입력하세요."
-                                        style={{ width: '100%', height: '60px', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '11px', backgroundColor: (formData.productIngredients && formData.productIngredients.length > 0) ? '#f8f9fa' : '#fff' }}
-                                    />
-                        </div>
-                                </div>
-                            </div>
 
                             {/* 카드 5: 제품 이미지 */}
                             <div className="card" style={{ borderLeft: '5px solid #9b59b6' }}>
@@ -4719,9 +4948,28 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                                                 <h3 style={{ margin: 0, fontSize: '15px', color: '#1e293b' }}>📝 개정 내역</h3>
                                                 {canEdit && (
-                                                    <button type="button" onClick={handleAddRevision} className="secondary" style={{ fontSize: '11px', padding: '4px 8px' }}>
-                                                        + 개정내역 추가
-                                                    </button>
+                                                    <div style={{ display: 'flex', gap: '6px' }}>
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={handleAutoGenerateRevision} 
+                                                            className="secondary" 
+                                                            style={{ 
+                                                                fontSize: '11px', 
+                                                                padding: '4px 8px',
+                                                                background: '#eff6ff',
+                                                                border: '1px solid #bfdbfe',
+                                                                color: '#1d4ed8',
+                                                                fontWeight: '600',
+                                                                borderRadius: '4px'
+                                                            }}
+                                                            title="현재 설정된 아웃박스 및 팔레트 적재 사양을 기반으로 개정 요약을 자동 생성합니다."
+                                                        >
+                                                            ⚡ 변경점 자동 요약 추가
+                                                        </button>
+                                                        <button type="button" onClick={handleAddRevision} className="secondary" style={{ fontSize: '11px', padding: '4px 8px' }}>
+                                                            + 개정내역 추가
+                                                        </button>
+                                                    </div>
                                                 )}
                                             </div>
                                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
@@ -7608,6 +7856,209 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                 style={{ padding: '8px 18px', borderRadius: '8px', border: 'none', background: '#2563eb', color: '#ffffff', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer', boxShadow: '0 1px 2px rgba(37, 99, 235, 0.3)' }}
                             >
                                 확인
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 글로벌 전성분 규제 스캔 결과 모달 */}
+            {isComplianceModalOpen && complianceResults && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999,
+                    backdropFilter: 'blur(4px)',
+                    padding: '20px'
+                }}>
+                    <div style={{
+                        background: '#ffffff',
+                        borderRadius: '16px',
+                        width: '100%',
+                        maxWidth: '850px',
+                        maxHeight: '90vh',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        overflow: 'hidden',
+                        animation: 'fadeIn 0.2s ease-out'
+                    }}>
+                        {/* 모달 헤더 */}
+                        <div style={{
+                            padding: '18px 24px',
+                            background: complianceResults.compliant ? '#ecfdf5' : '#fff1f2',
+                            borderBottom: `1px solid ${complianceResults.compliant ? '#a7f3d0' : '#fecdd3'}`,
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <span style={{ fontSize: '24px' }}>{complianceResults.compliant ? '✅' : '⚠️'}</span>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: complianceResults.compliant ? '#065f46' : '#9f1239' }}>
+                                        글로벌 규제 성분 & 배합한도 검사 결과
+                                    </h3>
+                                    <span style={{ fontSize: '12px', color: complianceResults.compliant ? '#047857' : '#be123c', fontWeight: '500' }}>
+                                        대상 국가: 한국(KR) · 유럽(EU) · 미국(US) · 중국(CN) · 일본(JP)
+                                    </span>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setIsComplianceModalOpen(false)}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    fontSize: '22px',
+                                    color: '#64748b',
+                                    cursor: 'pointer',
+                                    padding: '4px 8px',
+                                    borderRadius: '6px'
+                                }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* 요약 바 */}
+                        <div style={{
+                            padding: '14px 24px',
+                            background: '#f8fafc',
+                            borderBottom: '1px solid #e2e8f0',
+                            display: 'flex',
+                            gap: '24px',
+                            fontSize: '13px'
+                        }}>
+                            <div>
+                                <span style={{ color: '#64748b' }}>검사 상태: </span>
+                                <span style={{
+                                    fontWeight: '800',
+                                    color: complianceResults.compliant ? '#16a34a' : '#dc2626',
+                                    padding: '2px 8px',
+                                    borderRadius: '4px',
+                                    background: complianceResults.compliant ? '#dcfce7' : '#fee2e2'
+                                }}>
+                                    {complianceResults.compliant ? '글로벌 5개국 적합 (위반 없음)' : '주의/위반 항목 검출'}
+                                </span>
+                            </div>
+                            {complianceResults.totalScanned !== undefined && (
+                                <div>
+                                    <span style={{ color: '#64748b' }}>스캔 성분 수: </span>
+                                    <span style={{ fontWeight: '700', color: '#1e293b' }}>{complianceResults.totalScanned}개</span>
+                                </div>
+                            )}
+                            {complianceResults.flaggedCount !== undefined && (
+                                <div>
+                                    <span style={{ color: '#64748b' }}>주의/규제 검출: </span>
+                                    <span style={{ fontWeight: '700', color: complianceResults.flaggedCount > 0 ? '#dc2626' : '#16a34a' }}>
+                                        {complianceResults.flaggedCount}건
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 모달 본문 - 테이블 */}
+                        <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1 }}>
+                            {complianceResults.items && complianceResults.items.length > 0 ? (
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                                    <thead>
+                                        <tr style={{ background: '#f1f5f9', borderBottom: '2px solid #cbd5e1' }}>
+                                            <th style={{ padding: '10px 8px', textAlign: 'left', color: '#334155' }}>성분명 (국문/영문)</th>
+                                            <th style={{ padding: '10px 8px', textAlign: 'center', width: '70px', color: '#334155' }}>국가</th>
+                                            <th style={{ padding: '10px 8px', textAlign: 'center', width: '90px', color: '#334155' }}>규제 분류</th>
+                                            <th style={{ padding: '10px 8px', textAlign: 'center', width: '90px', color: '#334155' }}>배합 한도</th>
+                                            <th style={{ padding: '10px 8px', textAlign: 'left', color: '#334155' }}>규제 상세 및 주의사항</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {complianceResults.items.map((item, idx) => (
+                                            <tr key={idx} style={{
+                                                borderBottom: '1px solid #f1f5f9',
+                                                background: item.restrictionType?.includes('PROHIBITED') || item.restrictionType?.includes('금지') 
+                                                    ? '#fff5f5' 
+                                                    : item.restrictionType?.includes('LIMIT') || item.restrictionType?.includes('한도')
+                                                    ? '#fffbeb'
+                                                    : '#ffffff'
+                                            }}>
+                                                <td style={{ padding: '10px 8px', fontWeight: '600', color: '#1e293b' }}>
+                                                    <div>{item.ingredientName || item.korName || item.inciName}</div>
+                                                    {item.inciName && item.inciName !== item.ingredientName && (
+                                                        <div style={{ fontSize: '11px', color: '#64748b', fontWeight: '400' }}>INCI: {item.inciName}</div>
+                                                    )}
+                                                </td>
+                                                <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                                                    <span style={{
+                                                        padding: '2px 6px',
+                                                        borderRadius: '4px',
+                                                        fontSize: '11px',
+                                                        fontWeight: '700',
+                                                        background: '#e0e7ff',
+                                                        color: '#3730a3'
+                                                    }}>
+                                                        {item.country || 'ALL'}
+                                                    </span>
+                                                </td>
+                                                <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                                                    <span style={{
+                                                        padding: '2px 6px',
+                                                        borderRadius: '4px',
+                                                        fontSize: '11px',
+                                                        fontWeight: '700',
+                                                        background: item.restrictionType?.includes('PROHIBITED') || item.restrictionType?.includes('금지')
+                                                            ? '#fee2e2'
+                                                            : '#fef3c7',
+                                                        color: item.restrictionType?.includes('PROHIBITED') || item.restrictionType?.includes('금지')
+                                                            ? '#991b1b'
+                                                            : '#92400e'
+                                                    }}>
+                                                        {item.restrictionType || '배합한도'}
+                                                    </span>
+                                                </td>
+                                                <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: '700', color: '#b91c1c' }}>
+                                                    {item.maxLimitPercent !== undefined && item.maxLimitPercent !== null ? `${item.maxLimitPercent}%` : '-'}
+                                                </td>
+                                                <td style={{ padding: '10px 8px', color: '#475569', lineHeight: '1.4' }}>
+                                                    {item.description || item.reason || item.notes || '배합 한도 및 규제 조건을 확인하십시오.'}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            ) : (
+                                <div style={{ textAlign: 'center', padding: '40px 20px', color: '#16a34a' }}>
+                                    <div style={{ fontSize: '36px', marginBottom: '8px' }}>🎉</div>
+                                    <div style={{ fontSize: '15px', fontWeight: '700' }}>위반 및 규제 대상 성분이 검출되지 않았습니다.</div>
+                                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+                                        한국, 유럽, 미국, 중국, 일본의 기본 배합 금지/한도 DB 기준 모두 안전합니다.
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 모달 푸터 */}
+                        <div style={{
+                            padding: '14px 24px',
+                            background: '#f8fafc',
+                            borderTop: '1px solid #e2e8f0',
+                            display: 'flex',
+                            justifyContent: 'flex-end'
+                        }}>
+                            <button
+                                onClick={() => setIsComplianceModalOpen(false)}
+                                className="button primary"
+                                style={{
+                                    padding: '8px 20px',
+                                    fontSize: '13px',
+                                    borderRadius: '8px',
+                                    background: '#0f172a',
+                                    border: 'none',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                확인 및 닫기
                             </button>
                         </div>
                     </div>

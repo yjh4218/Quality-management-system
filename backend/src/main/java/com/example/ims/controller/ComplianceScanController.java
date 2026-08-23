@@ -1,7 +1,9 @@
 package com.example.ims.controller;
 
 import com.example.ims.dto.ComplianceScanDto;
+import com.example.ims.dto.IngredientPrecautionDto;
 import com.example.ims.service.ComplianceScanService;
+import com.example.ims.service.IngredientPrecautionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -16,10 +18,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class ComplianceScanController {
 
     private final ComplianceScanService complianceScanService;
+    private final IngredientPrecautionService ingredientPrecautionService;
 
     @PostMapping("/scan")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'USER')")
     public ResponseEntity<ComplianceScanDto.Response> scanIngredients(@RequestBody ComplianceScanDto.Request request) {
         return ResponseEntity.ok(complianceScanService.scanIngredients(request));
+    }
+
+    @PostMapping("/evaluate-precautions")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'USER')")
+    public ResponseEntity<IngredientPrecautionDto.EvaluateResponse> evaluatePrecautions(@RequestBody IngredientPrecautionDto.EvaluateRequest request) {
+        return ResponseEntity.ok(ingredientPrecautionService.evaluatePrecautions(request));
     }
 }

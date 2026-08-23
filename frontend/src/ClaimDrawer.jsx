@@ -84,6 +84,32 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
     const [emailActionType, setEmailActionType] = useState('SHARE'); // 'SHARE' or 'RE_REQUEST'
     const isSavingRef = React.useRef(false);
 
+    // LOT 역추적 상태
+    const [isLotTraceOpen, setIsLotTraceOpen] = useState(false);
+    const [lotTraceLoading, setLotTraceLoading] = useState(false);
+    const [lotTraceResults, setLotTraceResults] = useState([]);
+
+    const handleTraceLot = async () => {
+        if (!formData.lotNumber || !formData.lotNumber.trim()) {
+            toast.warn("분석할 LOT 번호를 입력해주세요.");
+            return;
+        }
+        setLotTraceLoading(true);
+        setIsLotTraceOpen(true);
+        try {
+            const res = await api.getLotPpmAnalysis({
+                lotNumber: formData.lotNumber.trim(),
+                itemCode: formData.itemCode || ''
+            });
+            setLotTraceResults(res.data || []);
+        } catch (err) {
+            console.error("LOT 역추적 실패:", err);
+            toast.error("LOT 역추적 데이터를 가져오지 못했습니다.");
+        } finally {
+            setLotTraceLoading(false);
+        }
+    };
+
     useEffect(() => {
         if (!isManufacturer) {
             api.getActiveMailTemplates('CLAIM')
@@ -698,8 +724,21 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                     </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
                                         <div className="form-group" style={{ marginBottom: 0 }}>
-                                            <label>로트(LOT)</label>
-                                            <input type="text" name="lotNumber" value={formData.lotNumber} onChange={handleChange} disabled={!canEditCs} />
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <label style={{ margin: 0 }}>로트(LOT)</label>
+                                                {formData.lotNumber && (
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={handleTraceLot} 
+                                                        className="secondary" 
+                                                        style={{ fontSize: '11px', padding: '2px 8px', background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', fontWeight: 'bold' }}
+                                                        title="해당 LOT 번호의 전체 입고 수량 및 누적 클레임 불량률 통계 분석"
+                                                    >
+                                                        🔍 LOT 분석
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <input type="text" name="lotNumber" value={formData.lotNumber} onChange={handleChange} disabled={!canEditCs} placeholder="예: 24A01 또는 LOT-202608..." />
                                         </div>
                                         <div className="form-group" style={{ marginBottom: 0 }}>
                                             <label>발생수량</label>
@@ -1356,6 +1395,90 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                         <span>🚀 확인 및 발송</span>
                                     </>
                                 )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* LOT 역추적 통계 분석 모달 */}
+            {isLotTraceOpen && (
+                <div className="modal-backdrop" style={{ zIndex: 6000, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
+                    <div className="modal-content" style={{ maxWidth: '750px', width: '90%', borderRadius: '16px', background: '#fff', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+                        <div className="modal-header" style={{ padding: '16px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span>📊</span> LOT 역추적 및 불량률(PPM) 분석: <code style={{ color: '#1d4ed8', background: '#eff6ff', padding: '2px 8px', borderRadius: '6px' }}>{formData.lotNumber}</code>
+                            </h3>
+                            <button onClick={() => setIsLotTraceOpen(false)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}>×</button>
+                        </div>
+                        <div style={{ padding: '20px', maxHeight: '70vh', overflowY: 'auto' }}>
+                            {lotTraceLoading ? (
+                                <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b' }}>
+                                    <div style={{ width: '32px', height: '32px', border: '3px solid #3b82f6', borderTopColor: 'transparent', borderRadius: '50%', margin: '0 auto 12px', animation: 'spin 1s linear infinite' }} />
+                                    <span>해당 LOT의 입고 데이터 및 클레임 내역을 분석 중입니다...</span>
+                                </div>
+                            ) : lotTraceResults.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: '30px', color: '#64748b', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                                    <div style={{ fontSize: '32px', marginBottom: '8px' }}>🔍</div>
+                                    <div style={{ fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>연관 입고/클레임 통계 데이터 없음</div>
+                                    <div style={{ fontSize: '13px' }}>입력하신 LOT 번호에 대한 입고 이력이 WMS에 등록되어 있지 않거나 클레임 발생 이력이 없습니다.</div>
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                    {lotTraceResults.map((item, idx) => (
+                                        <div key={idx} style={{ padding: '16px', border: '1px solid #e2e8f0', borderRadius: '12px', background: item.status === 'STATISTICAL_OUTLIER' ? '#fef2f2' : '#f8fafc' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                                <div>
+                                                    <strong style={{ fontSize: '14px', color: '#0f172a' }}>{item.productName || item.itemCode}</strong>
+                                                    <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '8px' }}>({item.itemCode})</span>
+                                                </div>
+                                                <span style={{
+                                                    fontSize: '12px',
+                                                    padding: '3px 10px',
+                                                    borderRadius: '20px',
+                                                    fontWeight: 'bold',
+                                                    background: item.status === 'STATISTICAL_OUTLIER' ? '#fee2e2' : '#dcfce7',
+                                                    color: item.status === 'STATISTICAL_OUTLIER' ? '#b91c1c' : '#15803d',
+                                                    border: `1px solid ${item.status === 'STATISTICAL_OUTLIER' ? '#fca5a5' : '#86efac'}`
+                                                }}>
+                                                    {item.statusDescription || item.status}
+                                                </span>
+                                            </div>
+
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', background: '#fff', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                                <div>
+                                                    <div style={{ fontSize: '11px', color: '#64748b' }}>총 입고 수량</div>
+                                                    <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#0f172a' }}>{(item.inboundQty || 0).toLocaleString()}개</div>
+                                                </div>
+                                                <div>
+                                                    <div style={{ fontSize: '11px', color: '#64748b' }}>클레임 건수</div>
+                                                    <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#0f172a' }}>{item.claimCount || 0}건</div>
+                                                </div>
+                                                <div>
+                                                    <div style={{ fontSize: '11px', color: '#64748b' }}>클레임 불량수량</div>
+                                                    <div style={{ fontSize: '14px', fontWeight: 'bold', color: item.claimQty > 0 ? '#b91c1c' : '#0f172a' }}>{(item.claimQty || 0).toLocaleString()}개</div>
+                                                </div>
+                                                <div>
+                                                    <div style={{ fontSize: '11px', color: '#64748b' }}>PPM 불량률</div>
+                                                    <div style={{ fontSize: '14px', fontWeight: 'bold', color: item.ppm > 500 ? '#b91c1c' : '#047857' }}>
+                                                        {item.ppm !== null && item.ppm !== undefined ? `${Math.round(item.ppm)} PPM` : '-'}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {item.analysisNote && (
+                                                <div style={{ marginTop: '10px', fontSize: '12px', color: '#475569', background: '#f1f5f9', padding: '8px 12px', borderRadius: '6px' }}>
+                                                    💡 <strong>분석 의견:</strong> {item.analysisNote}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <div style={{ padding: '12px 20px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end' }}>
+                            <button type="button" onClick={() => setIsLotTraceOpen(false)} className="primary" style={{ padding: '8px 20px', fontSize: '13px' }}>
+                                닫기
                             </button>
                         </div>
                     </div>
