@@ -520,7 +520,7 @@ export const exportProductsExcel = (params) => {
     return api.get(`/api/products/export?${queryParams.toString()}`, { responseType: 'blob' });
 };
 export const scanComplianceIngredients = (payload) => api.post('/api/compliance/scan', payload);
-export const evaluateIngredientPrecautions = (payload) => api.post('/api/compliance/evaluate-precautions', payload);
+export const evaluateIngredientPrecautions = (payload, config = { skipToast: true }) => api.post('/api/compliance/evaluate-precautions', payload, config);
 export const downloadIngredientTemplate = () => api.get('/api/products/ingredient-template', { responseType: 'blob' });
 
 // Packaging Spec APIs

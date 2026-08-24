@@ -9,8 +9,8 @@ import java.util.List;
 
 public interface IngredientPrecautionRuleRepository extends JpaRepository<IngredientPrecautionRule, Long> {
 
-    @Query("SELECT r FROM IngredientPrecautionRule r WHERE r.isActive = true AND (LOWER(r.ingredientNameKr) IN :names OR LOWER(r.ingredientNameEn) IN :names)")
-    List<IngredientPrecautionRule> findMatchingRules(@Param("names") List<String> names);
-
     List<IngredientPrecautionRule> findByIsActiveTrue();
+
+    @Query("SELECT r FROM IngredientPrecautionRule r WHERE r.isActive = true AND (LOWER(r.ingredientNameKr) IN :names OR (r.ingredientNameEn IS NOT NULL AND LOWER(r.ingredientNameEn) IN :names))")
+    List<IngredientPrecautionRule> findMatchingRules(@Param("names") List<String> names);
 }

@@ -21,13 +21,13 @@ public class ComplianceScanController {
     private final IngredientPrecautionService ingredientPrecautionService;
 
     @PostMapping("/scan")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'USER')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ComplianceScanDto.Response> scanIngredients(@RequestBody ComplianceScanDto.Request request) {
         return ResponseEntity.ok(complianceScanService.scanIngredients(request));
     }
 
     @PostMapping("/evaluate-precautions")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'USER')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<IngredientPrecautionDto.EvaluateResponse> evaluatePrecautions(@RequestBody IngredientPrecautionDto.EvaluateRequest request) {
         return ResponseEntity.ok(ingredientPrecautionService.evaluatePrecautions(request));
     }
