@@ -113,6 +113,10 @@ public class DocumentRequestScheduler {
                 LocalDate.now()
         );
 
+        int sentCount = 0;
+        int skippedEmptyEmailCount = 0;
+        int failedCount = 0;
+
         for (DocumentRequirement req : requirements) {
             if (req.getStatus() == DocumentStatus.FULFILLED) {
                 continue;
@@ -122,14 +126,20 @@ public class DocumentRequestScheduler {
             if (recipientEmail != null && !recipientEmail.trim().isEmpty()) {
                 try {
                     requestService.sendEmailRequest(req, recipientEmail);
-                    log.info("[SCHEDULE] Document request email sent successfully to: {}, ReqId={}", recipientEmail, req.getId());
+                    sentCount++;
+                    log.debug("[SCHEDULE] Document request email sent successfully to: {}, ReqId={}", recipientEmail, req.getId());
                 } catch (Exception e) {
+                    failedCount++;
                     log.error("[SCHEDULE] Failed to send document request email to: {}, ReqId={}: {}", recipientEmail, req.getId(), e.getMessage());
                 }
             } else {
-                log.warn("[SCHEDULE] Recipient email is empty for requirement ID: {}", req.getId());
+                skippedEmptyEmailCount++;
+                log.debug("[SCHEDULE] Recipient email is empty for requirement ID: {}", req.getId());
             }
         }
+
+        log.info("[SCHEDULE] Document request processing summary: Total targets={}, Sent={}, Skipped (No email)={}, Failed={}",
+                requirements.size(), sentCount, skippedEmptyEmailCount, failedCount);
     }
 
     /**

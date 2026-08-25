@@ -19,6 +19,13 @@ RUN mvn clean package -DskipTests
 FROM openjdk:17-jdk-slim
 WORKDIR /app
 
+# [AWT/폰트 지원] 엑셀/PDF 그래픽 렌더링을 위한 폰트 라이브러리 설치
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    fontconfig \
+    libfreetype6 \
+    fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
 # [보안] 루트(root) 권한 실행 방지를 위한 일반 사용자 생성
 # 컨테이너 침해 사고 시 호스트 시스템으로의 권한 상승을 차단합니다.
 RUN useradd -m -s /bin/bash qmsuser
@@ -40,5 +47,6 @@ EXPOSE 7860
 
 # 애플리케이션 실행 설정
 # -Xmx512m: 메모리 제한 설정
+# -Djava.awt.headless=true: 서버 그래픽 환경 활성화
 # -Dspring.profiles.active=prod: 운영 프로필 활성화
-ENTRYPOINT ["java", "-Xmx512m", "-Dspring.profiles.active=prod", "-Dserver.port=7860", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-Xmx512m", "-Djava.awt.headless=true", "-Dspring.profiles.active=prod", "-Dserver.port=7860", "-jar", "app.jar"]

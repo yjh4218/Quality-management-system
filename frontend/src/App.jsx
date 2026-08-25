@@ -6,17 +6,40 @@ import ManufacturerManagementPage from './ManufacturerManagementPage';
 import BrandManagementPage from './BrandManagementPage';
 import LogManagementPage from './LogManagementPage';
 
-// [코드 스플리팅] 대시보드 5종 및 대형 모듈 React.lazy 동적 로드 적용
-const DashboardPage = lazy(() => import('./DashboardPage'));
-const ClaimManagementPage = lazy(() => import('./ClaimManagementPage'));
-const ClaimDashboardPage = lazy(() => import('./ClaimDashboardPage.jsx'));
-const QualityDashboardPage = lazy(() => import('./QualityDashboardPage.jsx'));
-const ProductDashboardPage = lazy(() => import('./ProductDashboardPage.jsx'));
-const ProductionAuditDashboardPage = lazy(() => import('./ProductionAuditDashboardPage.jsx'));
-const QualityManagementPage = lazy(() => import('./QualityManagementPage'));
-const PackagingSpaceRatioCalculatorPage = lazy(() => import('./PackagingSpaceRatioCalculatorPage.jsx'));
-const OutboxSpecCalculatorPage = lazy(() => import('./OutboxSpecCalculatorPage.jsx'));
-const LotPpmDashboardPage = lazy(() => import('./LotPpmDashboardPage.jsx'));
+// [청크 로드 실패 자동 재시도 및 배포 캐시 무효화 유틸리티]
+function lazyRetry(componentImport) {
+    return lazy(async () => {
+        const hasRefreshed = JSON.parse(
+            window.sessionStorage.getItem('qms_chunk_reload_done') || 'false'
+        );
+
+        try {
+            const component = await componentImport();
+            window.sessionStorage.removeItem('qms_chunk_reload_done');
+            return component;
+        } catch (error) {
+            console.error('Dynamic chunk import error:', error);
+            if (!hasRefreshed) {
+                window.sessionStorage.setItem('qms_chunk_reload_done', 'true');
+                window.location.reload();
+                return new Promise(() => {}); // 대기
+            }
+            throw error;
+        }
+    });
+}
+
+// [코드 스플리팅] 대시보드 5종 및 대형 모듈 lazyRetry 동적 로드 적용
+const DashboardPage = lazyRetry(() => import('./DashboardPage'));
+const ClaimManagementPage = lazyRetry(() => import('./ClaimManagementPage'));
+const ClaimDashboardPage = lazyRetry(() => import('./ClaimDashboardPage.jsx'));
+const QualityDashboardPage = lazyRetry(() => import('./QualityDashboardPage.jsx'));
+const ProductDashboardPage = lazyRetry(() => import('./ProductDashboardPage.jsx'));
+const ProductionAuditDashboardPage = lazyRetry(() => import('./ProductionAuditDashboardPage.jsx'));
+const QualityManagementPage = lazyRetry(() => import('./QualityManagementPage'));
+const PackagingSpaceRatioCalculatorPage = lazyRetry(() => import('./PackagingSpaceRatioCalculatorPage.jsx'));
+const OutboxSpecCalculatorPage = lazyRetry(() => import('./OutboxSpecCalculatorPage.jsx'));
+const LotPpmDashboardPage = lazyRetry(() => import('./LotPpmDashboardPage.jsx'));
 
 import MarketReleaseRecordPage from './MarketReleaseRecordPage.jsx';
 import BomMasterPage from './BomMasterPage.jsx';
@@ -101,6 +124,22 @@ class ErrorBoundary extends React.Component {
     }
 
     componentDidCatch(error, errorInfo) {
+        // [배포 후 구버전 청크 요청 시 자동 새로고침 복구]
+        const isChunkLoadFailed = error?.message && (
+            error.message.includes('dynamically imported module') ||
+            error.message.includes('Loading chunk') ||
+            error.message.includes('Failed to fetch')
+        );
+
+        if (isChunkLoadFailed) {
+            const hasRefreshed = JSON.parse(window.sessionStorage.getItem('qms_chunk_reload_done') || 'false');
+            if (!hasRefreshed) {
+                window.sessionStorage.setItem('qms_chunk_reload_done', 'true');
+                window.location.reload();
+                return;
+            }
+        }
+
         this.setState({ errorInfo }, () => {
             this.sendAutoReportBackground();
         });

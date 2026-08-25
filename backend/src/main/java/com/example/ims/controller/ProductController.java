@@ -68,7 +68,7 @@ public class ProductController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MENU_PRODUCTS_EDIT')")
     public ResponseEntity<Product> createProduct(@jakarta.validation.Valid @RequestBody Product product,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(productService.createProduct(product, userDetails.getUsername()));
@@ -81,7 +81,7 @@ public class ProductController {
     }
 
     @RequestMapping(value = "/{id}", method = {RequestMethod.PUT, RequestMethod.POST})
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MENU_PRODUCTS_EDIT')")
     public ResponseEntity<Product> updateProduct(@PathVariable Long id, @jakarta.validation.Valid @RequestBody Product product,
             @AuthenticationPrincipal UserDetails userDetails) {
         log.debug(">>>> [CONTROLLER] ID: {}, Product: {}, Channels count: {}", id, product.getProductName(), (product.getChannels() != null ? product.getChannels().size() : 0));
@@ -89,7 +89,7 @@ public class ProductController {
     }
 
     @PostMapping("/upload")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES', 'QUALITY_TEAM')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MENU_PRODUCTS_EDIT')")
     public ResponseEntity<String> uploadFile(@RequestParam("file") MultipartFile file,
                                              @RequestParam(value = "productName", required = false) String productName,
                                              @RequestParam(value = "uploadType", required = false) String uploadType,
@@ -114,7 +114,7 @@ public class ProductController {
     }
 
     @PostMapping("/upload-ingredients")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES', 'QUALITY_TEAM')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MENU_PRODUCTS_EDIT')")
     public ResponseEntity<List<ProductIngredientDto>> uploadIngredientsFile(@RequestParam("file") MultipartFile file) {
         try {
             log.info("Processing Excel file for ingredients upload: {}", file.getOriginalFilename());
@@ -126,10 +126,8 @@ public class ProductController {
         }
     }
 
-
-
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES') or hasAuthority('MENU_PRODUCTS_DELETE')")
     public ResponseEntity<Void> deleteProduct(@PathVariable Long id, @AuthenticationPrincipal UserDetails userDetails) {
         productService.deleteProduct(id, userDetails.getUsername());
         return ResponseEntity.ok().build();

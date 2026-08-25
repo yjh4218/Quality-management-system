@@ -1278,7 +1278,7 @@ public class PackagingSpecExportService {
                     } else if ("i-text".equals(type) || "text".equals(type)) {
                         String text = obj.path("text").asText("");
                         int fontSize = (int) (obj.path("fontSize").asInt(16) * scaleX);
-                        g2d.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, Math.max(12, fontSize)));
+                        g2d.setFont(getSafeFont(java.awt.Font.BOLD, Math.max(12, fontSize)));
                         g2d.setColor(fillColor);
                         g2d.drawString(text, (int) left, (int) (top + fontSize));
                     }
@@ -1371,9 +1371,12 @@ public class PackagingSpecExportService {
 
             // Human Readable Text Label
             g2d.setColor(Color.DARK_GRAY);
-            g2d.setFont(new java.awt.Font("Consolas", java.awt.Font.BOLD, 12));
-            FontMetrics fm = g2d.getFontMetrics();
-            int textW = fm.stringWidth(barcodeText);
+            g2d.setFont(getSafeFont(java.awt.Font.BOLD, 12));
+            FontMetrics fm = null;
+            try {
+                fm = g2d.getFontMetrics();
+            } catch (Throwable ignored) {}
+            int textW = (fm != null) ? fm.stringWidth(barcodeText) : barcodeText.length() * 7;
             int textX = (width - textW) / 2;
             g2d.drawString(barcodeText, textX, height - pad - 6);
 
@@ -1671,23 +1674,44 @@ public class PackagingSpecExportService {
         return imgRowIdx + 1;
     }
 
+    private java.awt.Font getSafeFont(int style, int size) {
+        try {
+            return new java.awt.Font(java.awt.Font.SANS_SERIF, style, size);
+        } catch (Throwable t) {
+            return new java.awt.Font("Dialog", style, size);
+        }
+    }
+
     private int drawBadge(Graphics2D g2, int x, int y, String text, Color bgColor, Color textColor, Color borderColor) {
-        g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 11));
-        FontMetrics fm = g2.getFontMetrics();
-        int textW = fm.stringWidth(text);
+        int textW = text.length() * 8;
         int padH = 8;
-        int badgeW = textW + padH * 2;
         int badgeH = 20;
 
-        g2.setColor(bgColor);
-        g2.fillRoundRect(x, y - 14, badgeW, badgeH, 6, 6);
-        if (borderColor != null) {
-            g2.setColor(borderColor);
-            g2.setStroke(new BasicStroke(1.0f));
-            g2.drawRoundRect(x, y - 14, badgeW, badgeH, 6, 6);
+        try {
+            g2.setFont(getSafeFont(java.awt.Font.BOLD, 11));
+            FontMetrics fm = g2.getFontMetrics();
+            if (fm != null) {
+                textW = fm.stringWidth(text);
+            }
+        } catch (Throwable t) {
+            textW = text.length() * 8;
         }
-        g2.setColor(textColor);
-        g2.drawString(text, x + padH, y);
+
+        int badgeW = textW + padH * 2;
+
+        try {
+            g2.setColor(bgColor);
+            g2.fillRoundRect(x, y - 14, badgeW, badgeH, 6, 6);
+            if (borderColor != null) {
+                g2.setColor(borderColor);
+                g2.setStroke(new BasicStroke(1.0f));
+                g2.drawRoundRect(x, y - 14, badgeW, badgeH, 6, 6);
+            }
+            g2.setColor(textColor);
+            g2.drawString(text, x + padH, y);
+        } catch (Throwable t) {
+            log.warn("Failed to render badge drawing for '{}'", text);
+        }
         return badgeW;
     }
 
@@ -1727,13 +1751,15 @@ public class PackagingSpecExportService {
 
             if (!isInboxUsed) {
                 int badgeW = drawBadge(g2, 16, 26, "[인박스 미사용]", new Color(241, 245, 249), new Color(100, 116, 139), new Color(203, 213, 225));
-                g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 13));
-                g2.setColor(new Color(71, 85, 105));
-                g2.drawString("단상자 아웃박스 직접 입수 (Direct Packing)", 16 + badgeW + 8, 26);
+                try {
+                    g2.setFont(getSafeFont(java.awt.Font.BOLD, 13));
+                    g2.setColor(new Color(71, 85, 105));
+                    g2.drawString("단상자 아웃박스 직접 입수 (Direct Packing)", 16 + badgeW + 8, 26);
 
-                g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.PLAIN, 11));
-                g2.setColor(new Color(148, 163, 184));
-                g2.drawString("단상자가 인박스 없이 아웃박스에 직접 수납되는 포장 사양입니다.", 16, 46);
+                    g2.setFont(getSafeFont(java.awt.Font.PLAIN, 11));
+                    g2.setColor(new Color(148, 163, 184));
+                    g2.drawString("단상자가 인박스 없이 아웃박스에 직접 수납되는 포장 사양입니다.", 16, 46);
+                } catch (Throwable ignored) {}
 
                 g2.setColor(new Color(226, 232, 240));
                 g2.fillRoundRect(80, 100, 340, 200, 16, 16);
@@ -1741,23 +1767,29 @@ public class PackagingSpecExportService {
                 g2.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{6}, 0));
                 g2.drawRoundRect(80, 100, 340, 200, 16, 16);
 
-                g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 15));
-                g2.setColor(new Color(100, 116, 139));
-                g2.drawString("인박스 없음 (Direct Packing)", 140, 205);
+                try {
+                    g2.setFont(getSafeFont(java.awt.Font.BOLD, 15));
+                    g2.setColor(new Color(100, 116, 139));
+                    g2.drawString("인박스 없음 (Direct Packing)", 140, 205);
+                } catch (Throwable ignored) {}
             } else {
                 int badgeW = drawBadge(g2, 16, 26, "[인박스 3D]", new Color(237, 233, 254), new Color(109, 40, 217), new Color(221, 214, 254));
-                g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 13));
-                g2.setColor(new Color(109, 40, 217));
-                g2.drawString("단상자 입수 시뮬레이션", 16 + badgeW + 8, 26);
+                try {
+                    g2.setFont(getSafeFont(java.awt.Font.BOLD, 13));
+                    g2.setColor(new Color(109, 40, 217));
+                    g2.drawString("단상자 입수 시뮬레이션", 16 + badgeW + 8, 26);
+                } catch (Throwable ignored) {}
 
                 int inQty = spec.getInboxQty() != null && spec.getInboxQty() > 0 ? spec.getInboxQty() : 10;
                 String pattern = (spec.getInboxPackingPattern() != null && !spec.getInboxPackingPattern().trim().isEmpty() && !spec.getInboxPackingPattern().equals("-"))
                     ? spec.getInboxPackingPattern() : "2열×5행×1단 (" + inQty + "개입)";
 
-                g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.PLAIN, 11));
-                g2.setColor(new Color(100, 116, 139));
                 String sizeStr = spec.getInboxSize() != null ? spec.getInboxSize() : "규격 미지정";
-                g2.drawString("배열: " + pattern + " | 규격: " + sizeStr + "mm", 16, 46);
+                try {
+                    g2.setFont(getSafeFont(java.awt.Font.PLAIN, 11));
+                    g2.setColor(new Color(100, 116, 139));
+                    g2.drawString("배열: " + pattern + " | 규격: " + sizeStr + "mm", 16, 46);
+                } catch (Throwable ignored) {}
 
                 int cols = 2, rows = 5, layers = 1;
                 if (pattern.contains("열") && pattern.contains("행")) {
@@ -1780,8 +1812,8 @@ public class PackagingSpecExportService {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             ImageIO.write(img, "png", baos);
             return baos.toByteArray();
-        } catch (Exception e) {
-            log.error("Failed to generate fallback inbox isometric image", e);
+        } catch (Throwable t) {
+            log.error("Failed to generate fallback inbox isometric image", t);
             return null;
         }
     }
@@ -1807,9 +1839,11 @@ public class PackagingSpecExportService {
             int inboxesCount = isInboxUsed ? Math.max(1, outQty / Math.max(1, inQty)) : 1;
 
             int badgeW = drawBadge(g2, 16, 26, "[아웃박스 3D]", new Color(219, 234, 254), new Color(29, 78, 216), new Color(191, 219, 254));
-            g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 13));
-            g2.setColor(new Color(29, 78, 216));
-            g2.drawString(isInboxUsed ? "인박스 수납 입수 시뮬레이션" : "단상자 직접 입수 시뮬레이션", 16 + badgeW + 8, 26);
+            try {
+                g2.setFont(getSafeFont(java.awt.Font.BOLD, 13));
+                g2.setColor(new Color(29, 78, 216));
+                g2.drawString(isInboxUsed ? "인박스 수납 입수 시뮬레이션" : "단상자 직접 입수 시뮬레이션", 16 + badgeW + 8, 26);
+            } catch (Throwable ignored) {}
 
             String defaultPattern = isInboxUsed 
                 ? "2열×2행×1단 (인박스 " + inboxesCount + "박스입, 총 " + outQty + "개입)"
@@ -1818,12 +1852,15 @@ public class PackagingSpecExportService {
             String pattern = (spec.getOutboxPackingPattern() != null && !spec.getOutboxPackingPattern().trim().isEmpty() && !spec.getOutboxPackingPattern().equals("-"))
                 ? spec.getOutboxPackingPattern() : defaultPattern;
 
-            g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.PLAIN, 11));
-            g2.setColor(new Color(100, 116, 139));
             String sizeStr = spec.getOutboxSize() != null ? spec.getOutboxSize() : "규격 미지정";
             boolean hasPop = "O".equalsIgnoreCase(spec.getPopUseYn()) || (spec.getPopRequiredStandard() != null && spec.getPopRequiredStandard().contains("POP") && !spec.getPopRequiredStandard().contains("해당 없음"));
             boolean hasAirCap = "O".equalsIgnoreCase(spec.getAirCapUseYn());
-            g2.drawString("배열: " + pattern + " | 규격: " + sizeStr + "mm", 16, 46);
+
+            try {
+                g2.setFont(getSafeFont(java.awt.Font.PLAIN, 11));
+                g2.setColor(new Color(100, 116, 139));
+                g2.drawString("배열: " + pattern + " | 규격: " + sizeStr + "mm", 16, 46);
+            } catch (Throwable ignored) {}
 
             int badgeX = width - 16;
             if (hasAirCap) {
@@ -1864,8 +1901,8 @@ public class PackagingSpecExportService {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             ImageIO.write(img, "png", baos);
             return baos.toByteArray();
-        } catch (Exception e) {
-            log.error("Failed to generate fallback outbox isometric image", e);
+        } catch (Throwable t) {
+            log.error("Failed to generate fallback outbox isometric image", t);
             return null;
         }
     }
@@ -1884,9 +1921,11 @@ public class PackagingSpecExportService {
             g2.fillRect(0, 0, width, height);
 
             int badgeW = drawBadge(g2, 16, 26, "[팔레트 3D]", new Color(254, 243, 199), new Color(180, 83, 9), new Color(253, 230, 138));
-            g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 13));
-            g2.setColor(new Color(180, 83, 9));
-            g2.drawString("아웃박스 팔레트 적재 시뮬레이션", 16 + badgeW + 8, 26);
+            try {
+                g2.setFont(getSafeFont(java.awt.Font.BOLD, 13));
+                g2.setColor(new Color(180, 83, 9));
+                g2.drawString("아웃박스 팔레트 적재 시뮬레이션", 16 + badgeW + 8, 26);
+            } catch (Throwable ignored) {}
 
             int stacks = spec.getPalletTierCount() != null && spec.getPalletTierCount() > 0 ? spec.getPalletTierCount() : 5;
             int tierQty = spec.getPalletTierQty() != null && spec.getPalletTierQty() > 0 ? spec.getPalletTierQty() : 8;
@@ -1898,11 +1937,14 @@ public class PackagingSpecExportService {
                 : ((spec.getPalletStackingMethod() != null && !spec.getPalletStackingMethod().trim().isEmpty() && !spec.getPalletStackingMethod().equals("-")) 
                     ? spec.getPalletStackingMethod() : defaultPattern);
 
-            g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.PLAIN, 11));
-            g2.setColor(new Color(100, 116, 139));
             String sizeStr = spec.getPalletSize() != null ? spec.getPalletSize() : "1,100×1,100mm";
             boolean hasCornerPost = "O".equalsIgnoreCase(spec.getCornerPostUseYn());
-            g2.drawString("패턴: " + pattern + " | 팔레트: " + sizeStr, 16, 46);
+
+            try {
+                g2.setFont(getSafeFont(java.awt.Font.PLAIN, 11));
+                g2.setColor(new Color(100, 116, 139));
+                g2.drawString("패턴: " + pattern + " | 팔레트: " + sizeStr, 16, 46);
+            } catch (Throwable ignored) {}
 
             if (hasCornerPost) {
                 drawBadge(g2, width - 110, 26, "[코너 각대 연동]", new Color(254, 243, 199), new Color(217, 119, 6), new Color(253, 230, 138));
@@ -1914,8 +1956,8 @@ public class PackagingSpecExportService {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             ImageIO.write(img, "png", baos);
             return baos.toByteArray();
-        } catch (Exception e) {
-            log.error("Failed to generate fallback pallet isometric image", e);
+        } catch (Throwable t) {
+            log.error("Failed to generate fallback pallet isometric image", t);
             return null;
         }
     }
@@ -1951,15 +1993,19 @@ public class PackagingSpecExportService {
 
         if (hasPop) {
             drawBadge(g2, startX - 35, startY - layers * cellH - 16, "POP 동봉", new Color(255, 228, 230), new Color(225, 29, 72), new Color(253, 164, 175));
-            g2.setColor(new Color(225, 29, 72));
-            g2.setStroke(new BasicStroke(1.2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{4}, 0));
-            g2.drawRoundRect(startX - 40, startY - layers * cellH - 32, 80, 20, 4, 4);
+            try {
+                g2.setColor(new Color(225, 29, 72));
+                g2.setStroke(new BasicStroke(1.2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[]{4}, 0));
+                g2.drawRoundRect(startX - 40, startY - layers * cellH - 32, 80, 20, 4, 4);
+            } catch (Throwable ignored) {}
         }
 
         if (hasAirCap) {
-            g2.setColor(new Color(2, 132, 199));
-            g2.setFont(new java.awt.Font("맑은 고딕", java.awt.Font.BOLD, 10));
-            g2.drawString("🫧 에어캡 완충재", startX + totalSpanX / 4, startY - layers * cellH - 10);
+            try {
+                g2.setColor(new Color(2, 132, 199));
+                g2.setFont(getSafeFont(java.awt.Font.BOLD, 10));
+                g2.drawString("🫧 에어캡 완충재", startX + totalSpanX / 4, startY - layers * cellH - 10);
+            } catch (Throwable ignored) {}
         }
     }
 
