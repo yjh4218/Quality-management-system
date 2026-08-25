@@ -22,24 +22,6 @@ public class PreflightBypassFilter implements Filter {
             throws IOException, ServletException {
         HttpServletRequest request = (HttpServletRequest) req;
         HttpServletResponse response = (HttpServletResponse) res;
-
-        // OPTIONS 요청은 CORS 헤더 적용 후 즉시 성공(200 OK) 반환하여 Security 필터 진입 전 처리
-        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
-            String origin = request.getHeader("Origin");
-            if (origin == null || origin.trim().isEmpty()) {
-                origin = request.getHeader("origin");
-            }
-            if (origin != null && !origin.trim().isEmpty()) {
-                response.setHeader("Access-Control-Allow-Origin", origin);
-                response.setHeader("Access-Control-Allow-Credentials", "true");
-                response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
-                response.setHeader("Access-Control-Allow-Max-Age", "3600");
-                response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With, X-XSRF-TOKEN, Accept, Origin");
-            }
-            response.setStatus(HttpServletResponse.SC_OK);
-            return;
-        }
-
         // [METHOD OVERRIDE] 쿼리 스트링의 _method 파라미터가 존재하면 HTTP method를 변경된 값으로 강제 재정의
         String methodParam = request.getParameter("_method");
         final String overrideMethod = (methodParam != null && !methodParam.trim().isEmpty()) 
