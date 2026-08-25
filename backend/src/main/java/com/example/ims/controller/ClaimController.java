@@ -144,7 +144,7 @@ public class ClaimController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MENU_CLAIMS_EDIT')")
     public ResponseEntity<Claim> createClaim(
             @jakarta.validation.Valid @RequestBody Claim claim,
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -197,7 +197,7 @@ public class ClaimController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES', 'MANUFACTURER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'MANUFACTURER', 'USER') or hasAuthority('MENU_CLAIMS_EDIT')")
     public ResponseEntity<Claim> updateClaim(
             @PathVariable Long id, 
             @jakarta.validation.Valid @RequestBody Claim claim, 
@@ -212,13 +212,13 @@ public class ClaimController {
     }
 
     @GetMapping("/{id}/history")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES')")
     public ResponseEntity<List<ClaimHistory>> getClaimHistory(@PathVariable Long id) {
         return ResponseEntity.ok(claimService.getClaimHistory(id));
     }
 
     @PostMapping("/{id}/upload-response")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'MANUFACTURER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'MANUFACTURER')")
     public ResponseEntity<String> uploadResponse(@PathVariable Long id,
                                                  @RequestParam("file") MultipartFile file,
                                                  @RequestParam(value = "productName", required = false) String productName,
@@ -241,7 +241,7 @@ public class ClaimController {
     }
 
     @PostMapping("/upload-photo")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES', 'MANUFACTURER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'MANUFACTURER', 'USER')")
     public ResponseEntity<String> uploadPhoto(@RequestParam("file") MultipartFile file) {
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().body("File is empty");
@@ -255,7 +255,7 @@ public class ClaimController {
     }
 
     @GetMapping("/export")
-    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','SALES','MANUFACTURER','RESPONSIBLE_SALES')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'SALES', 'MANUFACTURER', 'RESPONSIBLE_SALES')")
     public ResponseEntity<byte[]> exportClaims(
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestParam(required = false) String startDate,
@@ -293,7 +293,7 @@ public class ClaimController {
     }
 
     @PostMapping("/{id}/re-request")
-    @PreAuthorize("hasAnyRole('ADMIN','QUALITY')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES')")
     public ResponseEntity<Claim> reRequestCriticalCapa(
             @PathVariable Long id,
             @RequestBody java.util.Map<String, String> body,

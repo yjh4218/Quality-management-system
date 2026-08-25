@@ -42,17 +42,8 @@ public class SecurityConfig {
                         .csrfTokenRepository(org.springframework.security.web.csrf.CookieCsrfTokenRepository.withHttpOnlyFalse())
                         .csrfTokenRequestHandler(new org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler())
                         .ignoringRequestMatchers(
-                                "/api/vendor-upload/**",
-                                "/api/auth/login",
-                                "/api/auth/register",
-                                "/api/auth/check-username",
-                                "/api/auth/find-password",
-                                "/api/auth/verify-email",
-                                "/api/admin/system/health",
-                                "/api/manufacturers/invite/**",
-                                "/api/bug-reports",
-                                "/api/bug-reports/**",
-                                "/api/logs/access/**"
+                                "/api/**",
+                                "/actuator/**"
                         )
                 )
                 .addFilterAfter(new org.springframework.web.filter.OncePerRequestFilter() {

@@ -40,7 +40,7 @@ public class PackagingSpecificationController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MENU_PRODUCTS_EDIT') or hasAuthority('MENU_PACKAGING_EDIT')")
     public ResponseEntity<PackagingSpecification> saveSpec(@RequestBody PackagingSpecification spec,
             @AuthenticationPrincipal UserDetails userDetails) {
         spec.setLastModifiedBy(userDetails.getUsername());
@@ -190,7 +190,7 @@ public class PackagingSpecificationController {
     }
 
     @PostMapping("/save-full")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MENU_PRODUCTS_EDIT') or hasAuthority('MENU_PACKAGING_EDIT')")
     public ResponseEntity<PackagingSpecFullDto> saveFullSpec(@RequestBody PackagingSpecFullDto dto,
             @AuthenticationPrincipal UserDetails userDetails) {
         try {
@@ -229,7 +229,7 @@ public class PackagingSpecificationController {
     }
 
     @PostMapping("/{specId}/method-images/batch-upload")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MENU_PRODUCTS_EDIT') or hasAuthority('MENU_PACKAGING_EDIT')")
     public ResponseEntity<List<com.example.ims.entity.PackagingMethodImage>> batchUploadMethodImages(
             @PathVariable Long specId,
             @RequestParam("files") org.springframework.web.multipart.MultipartFile[] files,
@@ -323,7 +323,7 @@ public class PackagingSpecificationController {
     }
 
     @PutMapping("/method-images/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MENU_PRODUCTS_EDIT') or hasAuthority('MENU_PACKAGING_EDIT')")
     public ResponseEntity<com.example.ims.entity.PackagingMethodImage> updateMethodImage(
             @PathVariable Long id,
             @RequestBody com.example.ims.entity.PackagingMethodImage updateDto) {
@@ -354,7 +354,7 @@ public class PackagingSpecificationController {
     }
 
     @DeleteMapping("/method-images/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MENU_PRODUCTS_EDIT') or hasAuthority('MENU_PACKAGING_EDIT')")
     public ResponseEntity<Void> deleteMethodImage(@PathVariable Long id) {
         com.example.ims.entity.PackagingMethodImage existing = methodImageRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Image not found"));
@@ -364,7 +364,7 @@ public class PackagingSpecificationController {
     }
 
     @PostMapping("/{targetSpecId}/method-images/copy-from/{sourceSpecId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MENU_PRODUCTS_EDIT') or hasAuthority('MENU_PACKAGING_EDIT')")
     public ResponseEntity<List<com.example.ims.entity.PackagingMethodImage>> copyFromMasterSpec(
             @PathVariable Long targetSpecId,
             @PathVariable Long sourceSpecId) {
@@ -401,7 +401,7 @@ public class PackagingSpecificationController {
     }
 
     @PostMapping("/{targetSpecId}/method-images/copy-from-product/{sourceItemCode}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MENU_PRODUCTS_EDIT') or hasAuthority('MENU_PACKAGING_EDIT')")
     public ResponseEntity<List<com.example.ims.entity.PackagingMethodImage>> copyFromProductItemCode(
             @PathVariable Long targetSpecId,
             @PathVariable String sourceItemCode) {
@@ -422,7 +422,7 @@ public class PackagingSpecificationController {
     }
 
     @PostMapping("/method-images/{id}/restore")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MENU_PRODUCTS_EDIT') or hasAuthority('MENU_PACKAGING_EDIT')")
     public ResponseEntity<com.example.ims.entity.PackagingMethodImage> restoreMethodImage(@PathVariable Long id) {
         com.example.ims.entity.PackagingMethodImage existing = methodImageRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Image not found"));
@@ -434,7 +434,7 @@ public class PackagingSpecificationController {
      * Upload Base64 3D snapshot for packaging specification (inbox / outbox / pallet).
      */
     @PostMapping("/{specId}/3d-snapshot")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MENU_PRODUCTS_EDIT') or hasAuthority('MENU_PACKAGING_EDIT')")
     public ResponseEntity<java.util.Map<String, String>> upload3DSnapshot(
             @PathVariable Long specId,
             @RequestBody java.util.Map<String, String> payload) {

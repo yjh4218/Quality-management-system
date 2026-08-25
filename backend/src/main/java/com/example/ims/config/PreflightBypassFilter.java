@@ -23,24 +23,18 @@ public class PreflightBypassFilter implements Filter {
         HttpServletRequest request = (HttpServletRequest) req;
         HttpServletResponse response = (HttpServletResponse) res;
 
-        // 최상위에서 CORS 기본 헤더 강제 부여 (대소문자 구분 없이 Origin 추출)
-        String origin = request.getHeader("Origin");
-        if (origin == null || origin.trim().isEmpty()) {
-            origin = request.getHeader("origin");
-        }
-        if (origin != null && !origin.trim().isEmpty()) {
-            response.setHeader("Access-Control-Allow-Origin", origin);
-            response.setHeader("Access-Control-Allow-Credentials", "true");
-            response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
-            response.setHeader("Access-Control-Allow-Max-Age", "3600");
-            response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With, X-XSRF-TOKEN, Accept, Origin");
-        }
-
-        // OPTIONS 요청은 CORS 헤더 적용 후 즉시 성공 처리하여 Security 필터 진입 전 반환
+        // OPTIONS 요청은 CORS 헤더 적용 후 즉시 성공(200 OK) 반환하여 Security 필터 진입 전 처리
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            String origin = request.getHeader("Origin");
+            if (origin == null || origin.trim().isEmpty()) {
+                origin = request.getHeader("origin");
+            }
             if (origin != null && !origin.trim().isEmpty()) {
                 response.setHeader("Access-Control-Allow-Origin", origin);
                 response.setHeader("Access-Control-Allow-Credentials", "true");
+                response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+                response.setHeader("Access-Control-Allow-Max-Age", "3600");
+                response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With, X-XSRF-TOKEN, Accept, Origin");
             }
             response.setStatus(HttpServletResponse.SC_OK);
             return;

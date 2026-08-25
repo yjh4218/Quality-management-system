@@ -81,7 +81,7 @@ public class QualityReportController {
     }
 
     @GetMapping("/export")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'MANUFACTURER', 'SALES', 'RESPONSIBLE_SALES')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'MANUFACTURER', 'SALES', 'RESPONSIBLE_SALES')")
     public ResponseEntity<byte[]> exportInbound(
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestParam(required = false) String startDate,
@@ -117,22 +117,24 @@ public class QualityReportController {
         }
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'MANUFACTURER', 'RESPONSIBLE_SALES')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'MANUFACTURER', 'RESPONSIBLE_SALES')")
     @PutMapping("/inbound/{id}")
     public ResponseEntity<WmsInbound> updateInbound(@PathVariable Long id, @RequestBody WmsInbound updatedData,
                                                    @AuthenticationPrincipal UserDetails userDetails) {
         User user = userRepository.findByUsername(userDetails.getUsername())
                 .orElseThrow(() -> new RuntimeException("User not found"));
         boolean isACompanyQuality = "더파운더즈".equals(user.getCompanyName()) && "Quality".equals(user.getDepartment());
+        boolean isQualityRole = user.getRole().contains("QUALITY") || user.getRole().contains("QUALITY_TEAM");
+        boolean isResponsibleSales = user.getRole().contains("RESPONSIBLE_SALES");
         boolean isAdmin = user.getRole().contains("ADMIN");
         
-        if (!isAdmin && !isACompanyQuality && !user.getRole().contains("MANUFACTURER")) {
+        if (!isAdmin && !isACompanyQuality && !isQualityRole && !isResponsibleSales && !user.getRole().contains("MANUFACTURER")) {
             throw new RuntimeException("수정 권한이 없습니다.");
         }
         return ResponseEntity.ok(qualityReportService.updateInbound(id, updatedData, user, isAdmin));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES')")
     @DeleteMapping("/inbound/{id}")
     public ResponseEntity<Void> deleteInbound(@PathVariable Long id, @AuthenticationPrincipal UserDetails userDetails) {
         User user = userRepository.findByUsername(userDetails.getUsername())
@@ -141,7 +143,7 @@ public class QualityReportController {
         return ResponseEntity.ok().build();
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES')")
     @PostMapping("/inbound/{id}/complete")
     public ResponseEntity<Void> completeInspection(@PathVariable Long id, @AuthenticationPrincipal UserDetails userDetails) {
         checkQualityAuthority(userDetails);
@@ -156,7 +158,7 @@ public class QualityReportController {
         return ResponseEntity.ok(qualityReportService.getInboundHistory(id, user));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'MANUFACTURER', 'RESPONSIBLE_SALES')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'MANUFACTURER', 'RESPONSIBLE_SALES')")
     @PostMapping("/inbound/upload-coa")
     public ResponseEntity<String> uploadCoa(@RequestParam("file") MultipartFile file,
                                              @RequestParam(value = "productName", required = false) String productName) {
@@ -176,14 +178,14 @@ public class QualityReportController {
         return ResponseEntity.ok(qualityReportService.submitReport(report));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES')")
     @PostMapping("/fetch-wms")
     public ResponseEntity<String> triggerWmsFetch() {
         wmsService.fetchAndSaveInboundData();
         return ResponseEntity.ok("WMS sync triggered (Simulated)");
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
     @PostMapping("/import")
     public ResponseEntity<String> importExcel(@RequestParam("file") MultipartFile file) {
         log.info(">>>> [IMPORT] Quality Excel Upload Request - File: {}", file.getOriginalFilename());
@@ -218,7 +220,7 @@ public class QualityReportController {
         public void setCustomEmails(java.util.Map<String, String> customEmails) { this.customEmails = customEmails; }
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
     @PostMapping("/request-coa")
     public ResponseEntity<java.util.Map<String, Object>> requestCoaEmails(
             @RequestBody CoaRequestDto dto) {
@@ -230,7 +232,7 @@ public class QualityReportController {
     }
 
 
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
     @GetMapping("/request-coa/preview")
     public ResponseEntity<List<java.util.Map<String, Object>>> getCoaRequestPreview(
             @RequestParam String startDate,
@@ -247,8 +249,9 @@ public class QualityReportController {
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
         boolean isACompanyQuality = "더파운더즈".equals(user.getCompanyName()) && "Quality".equals(user.getDepartment());
+        boolean isQualityRole = user.getRole().contains("QUALITY") || user.getRole().contains("QUALITY_TEAM");
         boolean isResponsibleSales = user.getRole().contains("RESPONSIBLE_SALES");
-        if (!user.getRole().contains("ADMIN") && !isACompanyQuality && !isResponsibleSales) {
+        if (!user.getRole().contains("ADMIN") && !isACompanyQuality && !isQualityRole && !isResponsibleSales) {
             throw new RuntimeException("품질 검사 및 수정을 위한 권한이 없습니다. (더파운더즈 품질팀 또는 책임판매관리자만 가능)");
         }
     }
