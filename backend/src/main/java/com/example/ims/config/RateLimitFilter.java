@@ -27,7 +27,7 @@ import java.util.concurrent.TimeUnit;
  * 4. X-Forwarded-For 헤더 파싱 및 remoteAddr 안전성 강화
  */
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE)
+@Order(Ordered.HIGHEST_PRECEDENCE + 1)
 @Slf4j
 public class RateLimitFilter implements Filter {
 
@@ -89,6 +89,11 @@ public class RateLimitFilter implements Filter {
     }
 
     private BucketLimitConfig getLimitConfig(String path, String method) {
+        // [CORS] OPTIONS Preflight 요청은 Rate Limit 대상에서 완전 제외
+        if ("OPTIONS".equalsIgnoreCase(method)) {
+            return null;
+        }
+
         // 1. 제조사 서류 제출 및 토큰 정보 조회 (GET /info, POST /file 등): 분당 10회 제한 (토큰 무차별 대입 방지)
         if (path.startsWith("/api/vendor-upload/")) {
             return new BucketLimitConfig("VENDOR_UPLOAD", 10, "제조사 서류 제출/조회 요청 한도를 초과했습니다. 1분 뒤 다시 시도해 주십시오.");
