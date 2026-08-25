@@ -506,6 +506,10 @@ const DashboardPage = ({ user, onNavigate }) => {
     const REFERENCE_WIDGETS = ['WIDGET_AUDIT_LOGS', 'WIDGET_QUALITY_STATS', 'WIDGET_CLAIM_TREND', 'WIDGET_AUDIT_GRADE'];
 
     const allWidgetKeys = data.widgetConfig ? [...data.widgetConfig] : [];
+    // [공지사항 복구] 전체공지 위젯이 설정에 없으면 상단에 자동 포함
+    if (!allWidgetKeys.includes('WIDGET_ANNOUNCEMENTS')) {
+        allWidgetKeys.unshift('WIDGET_ANNOUNCEMENTS');
+    }
     // 통계 위젯이 DB 설정에 없으면 자동으로 추가
     const statsToAdd = isManufacturer
         ? ['WIDGET_QUALITY_STATS', 'WIDGET_CLAIM_TREND']

@@ -117,12 +117,12 @@ const api = axios.create({
     xsrfHeaderName: 'X-XSRF-TOKEN'
 });
 
-// [버그 리포트 전용 독립 AXIOS 인스턴스] CORS preflight 및 CSRF 인터셉터의 영향을 받지 않는 무인증 JSON 클라이언트
+// [버그 리포트 / 비인증 로깅 전용 독립 AXIOS 인스턴스] CORS preflight 및 CSRF 인터셉터의 영향을 받지 않는 무인증 JSON 클라이언트
 const bugReportAxios = axios.create({
     baseURL: getBaseURL(),
     withCredentials: false,
     headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'text/plain;charset=UTF-8'
     }
 });
 
@@ -139,12 +139,19 @@ api.interceptors.request.use(
             config.headers['X-XSRF-TOKEN'] = xsrfToken;
         }
 
-        // [HTTP METHOD OVERRIDE] PUT, PATCH, DELETE 시 OPTIONS preflight를 회피하기 위해 POST + _method 쿼리스트링 조합으로 변환
+        // [CORS SIMPLE REQUEST & HTTP METHOD OVERRIDE]
+        // Hugging Face 프록시의 OPTIONS Preflight 가로채기(Credentials 누락)를 방어하기 위해
+        // PUT, PATCH, DELETE를 POST + _method 조합으로 변환하고 JSON 페이로드를 text/plain으로 전송
+        // (백엔드 PreflightBypassFilter에서 application/json으로 자동 복원)
         const upperMethod = config.method ? config.method.toUpperCase() : '';
         if (['PUT', 'PATCH', 'DELETE'].includes(upperMethod)) {
             const separator = config.url.includes('?') ? '&' : '?';
             config.url = `${config.url}${separator}_method=${upperMethod}`;
             config.method = 'post';
+        }
+
+        if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(upperMethod) && !(config.data instanceof FormData)) {
+            config.headers['Content-Type'] = 'text/plain;charset=UTF-8';
         }
 
         return config;
@@ -608,8 +615,8 @@ export const getAdminLogs = (params = {}) => {
 export const rollbackAuditLog = (logId) => api.post(`/api/admin/logs/${logId}/restore`);
 export const updateProfile = (profileData) => api.put('/api/auth/profile', profileData);
 
-// Page View Logging
-export const logPageView = (data) => api.post('/api/logs/access/page-move', data, { skipLoading: true, skipToast: true });
+// Page View Logging (비인증 경량 로깅: withCredentials: false로 Preflight CORS 원천 방지)
+export const logPageView = (data) => bugReportAxios.post('/api/logs/access/page-move', data).catch(() => {});
 
 // User Access Logs
 export const getAccessLogs = () => api.get('/api/logs/access').then(res => res.data);
