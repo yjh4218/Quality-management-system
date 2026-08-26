@@ -100,7 +100,7 @@ const AnnotatedCardImage = ({ imageUrl, annotationsJson, altText }) => {
  * - 3줄 전용 캡션 textarea
  * - 주석(도형/글씨) 카드 이미지 위 실시간 합성 표시
  */
-const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, onRegisterSaveHandler, onRegisterReloadHandler, onRegisterInheritHandler, onEnsureSpecCreated }) => {
+const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, onRegisterSaveHandler, onRegisterReloadHandler, onRegisterInheritHandler, onEnsureSpecCreated, onImagesChange }) => {
     const [images, setImages] = useState([]);
     const [pendingFiles, setPendingFiles] = useState([]); // 업로드 대기 신규 파일
     const [deletedIds, setDeletedIds] = useState([]); // 삭제 대기 ID 목록
@@ -119,7 +119,10 @@ const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, onRegisterSav
     const hasUnsavedChangesRef = useRef(hasUnsavedChanges);
     const specIdRef = useRef(specId);
 
-    useEffect(() => { imagesRef.current = images; }, [images]);
+    useEffect(() => { 
+        imagesRef.current = images; 
+        if (onImagesChange) onImagesChange(images);
+    }, [images, onImagesChange]);
     useEffect(() => { pendingFilesRef.current = pendingFiles; }, [pendingFiles]);
     useEffect(() => { deletedIdsRef.current = deletedIds; }, [deletedIds]);
     useEffect(() => { hasUnsavedChangesRef.current = hasUnsavedChanges; }, [hasUnsavedChanges]);

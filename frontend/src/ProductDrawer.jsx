@@ -568,6 +568,14 @@ const ProductDrawer = ({ product, onClose, user }) => {
     }, [activeTab, formData.dimensions?.width, formData.dimensions?.length, formData.dimensions?.height, formData.capacity, formData.components, formData.productType, formData.isPlanningSet, primaryContainer.shape, primaryContainer.diameter, primaryContainer.width, primaryContainer.depth, primaryContainer.height, primaryContainer.capacity_ml]);
 
     const [masterMethodImagesForInherit, setMasterMethodImagesForInherit] = useState({ images: [], masterSpecId: null });
+    const [packagingMethodImages, setPackagingMethodImages] = useState([]);
+    const [specValidationModalState, setSpecValidationModalState] = useState({
+        isOpen: false,
+        title: '',
+        missing3D: [],
+        missingMethodImages: false,
+        missingSpecs: []
+    });
     const packagingMethodSaveRef = useRef(null);
     const packagingMethodReloadRef = useRef(null);
     const packagingMethodInheritRef = useRef(null);
@@ -1260,6 +1268,79 @@ const ProductDrawer = ({ product, onClose, user }) => {
             });
         } else {
             doCapture();
+        }
+    };
+
+    const handleBatchSave3DSnapshots = async (forceAll = false) => {
+        if (!currentSpec?.id) {
+            toast.warn("사양서를 먼저 한 번 저장한 후 3D 도면을 일괄 확정할 수 있습니다.");
+            return;
+        }
+        const hasInbox = currentSpec.inboxUseYn === 'O';
+        const tierQty = parseInt(currentSpec?.palletTierQty || 0, 10);
+        const tierCount = parseInt(currentSpec?.palletTierCount || 0, 10);
+        if (tierQty <= 0 || tierCount <= 0) {
+            toast.warn("🧱 팔레트 적재 사양(1단 적재 수량 및 총 적재 단수)을 먼저 입력해야 팔레트 도면을 포함하여 일괄 저장할 수 있습니다.");
+            return;
+        }
+
+        const modesToSave = [];
+        if (hasInbox && (forceAll || !currentSpec.inboxLayoutImage)) modesToSave.push('inbox');
+        if (forceAll || !(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage)) modesToSave.push('outbox');
+        if (forceAll || !currentSpec.palletLayoutImage) modesToSave.push('pallet');
+
+        if (modesToSave.length === 0) {
+            toast.info("이미 모든 3D 도면(인박스, 아웃박스, 팔레트)이 확정 저장되어 있습니다.");
+            return;
+        }
+
+        try {
+            setSnapshotUploading(true);
+            const originalTab = sim3DTab;
+            const updatedImages = {};
+
+            for (let i = 0; i < modesToSave.length; i++) {
+                const targetMode = modesToSave[i];
+                const modeLabel = targetMode === 'inbox' ? '인박스' : targetMode === 'outbox' ? '아웃박스' : '팔레트';
+                toast.info(`📸 3D 도면 일괄 저장 중... (${i + 1}/${modesToSave.length}) - [${modeLabel}]`, { autoClose: 1200 });
+                
+                setSim3DTab(targetMode);
+                // 3D 씬 및 캔버스 렌더링 동기화 대기
+                await new Promise(r => setTimeout(r, 450));
+
+                if (viewer3DRef.current?.capture) {
+                    const dataUrl = viewer3DRef.current.capture();
+                    if (dataUrl) {
+                        const viewConfig = viewer3DRef.current?.getViewConfig?.();
+                        const viewConfigStr = viewConfig ? JSON.stringify(viewConfig) : null;
+                        const res = await api.uploadPackagingSpec3DSnapshot(currentSpec.id, targetMode, dataUrl, viewConfigStr);
+                        const savedPath = res.data?.imagePath;
+                        if (savedPath) {
+                            if (targetMode === 'inbox') updatedImages.inboxLayoutImage = savedPath;
+                            else if (targetMode === 'outbox') {
+                                updatedImages.outboxLayoutImageFile = savedPath;
+                                updatedImages.outboxLayoutImage = savedPath;
+                            } else updatedImages.palletLayoutImage = savedPath;
+                        }
+                    }
+                }
+            }
+
+            setCurrentSpec(prev => ({
+                ...prev,
+                ...updatedImages
+            }));
+
+            setSim3DTab(originalTab);
+            toast.success(`🎉 ${modesToSave.length}개 3D 도면이 성공적으로 일괄 확정 저장되었습니다! (엑셀 출력 100% 반영)`);
+            
+            // 검증 모달이 열려있었다면 닫기
+            setSpecValidationModalState(prev => ({ ...prev, isOpen: false }));
+        } catch (err) {
+            console.error("일괄 3D 도면 저장 실패:", err);
+            toast.error("3D 도면 일괄 저장 중 오류가 발생했습니다.");
+        } finally {
+            setSnapshotUploading(false);
         }
     };
 
@@ -2331,118 +2412,107 @@ const ProductDrawer = ({ product, onClose, user }) => {
     const handleDownloadSpecExcel = async () => {
         if (!product || !product.id) return;
 
+        // 1. 유효성 엄격 검증 (Strict Validation)
         const hasInbox = currentSpec.inboxUseYn === 'O';
-        const missingInbox = hasInbox && !currentSpec.inboxLayoutImage;
-        const missingOutbox = !(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage);
-        const missingPallet = !currentSpec.palletLayoutImage;
+        const missing3D = [];
+        if (hasInbox && !currentSpec.inboxLayoutImage) missing3D.push('인박스 3D 입수 도면');
+        if (!(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage)) missing3D.push('아웃박스 3D 입수 도면');
+        if (!currentSpec.palletLayoutImage) missing3D.push('팔레트 3D 적재 도면');
 
-        const executeDownload = async (captureCurrent = false) => {
-            try {
-                if (captureCurrent && viewer3DRef.current?.capture) {
-                    const curMode = sim3DTab.startsWith('pallet') ? 'pallet' : sim3DTab;
-                    if (curMode === 'pallet') {
-                        const tierQty = parseInt(currentSpec?.palletTierQty || 0, 10);
-                        const tierCount = parseInt(currentSpec?.palletTierCount || 0, 10);
-                        if (tierQty <= 0 || tierCount <= 0) {
-                            toast.warn("🧱 팔레트 적재 사양(1단 적재 수량 및 총 적재 단수)이 미입력되어 팔레트 도면은 자동 저장에서 제외됩니다.");
-                        } else {
-                            viewer3DRef.current.capture();
-                        }
-                    } else {
-                        viewer3DRef.current.capture();
-                    }
-                    await new Promise(r => setTimeout(r, 600));
-                }
+        const methodImgCount = (packagingMethodImages && packagingMethodImages.length) || (currentSpec.methodImages && currentSpec.methodImages.length) || (currentSpec.packagingMethodImage ? 1 : 0);
+        const missingMethod = methodImgCount === 0;
 
-                // 현재 입력 중인 최신 사양서 정보 자동 저장 후 다운로드
-                await handleSaveFullSpec(true);
-                const response = await downloadPackagingSpecExcel(product.id);
-                const url = window.URL.createObjectURL(new Blob([response.data]));
-                const link = document.createElement('a');
-                link.href = url;
-                link.setAttribute('download', `포장사양서_${formData.itemCode || product.itemCode || product.id}.xlsx`);
-                document.body.appendChild(link);
-                link.click();
-                link.remove();
-            } catch (error) {
-                toast.error("엑셀 다운로드에 실패했습니다.");
-                console.error(error);
-            }
-        };
+        const missingSpecs = [];
+        const outQty = parseInt(currentSpec.outboxQty || 0, 10);
+        const tierQty = parseInt(currentSpec.palletTierQty || 0, 10);
+        const tierCount = parseInt(currentSpec.palletTierCount || 0, 10);
+        if (outQty <= 0) missingSpecs.push('아웃박스 총 입수량 (수량 0 초과 필요)');
+        if (tierQty <= 0) missingSpecs.push('팔레트 1단 적재 박스 수량 (수량 0 초과 필요)');
+        if (tierCount <= 0) missingSpecs.push('팔레트 총 적재 단수 (단수 0 초과 필요)');
 
-        if (missingInbox || missingOutbox || missingPallet) {
-            const missingList = [];
-            if (missingInbox) missingList.push('인박스');
-            if (missingOutbox) missingList.push('아웃박스');
-            if (missingPallet) missingList.push('팔레트');
+        const hasValidationErrors = missing3D.length > 0 || missingMethod || missingSpecs.length > 0;
 
-            setConfirmDialogState({
-                icon: '📸',
-                title: '3D 도면 저장 및 엑셀 다운로드',
-                message: `포장사양서 3D 도면 중 [${missingList.join(', ')}] 도면이 아직 확정 저장되지 않았습니다.\n\n현재 3D 뷰어 화면의 도면을 자동으로 확정 저장한 후 엑셀을 다운로드하시겠습니까?`,
-                onConfirm: () => executeDownload(true)
+        if (hasValidationErrors) {
+            setSpecValidationModalState({
+                isOpen: true,
+                title: '포장사양서 엑셀 다운로드 불가 안내',
+                missing3D,
+                missingMethodImages: missingMethod,
+                missingSpecs
             });
-        } else {
-            await executeDownload(false);
+            return; // 누락 항목 존재 시 엑셀 다운로드 완전 차단!
+        }
+
+        // 2. 검증 완료 시 초고속 다운로드
+        try {
+            setGlobalLoading(true);
+            const response = await downloadPackagingSpecExcel(product.id);
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `포장사양서_${formData.itemCode || product.itemCode || product.id}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            toast.success("📑 포장사양서 엑셀 다운로드가 완료되었습니다!");
+        } catch (error) {
+            toast.error("엑셀 다운로드에 실패했습니다.");
+            console.error(error);
+        } finally {
+            setGlobalLoading(false);
         }
     };
 
     const handleDownloadSpecPdf = async () => {
         if (!product || !product.id) return;
 
+        // 1. 유효성 엄격 검증 (Strict Validation)
         const hasInbox = currentSpec.inboxUseYn === 'O';
-        const missingInbox = hasInbox && !currentSpec.inboxLayoutImage;
-        const missingOutbox = !(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage);
-        const missingPallet = !currentSpec.palletLayoutImage;
+        const missing3D = [];
+        if (hasInbox && !currentSpec.inboxLayoutImage) missing3D.push('인박스 3D 입수 도면');
+        if (!(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage)) missing3D.push('아웃박스 3D 입수 도면');
+        if (!currentSpec.palletLayoutImage) missing3D.push('팔레트 3D 적재 도면');
 
-        const executeDownload = async (captureCurrent = false) => {
-            try {
-                if (captureCurrent && viewer3DRef.current?.capture) {
-                    const curMode = sim3DTab.startsWith('pallet') ? 'pallet' : sim3DTab;
-                    if (curMode === 'pallet') {
-                        const tierQty = parseInt(currentSpec?.palletTierQty || 0, 10);
-                        const tierCount = parseInt(currentSpec?.palletTierCount || 0, 10);
-                        if (tierQty <= 0 || tierCount <= 0) {
-                            toast.warn("🧱 팔레트 적재 사양(1단 적재 수량 및 총 적재 단수)이 미입력되어 팔레트 도면은 자동 저장에서 제외됩니다.");
-                        } else {
-                            viewer3DRef.current.capture();
-                        }
-                    } else {
-                        viewer3DRef.current.capture();
-                    }
-                    await new Promise(r => setTimeout(r, 600));
-                }
+        const methodImgCount = (packagingMethodImages && packagingMethodImages.length) || (currentSpec.methodImages && currentSpec.methodImages.length) || (currentSpec.packagingMethodImage ? 1 : 0);
+        const missingMethod = methodImgCount === 0;
 
-                // 현재 입력 중인 최신 사양서 정보 자동 저장 후 다운로드
-                await handleSaveFullSpec(true);
-                const response = await downloadPackagingSpecPdf(product.id);
-                const url = window.URL.createObjectURL(new Blob([response.data]));
-                const link = document.createElement('a');
-                link.href = url;
-                link.setAttribute('download', `포장사양서_${formData.itemCode || product.itemCode || product.id}.pdf`);
-                document.body.appendChild(link);
-                link.click();
-                link.remove();
-            } catch (error) {
-                toast.error("PDF 다운로드에 실패했습니다.");
-                console.error(error);
-            }
-        };
+        const missingSpecs = [];
+        const outQty = parseInt(currentSpec.outboxQty || 0, 10);
+        const tierQty = parseInt(currentSpec.palletTierQty || 0, 10);
+        const tierCount = parseInt(currentSpec.palletTierCount || 0, 10);
+        if (outQty <= 0) missingSpecs.push('아웃박스 총 입수량 (수량 0 초과 필요)');
+        if (tierQty <= 0) missingSpecs.push('팔레트 1단 적재 박스 수량 (수량 0 초과 필요)');
+        if (tierCount <= 0) missingSpecs.push('팔레트 총 적재 단수 (단수 0 초과 필요)');
 
-        if (missingInbox || missingOutbox || missingPallet) {
-            const missingList = [];
-            if (missingInbox) missingList.push('인박스');
-            if (missingOutbox) missingList.push('아웃박스');
-            if (missingPallet) missingList.push('팔레트');
+        const hasValidationErrors = missing3D.length > 0 || missingMethod || missingSpecs.length > 0;
 
-            setConfirmDialogState({
-                icon: '📸',
-                title: '3D 도면 저장 및 PDF 다운로드',
-                message: `포장사양서 3D 도면 중 [${missingList.join(', ')}] 도면이 아직 확정 저장되지 않았습니다.\n\n현재 3D 뷰어 화면의 도면을 자동으로 확정 저장한 후 PDF를 다운로드하시겠습니까?`,
-                onConfirm: () => executeDownload(true)
+        if (hasValidationErrors) {
+            setSpecValidationModalState({
+                isOpen: true,
+                title: '포장사양서 PDF 다운로드 불가 안내',
+                missing3D,
+                missingMethodImages: missingMethod,
+                missingSpecs
             });
-        } else {
-            await executeDownload(false);
+            return; // 누락 항목 존재 시 PDF 다운로드 완전 차단!
+        }
+
+        try {
+            setGlobalLoading(true);
+            const response = await downloadPackagingSpecPdf(product.id);
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `포장사양서_${formData.itemCode || product.itemCode || product.id}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            toast.success("📄 포장사양서 PDF 다운로드가 완료되었습니다!");
+        } catch (error) {
+            toast.error("PDF 다운로드에 실패했습니다.");
+            console.error(error);
+        } finally {
+            setGlobalLoading(false);
         }
     };
 
@@ -6958,6 +7028,31 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
                                                                             {/* 도면 확정 및 관리 액션 버튼들 */}
                                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                {/* 0. 3D 도면 일괄 확정/저장 버튼 */}
+                                                                                <button
+                                                                                    type="button"
+                                                                                    disabled={snapshotUploading}
+                                                                                    onClick={() => handleBatchSave3DSnapshots(false)}
+                                                                                    style={{
+                                                                                        display: 'flex',
+                                                                                        alignItems: 'center',
+                                                                                        gap: '4px',
+                                                                                        padding: '5px 12px',
+                                                                                        borderRadius: '6px',
+                                                                                        fontSize: '12px',
+                                                                                        fontWeight: 'bold',
+                                                                                        background: '#4f46e5',
+                                                                                        color: '#ffffff',
+                                                                                        border: 'none',
+                                                                                        cursor: snapshotUploading ? 'wait' : 'pointer',
+                                                                                        boxShadow: '0 1px 3px rgba(79, 70, 229, 0.3)'
+                                                                                    }}
+                                                                                    title="미저장된 3D 도면(인박스/아웃박스/팔레트)을 현재 화면 기준으로 순차 자동 캡처하여 일괄 확정합니다."
+                                                                                >
+                                                                                    <span>⚡</span>
+                                                                                    <span>3D 도면 일괄 확정</span>
+                                                                                </button>
+
                                                                                 {/* 1. 현재 3D 뷰 확정/저장 버튼 */}
                                                                                 <button
                                                                                     type="button"
@@ -7042,8 +7137,15 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                                 {/* 4. 뷰 초기화 */}
                                                                                 <button
                                                                                     type="button"
-                                                                                    onClick={() => viewer3DRef.current?.resetView?.()}
+                                                                                    onClick={() => {
+                                                                                        if (viewer3DRef.current?.resetView) {
+                                                                                            viewer3DRef.current.resetView();
+                                                                                        }
+                                                                                    }}
                                                                                     style={{
+                                                                                        display: 'flex',
+                                                                                        alignItems: 'center',
+                                                                                        gap: '3px',
                                                                                         padding: '5px 8px',
                                                                                         borderRadius: '6px',
                                                                                         fontSize: '11px',
@@ -7135,6 +7237,30 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                                             {currentSpec.inboxLayoutImage ? '✓ 도면 확정됨' : '자동 3D 도면'}
                                                                                         </div>
                                                                                     </div>
+                                                                                    {hasInbox && (
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            disabled={snapshotUploading}
+                                                                                            onClick={() => {
+                                                                                                setSim3DTab('inbox');
+                                                                                                setTimeout(() => handleCaptureCurrent3D('inbox'), 250);
+                                                                                            }}
+                                                                                            style={{
+                                                                                                padding: '3px 6px',
+                                                                                                fontSize: '10px',
+                                                                                                fontWeight: 600,
+                                                                                                borderRadius: '4px',
+                                                                                                border: '1px solid #ddd6fe',
+                                                                                                background: '#f5f3ff',
+                                                                                                color: '#6d28d9',
+                                                                                                cursor: 'pointer',
+                                                                                                whiteSpace: 'nowrap'
+                                                                                            }}
+                                                                                            title="인박스 3D 뷰로 이동하여 즉시 캡처/저장합니다."
+                                                                                        >
+                                                                                            📸 {currentSpec.inboxLayoutImage ? '재캡처' : '캡처'}
+                                                                                        </button>
+                                                                                    )}
                                                                                 </div>
 
                                                                                 {/* 2. 아웃박스 */}
@@ -7166,6 +7292,28 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                                             {(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) ? '✓ 도면 확정됨' : '자동 3D 도면'}
                                                                                         </div>
                                                                                     </div>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        disabled={snapshotUploading}
+                                                                                        onClick={() => {
+                                                                                            setSim3DTab('outbox');
+                                                                                            setTimeout(() => handleCaptureCurrent3D('outbox'), 250);
+                                                                                        }}
+                                                                                        style={{
+                                                                                            padding: '3px 6px',
+                                                                                            fontSize: '10px',
+                                                                                            fontWeight: 600,
+                                                                                            borderRadius: '4px',
+                                                                                            border: '1px solid #bfdbfe',
+                                                                                            background: '#eff6ff',
+                                                                                            color: '#1d4ed8',
+                                                                                            cursor: 'pointer',
+                                                                                            whiteSpace: 'nowrap'
+                                                                                        }}
+                                                                                        title="아웃박스 3D 뷰로 이동하여 즉시 캡처/저장합니다."
+                                                                                    >
+                                                                                        📸 {(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) ? '재캡처' : '캡처'}
+                                                                                    </button>
                                                                                 </div>
 
                                                                                 {/* 3. 팔레트 */}
@@ -7197,6 +7345,28 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                                             {currentSpec.palletLayoutImage ? '✓ 도면 확정됨' : '자동 3D 도면'}
                                                                                         </div>
                                                                                     </div>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        disabled={snapshotUploading}
+                                                                                        onClick={() => {
+                                                                                            setSim3DTab('pallet');
+                                                                                            setTimeout(() => handleCaptureCurrent3D('pallet'), 250);
+                                                                                        }}
+                                                                                        style={{
+                                                                                            padding: '3px 6px',
+                                                                                            fontSize: '10px',
+                                                                                            fontWeight: 600,
+                                                                                            borderRadius: '4px',
+                                                                                            border: '1px solid #fde68a',
+                                                                                            background: '#fffbeb',
+                                                                                            color: '#b45309',
+                                                                                            cursor: 'pointer',
+                                                                                            whiteSpace: 'nowrap'
+                                                                                        }}
+                                                                                        title="팔레트 3D 뷰로 이동하여 즉시 캡처/저장합니다."
+                                                                                    >
+                                                                                        📸 {currentSpec.palletLayoutImage ? '재캡처' : '캡처'}
+                                                                                    </button>
                                                                                 </div>
                                                                             </div>
                                                                         </div>
@@ -7283,6 +7453,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                         specId={currentSpec?.id} 
                                         canEdit={canEdit} 
                                         masterMethodImages={masterMethodImagesForInherit}
+                                        onImagesChange={setPackagingMethodImages}
                                         onRegisterSaveHandler={(fn) => { packagingMethodSaveRef.current = fn; }}
                                         onRegisterReloadHandler={(fn) => { packagingMethodReloadRef.current = fn; }}
                                         onRegisterInheritHandler={(fn) => { packagingMethodInheritRef.current = fn; }}
@@ -8059,6 +8230,222 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                 }}
                             >
                                 확인 및 닫기
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ⚠️ 포장사양서 다운로드 필수 검증 모달 (다운로드 차단 및 가이드) */}
+            {specValidationModalState.isOpen && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(15, 23, 42, 0.65)',
+                    backdropFilter: 'blur(4px)',
+                    WebkitBackdropFilter: 'blur(4px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 99999,
+                    padding: '20px'
+                }}>
+                    <div style={{
+                        background: '#ffffff',
+                        borderRadius: '16px',
+                        width: '100%',
+                        maxWidth: '560px',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        border: '1px solid #fee2e2',
+                        overflow: 'hidden',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        animation: 'modalSlideUp 0.2s ease-out'
+                    }}>
+                        {/* 헤더 */}
+                        <div style={{
+                            padding: '18px 24px',
+                            background: '#fef2f2',
+                            borderBottom: '1px solid #fecaca',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px'
+                        }}>
+                            <div style={{
+                                width: '40px',
+                                height: '40px',
+                                borderRadius: '10px',
+                                background: '#fee2e2',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '20px'
+                            }}>
+                                🚫
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '800', color: '#991b1b' }}>
+                                    {specValidationModalState.title || '포장사양서 엑셀 다운로드 불가 안내'}
+                                </h3>
+                                <p style={{ margin: '3px 0 0 0', fontSize: '12px', color: '#b91c1c' }}>
+                                    사양서의 핵심 정보 또는 도면/사진이 누락되어 엑셀 다운로드가 제한됩니다.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setSpecValidationModalState(prev => ({ ...prev, isOpen: false }))}
+                                style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    fontSize: '20px',
+                                    cursor: 'pointer',
+                                    color: '#991b1b',
+                                    padding: '4px'
+                                }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* 모달 본문 - 누락 항목 체크리스트 */}
+                        <div style={{ padding: '20px 24px', maxHeight: '60vh', overflowY: 'auto' }}>
+                            <div style={{ fontSize: '13px', color: '#334155', marginBottom: '14px', lineHeight: '1.5' }}>
+                                완성도 높은 정식 포장사양서 출력을 위해 <strong>아래 누락 항목들을 먼저 등록 및 확정</strong>해 주시기 바랍니다.
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                {/* 1. 3D 도면 누락 */}
+                                {specValidationModalState.missing3D && specValidationModalState.missing3D.length > 0 && (
+                                    <div style={{
+                                        background: '#fff1f2',
+                                        border: '1px solid #fecdd3',
+                                        borderRadius: '10px',
+                                        padding: '12px 16px'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '700', fontSize: '13px', color: '#be123c', marginBottom: '6px' }}>
+                                            <span>📸</span>
+                                            <span>3D 포장/적재 도면 미저장 ({specValidationModalState.missing3D.length}건)</span>
+                                        </div>
+                                        <ul style={{ margin: 0, paddingLeft: '22px', fontSize: '12px', color: '#9f1239', lineHeight: '1.6' }}>
+                                            {specValidationModalState.missing3D.map((item, i) => (
+                                                <li key={i}>{item} 미확정</li>
+                                            ))}
+                                        </ul>
+                                        <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'flex-end' }}>
+                                            <button
+                                                type="button"
+                                                disabled={snapshotUploading}
+                                                onClick={() => handleBatchSave3DSnapshots(false)}
+                                                style={{
+                                                    padding: '6px 12px',
+                                                    fontSize: '12px',
+                                                    fontWeight: '700',
+                                                    borderRadius: '6px',
+                                                    border: 'none',
+                                                    background: '#e11d48',
+                                                    color: '#ffffff',
+                                                    cursor: snapshotUploading ? 'wait' : 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
+                                                    boxShadow: '0 2px 4px rgba(225, 29, 72, 0.25)'
+                                                }}
+                                            >
+                                                <span>⚡</span>
+                                                <span>{snapshotUploading ? '일괄 캡처 중...' : '미저장 3D 도면 바로 일괄 저장하기'}</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* 2. 포장방법 공정 사진 누락 */}
+                                {specValidationModalState.missingMethodImages && (
+                                    <div style={{
+                                        background: '#fffbeb',
+                                        border: '1px solid #fde68a',
+                                        borderRadius: '10px',
+                                        padding: '12px 16px'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '700', fontSize: '13px', color: '#b45309', marginBottom: '6px' }}>
+                                            <span>🖼️</span>
+                                            <span>포장방법 공정 사진 미등록</span>
+                                        </div>
+                                        <div style={{ fontSize: '12px', color: '#92400e', lineHeight: '1.5' }}>
+                                            엑셀 Sheet 2(포장방법)에 출력할 공정 사진이 1장도 등록되지 않았습니다. [Sheet 2 포장방법] 탭에서 사진을 최소 1장 이상 등록 후 저장해 주세요.
+                                        </div>
+                                        <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'flex-end' }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setSpecValidationModalState(prev => ({ ...prev, isOpen: false }));
+                                                    setSpecSubTab('sheet2');
+                                                }}
+                                                style={{
+                                                    padding: '5px 12px',
+                                                    fontSize: '11px',
+                                                    fontWeight: '700',
+                                                    borderRadius: '6px',
+                                                    border: '1px solid #f59e0b',
+                                                    background: '#ffffff',
+                                                    color: '#b45309',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                👉 포장방법 사진 탭으로 이동
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* 3. 필수 사양 미입력 */}
+                                {specValidationModalState.missingSpecs && specValidationModalState.missingSpecs.length > 0 && (
+                                    <div style={{
+                                        background: '#f8fafc',
+                                        border: '1px solid #cbd5e1',
+                                        borderRadius: '10px',
+                                        padding: '12px 16px'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '700', fontSize: '13px', color: '#334155', marginBottom: '6px' }}>
+                                            <span>📐</span>
+                                            <span>필수 포장/적재 사양 수치 미입력 ({specValidationModalState.missingSpecs.length}건)</span>
+                                        </div>
+                                        <ul style={{ margin: 0, paddingLeft: '22px', fontSize: '12px', color: '#475569', lineHeight: '1.6' }}>
+                                            {specValidationModalState.missingSpecs.map((item, i) => (
+                                                <li key={i}>{item}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* 모달 푸터 */}
+                        <div style={{
+                            padding: '14px 24px',
+                            background: '#f8fafc',
+                            borderTop: '1px solid #e2e8f0',
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            gap: '10px'
+                        }}>
+                            <button
+                                type="button"
+                                onClick={() => setSpecValidationModalState(prev => ({ ...prev, isOpen: false }))}
+                                style={{
+                                    padding: '8px 20px',
+                                    fontSize: '13px',
+                                    fontWeight: '700',
+                                    borderRadius: '8px',
+                                    background: '#475569',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                확인 (닫기)
                             </button>
                         </div>
                     </div>

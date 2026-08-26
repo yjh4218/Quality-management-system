@@ -74,6 +74,27 @@ public class PackagingSpecExportService {
             return Long.compare(idB, idA); // descending ID
         });
 
+        // [초고속화] 모든 이미지 URL을 사전에 병렬 비동기로 즉시 프리페치
+        try {
+            List<String> urlsToFetch = new ArrayList<>();
+            if (specs != null && !specs.isEmpty()) {
+                PackagingSpecification topSpec = specs.get(0);
+                if (topSpec.getInboxLayoutImage() != null) urlsToFetch.add(topSpec.getInboxLayoutImage());
+                if (topSpec.getOutboxLayoutImageFile() != null) urlsToFetch.add(topSpec.getOutboxLayoutImageFile());
+                if (topSpec.getOutboxLayoutImage() != null) urlsToFetch.add(topSpec.getOutboxLayoutImage());
+                if (topSpec.getPalletLayoutImage() != null) urlsToFetch.add(topSpec.getPalletLayoutImage());
+                if (topSpec.getMarkingLocationImage() != null) urlsToFetch.add(topSpec.getMarkingLocationImage());
+            }
+            if (product.getImagePaths() != null) urlsToFetch.addAll(product.getImagePaths());
+            if (product.getImagePath() != null) urlsToFetch.add(product.getImagePath());
+
+            urlsToFetch.parallelStream()
+                .filter(u -> u != null && !u.isBlank())
+                .forEach(this::getImageBytesFromFileOrUrl);
+        } catch (Exception e) {
+            log.warn("Image parallel prefetching warning: " + e.getMessage());
+        }
+
         Workbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
         
         // --- 스타일 정의 ---
@@ -1093,10 +1114,52 @@ public class PackagingSpecExportService {
         return out.toByteArray();
     }
 
+    private final java.util.Map<String, byte[]> executionImageCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private static volatile List<String> cachedValidRoots = null;
+
+    private List<String> getValidUploadRoots() {
+        if (cachedValidRoots != null) return cachedValidRoots;
+        String userDir = System.getProperty("user.dir", ".");
+        List<String> rawRoots = List.of(
+            "uploads", "./uploads", "backend/uploads", "./backend/uploads",
+            userDir + "/uploads", userDir + "/backend/uploads",
+            "internal-management-system/backend/uploads",
+            "./internal-management-system/backend/uploads",
+            userDir + "/internal-management-system/backend/uploads",
+            "E:/AI/internal-management-system/backend/uploads",
+            "E:/AI/uploads", "C:/uploads", "data", "./data"
+        );
+        List<String> valid = new ArrayList<>();
+        for (String r : rawRoots) {
+            try {
+                java.io.File d = new java.io.File(r);
+                if (d.exists() && d.isDirectory()) {
+                    valid.add(r);
+                }
+            } catch (Exception ignored) {}
+        }
+        if (valid.isEmpty()) valid.add("uploads");
+        cachedValidRoots = valid;
+        return valid;
+    }
+
     /**
      * Helper to read image bytes directly from local disk path, remote URL, or Base64 Data URL.
      */
     private byte[] getImageBytesFromFileOrUrl(String fileUrl) {
+        if (fileUrl == null || fileUrl.isBlank()) return null;
+        String key = fileUrl.trim();
+        if (executionImageCache.containsKey(key)) {
+            return executionImageCache.get(key);
+        }
+        byte[] result = fetchImageBytesDirect(key);
+        if (result != null && result.length > 0) {
+            executionImageCache.put(key, result);
+        }
+        return result;
+    }
+
+    private byte[] fetchImageBytesDirect(String fileUrl) {
         if (fileUrl == null || fileUrl.isBlank()) return null;
         if (fileUrl.startsWith("data:image/") && fileUrl.contains("base64,")) {
             try {
@@ -1115,16 +1178,22 @@ public class PackagingSpecExportService {
             }
         }
         if (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")) {
-            try (java.io.InputStream in = new java.net.URL(fileUrl).openStream();
-                 ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-                byte[] buf = new byte[8192];
-                int n;
-                while ((n = in.read(buf)) != -1) {
-                    baos.write(buf, 0, n);
+            try {
+                java.net.URL url = new java.net.URL(fileUrl);
+                java.net.URLConnection conn = url.openConnection();
+                conn.setConnectTimeout(2500);
+                conn.setReadTimeout(3500);
+                try (java.io.InputStream in = conn.getInputStream();
+                     ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+                    byte[] buf = new byte[8192];
+                    int n;
+                    while ((n = in.read(buf)) != -1) {
+                        baos.write(buf, 0, n);
+                    }
+                    return baos.toByteArray();
                 }
-                return baos.toByteArray();
             } catch (Exception e) {
-                log.warn("Failed to download image from URL: " + fileUrl, e);
+                log.warn("Failed to download image from URL: " + fileUrl + " (" + e.getMessage() + ")");
             }
         }
         return null;
@@ -1209,10 +1278,13 @@ public class PackagingSpecExportService {
 
         // 로컬 파일에서 읽지 못한 경우 URL 네트워크 통신으로 Fallback 다운로드 시도
         if (origImg == null && imgEntity.getImageUrl() != null && imgEntity.getImageUrl().startsWith("http")) {
-            try {
-                origImg = ImageIO.read(new java.net.URL(imgEntity.getImageUrl()));
-            } catch (Exception e) {
-                log.warn("Failed to read image from URL: " + imgEntity.getImageUrl(), e);
+            byte[] remoteBytes = getImageBytesFromFileOrUrl(imgEntity.getImageUrl());
+            if (remoteBytes != null && remoteBytes.length > 0) {
+                try {
+                    origImg = ImageIO.read(new java.io.ByteArrayInputStream(remoteBytes));
+                } catch (Exception e) {
+                    log.warn("Failed to read image from downloaded bytes: " + imgEntity.getImageUrl(), e);
+                }
             }
         }
 
@@ -1307,10 +1379,11 @@ public class PackagingSpecExportService {
         } catch (Exception e) {
             log.error("Failed to render annotations on image for " + imgEntity.getId(), e);
             try {
-                return java.nio.file.Files.readAllBytes(imgFile.toPath());
-            } catch (Exception ex) {
-                return null;
-            }
+                if (imgFile != null) {
+                    return java.nio.file.Files.readAllBytes(imgFile.toPath());
+                }
+            } catch (Exception ignored) {}
+            return null;
         }
     }
 
@@ -1390,6 +1463,7 @@ public class PackagingSpecExportService {
             return null;
         }
     }
+
     private Color parseColorSafe(String hex, Color defaultColor) {
         if (hex == null || hex.isBlank()) return defaultColor;
         try {
@@ -1425,24 +1499,8 @@ public class PackagingSpecExportService {
             cleanFileName = raw;
         }
 
-        String userDir = System.getProperty("user.dir", ".");
+        List<String> uploadRoots = getValidUploadRoots();
         
-        List<String> uploadRoots = new ArrayList<>();
-        uploadRoots.add("uploads");
-        uploadRoots.add("./uploads");
-        uploadRoots.add("backend/uploads");
-        uploadRoots.add("./backend/uploads");
-        uploadRoots.add("internal-management-system/backend/uploads");
-        uploadRoots.add("./internal-management-system/backend/uploads");
-        uploadRoots.add(userDir + "/uploads");
-        uploadRoots.add(userDir + "/backend/uploads");
-        uploadRoots.add(userDir + "/internal-management-system/backend/uploads");
-        uploadRoots.add("E:/AI/internal-management-system/backend/uploads");
-        uploadRoots.add("E:/AI/uploads");
-        uploadRoots.add("C:/uploads");
-        uploadRoots.add("data");
-        uploadRoots.add("./data");
-
         List<String> candidates = new ArrayList<>();
         candidates.add(imagePath);
         candidates.add(imageUrl);
