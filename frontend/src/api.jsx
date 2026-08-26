@@ -150,7 +150,17 @@ api.interceptors.request.use(
             config.method = 'post';
         }
 
-        if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(upperMethod) && !(config.data instanceof FormData)) {
+        const isFormData = config.data instanceof FormData;
+        const isUrlSearchParams = config.data instanceof URLSearchParams;
+        const isLoginEndpoint = config.url && config.url.includes('/auth/login');
+
+        // 순수 JSON 객체/배열에 대해서만 text/plain 우회 적용 (URLSearchParams 및 폼 로그인은 기존 포맷 보존)
+        if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(upperMethod) && 
+            config.data && 
+            typeof config.data === 'object' && 
+            !isFormData && 
+            !isUrlSearchParams && 
+            !isLoginEndpoint) {
             config.headers['Content-Type'] = 'text/plain;charset=UTF-8';
         }
 
