@@ -43,7 +43,7 @@ const ProductSearchPopup = ({
     const fetchInitialMasterProducts = async () => {
         setLoading(true);
         try {
-            const res = await searchProducts({ isMaster: true, size: 200 });
+            const res = await searchProducts({ isMaster: true, size: 50 });
             const rawData = res.data.content !== undefined ? res.data.content : res.data;
             const list = Array.isArray(rawData) ? rawData : [];
             const filtered = list.filter(p => p.isMaster === true || p.isMaster === 'true' || p.isMaster === 1);
@@ -69,7 +69,7 @@ const ProductSearchPopup = ({
                 manufacturer: searchFields.manufacturer,
                 ingredients: searchFields.ingredients,
                 isMaster: searchFields.isMasterOnly ? true : undefined,
-                size: 200
+                size: 50
             };
             const res = await searchProducts(queryParams);
             const data = res.data.content !== undefined ? res.data.content : res.data;

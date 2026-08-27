@@ -278,6 +278,7 @@ const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, onRegisterSav
     };
 
     const lastInheritedMasterSpecIdRef = useRef(null);
+    const lastLoadedSpecIdRef = useRef(null);
 
     useEffect(() => {
         if (masterMethodImages && Array.isArray(masterMethodImages.images) && masterMethodImages.images.length > 0) {
@@ -288,9 +289,10 @@ const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, onRegisterSav
         }
     }, [masterMethodImages]);
 
-    // specId가 존재하거나 변경 시 자동으로 포장방법 사진 목록을 서버에서 조회
+    // specId가 존재하거나 변경 시 자동으로 포장방법 사진 목록을 서버에서 조회 (단, 이미 해당 specId로 로드된 경우 재로드 생략)
     useEffect(() => {
-        if (specId) {
+        if (specId && lastLoadedSpecIdRef.current !== specId) {
+            lastLoadedSpecIdRef.current = specId;
             loadImages(specId);
         }
     }, [specId]);
@@ -301,7 +303,10 @@ const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, onRegisterSav
             onRegisterSaveHandler((overrideId) => saveAllChanges(overrideId));
         }
         if (onRegisterReloadHandler) {
-            onRegisterReloadHandler((targetId) => loadImages(targetId));
+            onRegisterReloadHandler((targetId) => {
+                if (targetId) lastLoadedSpecIdRef.current = targetId;
+                return loadImages(targetId);
+            });
         }
         if (onRegisterInheritHandler) {
             onRegisterInheritHandler((masterImgs, masterSpecId) => inheritMasterImages(masterImgs, masterSpecId));

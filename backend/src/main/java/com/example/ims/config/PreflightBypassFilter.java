@@ -48,7 +48,7 @@ public class PreflightBypassFilter implements Filter {
             response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
             response.setHeader("Access-Control-Allow-Max-Age", "3600");
             response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With, X-XSRF-TOKEN, Accept, Origin, Access-Control-Request-Method, Access-Control-Request-Headers");
-            response.setHeader("Access-Control-Expose-Headers", "Set-Cookie, Authorization, XSRF-TOKEN, X-XSRF-TOKEN");
+            response.setHeader("Access-Control-Expose-Headers", "Set-Cookie, Authorization, XSRF-TOKEN, X-XSRF-TOKEN, X-Response-Time-Millis, ETag");
         }
 
         // [2] OPTIONS Preflight 요청은 _method 파싱 전 즉시 200 OK 반환 (Security 인증 필터 간섭 차단)

@@ -19,6 +19,12 @@ export default defineConfig({
             if (id.includes('xlsx')) {
               return 'vendor-xlsx';
             }
+            if (id.includes('three')) {
+              return 'vendor-three';
+            }
+            if (id.includes('lucide-react')) {
+              return 'vendor-lucide';
+            }
             if (id.includes('@mui') || id.includes('@emotion')) {
               return 'vendor-mui';
             }

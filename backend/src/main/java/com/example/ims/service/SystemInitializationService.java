@@ -679,6 +679,14 @@ public class SystemInitializationService {
         } catch (Exception e) {
             log.warn(">>>> [SYSTEM INIT] Could not create notification_number_seq sequence: {}", e.getMessage());
         }
+
+        // 5. 클레임 일련번호 시퀀스 보정
+        try {
+            jdbcTemplate.execute("CREATE SEQUENCE IF NOT EXISTS claim_number_seq START WITH 1 INCREMENT BY 1");
+            log.info(">>>> [SYSTEM INIT] claim_number_seq sequence verified/created.");
+        } catch (Exception e) {
+            log.warn(">>>> [SYSTEM INIT] Could not create claim_number_seq sequence: {}", e.getMessage());
+        }
     }
 
     private void performDataAudit() {

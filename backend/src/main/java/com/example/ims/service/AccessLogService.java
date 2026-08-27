@@ -67,6 +67,11 @@ public class AccessLogService {
 
     @Transactional(readOnly = true)
     public List<AccessLog> getAllLogs() {
-        return accessLogRepository.findAllByOrderByCreatedAtDesc();
+        return accessLogRepository.findTop200ByOrderByCreatedAtDesc();
+    }
+
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<AccessLog> getLogsPaged(org.springframework.data.domain.Pageable pageable) {
+        return accessLogRepository.findAllByOrderByCreatedAtDesc(pageable);
     }
 }

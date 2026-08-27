@@ -119,7 +119,7 @@ export default function LotPpmDashboardPage({ user, onNavigate }) {
             const [resData, resSummary, resClaims] = await Promise.all([
                 axios.get('/api/quality-analytics/lot-ppm', { params }),
                 axios.get('/api/quality-analytics/summary', { params: summaryParams }),
-                axios.get('/api/claims')
+                axios.get('/api/claims', { params: summaryParams })
             ]);
 
             setData(resData.data || []);

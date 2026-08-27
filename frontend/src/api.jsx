@@ -129,6 +129,9 @@ const bugReportAxios = axios.create({
 // [고도화 3] Request 인프라: 로딩 시작, CSRF 토큰 헤더 주입 및 HTTP 메서드 우회
 api.interceptors.request.use(
     (config) => {
+        // [성능 측정] E2E 레이턴시 분해 측정을 위한 시작 시각 기록
+        config.metadata = { startTime: performance.now() };
+
         if (!config.skipLoading) {
             setGlobalLoading(true); // 스피너 시작
         }
@@ -172,12 +175,43 @@ api.interceptors.request.use(
     }
 );
 
+// [성능 모니터링 헬퍼] 레이턴시 분해 로깅 함수
+const logPerformanceMetrics = (config, response, isError = false) => {
+    if (!config?.metadata?.startTime) return;
+    try {
+        const totalDurationMs = Math.round(performance.now() - config.metadata.startTime);
+        const headers = response?.headers || {};
+        const serverDurationHeader = headers['x-response-time-millis'] || headers['X-Response-Time-Millis'];
+        const serverDurationMs = serverDurationHeader ? parseInt(serverDurationHeader, 10) : null;
+        const networkDurationMs = serverDurationMs !== null ? Math.max(0, totalDurationMs - serverDurationMs) : null;
+        
+        const method = (config.method || 'GET').toUpperCase();
+        const url = config.url || '';
+        const breakdown = serverDurationMs !== null 
+            ? ` (서버: ${serverDurationMs}ms / 네트워크: ${networkDurationMs}ms)` 
+            : '';
+
+        if (isError) {
+            console.warn(`❌ [PERF-ERR] ${method} ${url} | 총 ${totalDurationMs}ms (status: ${response?.status || 'ERR'})`);
+        } else if (totalDurationMs >= 1000) {
+            console.warn(`⏳ [PERF-SLOW] ${method} ${url} | 총 ${totalDurationMs}ms${breakdown}`);
+        } else {
+            console.debug(`⚡ [PERF] ${method} ${url} | 총 ${totalDurationMs}ms${breakdown}`);
+        }
+    } catch (e) {
+        // 로깅 실패가 비즈니스 로직에 영향을 주지 않도록 보호
+    }
+};
+
 // [고도화 4] Response 인프라: 로딩 종료 및 전역 에러 알림(Toast) 자동화
 api.interceptors.response.use(
     (response) => {
         if (!response.config.skipLoading) {
             setGlobalLoading(false); // 스피너 종료
         }
+
+        // [성능 모니터링] 정상 응답 레이턴시 분해 로깅
+        logPerformanceMetrics(response.config, response, false);
 
         // [아키텍처] ApiResponse 표준 규격 대응
         // 서버에서 { success: true, data: { ... } } 형태로 응답이 오면 내부 data만 추출하여 반환합니다.
@@ -203,6 +237,11 @@ api.interceptors.response.use(
     (error) => {
         if (error.config && !error.config.skipLoading) {
             setGlobalLoading(false);
+        }
+
+        // [성능 모니터링] 에러 응답 레이턴시 로깅
+        if (error.config) {
+            logPerformanceMetrics(error.config, error.response, true);
         }
 
         const isLoginRequest = error.config && error.config.url && (error.config.url.endsWith('/auth/login') || error.config.url.includes('/auth/login'));
@@ -448,21 +487,77 @@ export const downloadInboundTemplate = () => api.get('/api/quality/import-templa
 export const requestCoaEmails = (startDate, endDate, customEmails = {}) => api.post('/api/quality/request-coa', { startDate, endDate, customEmails });
 export const getCoaRequestPreview = (startDate, endDate) => api.get(`/api/quality/request-coa/preview?startDate=${startDate}&endDate=${endDate}`);
 
+// [성능 최적화] 마스터 데이터 프론트엔드 인메모리 캐시 (TTL 5분)
+const masterDataCache = {
+    manufacturers: { data: null, timestamp: 0 },
+    brands: { data: null, timestamp: 0 },
+    materials: { data: null, timestamp: 0 },
+    channels: { data: null, timestamp: 0 }
+};
+const MASTER_CACHE_TTL = 5 * 60 * 1000;
+
+export const clearMasterDataCache = () => {
+    masterDataCache.manufacturers.data = null;
+    masterDataCache.brands.data = null;
+    masterDataCache.materials.data = null;
+    masterDataCache.channels.data = null;
+};
+
 // Manufacturer APIs
-export const getManufacturers = () => api.get('/api/manufacturers');
-export const createManufacturer = (m) => api.post('/api/manufacturers', m);
-export const updateManufacturer = (id, m) => api.put(`/api/manufacturers/${id}`, m);
-export const deleteManufacturer = (id) => api.delete(`/api/manufacturers/${id}`);
-export const restoreManufacturer = (id) => api.post(`/api/manufacturers/${id}/restore`);
-export const hardDeleteManufacturer = (id) => api.delete(`/api/manufacturers/${id}/hard`);
+export const getManufacturers = async (forceRefresh = false) => {
+    const now = Date.now();
+    if (!forceRefresh && masterDataCache.manufacturers.data && (now - masterDataCache.manufacturers.timestamp < MASTER_CACHE_TTL)) {
+        return masterDataCache.manufacturers.data;
+    }
+    const res = await api.get('/api/manufacturers');
+    masterDataCache.manufacturers = { data: res, timestamp: now };
+    return res;
+};
+export const createManufacturer = async (m) => {
+    masterDataCache.manufacturers.data = null;
+    return api.post('/api/manufacturers', m);
+};
+export const updateManufacturer = async (id, m) => {
+    masterDataCache.manufacturers.data = null;
+    return api.put(`/api/manufacturers/${id}`, m);
+};
+export const deleteManufacturer = async (id) => {
+    masterDataCache.manufacturers.data = null;
+    return api.delete(`/api/manufacturers/${id}`);
+};
+export const restoreManufacturer = async (id) => {
+    masterDataCache.manufacturers.data = null;
+    return api.post(`/api/manufacturers/${id}/restore`);
+};
+export const hardDeleteManufacturer = async (id) => {
+    masterDataCache.manufacturers.data = null;
+    return api.delete(`/api/manufacturers/${id}/hard`);
+};
 export const getCompanyDepartmentsAndEmails = (companyName) => api.get('/api/manufacturers/departments', { params: { companyName } });
 export const getManufacturerScorecard = (id) => api.get(`/api/manufacturers/${id}/scorecard`);
 
 // Brand APIs
-export const getBrands = () => api.get('/api/brands');
-export const createBrand = (brand) => api.post('/api/brands', brand);
-export const updateBrand = (id, brand) => api.put(`/api/brands/${id}`, brand);
-export const deleteBrand = (id) => api.delete(`/api/brands/${id}`);
+export const getBrands = async (forceRefresh = false) => {
+    const now = Date.now();
+    if (!forceRefresh && masterDataCache.brands.data && (now - masterDataCache.brands.timestamp < MASTER_CACHE_TTL)) {
+        return masterDataCache.brands.data;
+    }
+    const res = await api.get('/api/brands');
+    masterDataCache.brands = { data: res, timestamp: now };
+    return res;
+};
+export const createBrand = async (brand) => {
+    masterDataCache.brands.data = null;
+    return api.post('/api/brands', brand);
+};
+export const updateBrand = async (id, brand) => {
+    masterDataCache.brands.data = null;
+    return api.put(`/api/brands/${id}`, brand);
+};
+export const deleteBrand = async (id) => {
+    masterDataCache.brands.data = null;
+    return api.delete(`/api/brands/${id}`);
+};
 
 // Product APIs
 export const getProducts = () => api.get('/api/products');
@@ -569,7 +664,19 @@ export const exportAuditsExcel = (params) => {
 // Master Data APIs (Feature 2, 11)
 export const getMasterTemplates = () => api.get('/api/admin/master-data/templates', { skipToast: true }).catch(() => ({ data: [] }));
 export const saveMasterTemplate = (template) => api.post('/api/admin/master-data/templates', template);
-export const getMasterMaterials = () => api.get('/api/admin/master-data/materials', { skipToast: true }).catch(() => ({ data: [] }));
+export const getMasterMaterials = async (forceRefresh = false) => {
+    const now = Date.now();
+    if (!forceRefresh && masterDataCache.materials.data && (now - masterDataCache.materials.timestamp < MASTER_CACHE_TTL)) {
+        return masterDataCache.materials.data;
+    }
+    try {
+        const res = await api.get('/api/admin/master-data/materials', { skipToast: true });
+        masterDataCache.materials = { data: res, timestamp: now };
+        return res;
+    } catch {
+        return { data: [] };
+    }
+};
 export const getMasterMaterialsSearch = (params = {}) => {
     const queryParams = new URLSearchParams();
     if (params.bomCode) queryParams.append('bomCode', params.bomCode);
@@ -579,18 +686,42 @@ export const getMasterMaterialsSearch = (params = {}) => {
     if (params.manufacturer) queryParams.append('manufacturer', params.manufacturer);
     return api.get(`/api/admin/master-data/materials/search?${queryParams.toString()}`, { skipToast: true }).catch(() => ({ data: [] }));
 };
-export const saveMasterMaterial = (material) => api.post('/api/admin/master-data/materials', material);
+export const saveMasterMaterial = async (material) => {
+    masterDataCache.materials.data = null;
+    return api.post('/api/admin/master-data/materials', material);
+};
 export const checkBomCodeExists = (bomCode) => api.get(`/api/admin/master-data/materials/check-bom-code?bomCode=${bomCode}`);
 export const generateBomCode = (type) => api.get(`/api/admin/master-data/materials/generate-code${type ? `?type=${encodeURIComponent(type)}` : ''}`);
 export const getMasterStickers = () => api.get('/api/admin/master-data/stickers', { skipToast: true }).catch(() => ({ data: [] }));
 export const saveMasterSticker = (sticker) => api.post('/api/admin/master-data/stickers', sticker);
 
 // --- Sales Channels (Distribution Channel Management) ---
-export const getSalesChannels = () => api.get('/api/admin/master-data/sales-channels', { skipToast: true }).catch(() => ({ data: [] }));
+export const getSalesChannels = async (forceRefresh = false) => {
+    const now = Date.now();
+    if (!forceRefresh && masterDataCache.channels.data && (now - masterDataCache.channels.timestamp < MASTER_CACHE_TTL)) {
+        return masterDataCache.channels.data;
+    }
+    try {
+        const res = await api.get('/api/admin/master-data/sales-channels', { skipToast: true });
+        masterDataCache.channels = { data: res, timestamp: now };
+        return res;
+    } catch {
+        return { data: [] };
+    }
+};
 export const getActiveSalesChannels = () => api.get('/api/admin/master-data/sales-channels/active', { skipToast: true }).catch(() => ({ data: [] }));
-export const saveSalesChannel = (channel) => api.post('/api/admin/master-data/sales-channels', channel);
-export const toggleSalesChannel = (id) => api.post(`/api/admin/master-data/sales-channels/${id}/toggle`);
-export const deleteSalesChannel = (id) => api.delete(`/api/admin/master-data/sales-channels/${id}`);
+export const saveSalesChannel = async (channel) => {
+    masterDataCache.channels.data = null;
+    return api.post('/api/admin/master-data/sales-channels', channel);
+};
+export const toggleSalesChannel = async (id) => {
+    masterDataCache.channels.data = null;
+    return api.post(`/api/admin/master-data/sales-channels/${id}/toggle`);
+};
+export const deleteSalesChannel = async (id) => {
+    masterDataCache.channels.data = null;
+    return api.delete(`/api/admin/master-data/sales-channels/${id}`);
+};
 export const getChannelSpecialNotes = (channelId) => api.get(`/api/sales-channels/${channelId}/special-notes`, { skipToast: true }).catch(() => ({ data: { notes: [] } }));
 
 // Master Data Upload (Common)

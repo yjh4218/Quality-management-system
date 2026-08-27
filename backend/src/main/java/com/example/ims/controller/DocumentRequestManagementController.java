@@ -52,7 +52,7 @@ public class DocumentRequestManagementController {
             @RequestParam(required = false) String itemCode,
             @RequestParam(required = false) String productName,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "200") int size,
+            @RequestParam(defaultValue = "50") int size,
             @org.springframework.security.core.annotation.AuthenticationPrincipal org.springframework.security.core.userdetails.UserDetails userDetails
     ) {
         Long manufacturerId = null;

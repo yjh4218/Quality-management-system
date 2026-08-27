@@ -3058,9 +3058,8 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
                 <div className="drawer-body">
                     <form id="product-form" onSubmit={handleSubmit} className="drawer-body-form">
-                        {activeTab === 'spaceRatio' && (
-                            <div className="tab-pane" style={{ gap: '20px' }}>
-                                <div className="card" style={{ borderLeft: '5px solid #6366f1' }}>
+                        <div className="tab-pane" style={{ display: activeTab === 'spaceRatio' ? 'flex' : 'none', gap: '20px' }}>
+                            <div className="card" style={{ borderLeft: '5px solid #6366f1' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                                         <h3 style={{ margin: 0 }}>⚖️ 6개국 포장공간비율 검증 및 규격 최적화 역산</h3>
                                         <div style={{ display: 'flex', gap: '8px' }}>
@@ -3448,11 +3447,9 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                     )}
                                 </div>
                             </div>
-                        )}
 
-                        {activeTab === 'details' && (
-                            <div className="tab-pane">
-                                <div className="card">
+                        <div className="tab-pane" style={{ display: activeTab === 'details' ? 'block' : 'none' }}>
+                            <div className="card">
                                 <h3>
                                     <span style={{ color: '#4a90e2' }}>📝</span> 품목 기본 정보
                                 </h3>
@@ -4578,11 +4575,9 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                 </div>
                             </div>
                                 </div>
-                        )}
 
-                        {activeTab === 'testReports' && (
-                            <div className="tab-pane" style={{ padding: '20px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                        <div className="tab-pane" style={{ display: activeTab === 'testReports' ? 'block' : 'none', padding: '20px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                                     <h3 style={{ margin: 0, fontSize: '18px', color: '#003366', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                         <span>📋</span> 공인기관 성적서 관리
                                     </h3>
@@ -4615,11 +4610,10 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                     )}
                                 </div>
                             </div>
-                        )}
 
-                        {activeTab === 'history' && (
-                    <div>
-                        {history.length === 0 ? <p style={{ padding: '20px', color: '#777' }}>변경 이력이 없습니다.</p> : Object.entries(
+                        <div className="tab-pane" style={{ display: activeTab === 'history' ? 'block' : 'none' }}>
+                            <div>
+                                {history.length === 0 ? <p style={{ padding: '20px', color: '#777' }}>변경 이력이 없습니다.</p> : Object.entries(
                             history.reduce((acc, rec) => {
                                 const timeKey = rec.modifiedAt ? rec.modifiedAt.substring(0, 19).replace('T', ' ') : '알 수 없는 시간';
                                 // [고도화] 상세 사용자 정보 우선 노출, 없으면 기존 modifier 필드 사용
@@ -4707,11 +4701,10 @@ const ProductDrawer = ({ product, onClose, user }) => {
                             </div>
                         ))}
                     </div>
-                        )}
+                </div>
 
-                        {activeTab === 'packaging' && (
-                            <div className="tab-pane" style={{ animation: 'fadeIn 0.3s ease' }}>
-                                {/* 탭 메뉴 헤더 (상단 스크롤 고정 & 모던 세그먼트 알약 UI) */}
+                <div className="tab-pane" style={{ display: activeTab === 'packaging' ? 'block' : 'none', animation: 'fadeIn 0.3s ease' }}>
+                    {/* 탭 메뉴 헤더 (상단 스크롤 고정 & 모던 세그먼트 알약 UI) */}
                                 <div style={{ 
                                     position: 'sticky', 
                                     top: '-30px', 
@@ -7761,7 +7754,6 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                     </div>
                                 )}
                             </div>
-                        )}
                     </form>
                 </div>
 
