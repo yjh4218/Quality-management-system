@@ -191,7 +191,12 @@ const logPerformanceMetrics = (config, response, isError = false) => {
             ? ` (서버: ${serverDurationMs}ms / 네트워크: ${networkDurationMs}ms)` 
             : '';
 
+        const isSilentAuth = config.silentAuthCheck === true || (config.url && config.url.includes('/auth/me'));
         if (isError) {
+            if (isSilentAuth && response?.status === 401) {
+                // 비로그인 초기 접속 시 세션 미존재(401)는 정상적인 게스트 상태이므로 에러 로그를 억제합니다.
+                return;
+            }
             console.warn(`❌ [PERF-ERR] ${method} ${url} | 총 ${totalDurationMs}ms (status: ${response?.status || 'ERR'})`);
         } else if (totalDurationMs >= 1000) {
             console.warn(`⏳ [PERF-SLOW] ${method} ${url} | 총 ${totalDurationMs}ms${breakdown}`);
