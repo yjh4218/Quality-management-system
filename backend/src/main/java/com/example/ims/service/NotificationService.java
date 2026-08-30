@@ -290,6 +290,26 @@ public class NotificationService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * SSE HTTP/2 연결 유지용 하트비트 주기 발송 (20초 주기)
+     * Hugging Face, Cloudflare 등 리버스 프록시의 타임아웃 및 net::ERR_HTTP2_PROTOCOL_ERROR 방지
+     */
+    @org.springframework.scheduling.annotation.Scheduled(fixedRate = 20000)
+    public void sendHeartbeat() {
+        if (sseConnections.isEmpty()) return;
+        List<UserSseConnection> deadConnections = new java.util.ArrayList<>();
+        for (UserSseConnection conn : sseConnections) {
+            try {
+                conn.getEmitter().send(SseEmitter.event().name("ping").data("keepalive"));
+            } catch (Exception e) {
+                deadConnections.add(conn);
+            }
+        }
+        if (!deadConnections.isEmpty()) {
+            sseConnections.removeAll(deadConnections);
+        }
+    }
+
     private static class UsernameNotFoundException extends RuntimeException {
         public UsernameNotFoundException(String msg) {
             super(msg);

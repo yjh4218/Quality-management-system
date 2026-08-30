@@ -32,10 +32,13 @@ public class NotificationController {
      * 알림 실시간 수신용 SSE 스트림 구독 엔드포인트
      */
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter subscribeNotifications(@AuthenticationPrincipal UserDetails userDetails) {
+    public SseEmitter subscribeNotifications(@AuthenticationPrincipal UserDetails userDetails, jakarta.servlet.http.HttpServletResponse response) {
         if (userDetails == null) {
             return null;
         }
+        response.setHeader("X-Accel-Buffering", "no");
+        response.setHeader("Cache-Control", "no-cache, no-transform");
+        response.setHeader("Connection", "keep-alive");
         return notificationService.subscribe(userDetails.getUsername());
     }
 

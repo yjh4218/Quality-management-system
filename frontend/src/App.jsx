@@ -528,7 +528,7 @@ const App = () => {
             });
 
             eventSource.onerror = (err) => {
-                console.error("[SSE] EventSource error, reconnecting in 5s...", err);
+                console.debug("[SSE] EventSource reconnecting in 5s...", err);
                 eventSource.close();
                 reconnectTimeout = setTimeout(() => {
                     if (isLoggedIn && !isClosing) connectSSE();
