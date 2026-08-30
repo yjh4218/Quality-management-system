@@ -345,7 +345,7 @@ public class SystemInitializationService {
                 name, roleKey);
     }
 
-    private void seedAndRepairPageGuides() {
+    private void verifyPageGuidesTable() {
         try {
             Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM system_page_guides", Integer.class);
             log.info(">>>> [SYSTEM INIT] Verified system_page_guides table (current active guides: {}).", count != null ? count : 0);
