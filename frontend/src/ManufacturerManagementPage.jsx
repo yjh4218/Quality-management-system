@@ -4,6 +4,7 @@ import { getManufacturers, deleteManufacturer, getManufacturerScorecard } from '
 import ManufacturerDrawer from './ManufacturerDrawer';
 import { usePermissions } from './usePermissions';
 import { toast } from 'react-toastify';
+import { matchesMultiFieldTokens } from './utils/searchUtils';
 
 /**
  * 제조사 정보 관리 페이지
@@ -43,6 +44,16 @@ const ManufacturerManagementPage = ({ user }) => {
             setLoading(false);
         }
     }, []);
+
+    const filteredRowData = useMemo(() => {
+        if (!quickFilterText) return rowData;
+        return rowData.filter(item =>
+            matchesMultiFieldTokens(
+                [item.name, item.code, item.businessNumber, item.contactPerson, item.email, item.phone, item.category],
+                quickFilterText
+            )
+        );
+    }, [rowData, quickFilterText]);
 
     useEffect(() => {
         fetchManufacturers();
@@ -207,11 +218,11 @@ const ManufacturerManagementPage = ({ user }) => {
             <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
                     <div>
-                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏭 제조사 검색</label>
+                        <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏭 제조사 다중 검색 (쉼표[,] 또는 띄어쓰기 구분)</label>
                         <div style={{ position: 'relative' }}>
                             <input
                                 type="text"
-                                placeholder="명칭, 코드 등으로 빠른 검색..."
+                                placeholder="예: 콜마, 화장품 또는 신우 003"
                                 value={quickFilterText}
                                 onChange={(e) => setQuickFilterText(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && fetchManufacturers()}
@@ -226,7 +237,7 @@ const ManufacturerManagementPage = ({ user }) => {
             {/* 데이터 카드 */}
             <div className="card" style={{ padding: '24px', borderRadius: '16px', flex: 1, display: 'flex', flexDirection: 'column', background: 'white', border: '1px solid #e2e8f0' }}>
                 <div style={{ marginBottom: '15px', fontWeight: '800', fontSize: '14px', color: '#64748b' }}>
-                    등록된 제조사 수: <span style={{ color: '#2563eb' }}>{rowData.length}</span> 건
+                    등록된 제조사 수: <span style={{ color: '#2563eb' }}>{filteredRowData.length}</span> / 전체 {rowData.length}건
                 </div>
                 <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
                     <AgGridReact

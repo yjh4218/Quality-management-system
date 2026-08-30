@@ -1349,10 +1349,10 @@ const OutboxSpecCalculatorPage = ({ user, onNavigate }) => {
 
                 {/* ── 상세 사양 표 & 2D/3D 시뮬레이션 그리드 (2-Column) ── */}
                 {activeProposal && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '16px', alignItems: 'start' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '16px', alignItems: 'stretch' }}>
 
                     {/* 좌측: 상세 사양 테이블 & 2D 배치도 */}
-                    <div style={{ ...qmsCardStyle, padding: '0', overflow: 'hidden' }}>
+                    <div style={{ ...qmsCardStyle, padding: '0', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                       {isAlternativeProposal && (
                         <div style={{ background: '#fef3c7', borderBottom: '1px solid #fde68a', padding: '8px 16px', fontSize: '12px', color: '#92400e', fontWeight: 'bold' }}>
                           ⚠️ 비 5/10단위 대안 — {activeProposal.qty}개 / 1단 {activeProposal.pq}개
@@ -1464,13 +1464,13 @@ const OutboxSpecCalculatorPage = ({ user, onNavigate }) => {
                       </table>
 
                       {/* 2D 1단 평면 배치도 */}
-                      <div style={{ padding: '14px', borderTop: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', justifyContent: 'center' }}>
+                      <div style={{ padding: '14px', borderTop: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', justifyContent: 'center', flex: 1, alignItems: 'center' }}>
                         <Pallet2DTopView pattern={activeProposal.pat} palletW={palletSpec.w} palletD={palletSpec.d} />
                       </div>
                     </div>
 
                     {/* 우측: 3D 시뮬레이터 (QMS 테마) */}
-                    <div style={{ ...qmsCardStyle, padding: '14px 16px' }}>
+                    <div style={{ ...qmsCardStyle, padding: '14px 16px', display: 'flex', flexDirection: 'column' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '6px' }}>
                         <div style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
                           🎮 3D 적재 시뮬레이터
@@ -1478,10 +1478,10 @@ const OutboxSpecCalculatorPage = ({ user, onNavigate }) => {
 
                         <div style={{ display: 'flex', gap: '4px' }}>
                           {[
-                            { id: 'pallet-cross', label: '🏗️ 교차 적재' },
-                            { id: 'pallet-normal', label: '🏗️ 일반 적재' },
+                            ...(useInbox ? [{ id: 'inbox', label: '📥 인박스' }] : []),
                             { id: 'outbox', label: '📦 아웃박스' },
-                            ...(useInbox ? [{ id: 'inbox', label: '📥 인박스' }] : [])
+                            { id: 'pallet-normal', label: '🏗️ 일반 적재' },
+                            { id: 'pallet-cross', label: '🏗️ 교차 적재' }
                           ].map(m => (
                             <button
                               key={m.id}
@@ -1505,7 +1505,7 @@ const OutboxSpecCalculatorPage = ({ user, onNavigate }) => {
                         </div>
                       </div>
 
-                      <div style={{ width: '100%', height: '420px', borderRadius: '8px', overflow: 'hidden', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                      <div style={{ width: '100%', flex: 1, minHeight: '520px', borderRadius: '8px', overflow: 'hidden', background: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }}>
                         <PackagingViewer3D
                           mode={viewerMode}
                           unitBox={unitBox}
@@ -1518,7 +1518,7 @@ const OutboxSpecCalculatorPage = ({ user, onNavigate }) => {
                           popHeight={popHeight}
                           useAirCap={false}
                           palletConfig={viewerPalletConfig}
-                          height={420}
+                          height="100%"
                         />
                       </div>
                       <div style={{ fontSize: '11px', color: '#94a3b8', textAlign: 'center', marginTop: '6px' }}>

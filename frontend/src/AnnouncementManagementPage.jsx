@@ -15,6 +15,7 @@ import {
 import { toast } from 'react-toastify';
 import { usePermissions } from './usePermissions';
 import SaveConfirmModal from './components/SaveConfirmModal';
+import { matchesMultiFieldTokens } from './utils/searchUtils';
 
 /**
  * 전체공지사항 관리 페이지 V2.
@@ -675,6 +676,29 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
         }
     ], [canEditCategories, canDeleteCategories]);
 
+    const filteredAnnouncements = useMemo(() => {
+        if (!quickFilterText || !quickFilterText.trim()) return rowData;
+        return rowData.filter(ann => matchesMultiFieldTokens([
+            ann.announcementNumber,
+            ann.title,
+            ann.content,
+            ann.createdByName,
+            ann.category?.name,
+            ann.targetType,
+            ann.targetCategory,
+            ann.targetManufacturer,
+            ann.targetDepartments
+        ], quickFilterText));
+    }, [rowData, quickFilterText]);
+
+    const filteredCategories = useMemo(() => {
+        if (!categoryQuickFilterText || !categoryQuickFilterText.trim()) return categoriesList;
+        return categoriesList.filter(cat => matchesMultiFieldTokens([
+            cat.name,
+            cat.color
+        ], categoryQuickFilterText));
+    }, [categoriesList, categoryQuickFilterText]);
+
     return (
         <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#f1f5f9', width: '100%' }}>
 
@@ -881,11 +905,10 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
                                 theme="legacy"
                                 rowHeight={54}
                                 rowSelection="multiple"
-                                rowData={rowData}
+                                rowData={filteredAnnouncements}
                                 columnDefs={columnDefs}
                                 pagination={true}
                                 paginationPageSize={50}
-                                quickFilterText={quickFilterText}
                                 animateRows={true}
                             />
                         </div>
@@ -900,11 +923,11 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
                     <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
                             <div>
-                                <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏷️ 분류 검색</label>
+                                <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏷️ 분류 다중 검색 (쉼표[,] 또는 띄어쓰기 구분)</label>
                                 <div style={{ position: 'relative' }}>
                                     <input
                                         type="text"
-                                        placeholder="분류명 검색..."
+                                        placeholder="예: 중요, 긴급"
                                         value={categoryQuickFilterText}
                                         onChange={(e) => setCategoryQuickFilterText(e.target.value)}
                                         onKeyDown={(e) => e.key === 'Enter' && fetchCategories()}
@@ -919,17 +942,16 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
                     {/* Ag-Grid 분류 목록 카드 */}
                     <div className="card" style={{ padding: '24px', borderRadius: '16px', flex: 1, display: 'flex', flexDirection: 'column', background: 'white', border: '1px solid #e2e8f0', minHeight: 0 }}>
                         <div style={{ marginBottom: '15px', fontWeight: '800', fontSize: '14px', color: '#64748b' }}>
-                            등록된 분류 수: <span style={{ color: '#0d9488' }}>{categoriesList.length}</span> 건
+                            등록된 분류 수: <span style={{ color: '#0d9488' }}>{filteredCategories.length}</span> / 전체 {categoriesList.length}건
                         </div>
                         <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
                             <AgGridReact
                                 theme="legacy"
                                 rowHeight={54}
-                                rowData={categoriesList}
+                                rowData={filteredCategories}
                                 columnDefs={categoryColumnDefs}
                                 pagination={true}
                                 paginationPageSize={50}
-                                quickFilterText={categoryQuickFilterText}
                                 animateRows={true}
                             />
                         </div>

@@ -6,10 +6,33 @@ import ProductSearchPopup from './ProductSearchPopup';
 import { usePermissions } from './usePermissions';
 import ProductSpaceRatioCheckModal from './components/ProductSpaceRatioCheckModal';
 import useDateRangePreset from './hooks/useDateRangePreset';
+import { splitSearchTokens, matchesAllTokens } from './utils/searchUtils';
+import GridColorLegendPopover from './components/common/GridColorLegendPopover';
+import GridConditionalFormattingModal from './components/common/GridConditionalFormattingModal';
+
+const PRODUCT_LEGENDS = [
+    { label: '필수 정보 미기입 품목', color: '#b91c1c', bg: '#fff4f4', icon: '⚠️', scope: '행 전체', desc: '브랜드/제조사/재활용등급 등 필수 품질 규격 미기입 품목 (연빨강 배경 경고)' },
+    { label: '대표 마스터 제품 (M)', color: '#004085', bg: '#f4fbff', icon: 'Ⓜ️', scope: '행 전체', desc: '해당 제품 라인의 기준이 되는 대표 마스터 품목 (연파랑 배경 & 볼드 네이비)' },
+    { label: '기획세트 (Planning Set)', color: '#6d28d9', bg: '#f5f3ff', icon: '🎁', scope: '제품구분', desc: '복수 단품들이 결합된 세트 구성 상품' },
+    { label: '단일상품 (Single)', color: '#334155', bg: '#f8fafc', icon: '📦', scope: '제품구분', desc: '개별 단품 규격 상품' },
+    { label: '체적 상태 (확정/가안)', color: '#15803d', bg: '#dcfce7', icon: '🏷️', scope: '체적 상태', desc: '체적 측정 및 스펙 확정(✅ 확정) 또는 등록 임시(📝 가안)' },
+    { label: '포장공간비율 검증 뱃지', color: '#b45309', bg: '#fef3c7', icon: '📐', scope: '비율 검증', desc: '포장공간비율 검증 완료(초록) / 미검증(주황 경고)' }
+];
+
+const PRODUCT_FORMATTABLE_COLUMNS = [
+    { field: 'brandName', headerName: '브랜드' },
+    { field: 'productType', headerName: '제품구분' },
+    { field: 'itemCode', headerName: '품목코드' },
+    { field: 'productName', headerName: '제품명(한글)' },
+    { field: 'englishProductName', headerName: '제품명(영문)' },
+    { field: 'manufacturerName', headerName: '제조사' },
+    { field: 'shelfLifeMonths', headerName: '사용기한(개월)' },
+    { field: 'dimensionsStatus', headerName: '체적 상태' }
+];
 
 const ProductListPage = ({ user, navigationData, onNavigated }) => {
     const defaultPageSize = 100;
-    const { canView, canEdit: canEditProduct, hasPerm } = usePermissions(user);
+    const { canView, canEdit: canEditProduct, hasPerm, isAdmin } = usePermissions(user);
     const gridRef = useRef(null);
     const [rowData, setRowData] = useState([]);
     const [selectedProduct, setSelectedProduct] = useState(null);
@@ -35,6 +58,14 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
     const [exporting, setExporting] = useState(false);
     const [checkProduct, setCheckProduct] = useState(null);
     const [checkModalOpen, setCheckModalOpen] = useState(false);
+    const [isFormattingModalOpen, setIsFormattingModalOpen] = useState(false);
+    const [customRules, setCustomRules] = useState(() => {
+        try {
+            return JSON.parse(localStorage.getItem('qms_grid_rules_product_list') || '[]');
+        } catch {
+            return [];
+        }
+    });
 
     // 채널 선택 필터
     const [availableChannels, setAvailableChannels] = useState([]);
@@ -110,7 +141,23 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
     const fetchProducts = async (pageNum = 0) => {
         setLoading(true);
         try {
-            const response = await api.searchProducts({ ...searchFields, channelNames: selectedChannels, page: pageNum, size: defaultPageSize });
+            const itemCodeTokens = splitSearchTokens(searchFields.itemCode);
+            const nameTokens = splitSearchTokens(searchFields.productName);
+            const brandTokens = splitSearchTokens(searchFields.brand);
+            const mfrTokens = splitSearchTokens(searchFields.manufacturer);
+
+            const queryParams = {
+                ...searchFields,
+                itemCode: itemCodeTokens.length > 0 ? itemCodeTokens[0] : undefined,
+                productName: nameTokens.length > 0 ? nameTokens[0] : undefined,
+                brand: brandTokens.length > 0 ? brandTokens[0] : undefined,
+                manufacturer: mfrTokens.length > 0 ? mfrTokens[0] : undefined,
+                ingredients: searchFields.ingredients ? searchFields.ingredients.trim() : undefined,
+                channelNames: selectedChannels,
+                page: pageNum,
+                size: defaultPageSize
+            };
+            const response = await api.searchProducts(queryParams);
             setRowData(response.data.content || []);
             setTotalPages(response.data.totalPages || 1);
             setPage(pageNum);
@@ -133,8 +180,26 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
         if (showOnlyPlanningSet) {
             list = list.filter(p => p.isPlanningSet || p.productType === '기획세트');
         }
+
+        // 다중 키워드(쉼표/공백 구분 AND 조건) 정밀 필터링
+        if (searchFields.itemCode?.trim()) {
+            list = list.filter(p => matchesAllTokens(p.itemCode, searchFields.itemCode));
+        }
+        if (searchFields.productName?.trim()) {
+            list = list.filter(p => matchesAllTokens(p.productName, searchFields.productName));
+        }
+        if (searchFields.brand?.trim()) {
+            list = list.filter(p => matchesAllTokens(p.brand, searchFields.brand));
+        }
+        if (searchFields.manufacturer?.trim()) {
+            list = list.filter(p => matchesAllTokens(p.manufacturer, searchFields.manufacturer));
+        }
+        if (searchFields.ingredients?.trim()) {
+            list = list.filter(p => matchesAllTokens(p.ingredients, searchFields.ingredients));
+        }
+
         return list;
-    }, [rowData, showOnlyMaster, showOnlyPlanningSet]);
+    }, [rowData, showOnlyMaster, showOnlyPlanningSet, searchFields]);
 
     const handleExportExcel = async () => {
         if (!rowData || rowData.length === 0) {
@@ -162,14 +227,33 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
         setIsDrawerOpen(true);
     };
 
+    const getCellStyle = (field) => (params) => {
+        if (!customRules || customRules.length === 0 || !params.value) return null;
+        const matchingRule = customRules.find(rule => {
+            if (rule.field !== field) return false;
+            const cellVal = String(params.value).toLowerCase();
+            const ruleVal = String(rule.value).toLowerCase();
+            return rule.operator === 'CONTAINS' ? cellVal.includes(ruleVal) : cellVal === ruleVal;
+        });
+        if (matchingRule) {
+            return {
+                backgroundColor: matchingRule.bg,
+                color: matchingRule.text,
+                fontWeight: '600'
+            };
+        }
+        return null;
+    };
+
     const colDefs = useMemo(() => [
-        { field: "brandName", headerName: "브랜드", filter: true, width: 140, pinned: 'left' },
+        { field: "brandName", headerName: "브랜드", filter: true, width: 140, pinned: 'left', cellStyle: getCellStyle('brandName') },
         {
             field: "productType",
             headerName: "제품구분",
             filter: true,
             width: 120,
             pinned: 'left',
+            cellStyle: getCellStyle('productType'),
             valueGetter: (params) => {
                 if (params.data?.productType) return params.data.productType;
                 return params.data?.isPlanningSet ? '기획세트' : '단품';
@@ -181,6 +265,7 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
             filter: true,
             width: 140,
             pinned: 'left',
+            cellStyle: getCellStyle('itemCode'),
             cellRenderer: p => (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span>{p.value}</span>
@@ -207,11 +292,12 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
             headerName: "제품명(한글)",
             filter: true,
             width: 250,
-            pinned: 'left'
+            pinned: 'left',
+            cellStyle: getCellStyle('productName')
         },
-        { field: "englishProductName", headerName: "제품명(영문)", filter: true, flex: 1, minWidth: 250 },
-        { field: "manufacturerName", headerName: "제조사", filter: true, width: 130 },
-        { field: "shelfLifeMonths", headerName: "사용기한(개월)", width: 120, filter: true, valueFormatter: p => p.value ? p.value + '개월' : '' },
+        { field: "englishProductName", headerName: "제품명(영문)", filter: true, flex: 1, minWidth: 250, cellStyle: getCellStyle('englishProductName') },
+        { field: "manufacturerName", headerName: "제조사", filter: true, width: 130, cellStyle: getCellStyle('manufacturerName') },
+        { field: "shelfLifeMonths", headerName: "사용기한(개월)", width: 120, filter: true, cellStyle: getCellStyle('shelfLifeMonths'), valueFormatter: p => p.value ? p.value + '개월' : '' },
         {
             field: "ingredients",
             headerName: "전성분",
@@ -222,7 +308,7 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
         {
             headerName: '제품 체적',
             children: [
-                { field: "dimensionsStatus", headerName: "상태", width: 110, cellRenderer: p => p.value === '확정' ? '✅ 확정' : '📝 가안' },
+                { field: "dimensionsStatus", headerName: "상태", width: 110, cellStyle: getCellStyle('dimensionsStatus'), cellRenderer: p => p.value === '확정' ? '✅ 확정' : '📝 가안' },
                 { field: "width", headerName: "W", width: 90, valueFormatter: p => p.value != null ? Number(p.value).toLocaleString() : '' },
                 { field: "length", headerName: "L", width: 90, valueFormatter: p => p.value != null ? Number(p.value).toLocaleString() : '' },
                 { field: "height", headerName: "H", width: 90, valueFormatter: p => p.value != null ? Number(p.value).toLocaleString() : '' },
@@ -304,7 +390,7 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
             return false;
         }
         return true;
-    }), [canViewPackaging]);
+    }), [canViewPackaging, customRules]);
 
     const getRowStyle = (params) => {
         const p = params.data;
@@ -430,6 +516,23 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
                                 style={{ fontSize: '14px', padding: '10px 20px', backgroundColor: '#fff', color: '#107c41', borderColor: '#107c41', opacity: exporting ? 0.7 : 1 }}
                             >
                                 {exporting ? '⏳ 다운로드 중...' : '📊 결과 다운로드'}
+                            </button>
+                        )}
+                        <GridColorLegendPopover 
+                            title="제품코드 마스터" 
+                            legends={PRODUCT_LEGENDS} 
+                            customRules={customRules}
+                            formattableColumns={PRODUCT_FORMATTABLE_COLUMNS}
+                        />
+                        {isAdmin && (
+                            <button
+                                type="button"
+                                className="outline"
+                                onClick={() => setIsFormattingModalOpen(true)}
+                                title="관리자 맞춤형 서식 규칙 설정"
+                                style={{ fontSize: '13px', padding: '8px 12px', borderColor: '#94a3b8', color: '#334155' }}
+                            >
+                                ⚙️ 서식 설정
                             </button>
                         )}
                         <button
@@ -724,6 +827,20 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
                     }}
                 />
             )}
+
+            <GridConditionalFormattingModal
+                isOpen={isFormattingModalOpen}
+                onClose={() => setIsFormattingModalOpen(false)}
+                columns={PRODUCT_FORMATTABLE_COLUMNS}
+                rules={customRules}
+                legends={PRODUCT_LEGENDS}
+                onSave={(rules) => {
+                    setCustomRules(rules);
+                    if (gridRef.current?.api) {
+                        gridRef.current.api.redrawRows();
+                    }
+                }}
+            />
         </div>
     );
 };

@@ -3,6 +3,8 @@ import { AgGridReact } from 'ag-grid-react';
 import { getPageGuides, savePageGuide, deletePageGuide } from './api';
 import { toast } from 'react-toastify';
 import { usePermissions } from './usePermissions';
+import { matchesMultiFieldTokens } from './utils/searchUtils';
+import { pageGuides as defaultPageGuides } from './guides/pageGuides';
 
 /**
  * 사용자 가이드 관리 페이지 (관리자 전용)
@@ -18,6 +20,7 @@ const GuideManagementPage = ({ user }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [loading, setLoading] = useState(true);
     const [quickFilterText, setQuickFilterText] = useState('');
+    const [syncing, setSyncing] = useState(false);
 
     useEffect(() => {
         fetchGuides();
@@ -32,6 +35,40 @@ const GuideManagementPage = ({ user }) => {
             toast.error("가이드 목록 로딩 실패");
         } finally {
             setLoading(false);
+        }
+    };
+
+    // 쉼표(,) 및 공백 기반 다중 키워드 AND 검색 필터링
+    const filteredGuides = useMemo(() => {
+        if (!quickFilterText || !quickFilterText.trim()) return guides;
+        return guides.filter(g => 
+            matchesMultiFieldTokens([g.pageKey, g.title, g.content, g.sectionsJson], quickFilterText)
+        );
+    }, [guides, quickFilterText]);
+
+    // 39개 시스템 표준 가이드 일괄 동기화/복원
+    const handleSyncAllStandardGuides = async () => {
+        if (!window.confirm("39개 시스템 표준 가이드 데이터를 DB와 일괄 동기화(추가/업데이트)하시겠습니까?")) return;
+        try {
+            setSyncing(true);
+            let count = 0;
+            for (const [pageKey, data] of Object.entries(defaultPageGuides)) {
+                const dataToSave = {
+                    pageKey,
+                    title: data.title,
+                    sectionsJson: JSON.stringify(data.sections),
+                    content: data.sections.map(s => `${s.subtitle}: ${s.content}`).join('\n\n')
+                };
+                await savePageGuide(dataToSave);
+                count++;
+            }
+            toast.success(`총 ${count}개 표준 가이드가 성공적으로 동기화되었습니다!`);
+            fetchGuides();
+        } catch (error) {
+            console.error("Standard guides sync failed:", error);
+            toast.error("표준 가이드 동기화 중 오류가 발생했습니다.");
+        } finally {
+            setSyncing(false);
         }
     };
 
@@ -226,21 +263,44 @@ const GuideManagementPage = ({ user }) => {
 
                     <div style={{ display: 'flex', gap: '8px' }}>
                         {canEditGuide && !isEditing && (
-                            <button 
-                                className="primary" 
-                                onClick={handleCreateNew} 
-                                style={{ 
-                                    padding: '10px 24px', 
-                                    borderRadius: '10px', 
-                                    fontWeight: '800', 
-                                    backgroundColor: '#2563eb',
-                                    color: '#fff',
-                                    border: 'none',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                ➕ 신규 가이드 등록
-                            </button>
+                            <>
+                                <button 
+                                    className="secondary" 
+                                    onClick={handleSyncAllStandardGuides}
+                                    disabled={syncing}
+                                    style={{ 
+                                        padding: '10px 18px', 
+                                        borderRadius: '10px', 
+                                        fontWeight: '800', 
+                                        backgroundColor: '#eff6ff',
+                                        color: '#2563eb',
+                                        border: '1px solid #bfdbfe',
+                                        cursor: syncing ? 'wait' : 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px'
+                                    }}
+                                    title="39개 화면 표준 가이드를 DB에 일괄 등록/동기화합니다."
+                                >
+                                    <span>{syncing ? '⏳' : '🔄'}</span>
+                                    <span>{syncing ? '동기화 진행 중...' : '표준 가이드 39종 일괄 동기화'}</span>
+                                </button>
+                                <button 
+                                    className="primary" 
+                                    onClick={handleCreateNew} 
+                                    style={{ 
+                                        padding: '10px 24px', 
+                                        borderRadius: '10px', 
+                                        fontWeight: '800', 
+                                        backgroundColor: '#2563eb',
+                                        color: '#fff',
+                                        border: 'none',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    ➕ 신규 가이드 등록
+                                </button>
+                            </>
                         )}
                     </div>
                 </div>
@@ -308,13 +368,15 @@ const GuideManagementPage = ({ user }) => {
                 <>
                     {/* 검색 필터 그리드 */}
                     <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
                             <div>
-                                <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🔍 가이드 검색</label>
+                                <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>
+                                    🔍 가이드 다중 검색 (쉼표[,] 또는 띄어쓰기)
+                                </label>
                                 <div style={{ position: 'relative' }}>
                                     <input
                                         type="text"
-                                        placeholder="가이드 제목, 키워드 검색..."
+                                        placeholder="가이드 제목, 페이지 키, 내용 다중 검색..."
                                         value={quickFilterText}
                                         onChange={(e) => setQuickFilterText(e.target.value)}
                                         style={{ width: '100%', padding: '10px 40px 10px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', fontWeight: '600' }}
@@ -327,18 +389,24 @@ const GuideManagementPage = ({ user }) => {
 
                     {/* 데이터 카드 */}
                     <div className="card" style={{ padding: '24px', borderRadius: '16px', flex: 1, display: 'flex', flexDirection: 'column', background: 'white', border: '1px solid #e2e8f0' }}>
-                        <div style={{ marginBottom: '15px', fontWeight: '800', fontSize: '14px', color: '#64748b' }}>
-                            등록된 가이드 수: <span style={{ color: '#2563eb' }}>{guides.length}</span> 건
+                        <div style={{ marginBottom: '15px', fontWeight: '800', fontSize: '14px', color: '#64748b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                등록된 가이드 수: <span style={{ color: '#2563eb' }}>{filteredGuides.length}</span> / {guides.length} 건
+                            </div>
+                            {quickFilterText && (
+                                <span style={{ fontSize: '12px', color: '#2563eb', background: '#eff6ff', padding: '2px 8px', borderRadius: '6px' }}>
+                                    검색 필터 적용 중
+                                </span>
+                            )}
                         </div>
                         <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
                             <AgGridReact
                                 theme="legacy"
                                 rowHeight={54}
-                                rowData={guides}
+                                rowData={filteredGuides}
                                 columnDefs={columnDefs}
                                 pagination={true}
                                 paginationPageSize={50}
-                                quickFilterText={quickFilterText}
                                 animateRows={true}
                                 onRowDoubleClicked={(p) => handleEdit(p.data)}
                             />

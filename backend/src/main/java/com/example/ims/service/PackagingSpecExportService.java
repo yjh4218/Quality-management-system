@@ -1262,12 +1262,26 @@ public class PackagingSpecExportService {
     }
 
     /**
-     * Reads the physical image file and renders annotationsJson (shapes/texts) onto it using Java2D Graphics2D
+     * Reads the physical image file and renders annotationsJson (shapes/texts) onto it using Java2D Graphics2D.
+     * Preserves high resolution and prevents low-res downscaling for crystal clear Excel printing.
      */
     private byte[] getAnnotatedImageBytes(com.example.ims.entity.PackagingMethodImage imgEntity) {
         java.io.File imgFile = findLocalFile(imgEntity.getImageUrl(), imgEntity.getImagePath());
-        BufferedImage origImg = null;
 
+        // 1. 프론트엔드에서 이미 뷰포트 확대와 주석이 초고화질(Ultra-HD)로 합성되어 업로드된 파일인 경우
+        // 파일명이 'annotated_'로 시작하거나 로컬 파일이 존재하면 원본 화질을 100% 그대로 반환하여 엑셀에 선명하게 삽입!
+        if (imgFile != null && imgFile.exists()) {
+            String fileName = imgFile.getName().toLowerCase();
+            if (fileName.startsWith("annotated_") || fileName.startsWith("pkg_method_")) {
+                try {
+                    return java.nio.file.Files.readAllBytes(imgFile.toPath());
+                } catch (Exception e) {
+                    log.warn("Failed to read raw image file: " + imgFile.getAbsolutePath(), e);
+                }
+            }
+        }
+
+        BufferedImage origImg = null;
         if (imgFile != null && imgFile.exists()) {
             try {
                 origImg = ImageIO.read(imgFile);
@@ -1296,7 +1310,7 @@ public class PackagingSpecExportService {
             String annotationsJson = imgEntity.getAnnotationsJson();
             if (annotationsJson == null || annotationsJson.isBlank()) {
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                ImageIO.write(origImg, "jpg", baos);
+                ImageIO.write(origImg, "png", baos);
                 return baos.toByteArray();
             }
 
@@ -1307,14 +1321,16 @@ public class PackagingSpecExportService {
             Graphics2D g2d = annotatedImg.createGraphics();
             g2d.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
             g2d.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            g2d.setRenderingHint(java.awt.RenderingHints.KEY_RENDERING, java.awt.RenderingHints.VALUE_RENDER_QUALITY);
+            g2d.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC);
 
             g2d.drawImage(origImg, 0, 0, null);
 
             // Fabric.js editor canvas resolution in frontend is 780x520
             double editorWidth = 780.0;
             double editorHeight = 520.0;
-            double scaleX = imgWidth / editorWidth;
-            double scaleY = imgHeight / editorHeight;
+            double scaleX = (double) imgWidth / editorWidth;
+            double scaleY = (double) imgHeight / editorHeight;
 
             ObjectMapper mapper = new ObjectMapper();
             JsonNode root = mapper.readTree(annotationsJson);
@@ -1350,7 +1366,7 @@ public class PackagingSpecExportService {
                     } else if ("i-text".equals(type) || "text".equals(type)) {
                         String text = obj.path("text").asText("");
                         int fontSize = (int) (obj.path("fontSize").asInt(16) * scaleX);
-                        g2d.setFont(getSafeFont(java.awt.Font.BOLD, Math.max(12, fontSize)));
+                        g2d.setFont(getSafeFont(java.awt.Font.BOLD, Math.max(14, fontSize)));
                         g2d.setColor(fillColor);
                         g2d.drawString(text, (int) left, (int) (top + fontSize));
                     }
@@ -1358,23 +1374,29 @@ public class PackagingSpecExportService {
             }
             g2d.dispose();
 
-            // Downscale to fit target excel cell bound while preserving aspect ratio (Max 550x300)
-            int maxTargetWidth = 550;
-            int maxTargetHeight = 300;
+            // High-resolution output (Full HD/4K preservation up to 1920x1280)
+            int maxTargetWidth = 1920;
+            int maxTargetHeight = 1280;
             double scale = Math.min((double) maxTargetWidth / imgWidth, (double) maxTargetHeight / imgHeight);
-            if (scale > 1.0) scale = 1.0; // Don't upscale small images
+            if (scale >= 1.0) {
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                ImageIO.write(annotatedImg, "png", baos);
+                return baos.toByteArray();
+            }
 
             int scaledW = (int) (imgWidth * scale);
             int scaledH = (int) (imgHeight * scale);
 
             BufferedImage finalImg = new BufferedImage(scaledW, scaledH, BufferedImage.TYPE_INT_RGB);
             Graphics2D gFinal = finalImg.createGraphics();
-            gFinal.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            gFinal.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+            gFinal.setRenderingHint(java.awt.RenderingHints.KEY_RENDERING, java.awt.RenderingHints.VALUE_RENDER_QUALITY);
+            gFinal.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
             gFinal.drawImage(annotatedImg, 0, 0, scaledW, scaledH, null);
             gFinal.dispose();
 
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            ImageIO.write(finalImg, "jpg", baos);
+            ImageIO.write(finalImg, "png", baos);
             return baos.toByteArray();
         } catch (Exception e) {
             log.error("Failed to render annotations on image for " + imgEntity.getId(), e);

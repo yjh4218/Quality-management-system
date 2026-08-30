@@ -6,6 +6,30 @@ import ProductSearchPopup from './ProductSearchPopup';
 import * as api from './api';
 import { usePermissions } from './usePermissions';
 import useDateRangePreset from './hooks/useDateRangePreset';
+import GridColorLegendPopover from './components/common/GridColorLegendPopover';
+import GridConditionalFormattingModal from './components/common/GridConditionalFormattingModal';
+
+const PROD_AUDIT_LEGENDS = [
+    {
+        title: '생산 실사(사진 감리) 진행 상태',
+        items: [
+            { label: '승인됨 (APPROVED)', desc: '품질팀 최종 검토 및 승인 완료된 감리 건', bg: '#f6ffed', text: '#389e0d', border: '#b7eb8f' },
+            { label: '제출됨 (SUBMITTED)', desc: '제조사 등록 완료 후 품질팀 검토 대기 건', bg: '#e6f7ff', text: '#096dd9', border: '#91d5ff' },
+            { label: '반려됨 (REJECTED)', desc: '품질팀 검토 결과 보완/재촬영 요구 건', bg: '#fff1f0', text: '#cf1322', border: '#ffa39e' },
+            { label: '미진행 (PENDING)', desc: '신제품 생산 후 사진 감리 미등록 대상 품목', bg: '#fffbe6', text: '#d48806', border: '#ffe58f' }
+        ]
+    }
+];
+
+const PROD_AUDIT_FORMATTABLE_COLUMNS = [
+    { field: 'status', headerName: '진행상태' },
+    { field: 'itemCode', headerName: '품목코드' },
+    { field: 'productName', headerName: '제품명' },
+    { field: 'manufacturerName', headerName: '제조사' },
+    { field: 'isDisclosed', headerName: '제조사 공개' },
+    { field: 'productionDate', headerName: '생산일자' },
+    { field: 'uploadDate', headerName: '사진 업로드일' }
+];
 
 /**
  * 신제품 생산감리(사진감리) 메인 화면 컴포넌트입니다.
@@ -17,8 +41,47 @@ import useDateRangePreset from './hooks/useDateRangePreset';
  */
 const ProductionAuditPage = ({ user, navigationData, onNavigated }) => {
     const { canView, canEdit } = usePermissions(user);
+    const isAdmin = user?.roles?.some(r => r.authority?.includes('ADMIN')) || user?.role === 'ADMIN';
     const isManufacturer = user?.roles?.some(r => r.authority?.includes('MANUFACTURER'));
     const canRegister = canEdit('qualityPhotoAudit');
+    const [isFormattingModalOpen, setIsFormattingModalOpen] = useState(false);
+    const [customRules, setCustomRules] = useState(() => {
+        try {
+            const saved = localStorage.getItem('prod_audit_grid_custom_rules');
+            return saved ? JSON.parse(saved) : [];
+        } catch {
+            return [];
+        }
+    });
+
+    const handleSaveCustomRules = (newRules) => {
+        setCustomRules(newRules);
+        localStorage.setItem('prod_audit_grid_custom_rules', JSON.stringify(newRules));
+    };
+
+    const getCellStyle = (field, value, fallbackStyle = null) => {
+        if (!customRules || customRules.length === 0) return fallbackStyle;
+        const matchedRule = customRules.find(rule => {
+            if (rule.field !== field) return false;
+            const strVal = String(value ?? '').trim().toLowerCase();
+            const targetVal = String(rule.value ?? '').trim().toLowerCase();
+            if (rule.operator === 'equals') return strVal === targetVal;
+            if (rule.operator === 'contains') return strVal.includes(targetVal);
+            if (rule.operator === 'startsWith') return strVal.startsWith(targetVal);
+            if (rule.operator === 'endsWith') return strVal.endsWith(targetVal);
+            return false;
+        });
+
+        if (matchedRule) {
+            return {
+                ...(fallbackStyle || {}),
+                backgroundColor: matchedRule.bg || matchedRule.bgColor,
+                color: matchedRule.text || matchedRule.textColor,
+                fontWeight: 'bold'
+            };
+        }
+        return fallbackStyle;
+    };
     const gridRef = useRef(null);
     const [rowData, setRowData] = useState([]);
     const [selectedAudit, setSelectedAudit] = useState(null);
@@ -255,6 +318,7 @@ const ProductionAuditPage = ({ user, navigationData, onNavigated }) => {
             headerName: "진행상태", 
             width: 120,
             pinned: 'left',
+            cellStyle: p => getCellStyle('status', p.value),
             cellRenderer: p => {
                 const statusMap = {
                     'SUBMITTED': { label: '제출됨', class: 'info' },
@@ -266,14 +330,15 @@ const ProductionAuditPage = ({ user, navigationData, onNavigated }) => {
                 return <span className={`badge ${status.class}`} style={{ fontSize: '11px' }}>{status.label}</span>;
             }
         },
-        { field: "itemCode", headerName: "품목코드", filter: true, width: 140, pinned: 'left' },
-        { field: "productName", headerName: "제품명", filter: true, width: 250, pinned: 'left' },
-        { field: "manufacturerName", headerName: "제조사", filter: true, width: 150 },
+        { field: "itemCode", headerName: "품목코드", filter: true, width: 140, pinned: 'left', cellStyle: p => getCellStyle('itemCode', p.value) },
+        { field: "productName", headerName: "제품명", filter: true, width: 250, pinned: 'left', cellStyle: p => getCellStyle('productName', p.value) },
+        { field: "manufacturerName", headerName: "제조사", filter: true, width: 150, cellStyle: p => getCellStyle('manufacturerName', p.value) },
         { 
             field: "isDisclosed", 
             headerName: "제조사 공개", 
             width: 110,
             hide: isManufacturer,
+            cellStyle: p => getCellStyle('isDisclosed', p.value ? '공개' : '비공개'),
             cellRenderer: p => (
                 <span style={{ 
                     color: p.value ? '#38a169' : '#e53e3e', 
@@ -292,17 +357,19 @@ const ProductionAuditPage = ({ user, navigationData, onNavigated }) => {
             headerName: "생산일자", 
             width: 130, 
             filter: 'agDateColumnFilter',
-            valueFormatter: p => p.value || '-'
+            valueFormatter: p => p.value || '-',
+            cellStyle: p => getCellStyle('productionDate', p.value)
         },
         { 
             field: "uploadDate", 
             headerName: "사진 업로드일", 
             width: 160, 
             filter: 'agDateColumnFilter',
-            valueFormatter: p => p.value ? new Date(p.value).toLocaleString() : '-'
+            valueFormatter: p => p.value ? new Date(p.value).toLocaleString() : '-',
+            cellStyle: p => getCellStyle('uploadDate', p.value)
         },
         { field: "rejectionReason", headerName: "승인/반려 의견", flex: 1, minWidth: 200 }
-    ], [viewMode, isManufacturer]);
+    ], [viewMode, isManufacturer, customRules]);
 
     return (
         <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#f1f5f9' }}>
@@ -428,7 +495,41 @@ const ProductionAuditPage = ({ user, navigationData, onNavigated }) => {
                             </button>
                         </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        {/* 🎨 색상 범례 팝오버 */}
+                        <GridColorLegendPopover 
+                            legends={PROD_AUDIT_LEGENDS}
+                            customRules={customRules}
+                            onDeleteCustomRule={(idx) => {
+                                handleSaveCustomRules(customRules.filter((_, i) => i !== idx));
+                            }}
+                        />
+
+                        {/* ⚙️ 조건부 서식 설정 (관리자 전용) */}
+                        {isAdmin && (
+                            <button
+                                type="button"
+                                className="outline"
+                                onClick={() => setIsFormattingModalOpen(true)}
+                                style={{
+                                    fontSize: '13px',
+                                    padding: '8px 14px',
+                                    backgroundColor: '#fff',
+                                    color: '#475569',
+                                    borderColor: '#cbd5e1',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    fontWeight: 'bold',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer'
+                                }}
+                                title="그리드 셀 조건부 서식 규칙 추가/관리"
+                            >
+                                ⚙️ 서식 설정
+                            </button>
+                        )}
+
                         <button 
                             className="outline" 
                             onClick={handleExportExcel}
@@ -599,6 +700,16 @@ const ProductionAuditPage = ({ user, navigationData, onNavigated }) => {
                     }}
                 />
             )}
+
+            {/* 조건부 서식 설정 모달 (관리자 전용) */}
+            <GridConditionalFormattingModal
+                isOpen={isFormattingModalOpen}
+                onClose={() => setIsFormattingModalOpen(false)}
+                columns={PROD_AUDIT_FORMATTABLE_COLUMNS}
+                rules={customRules}
+                legends={PROD_AUDIT_LEGENDS}
+                onSave={handleSaveCustomRules}
+            />
         </div>
     );
 };

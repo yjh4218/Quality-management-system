@@ -2,9 +2,73 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { getAdminLogs, restoreProduct, hardDeleteProduct, restoreManufacturer, hardDeleteManufacturer, rollbackAuditLog } from './api';
 import { usePermissions } from './usePermissions';
+import GridColorLegendPopover from './components/common/GridColorLegendPopover';
+import GridConditionalFormattingModal from './components/common/GridConditionalFormattingModal';
+
+const LOG_LEGENDS = [
+    {
+        title: '감사 로그 액션 기본 규칙',
+        items: [
+            { label: 'CREATE (신규 생성)', desc: '신규 품목/제조사/클레임/BOM 등록 이력', bg: '#f6ffed', text: '#389e0d', border: '#b7eb8f' },
+            { label: 'UPDATE (정보 수정)', desc: '기존 데이터 변경 및 주석 저장 이력', bg: '#e6f7ff', text: '#096dd9', border: '#91d5ff' },
+            { label: 'DELETE (데이터 삭제)', desc: '데이터 삭제 (휴지통 이동) 이력', bg: '#fff1f0', text: '#cf1322', border: '#ffa39e' },
+            { label: 'EXPORT (엑셀 다운로드)', desc: '보고서 및 데이터 엑셀 내보내기 이력', bg: '#f9f0ff', text: '#722ed1', border: '#d3adf7' },
+            { label: 'LOGIN / LOGOUT', desc: '사용자 로그인 및 로그아웃 접속 이력', bg: '#e6fffb', text: '#08979c', border: '#87e8de' }
+        ]
+    }
+];
+
+const LOG_FORMATTABLE_COLUMNS = [
+    { field: 'modifierName', headerName: '변경자 성함' },
+    { field: 'modifierUsername', headerName: 'ID (로그인)' },
+    { field: 'modifierCompany', headerName: '소속(업체명)' },
+    { field: 'entityType', headerName: '유형' },
+    { field: 'action', headerName: '액션' },
+    { field: 'entityId', headerName: '대상 ID' },
+    { field: 'ipAddress', headerName: '접속 IP' }
+];
 
 const LogManagementPage = ({ user }) => {
     const { canEdit, canDelete } = usePermissions(user);
+    const isAdmin = user?.roles?.some(r => r.authority?.includes('ADMIN')) || user?.role === 'ADMIN';
+    const [isFormattingModalOpen, setIsFormattingModalOpen] = useState(false);
+    const [customRules, setCustomRules] = useState(() => {
+        try {
+            const saved = localStorage.getItem('log_grid_custom_rules');
+            return saved ? JSON.parse(saved) : [];
+        } catch {
+            return [];
+        }
+    });
+
+    const handleSaveCustomRules = (newRules) => {
+        setCustomRules(newRules);
+        localStorage.setItem('log_grid_custom_rules', JSON.stringify(newRules));
+    };
+
+    const getCellStyle = (field, value, fallbackStyle = null) => {
+        if (!customRules || customRules.length === 0) return fallbackStyle;
+        const matchedRule = customRules.find(rule => {
+            if (rule.field !== field) return false;
+            const strVal = String(value ?? '').trim().toLowerCase();
+            const targetVal = String(rule.value ?? '').trim().toLowerCase();
+            if (rule.operator === 'equals') return strVal === targetVal;
+            if (rule.operator === 'contains') return strVal.includes(targetVal);
+            if (rule.operator === 'startsWith') return strVal.startsWith(targetVal);
+            if (rule.operator === 'endsWith') return strVal.endsWith(targetVal);
+            return false;
+        });
+
+        if (matchedRule) {
+            return {
+                ...(fallbackStyle || {}),
+                backgroundColor: matchedRule.bg || matchedRule.bgColor,
+                color: matchedRule.text || matchedRule.textColor,
+                fontWeight: 'bold'
+            };
+        }
+        return fallbackStyle;
+    };
     const [rowData, setRowData] = useState([]);
     const [selectedLog, setSelectedLog] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -141,31 +205,37 @@ const LogManagementPage = ({ user }) => {
 
     const colDefs = useMemo(() => [
         { field: "modifiedAt", headerName: "변경 일시", width: 180, valueFormatter: p => p.value?.replace('T', ' ') },
-        { field: "modifierName", headerName: "변경자 성함", width: 120 },
-        { field: "modifierUsername", headerName: "ID (로그인)", width: 120 },
-        { field: "modifierCompany", headerName: "소속(업체명)", width: 150 },
+        { field: "modifierName", headerName: "변경자 성함", width: 120, cellStyle: p => getCellStyle('modifierName', p.value) },
+        { field: "modifierUsername", headerName: "ID (로그인)", width: 120, cellStyle: p => getCellStyle('modifierUsername', p.value) },
+        { field: "modifierCompany", headerName: "소속(업체명)", width: 150, cellStyle: p => getCellStyle('modifierCompany', p.value) },
         {
             field: "entityType", headerName: "유형", width: 110, cellStyle: p => {
-                if (p.value === 'PRODUCT') return { color: '#003366', fontWeight: 'bold' };
-                if (p.value === 'CLAIM') return { color: '#e67e22', fontWeight: 'bold' };
-                if (p.value === 'INBOUND') return { color: '#27ae60', fontWeight: 'bold' };
-                if (p.value === 'MANUFACTURER') return { color: '#2c3e50', fontWeight: 'bold' };
-                if (p.value === 'BRAND') return { color: '#8e44ad', fontWeight: 'bold' };
-                if (p.value === 'ACCESS') return { color: '#3498db', fontWeight: 'bold' };
-                if (p.value === 'VIEW') return { color: '#1abc9c', fontWeight: 'bold' };
-                return null;
+                const fallback = (() => {
+                    if (p.value === 'PRODUCT') return { color: '#003366', fontWeight: 'bold' };
+                    if (p.value === 'CLAIM') return { color: '#e67e22', fontWeight: 'bold' };
+                    if (p.value === 'INBOUND') return { color: '#27ae60', fontWeight: 'bold' };
+                    if (p.value === 'MANUFACTURER') return { color: '#2c3e50', fontWeight: 'bold' };
+                    if (p.value === 'BRAND') return { color: '#8e44ad', fontWeight: 'bold' };
+                    if (p.value === 'ACCESS') return { color: '#3498db', fontWeight: 'bold' };
+                    if (p.value === 'VIEW') return { color: '#1abc9c', fontWeight: 'bold' };
+                    return null;
+                })();
+                return getCellStyle('entityType', p.value, fallback);
             }
         },
         {
             field: "action", headerName: "액션", width: 110, cellStyle: p => {
-                if (p.value === 'CREATE') return { color: 'green', fontWeight: 'bold' };
-                if (p.value === 'UPDATE') return { color: 'blue', fontWeight: 'bold' };
-                if (p.value === 'DELETE') return { color: 'red', fontWeight: 'bold' };
-                if (p.value === 'EXPORT') return { color: '#8e44ad', fontWeight: 'bold' };
-                if (p.value === 'LOGIN') return { color: '#2980b9', fontWeight: 'bold' };
-                if (p.value === 'LOGOUT') return { color: '#7f8c8d', fontWeight: 'bold' };
-                if (p.value === 'OPEN') return { color: '#16a085', fontWeight: 'bold' };
-                return null;
+                const fallback = (() => {
+                    if (p.value === 'CREATE') return { color: 'green', fontWeight: 'bold' };
+                    if (p.value === 'UPDATE') return { color: 'blue', fontWeight: 'bold' };
+                    if (p.value === 'DELETE') return { color: 'red', fontWeight: 'bold' };
+                    if (p.value === 'EXPORT') return { color: '#8e44ad', fontWeight: 'bold' };
+                    if (p.value === 'LOGIN') return { color: '#2980b9', fontWeight: 'bold' };
+                    if (p.value === 'LOGOUT') return { color: '#7f8c8d', fontWeight: 'bold' };
+                    if (p.value === 'OPEN') return { color: '#16a085', fontWeight: 'bold' };
+                    return null;
+                })();
+                return getCellStyle('action', p.value, fallback);
             }
         },
         { field: "description", headerName: "변경 상세 정보", flex: 1 },
@@ -176,7 +246,7 @@ const LogManagementPage = ({ user }) => {
             sortable: false,
             filter: false
         }
-    ], []);
+    ], [canDelete, customRules]);
 
     const JsonDiffViewer = ({ oldStr, newStr }) => {
         if (!oldStr || oldStr === '-' || oldStr === 'HARD_DELETED' || oldStr.startsWith('{"warning"')) {
@@ -353,7 +423,41 @@ const LogManagementPage = ({ user }) => {
                     <div style={{ color: '#64748b', fontSize: '13px' }}>
                         시스템 내 모든 변경 사항을 추적합니다. (더블 클릭 시 상세 데이터 확인)
                     </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        {/* 🎨 색상 범례 팝오버 */}
+                        <GridColorLegendPopover 
+                            legends={LOG_LEGENDS}
+                            customRules={customRules}
+                            onDeleteCustomRule={(idx) => {
+                                handleSaveCustomRules(customRules.filter((_, i) => i !== idx));
+                            }}
+                        />
+
+                        {/* ⚙️ 조건부 서식 설정 (관리자 전용) */}
+                        {isAdmin && (
+                            <button
+                                type="button"
+                                className="outline"
+                                onClick={() => setIsFormattingModalOpen(true)}
+                                style={{
+                                    fontSize: '13px',
+                                    padding: '8px 14px',
+                                    backgroundColor: '#fff',
+                                    color: '#475569',
+                                    borderColor: '#cbd5e1',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    fontWeight: 'bold',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer'
+                                }}
+                                title="그리드 셀 조건부 서식 규칙 추가/관리"
+                            >
+                                ⚙️ 서식 설정
+                            </button>
+                        )}
+
                         <button 
                             className="outline" 
                             onClick={() => alert("로그 내역 엑셀 다운로드 기능 준비 중입니다.")}
@@ -561,6 +665,16 @@ const LogManagementPage = ({ user }) => {
                     </div>
                 </div>
             )}
+
+            {/* 조건부 서식 설정 모달 (관리자 전용) */}
+            <GridConditionalFormattingModal
+                isOpen={isFormattingModalOpen}
+                onClose={() => setIsFormattingModalOpen(false)}
+                columns={LOG_FORMATTABLE_COLUMNS}
+                rules={customRules}
+                legends={LOG_LEGENDS}
+                onSave={handleSaveCustomRules}
+            />
         </div>
     );
 };

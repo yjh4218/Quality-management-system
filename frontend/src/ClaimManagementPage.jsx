@@ -6,9 +6,31 @@ import ClaimDrawer from './ClaimDrawer';
 import ProductSearchPopup from './ProductSearchPopup';
 import { usePermissions } from './usePermissions';
 import useDateRangePreset from './hooks/useDateRangePreset';
+import { splitSearchTokens, matchesAllTokens } from './utils/searchUtils';
+import GridColorLegendPopover from './components/common/GridColorLegendPopover';
+import GridConditionalFormattingModal from './components/common/GridConditionalFormattingModal';
+
+const CLAIM_LEGENDS = [
+    { label: '치명 클레임 (CRITICAL)', color: '#be123c', bg: '#fff5f5', icon: '🔴', scope: '행 전체', desc: '중대 결함으로 지정된 고위험 클레임 건 (연분홍 배경 & 붉은 글자)' },
+    { label: '고객 회신 필요 건', color: '#b30000', bg: '#ffe5e5', icon: '⚠️', scope: '행 전체', desc: '소비자/고객사 추가 답변 및 보상 요구 건 (붉은 강조 배경)' },
+    { label: '품질팀 처리 상태 (1~5단계)', color: '#0d6efd', bg: '#eff6ff', icon: '🔄', scope: '처리 상태', desc: '1단계(파랑) / 2단계(주황) / 3단계(청록) / 4단계(보라) / 5단계(초록)' },
+    { label: '제조사 처리 상태 (1~4단계)', color: '#16a34a', bg: '#f0fdf4', icon: '🏭', scope: '제조사 상태', desc: '1.접수(파랑) / 2.원인분석(노랑) / 3.대책수립(초록) / 4.클레임 종결(검정)' },
+    { label: '제조사 공유 상태', color: '#15803d', bg: '#dcfce7', icon: '✅', scope: '제조사 공유', desc: '제조사 포털 실시간 공유 여부 (공유중 / 비공개)' }
+];
+
+const CLAIM_FORMATTABLE_COLUMNS = [
+    { field: 'claimNumber', headerName: '문서번호' },
+    { field: 'country', headerName: '인입 국가' },
+    { field: 'itemCode', headerName: '품목코드' },
+    { field: 'productName', headerName: '품목명' },
+    { field: 'lotNumber', headerName: '로트번호' },
+    { field: 'manufacturer', headerName: '제조사' },
+    { field: 'primaryCategory', headerName: '대분류' },
+    { field: 'mfrStatus', headerName: '제조사 처리 상태' }
+];
 
 const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) => {
-    const { canView } = usePermissions(user);
+    const { canView, isAdmin } = usePermissions(user);
     const gridRef = useRef(null);
     const [actualClaims, setActualClaims] = useState([]);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -16,6 +38,14 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
     const initializedRef = useRef(false);
     const [loading, setLoading] = useState(false);
     const [exporting, setExporting] = useState(false);
+    const [isFormattingModalOpen, setIsFormattingModalOpen] = useState(false);
+    const [customRules, setCustomRules] = useState(() => {
+        try {
+            return JSON.parse(localStorage.getItem('qms_grid_rules_claim_list') || '[]');
+        } catch {
+            return [];
+        }
+    });
 
     const [currentPage, setCurrentPage] = useState(0);
     const [totalPages, setTotalPages] = useState(0);
@@ -66,7 +96,22 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
         lastSearchRef.current = currentSearchKey; // Set early to prevent race conditions
         setLoading(true);
         try {
-            const claimsRes = await getClaimsPaged(searchParams, pageNum, pageSize);
+            const itemCodeTokens = splitSearchTokens(searchParams.itemCode);
+            const nameTokens = splitSearchTokens(searchParams.productName);
+            const lotTokens = splitSearchTokens(searchParams.lotNumber);
+            const claimNumTokens = splitSearchTokens(searchParams.claimNumber);
+            const mfrTokens = splitSearchTokens(searchParams.manufacturer);
+
+            const queryParams = {
+                ...searchParams,
+                itemCode: itemCodeTokens.length > 0 ? itemCodeTokens[0] : undefined,
+                productName: nameTokens.length > 0 ? nameTokens[0] : undefined,
+                lotNumber: lotTokens.length > 0 ? lotTokens[0] : undefined,
+                claimNumber: claimNumTokens.length > 0 ? claimNumTokens[0] : undefined,
+                manufacturer: mfrTokens.length > 0 ? mfrTokens[0] : undefined
+            };
+
+            const claimsRes = await getClaimsPaged(queryParams, pageNum, pageSize);
             setActualClaims(claimsRes.data.content || []);
             setTotalPages(claimsRes.data.totalPages || 0);
             setTotalElements(claimsRes.data.totalElements || 0);
@@ -79,6 +124,18 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
             setLoading(false);
         }
     }, [searchParams]);
+
+    const filteredClaims = useMemo(() => {
+        return actualClaims.filter(c => {
+            if (searchParams.claimNumber?.trim() && !matchesAllTokens(c.claimNumber, searchParams.claimNumber)) return false;
+            if (searchParams.itemCode?.trim() && !matchesAllTokens(c.itemCode, searchParams.itemCode)) return false;
+            if (searchParams.productName?.trim() && !matchesAllTokens(c.productName, searchParams.productName)) return false;
+            if (searchParams.lotNumber?.trim() && !matchesAllTokens(c.lotNumber, searchParams.lotNumber)) return false;
+            if (searchParams.country?.trim() && !matchesAllTokens(c.country, searchParams.country)) return false;
+            if (searchParams.manufacturer?.trim() && !matchesAllTokens(c.manufacturer, searchParams.manufacturer)) return false;
+            return true;
+        });
+    }, [actualClaims, searchParams]);
 
     // Consistently trigger check on mount and key-filter changes
     const hasFetchedOnMount = useRef(false);
@@ -102,8 +159,26 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
         }
     }, [navigationData, onNavigated]);
 
+    const getCellStyle = (field) => (params) => {
+        if (!customRules || customRules.length === 0 || !params.value) return null;
+        const matchingRule = customRules.find(rule => {
+            if (rule.field !== field) return false;
+            const cellVal = String(params.value).toLowerCase();
+            const ruleVal = String(rule.value).toLowerCase();
+            return rule.operator === 'CONTAINS' ? cellVal.includes(ruleVal) : cellVal === ruleVal;
+        });
+        if (matchingRule) {
+            return {
+                backgroundColor: matchingRule.bg,
+                color: matchingRule.text,
+                fontWeight: '600'
+            };
+        }
+        return null;
+    };
+
     const columnDefs = useMemo(() => [
-        { field: 'claimNumber', headerName: '문서번호', width: 180, sortable: true, filter: true, pinned: 'left' },
+        { field: 'claimNumber', headerName: '문서번호', width: 180, sortable: true, filter: true, pinned: 'left', cellStyle: getCellStyle('claimNumber') },
         { field: 'receiptDate', headerName: '접수일자', sortable: true, filter: true, width: 150 },
         {
             field: 'qualityStatus', headerName: '처리 상태', sortable: true, filter: true, width: 230,
@@ -123,7 +198,7 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
             cellRenderer: params => params.value ? '✅ 공유중' : '❌ 비공개'
         },
         {
-            field: 'mfrStatus', headerName: '제조사 처리 상태', sortable: true, filter: true, width: 230,
+            field: 'mfrStatus', headerName: '제조사 처리 상태', sortable: true, filter: true, width: 230, cellStyle: getCellStyle('mfrStatus'),
             cellRenderer: params => {
                 if (!params.data.sharedWithManufacturer) return <span style={{color: '#adb5bd', fontSize: '12px'}}>-비공개-</span>;
                 const status = params.value;
@@ -135,17 +210,17 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
                 return <span style={{ color: color, fontWeight: 'bold' }}>{status || '1. 접수'}</span>;
             }
         },
-        { field: 'country', headerName: '인입 국가', sortable: true, filter: true, width: 150 },
-        { field: 'itemCode', headerName: '품목코드', sortable: true, filter: true, width: 160 },
-        { field: 'productName', headerName: '품목명', sortable: true, filter: true, width: 280 },
-        { field: 'lotNumber', headerName: '로트번호', sortable: true, filter: true, width: 160 },
-        { field: 'manufacturer', headerName: '제조사', sortable: true, filter: true, width: 180 },
-        { field: 'primaryCategory', headerName: '대분류', sortable: true, filter: true, width: 170 },
+        { field: 'country', headerName: '인입 국가', sortable: true, filter: true, width: 150, cellStyle: getCellStyle('country') },
+        { field: 'itemCode', headerName: '품목코드', sortable: true, filter: true, width: 160, cellStyle: getCellStyle('itemCode') },
+        { field: 'productName', headerName: '품목명', sortable: true, filter: true, width: 280, cellStyle: getCellStyle('productName') },
+        { field: 'lotNumber', headerName: '로트번호', sortable: true, filter: true, width: 160, cellStyle: getCellStyle('lotNumber') },
+        { field: 'manufacturer', headerName: '제조사', sortable: true, filter: true, width: 180, cellStyle: getCellStyle('manufacturer') },
+        { field: 'primaryCategory', headerName: '대분류', sortable: true, filter: true, width: 170, cellStyle: getCellStyle('primaryCategory') },
         { field: 'occurrenceQty', headerName: '발생수량', sortable: true, filter: true, width: 130 },
         { field: 'qualityReceivedReturnedProduct', headerName: '품질팀 회수 제품 수령 여부', sortable: true, filter: true, width: 200 },
         { field: 'qualityReceivedDate', headerName: '품질팀 수령일자', sortable: true, filter: true, width: 160 },
         { field: 'terminationDate', headerName: '종결일', sortable: true, filter: true, width: 150 }
-    ], [isManufacturer]);
+    ], [isManufacturer, customRules]);
 
     const handleRowClick = (e) => {
         setSelectedClaim(e.data);
@@ -256,6 +331,23 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
                                 style={{ fontSize: '14px', padding: '10px 20px', backgroundColor: '#fff', color: '#107c41', borderColor: '#107c41', opacity: exporting ? 0.7 : 1 }}
                             >
                                 {exporting ? '⏳ 다운로드 중...' : '📊 결과 다운로드'}
+                            </button>
+                        )}
+                        <GridColorLegendPopover 
+                            title="CX 클레임 관리" 
+                            legends={CLAIM_LEGENDS} 
+                            customRules={customRules}
+                            formattableColumns={CLAIM_FORMATTABLE_COLUMNS}
+                        />
+                        {isAdmin && (
+                            <button
+                                type="button"
+                                className="outline"
+                                onClick={() => setIsFormattingModalOpen(true)}
+                                title="관리자 맞춤형 서식 규칙 설정"
+                                style={{ fontSize: '13px', padding: '8px 12px', borderColor: '#94a3b8', color: '#334155' }}
+                            >
+                                ⚙️ 서식 설정
                             </button>
                         )}
                         <button 
@@ -464,7 +556,7 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
                 <AgGridReact
                     theme="legacy"
                     ref={gridRef}
-                    rowData={actualClaims}
+                    rowData={filteredClaims}
                     columnDefs={columnDefs}
                     pagination={false}
                     onRowDoubleClicked={handleRowClick}
@@ -518,6 +610,20 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
                     }}
                 />
             )}
+
+            <GridConditionalFormattingModal
+                isOpen={isFormattingModalOpen}
+                onClose={() => setIsFormattingModalOpen(false)}
+                columns={CLAIM_FORMATTABLE_COLUMNS}
+                rules={customRules}
+                legends={CLAIM_LEGENDS}
+                onSave={(rules) => {
+                    setCustomRules(rules);
+                    if (gridRef.current?.api) {
+                        gridRef.current.api.redrawRows();
+                    }
+                }}
+            />
         </div>
     );
 };

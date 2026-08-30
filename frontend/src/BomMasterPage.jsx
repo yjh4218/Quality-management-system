@@ -6,6 +6,31 @@ import BomRegistrationDrawer from './BomRegistrationDrawer';
 import ProductSearchPopup from './ProductSearchPopup';
 import { usePermissions } from './usePermissions';
 import useDateRangePreset from './hooks/useDateRangePreset';
+import { matchesAllTokens } from './utils/searchUtils';
+import GridColorLegendPopover from './components/common/GridColorLegendPopover';
+import GridConditionalFormattingModal from './components/common/GridConditionalFormattingModal';
+
+const BOM_LEGENDS = [
+    {
+        title: '구성품 BOM 마스터 기본 분류',
+        items: [
+            { label: '용기류 (PET/초자/파우치)', desc: '화장품 본품 직접 충진 용기', bg: '#f0f9ff', text: '#0369a1', border: '#bae6fd' },
+            { label: '캡·펌프류', desc: '원터치캡, 스크류캡, 디스펜서 펌프', bg: '#fdf4ff', text: '#a21caf', border: '#f5d0fe' },
+            { label: '단상자·라벨류', desc: '종이 단상자, 방수/은박 라벨, 봉합 라벨', bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0' },
+            { label: '인박스·아웃박스', desc: '골판지 포장박스, 간지, 완충재', bg: '#fffbeb', text: '#b45309', border: '#fef3c7' }
+        ]
+    }
+];
+
+const BOM_FORMATTABLE_COLUMNS = [
+    { field: 'bomCode', headerName: 'BOM 코드' },
+    { field: 'componentName', headerName: '구성품명' },
+    { field: 'specification', headerName: '규격' },
+    { field: 'type', headerName: '유형' },
+    { field: 'detailedType', headerName: '세부유형' },
+    { field: 'detailedMaterial', headerName: '재질 상세' },
+    { field: 'manufacturer', headerName: '제조사' }
+];
 
 const BOM_TYPE_MAP = {
     '용기': ['PET병', '초자(유리)', '파우치', '필름', '합성수지 용기(헤비브로우, 트레이)', '알루미늄 튜브', 'PP용기', '기타 용기'],
@@ -16,6 +41,45 @@ const BOM_TYPE_MAP = {
 };
 
 const BomMasterPage = ({ user }) => {
+    const isAdmin = user?.roles?.some(r => r.authority?.includes('ADMIN')) || user?.role === 'ADMIN';
+    const [isFormattingModalOpen, setIsFormattingModalOpen] = useState(false);
+    const [customRules, setCustomRules] = useState(() => {
+        try {
+            const saved = localStorage.getItem('bom_grid_custom_rules');
+            return saved ? JSON.parse(saved) : [];
+        } catch {
+            return [];
+        }
+    });
+
+    const handleSaveCustomRules = (newRules) => {
+        setCustomRules(newRules);
+        localStorage.setItem('bom_grid_custom_rules', JSON.stringify(newRules));
+    };
+
+    const getCellStyle = (field, value, fallbackStyle = null) => {
+        if (!customRules || customRules.length === 0) return fallbackStyle;
+        const matchedRule = customRules.find(rule => {
+            if (rule.field !== field) return false;
+            const strVal = String(value ?? '').trim().toLowerCase();
+            const targetVal = String(rule.value ?? '').trim().toLowerCase();
+            if (rule.operator === 'equals') return strVal === targetVal;
+            if (rule.operator === 'contains') return strVal.includes(targetVal);
+            if (rule.operator === 'startsWith') return strVal.startsWith(targetVal);
+            if (rule.operator === 'endsWith') return strVal.endsWith(targetVal);
+            return false;
+        });
+
+        if (matchedRule) {
+            return {
+                ...(fallbackStyle || {}),
+                backgroundColor: matchedRule.bg || matchedRule.bgColor,
+                color: matchedRule.text || matchedRule.textColor,
+                fontWeight: 'bold'
+            };
+        }
+        return fallbackStyle;
+    };
     const [materials, setMaterials] = useState([]);
     const [categories, setCategories] = useState([]);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -85,8 +149,27 @@ const BomMasterPage = ({ user }) => {
         }
     };
 
+    const filteredMaterials = useMemo(() => {
+        return materials.filter(m => {
+            if (filters.bomCode?.trim() && !matchesAllTokens(m.bomCode, filters.bomCode)) return false;
+            if (filters.componentName?.trim() && !matchesAllTokens(m.componentName, filters.componentName)) return false;
+            if (filters.type?.trim()) {
+                const combinedType = `${m.type || ''} ${m.detailedType || ''}`;
+                if (!matchesAllTokens(combinedType, filters.type)) return false;
+            }
+            if (filters.detailedType?.trim() && !matchesAllTokens(m.detailedType, filters.detailedType)) return false;
+            if (filters.detailedMaterial?.trim()) {
+                const layersStr = m.isMultiLayer && m.layers ? m.layers.map(l => l.materialName).join(' ') : '';
+                const combinedMaterial = `${m.material || ''} ${m.detailedMaterial || ''} ${layersStr}`;
+                if (!matchesAllTokens(combinedMaterial, filters.detailedMaterial)) return false;
+            }
+            if (filters.manufacturer?.trim() && !matchesAllTokens(m.manufacturer, filters.manufacturer)) return false;
+            return true;
+        });
+    }, [materials, filters]);
+
     const handleSearch = (e) => {
-        e.preventDefault();
+        if (e) e.preventDefault();
         fetchMaterials();
     };
 
@@ -155,26 +238,28 @@ const BomMasterPage = ({ user }) => {
                 );
             }
         },
-        { field: "bomCode", headerName: "BOM 코드", filter: true, width: 150, pinned: 'left' },
-        { field: "componentName", headerName: "구성품명", filter: true, flex: 1, minWidth: 180 },
-        { field: "specification", headerName: "규격", filter: true, width: 140 },
+        { field: "bomCode", headerName: "BOM 코드", filter: true, width: 150, pinned: 'left', cellStyle: p => getCellStyle('bomCode', p.value) },
+        { field: "componentName", headerName: "구성품명", filter: true, flex: 1, minWidth: 180, cellStyle: p => getCellStyle('componentName', p.value) },
+        { field: "specification", headerName: "규격", filter: true, width: 140, cellStyle: p => getCellStyle('specification', p.value) },
         { 
             headerName: "유형 / 세부유형", 
             width: 180, 
             valueGetter: p => `${p.data.type || ''} / ${p.data.detailedType || ''}`,
-            filter: true
+            filter: true,
+            cellStyle: p => getCellStyle('type', p.data?.type)
         },
         { 
             headerName: "재질 상세", 
             width: 220, 
-            valueGetter: p => p.data.isMultiLayer ? p.data.layers?.map(l => l.materialName).join(' + ') : (p.data.detailedMaterial || '-')
+            valueGetter: p => p.data.isMultiLayer ? p.data.layers?.map(l => l.materialName).join(' + ') : (p.data.detailedMaterial || '-'),
+            cellStyle: p => getCellStyle('detailedMaterial', p.data?.detailedMaterial)
         },
         { 
             headerName: "중량(g) / 두께(um)", 
             width: 160,
             valueGetter: p => `${p.data.weight || 0}g / ${p.data.thickness || 0}um`
         },
-        { field: "manufacturer", headerName: "제조사", filter: true, width: 140 },
+        { field: "manufacturer", headerName: "제조사", filter: true, width: 140, cellStyle: p => getCellStyle('manufacturer', p.value) },
         {
             headerName: "관리",
             width: 100,
@@ -188,7 +273,7 @@ const BomMasterPage = ({ user }) => {
                 >수정</button>
             )
         }
-    ], [canEdit]);
+    ], [canEdit, customRules]);
 
     return (
         <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#f1f5f9' }}>
@@ -247,7 +332,41 @@ const BomMasterPage = ({ user }) => {
                     <div style={{ color: '#64748b', fontSize: '13px' }}>
                         제품 구성품(용기, 캡, 라벨 등)의 상세 스펙과 재질 정보를 통합 관리합니다.
                     </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        {/* 🎨 색상 범례 팝오버 */}
+                        <GridColorLegendPopover 
+                            legends={BOM_LEGENDS}
+                            customRules={customRules}
+                            onDeleteCustomRule={(idx) => {
+                                handleSaveCustomRules(customRules.filter((_, i) => i !== idx));
+                            }}
+                        />
+
+                        {/* ⚙️ 조건부 서식 설정 (관리자 전용) */}
+                        {isAdmin && (
+                            <button
+                                type="button"
+                                className="outline"
+                                onClick={() => setIsFormattingModalOpen(true)}
+                                style={{
+                                    fontSize: '13px',
+                                    padding: '8px 14px',
+                                    backgroundColor: '#fff',
+                                    color: '#475569',
+                                    borderColor: '#cbd5e1',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    fontWeight: 'bold',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer'
+                                }}
+                                title="그리드 셀 조건부 서식 규칙 추가/관리"
+                            >
+                                ⚙️ 서식 설정
+                            </button>
+                        )}
+
                         <button 
                             className="outline" 
                             onClick={() => alert("BOM 마스터 엑셀 다운로드 기능 준비 중입니다.")}
@@ -375,12 +494,12 @@ const BomMasterPage = ({ user }) => {
             {/* 데이터 카드 */}
             <div className="card" style={{ padding: '24px', borderRadius: '16px', flex: 1, display: 'flex', flexDirection: 'column', background: 'white', border: '1px solid #e2e8f0' }}>
                 <div style={{ marginBottom: '15px', fontWeight: '800', fontSize: '14px', color: '#64748b' }}>
-                    검색 결과: <span style={{ color: '#2563eb' }}>{materials.length}</span> 건
+                    검색 결과: <span style={{ color: '#2563eb' }}>{filteredMaterials.length}</span> / 전체 {materials.length}건
                 </div>
                 <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
                     <AgGridReact
                         theme="legacy"
-                        rowData={materials}
+                        rowData={filteredMaterials}
                         columnDefs={colDefs}
                         rowHeight={54}
                         animateRows={true}
@@ -495,6 +614,16 @@ const BomMasterPage = ({ user }) => {
                     </div>
                 </div>
             )}
+
+            {/* 조건부 서식 설정 모달 (관리자 전용) */}
+            <GridConditionalFormattingModal
+                isOpen={isFormattingModalOpen}
+                onClose={() => setIsFormattingModalOpen(false)}
+                columns={BOM_FORMATTABLE_COLUMNS}
+                rules={customRules}
+                legends={BOM_LEGENDS}
+                onSave={handleSaveCustomRules}
+            />
         </div>
     );
 };

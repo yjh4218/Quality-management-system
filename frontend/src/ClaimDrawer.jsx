@@ -7,6 +7,8 @@ import ProductSearchPopup from './ProductSearchPopup';
 import SaveConfirmModal from './components/SaveConfirmModal';
 import { usePermissions } from './usePermissions';
 import NumericFormattedInput from './components/common/NumericFormattedInput';
+import useFormDraft from './hooks/useFormDraft';
+import DraftRestoreBanner from './components/common/DraftRestoreBanner';
 
 const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNavigateToEdit }) => {
     const [formData, setFormData] = useState({
@@ -59,7 +61,13 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
     const { canEdit: canEditClaim, canDelete: canDeleteClaim } = usePermissions(user);
     const hasGlobalEdit = canEditClaim('claims');
 
-
+    // 폼 자동 임시저장(Autosave) 및 복원 훅
+    const { hasDraft, draftSavedAt, restoreDraft, clearDraft } = useFormDraft(
+        claim ? `claim_edit_${claim.id || claim.claimNumber}` : 'claim_new',
+        formData,
+        setFormData,
+        { enabled: !readOnly && (canEditClaim('claims') || isAdmin || isQuality) }
+    );
 
     const canEditCs = (!readOnly) && hasGlobalEdit && (!isManufacturer);
     const canEditQuality = (!readOnly) && hasGlobalEdit && (isAdmin || isQuality || isManufacturer);
@@ -634,6 +642,7 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                 await createClaim(sanitizedData);
                 alert("등록되었습니다.");
             }
+            clearDraft();
             onSaved();
             onClose();
         } catch (error) {
@@ -666,6 +675,17 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                         <span className="icon">×</span> 닫기
                     </button>
                 </div>
+
+                {hasDraft && (
+                    <div style={{ padding: '0 24px', paddingTop: '12px' }}>
+                        <DraftRestoreBanner
+                            hasDraft={hasDraft}
+                            draftSavedAt={draftSavedAt}
+                            onRestore={restoreDraft}
+                            onClear={clearDraft}
+                        />
+                    </div>
+                )}
 
                 {/* 2. Tabs Section */}
                 <div className="drawer-tabs-wrapper">

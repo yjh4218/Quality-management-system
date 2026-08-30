@@ -4,6 +4,7 @@ import { Backdrop, CircularProgress } from '@mui/material';
 import QualitySearchFilter from './components/QualitySearchFilter';
 import QualityDetailDrawer from './components/QualityDetailDrawer';
 import CoaRequestPreviewModal from './components/CoaRequestPreviewModal';
+import GridConditionalFormattingModal from './components/common/GridConditionalFormattingModal';
 import api, {
     getInboundData,
     updateInboundData,
@@ -15,7 +16,69 @@ import api, {
 
 import { useQualityManagement } from './hooks/useQualityManagement';
 
+const QUALITY_LEGENDS = [
+    {
+        title: '입고 품질 상태 기본 규칙',
+        items: [
+            { label: '5단계 최종 완료', desc: '모든 검사 및 승인이 종결된 입고 건', bg: '#f0f0f0', text: '#666666', border: '#cbd5e1' },
+            { label: '날짜 순서 논리 오류', desc: '성적서 판정일 또는 품질 결정일 순서 모순 행', bg: '#fff4f4', text: '#dc2626', border: '#fca5a5' },
+            { label: '제조사 전용 작성 구역', desc: '제조사가 직접 업로드/입력해야 하는 컬럼 구역', bg: '#e8f5e9', text: '#166534', border: '#86efac' },
+            { label: '반품 / 불합격 판정', desc: '입고 검사 단계에서 반품 또는 불합격 처리된 건', bg: '#fee2e2', text: '#b91c1c', border: '#fca5a5' }
+        ]
+    }
+];
+
+const QUALITY_FORMATTABLE_COLUMNS = [
+    { field: 'overallStatus', headerName: '입고 검사 상태' },
+    { field: 'grnNumber', headerName: '입고번호' },
+    { field: 'inboundDate', headerName: '입고일자' },
+    { field: 'itemCode', headerName: '품목코드' },
+    { field: 'productName', headerName: '제품명' },
+    { field: 'manufacturer', headerName: '제조사' },
+    { field: 'lotNumber', headerName: 'LOT 번호' },
+    { field: 'inboundInspectionStatus', headerName: '입고검사 단계' },
+    { field: 'inboundInspectionResult', headerName: '입고 검사 결과' }
+];
+
 const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
+    const [isFormattingModalOpen, setIsFormattingModalOpen] = useState(false);
+    const [customRules, setCustomRules] = useState(() => {
+        try {
+            const saved = localStorage.getItem('quality_grid_custom_rules');
+            return saved ? JSON.parse(saved) : [];
+        } catch {
+            return [];
+        }
+    });
+
+    const handleSaveCustomRules = (newRules) => {
+        setCustomRules(newRules);
+        localStorage.setItem('quality_grid_custom_rules', JSON.stringify(newRules));
+    };
+
+    const getCellStyle = (field, value, fallbackStyle = null) => {
+        if (!customRules || customRules.length === 0) return fallbackStyle;
+        const matchedRule = customRules.find(rule => {
+            if (rule.field !== field) return false;
+            const strVal = String(value ?? '').trim().toLowerCase();
+            const targetVal = String(rule.value ?? '').trim().toLowerCase();
+            if (rule.operator === 'equals') return strVal === targetVal;
+            if (rule.operator === 'contains') return strVal.includes(targetVal);
+            if (rule.operator === 'startsWith') return strVal.startsWith(targetVal);
+            if (rule.operator === 'endsWith') return strVal.endsWith(targetVal);
+            return false;
+        });
+
+        if (matchedRule) {
+            return {
+                ...(fallbackStyle || {}),
+                backgroundColor: matchedRule.bg || matchedRule.bgColor,
+                color: matchedRule.text || matchedRule.textColor,
+                fontWeight: 'bold'
+            };
+        }
+        return fallbackStyle;
+    };
     const {
         gridRef,
         rowData,
@@ -82,19 +145,19 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
             checkboxSelection: true,
             headerCheckboxSelection: true,
             valueFormatter: p => overallStatusMap[p.value] || p.value,
-            cellStyle: { fontWeight: 'bold', backgroundColor: '#f0f0f0', color: '#666' },
+            cellStyle: p => getCellStyle('overallStatus', p.value, { fontWeight: 'bold', backgroundColor: '#f0f0f0', color: '#666' }),
             cellRenderer: p => {
                 const label = overallStatusMap[p.value] || p.value;
                 return <span>{label}</span>;
             }
         },
-        { field: "grnNumber", headerName: "입고번호", width: 180, pinned: 'left', sortable: true, filter: true },
-        { field: "inboundDate", headerName: "입고일자", width: 140, pinned: 'left', valueFormatter: p => p.value?.split('T')[0] },
-        { field: "itemCode", headerName: "품목코드", filter: true, width: 130, pinned: 'left' },
-        { field: "productName", headerName: "제품명", filter: true, width: 200, pinned: 'left' },
-        { field: "manufacturer", headerName: "제조사", filter: true, width: 130 },
+        { field: "grnNumber", headerName: "입고번호", width: 180, pinned: 'left', sortable: true, filter: true, cellStyle: p => getCellStyle('grnNumber', p.value) },
+        { field: "inboundDate", headerName: "입고일자", width: 140, pinned: 'left', valueFormatter: p => p.value?.split('T')[0], cellStyle: p => getCellStyle('inboundDate', p.value) },
+        { field: "itemCode", headerName: "품목코드", filter: true, width: 130, pinned: 'left', cellStyle: p => getCellStyle('itemCode', p.value) },
+        { field: "productName", headerName: "제품명", filter: true, width: 200, pinned: 'left', cellStyle: p => getCellStyle('productName', p.value) },
+        { field: "manufacturer", headerName: "제조사", filter: true, width: 130, cellStyle: p => getCellStyle('manufacturer', p.value) },
         { field: "quantity", headerName: "입고수량", width: 120, valueFormatter: p => p.value != null ? Number(p.value).toLocaleString() : '' },
-        { field: "lotNumber", headerName: "LOT 번호", width: 140 },
+        { field: "lotNumber", headerName: "LOT 번호", width: 140, cellStyle: p => getCellStyle('lotNumber', p.value) },
         { field: "expirationDate", headerName: "사용기한", width: 120 },
         {
             headerName: '품질 담당자 영역',
@@ -111,9 +174,8 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
                     cellEditor: 'agSelectCellEditor',
                     cellEditorParams: { values: ['검사 대기', '검사 중', '검사 완료', '반품'] },
                     cellStyle: params => {
-                        if (params.data.overallStatus === 'STEP5_FINAL_COMPLETE') return { backgroundColor: '#f0f0f0', color: '#666' };
-                        if (params.value === '반품') return { color: 'red', fontWeight: 'bold' };
-                        return null;
+                        const fallback = params.data.overallStatus === 'STEP5_FINAL_COMPLETE' ? { backgroundColor: '#f0f0f0', color: '#666' } : (params.value === '반품' ? { color: 'red', fontWeight: 'bold' } : null);
+                        return getCellStyle('inboundInspectionStatus', params.value, fallback);
                     }
                 },
                 {
@@ -125,7 +187,10 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
                     editable: params => (isInternalQuality || isAdmin) && params.data.overallStatus !== 'STEP5_FINAL_COMPLETE',
                     cellEditor: 'agSelectCellEditor',
                     cellEditorParams: { values: ['판정 중', '적합', '부적합'] },
-                    cellStyle: params => params.data.overallStatus === 'STEP5_FINAL_COMPLETE' ? { backgroundColor: '#f0f0f0', color: '#666' } : null
+                    cellStyle: params => {
+                        const fallback = params.data.overallStatus === 'STEP5_FINAL_COMPLETE' ? { backgroundColor: '#f0f0f0', color: '#666' } : null;
+                        return getCellStyle('inboundInspectionResult', params.value, fallback);
+                    }
                 },
                 {
                     field: "controlSampleStatus",
@@ -287,7 +352,7 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
             ]
         },
         { field: "remark", headerName: "비고", flex: 1, minWidth: 150, editable: params => (isInternalQuality || isManufacturer || isAdmin) && params.data.overallStatus !== 'STEP5_FINAL_COMPLETE', cellStyle: params => params.data.overallStatus === 'STEP5_FINAL_COMPLETE' ? { backgroundColor: '#f0f0f0', color: '#666' } : null }
-    ], [isInternalQuality, isManufacturer, isAdmin]);
+    ], [isInternalQuality, isManufacturer, isAdmin, customRules]);
 
     const updateDetailField = async (field, value) => {
         if (!selectedInbound) return;
@@ -413,6 +478,11 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
                 manufacturers={manufacturers}
                 canViewInbound={true}
                 inboundCount={rowData.length}
+                isAdmin={isAdmin}
+                customRules={customRules}
+                setCustomRules={handleSaveCustomRules}
+                onOpenFormattingModal={() => setIsFormattingModalOpen(true)}
+                legends={QUALITY_LEGENDS}
             />
 
             <div className="ag-theme-alpine" style={{ flex: 1, width: '100%', minHeight: 0, fontSize: '12px' }}>
@@ -474,6 +544,17 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
                 startDate={searchParams.startDate}
                 endDate={searchParams.endDate}
             />
+
+            {/* 조건부 서식 설정 모달 (관리자 전용) */}
+            <GridConditionalFormattingModal
+                isOpen={isFormattingModalOpen}
+                onClose={() => setIsFormattingModalOpen(false)}
+                columns={QUALITY_FORMATTABLE_COLUMNS}
+                rules={customRules}
+                legends={QUALITY_LEGENDS}
+                onSave={handleSaveCustomRules}
+            />
+
             {/* Loading Overlay */}
             <Backdrop
                 sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 4000 }}

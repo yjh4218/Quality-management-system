@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
 import apiDefault, * as api from '../../api';
 import ProductSearchPopup from '../../ProductSearchPopup';
+import ExcelColorPickerPopover from '../common/ExcelColorPickerPopover';
 
 /**
  * 주석 데이터(annotationsJson)가 포함된 이미지를 카드 위에 렌더링하는 소형 캔버스 컴포넌트
@@ -49,27 +50,71 @@ const AnnotatedCardImage = ({ imageUrl, annotationsJson, altText }) => {
                     ctx.translate(offsetX, offsetY);
 
                     objects.forEach(obj => {
+                        ctx.save();
+                        const strokeColor = obj.stroke || '#ef4444';
+                        const strokeWidth = (obj.strokeWidth || 3) * scaleX;
+                        const fillColor = obj.fill && obj.fill !== 'transparent' && obj.fill !== 'none' ? obj.fill : null;
+                        const opacity = obj.opacity != null ? obj.opacity : 1;
+
+                        ctx.globalAlpha = opacity;
+                        ctx.strokeStyle = strokeColor;
+                        ctx.lineWidth = strokeWidth;
+
                         if (obj.type === 'rect') {
+                            const x = obj.left * scaleX;
+                            const y = obj.top * scaleY;
+                            const w = obj.width * (obj.scaleX || 1) * scaleX;
+                            const h = obj.height * (obj.scaleY || 1) * scaleY;
+                            const rx = (obj.rx || 0) * scaleX;
+
                             ctx.beginPath();
-                            ctx.strokeStyle = obj.stroke || '#ef4444';
-                            ctx.lineWidth = (obj.strokeWidth || 3) * scaleX;
-                            ctx.rect(obj.left * scaleX, obj.top * scaleY, obj.width * (obj.scaleX || 1) * scaleX, obj.height * (obj.scaleY || 1) * scaleY);
-                            ctx.stroke();
+                            if (rx > 0 && ctx.roundRect) {
+                                ctx.roundRect(x, y, w, h, rx);
+                            } else {
+                                ctx.rect(x, y, w, h);
+                            }
+                            if (fillColor) {
+                                ctx.fillStyle = fillColor;
+                                ctx.fill();
+                            }
+                            if (strokeWidth > 0) ctx.stroke();
                         } else if (obj.type === 'circle') {
-                            ctx.beginPath();
-                            ctx.strokeStyle = obj.stroke || '#ef4444';
-                            ctx.lineWidth = (obj.strokeWidth || 3) * scaleX;
                             const rx = (obj.radius || 40) * (obj.scaleX || 1) * scaleX;
                             const ry = (obj.radius || 40) * (obj.scaleY || 1) * scaleY;
                             const cx = obj.left * scaleX + rx;
                             const cy = obj.top * scaleY + ry;
+                            ctx.beginPath();
                             ctx.ellipse(cx, cy, rx, ry, 0, 0, 2 * Math.PI);
+                            if (fillColor) {
+                                ctx.fillStyle = fillColor;
+                                ctx.fill();
+                            }
+                            if (strokeWidth > 0) ctx.stroke();
+                        } else if (obj.type === 'line') {
+                            const x1 = (obj.left || 0) * scaleX;
+                            const y1 = (obj.top || 0) * scaleY;
+                            const x2 = x1 + (obj.width || 100) * (obj.scaleX || 1) * scaleX;
+                            const y2 = y1 + (obj.height || 0) * (obj.scaleY || 1) * scaleY;
+                            ctx.beginPath();
+                            ctx.moveTo(x1, y1);
+                            ctx.lineTo(x2, y2);
                             ctx.stroke();
                         } else if (obj.type === 'i-text' || obj.type === 'text') {
-                            ctx.font = `bold ${(obj.fontSize || 16) * scaleX}px sans-serif`;
+                            const fontSize = (obj.fontSize || 18) * scaleX;
+                            ctx.font = `${obj.fontWeight || 'bold'} ${fontSize}px sans-serif`;
                             ctx.fillStyle = obj.fill || '#ef4444';
-                            ctx.fillText(obj.text || '', obj.left * scaleX, (obj.top + (obj.fontSize || 16)) * scaleY);
+                            ctx.fillText(obj.text || '', obj.left * scaleX, (obj.top + (obj.fontSize || 18)) * scaleY);
+                        } else if (obj.type === 'path' || obj.type === 'group') {
+                            // 복합 도형(화살표/말풍선) fallback stroke
+                            const x = obj.left * scaleX;
+                            const y = obj.top * scaleY;
+                            const w = (obj.width || 60) * (obj.scaleX || 1) * scaleX;
+                            const h = (obj.height || 40) * (obj.scaleY || 1) * scaleY;
+                            ctx.beginPath();
+                            ctx.rect(x, y, w, h);
+                            ctx.stroke();
                         }
+                        ctx.restore();
                     });
 
                     ctx.restore();
@@ -128,11 +173,21 @@ const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, onRegisterSav
     useEffect(() => { hasUnsavedChangesRef.current = hasUnsavedChanges; }, [hasUnsavedChanges]);
     useEffect(() => { specIdRef.current = specId; }, [specId]);
 
-    // 캔버스 모달 에디터 상태
+    // 캔버스 모달 에디터 상태 (줌, 패닝, 다양한 도형, 선/면 색상 독립 제어)
     const [editingImage, setEditingImage] = useState(null);
     const [isCanvasDirty, setIsCanvasDirty] = useState(false);
-    const [canvasColor, setCanvasColor] = useState('#ef4444');
-    const [canvasTool, setCanvasTool] = useState('rect'); // 'rect', 'circle', 'text'
+    const [canvasTool, setCanvasTool] = useState('rect'); // 'rect', 'rounded-rect', 'circle', 'arrow', 'line', 'callout', 'text', 'check', 'cross'
+    const [strokeColor, setStrokeColor] = useState('#ef4444');
+    const [strokeWidth, setStrokeWidth] = useState(3);
+    const [fillColor, setFillColor] = useState('transparent');
+    const [fillOpacity, setFillOpacity] = useState(0); // 0 (투명) ~ 100 (불투명)
+    const [textColor, setTextColor] = useState('#000000'); // 글상자 및 텍스트 폰트 색상
+    const [zoomLevel, setZoomLevel] = useState(100);
+    const [isPanMode, setIsPanMode] = useState(false);
+    const isPanModeRef = useRef(false);
+    const currentImgDimensionsRef = useRef({ width: 2400, height: 1600 });
+    useEffect(() => { isPanModeRef.current = isPanMode; }, [isPanMode]);
+
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
     const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
 
@@ -250,7 +305,12 @@ const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, onRegisterSav
             const res = await apiDefault.get(`/api/packaging-specs/${activeId}/method-images`);
             const rawData = res.data;
             const list = Array.isArray(rawData) ? rawData : (rawData?.data && Array.isArray(rawData.data) ? rawData.data : []);
-            setImages(list);
+            // 원본 이미지 URL(originalImageUrl)을 보존하여 재편집 시 무손실 로딩 보장
+            const enhancedList = list.map(item => ({
+                ...item,
+                originalImageUrl: item.originalImageUrl || item.imageUrl
+            }));
+            setImages(enhancedList);
             setPendingFiles([]);
             setDeletedIds([]);
             setHasUnsavedChanges(false);
@@ -266,6 +326,7 @@ const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, onRegisterSav
         const inheritedList = masterImages.map(img => ({
             ...img,
             id: `temp_master_${img.id}_${Math.random().toString(36).substring(2, 6)}`,
+            originalImageUrl: img.originalImageUrl || img.imageUrl,
             isMasterInherited: true
         }));
         setImages(inheritedList);
@@ -345,6 +406,7 @@ const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, onRegisterSav
             newImages.push({
                 id: tempId,
                 imageUrl: blobUrl,
+                originalImageUrl: blobUrl, // 최초 원본 URL 영구 보존!
                 captionText: '',
                 annotationsJson: null,
                 isTemp: true
@@ -378,17 +440,63 @@ const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, onRegisterSav
         setHasUnsavedChanges(true);
     };
 
-    // 캔버스 주석 저장 (로컬 state 반영)
-    const handleSaveCanvas = () => {
+    // 캔버스 주석 저장 (확대한 화면 그대로 초고화질 무손실 DataURL/Blob 추출 및 반영)
+    const handleSaveCanvas = async () => {
         const canvas = fabricCanvasRef.current;
         if (!canvas || !editingImage) return;
 
-        const json = JSON.stringify(canvas.toJSON());
-        setImages(prev => prev.map(img => img.id === editingImage.id ? { ...img, annotationsJson: json } : img));
+        // 1. 객체 선택 해제하여 선택 박스(컨트롤러) 제거
+        canvas.discardActiveObject();
+        canvas.renderAll();
+
+        // 2. 원본 이미지 실제 해상도(naturalWidth) 및 현재 줌 배율 기반 동적 초고화질(Multiplier 3.5~6.0x) 계산
+        const natWidth = currentImgDimensionsRef.current?.width || 2400;
+        const canvasWidth = canvas.getWidth() || 780;
+        const currentZoom = canvas.getZoom() || 1.0;
+        const baseMultiplier = natWidth / canvasWidth;
+        const dynamicMultiplier = Math.min(6.0, Math.max(3.5, baseMultiplier * Math.max(1.0, currentZoom)));
+
+        // 3. 현재 캔버스에 표시된 확대/이동 상태(뷰포트 그대로)의 초고해상도 무손실 PNG 추출 (3000px급 4K 해상도 보존)
+        const compositeDataUrl = canvas.toDataURL({
+            format: 'png',
+            quality: 1.0,
+            multiplier: dynamicMultiplier,
+            enableRetinaScaling: true
+        });
+
+        // 4. 주석 메타데이터(JSON) 및 뷰포트 상태 저장
+        const canvasJson = canvas.toJSON();
+        canvasJson.viewportTransform = canvas.viewportTransform;
+        canvasJson.zoomLevel = canvas.getZoom();
+        const jsonStr = JSON.stringify(canvasJson);
+
+        // 5. DataURL을 Blob으로 변환하여 pendingFiles에 등록 (제품 마스터 저장 시 서버로 실제 전송)
+        try {
+            const res = await fetch(compositeDataUrl);
+            const blob = await res.blob();
+            const file = new File([blob], `annotated_${Date.now()}.png`, { type: 'image/png' });
+
+            setPendingFiles(prev => {
+                const filtered = prev.filter(p => p.tempId !== editingImage.id);
+                return [...filtered, { tempId: editingImage.id, file }];
+            });
+        } catch (err) {
+            console.error('Failed to convert composite image to blob', err);
+        }
+
+        // 6. 로컬 images state 갱신 (originalImageUrl은 영구 보존하고, 미리보기 및 사양서에는 초고화질 compositeDataUrl 바인딩)
+        setImages(prev => prev.map(img => img.id === editingImage.id ? {
+            ...img,
+            originalImageUrl: img.originalImageUrl || img.imageUrl, // 원본 소스 영구 보존!
+            imageUrl: compositeDataUrl,
+            annotationsJson: jsonStr,
+            isAnnotated: true
+        } : img));
+
         setHasUnsavedChanges(true);
         setIsCanvasDirty(false);
         setEditingImage(null);
-        toast.info('주석이 임시 적용되었습니다. 하단 [💾 저장하기] 버튼을 눌러 확정하세요.');
+        toast.success('초고화질 주석 및 확대 화면이 반영되었습니다. 하단 [💾 저장하기]를 눌러 최종 저장하세요!');
     };
 
     // 최종 [저장하기] 실행 (서버 배치 일괄 반영)
@@ -495,10 +603,28 @@ const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, onRegisterSav
         }
     };
 
-    // Fabric.js 초기화 및 주석 로드
+    // 색상 + 투명도 변환 헬퍼 (Hex to RGBA)
+    const getComputedFillColor = (hex, opacityPercent) => {
+        if (!hex || hex === 'transparent' || hex === 'none' || opacityPercent === 0) {
+            return 'transparent';
+        }
+        // hex to rgba
+        let c = hex.replace('#', '');
+        if (c.length === 3) c = c.split('').map(x => x + x).join('');
+        const num = parseInt(c, 16);
+        const r = (num >> 16) & 255;
+        const g = (num >> 8) & 255;
+        const b = num & 255;
+        const alpha = Math.min(Math.max(opacityPercent / 100, 0), 1);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    };
+
+    // Fabric.js 초기화 및 주석 로드 (줌/패닝 및 다양한 도형 지원)
     const openCanvasEditor = (img) => {
         setEditingImage(img);
         setIsCanvasDirty(false);
+        setZoomLevel(100);
+        setIsPanMode(false);
 
         setTimeout(() => {
             if (!canvasRef.current) return;
@@ -511,45 +637,149 @@ const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, onRegisterSav
             const canvasHeight = 520;
             const canvas = new window.fabric.Canvas(canvasRef.current, {
                 width: canvasWidth,
-                height: canvasHeight
+                height: canvasHeight,
+                preserveObjectStacking: true
             });
             fabricCanvasRef.current = canvas;
 
-            const fullImgUrl = img.imageUrl?.startsWith('blob:') 
-                ? img.imageUrl 
-                : (api.getBaseURL ? `${api.getBaseURL()}${img.imageUrl?.startsWith('/') ? '' : '/'}${img.imageUrl}` : img.imageUrl);
+            const rawImgUrl = img.originalImageUrl || img.imageUrl;
+            const fullImgUrl = rawImgUrl?.startsWith('blob:') 
+                ? rawImgUrl 
+                : (api.getBaseURL ? `${api.getBaseURL()}${rawImgUrl?.startsWith('/') ? '' : '/'}${rawImgUrl}` : rawImgUrl);
             
-            const htmlImg = new Image();
-            htmlImg.onload = () => {
-                const oImg = new window.fabric.Image(htmlImg, {
-                    selectable: false,
-                    evented: false
-                });
-                const scale = Math.min(canvasWidth / htmlImg.width, canvasHeight / htmlImg.height);
-                oImg.scale(scale);
-                canvas.centerObject(oImg);
-                canvas.add(oImg);
-                canvas.sendToBack(oImg);
+            const loadIntoCanvas = (srcUrl) => {
+                const htmlImg = new Image();
+                htmlImg.crossOrigin = 'anonymous';
+                htmlImg.onload = () => {
+                    // 원본 이미지의 실제 해상도(naturalWidth, naturalHeight) 기록 (고해상도 동적 배율 계산용)
+                    currentImgDimensionsRef.current = {
+                        width: htmlImg.naturalWidth || htmlImg.width || 2400,
+                        height: htmlImg.naturalHeight || htmlImg.height || 1600
+                    };
 
-                if (img.annotationsJson) {
-                    try {
-                        const parsed = JSON.parse(img.annotationsJson);
-                        canvas.loadFromJSON(parsed, () => {
+                    const oImg = new window.fabric.Image(htmlImg, {
+                        selectable: false,
+                        evented: false
+                    });
+                    const scale = Math.min(canvasWidth / htmlImg.width, canvasHeight / htmlImg.height);
+                    oImg.scale(scale);
+                    canvas.centerObject(oImg);
+                    canvas.add(oImg);
+                    canvas.sendToBack(oImg);
+
+                    if (img.annotationsJson) {
+                        try {
+                            const parsed = JSON.parse(img.annotationsJson);
+                            canvas.loadFromJSON(parsed, () => {
+                                // loadFromJSON 후 oImg가 누락되었으면 다시 추가하고 맨 뒤로 배치
+                                const hasBg = canvas.getObjects().some(obj => obj === oImg);
+                                if (!hasBg) {
+                                    canvas.add(oImg);
+                                    canvas.sendToBack(oImg);
+                                }
+                                if (parsed.viewportTransform && Array.isArray(parsed.viewportTransform)) {
+                                    canvas.setViewportTransform(parsed.viewportTransform);
+                                    if (parsed.zoomLevel) setZoomLevel(Math.round(parsed.zoomLevel * 100));
+                                }
+                                canvas.renderAll();
+                            });
+                        } catch (err) {
+                            console.error('Failed to load annotation json', err);
                             canvas.renderAll();
-                        });
-                    } catch (err) {
-                        console.error('Failed to load annotation json', err);
+                        }
+                    } else {
                         canvas.renderAll();
                     }
-                } else {
+                };
+                htmlImg.onerror = (err) => {
+                    console.error('Failed to load image for canvas editor:', srcUrl, err);
                     canvas.renderAll();
+                };
+                htmlImg.src = srcUrl;
+            };
+
+            // Blob 변환을 통해 CORS Taint를 완벽하게 방지
+            if (fullImgUrl?.startsWith('blob:') || fullImgUrl?.startsWith('data:')) {
+                loadIntoCanvas(fullImgUrl);
+            } else {
+                fetch(fullImgUrl, { mode: 'cors', credentials: 'include' })
+                    .then(res => {
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                        return res.blob();
+                    })
+                    .then(blob => {
+                        const blobUrl = URL.createObjectURL(blob);
+                        loadIntoCanvas(blobUrl);
+                    })
+                    .catch(err => {
+                        console.warn('Direct blob fetch failed, falling back to direct URL with crossOrigin:', err);
+                        loadIntoCanvas(fullImgUrl);
+                    });
+            }
+
+            // 마우스 휠 줌
+            canvas.on('mouse:wheel', function(opt) {
+                const delta = opt.e.deltaY;
+                let zoom = canvas.getZoom();
+                zoom *= 0.999 ** delta;
+                if (zoom > 3) zoom = 3;
+                if (zoom < 0.5) zoom = 0.5;
+                canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
+                opt.e.preventDefault();
+                opt.e.stopPropagation();
+                setZoomLevel(Math.round(zoom * 100));
+            });
+
+            // 패닝 드래그 이벤트 (Space, Alt 키 또는 이동 모드 활성화 시)
+            let isDragging = false;
+            let lastPosX = 0;
+            let lastPosY = 0;
+
+            canvas.on('mouse:down', function(opt) {
+                const evt = opt.e;
+                if (evt.altKey || evt.spaceKey || isPanModeRef.current) {
+                    isDragging = true;
+                    canvas.selection = false;
+                    lastPosX = evt.clientX;
+                    lastPosY = evt.clientY;
+                }
+            });
+
+            canvas.on('mouse:move', function(opt) {
+                if (isDragging) {
+                    const e = opt.e;
+                    const vpt = canvas.viewportTransform;
+                    vpt[4] += e.clientX - lastPosX;
+                    vpt[5] += e.clientY - lastPosY;
+                    canvas.requestRenderAll();
+                    lastPosX = e.clientX;
+                    lastPosY = e.clientY;
+                }
+            });
+
+            canvas.on('mouse:up', function() {
+                if (isDragging) {
+                    canvas.setViewportTransform(canvas.viewportTransform);
+                    isDragging = false;
+                    canvas.selection = !isPanModeRef.current;
+                }
+            });
+
+            // 객체 선택 시 툴바 속성 동기화
+            const syncActiveObjectProps = (e) => {
+                const obj = e.selected?.[0] || canvas.getActiveObject();
+                if (!obj) return;
+                if (obj.type === 'i-text') {
+                    if (obj.fill) setTextColor(obj.fill);
+                    setFillColor(obj.backgroundColor ? obj.backgroundColor : 'transparent');
+                } else {
+                    if (obj.stroke) setStrokeColor(obj.stroke);
+                    if (obj.strokeWidth) setStrokeWidth(obj.strokeWidth);
+                    if (obj.fill) setFillColor(obj.fill === 'transparent' ? 'transparent' : obj.fill);
                 }
             };
-            htmlImg.onerror = (err) => {
-                console.error('Failed to load image for canvas editor:', fullImgUrl, err);
-                canvas.renderAll();
-            };
-            htmlImg.src = fullImgUrl;
+            canvas.on('selection:created', syncActiveObjectProps);
+            canvas.on('selection:updated', syncActiveObjectProps);
 
             canvas.on('object:added', () => setIsCanvasDirty(true));
             canvas.on('object:modified', () => setIsCanvasDirty(true));
@@ -557,30 +787,180 @@ const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, onRegisterSav
         }, 100);
     };
 
+    // 줌 핸들러
+    const handleZoomIn = () => {
+        const canvas = fabricCanvasRef.current;
+        if (!canvas) return;
+        let zoom = canvas.getZoom() * 1.25;
+        if (zoom > 3.5) zoom = 3.5;
+        canvas.zoomToPoint({ x: canvas.width / 2, y: canvas.height / 2 }, zoom);
+        setZoomLevel(Math.round(zoom * 100));
+    };
+
+    const handleZoomOut = () => {
+        const canvas = fabricCanvasRef.current;
+        if (!canvas) return;
+        let zoom = canvas.getZoom() / 1.25;
+        if (zoom < 0.5) zoom = 0.5;
+        canvas.zoomToPoint({ x: canvas.width / 2, y: canvas.height / 2 }, zoom);
+        setZoomLevel(Math.round(zoom * 100));
+    };
+
+    const handleZoomReset = () => {
+        const canvas = fabricCanvasRef.current;
+        if (!canvas) return;
+        canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+        setZoomLevel(100);
+    };
+
+    // 상/하/좌/우 수동 이동(패닝) 핸들러
+    const handlePanStep = (dx, dy) => {
+        const canvas = fabricCanvasRef.current;
+        if (!canvas) return;
+        canvas.relativePan(new window.fabric.Point(dx, dy));
+        canvas.requestRenderAll();
+    };
+
+    // 엑셀형 다양한 도형 추가
     const addCanvasShape = () => {
         const canvas = fabricCanvasRef.current;
         if (!canvas) return;
 
+        const currentFill = getComputedFillColor(fillColor, fillOpacity);
+        const currentStroke = strokeColor;
+        const currentStrokeWidth = Number(strokeWidth);
+
         if (canvasTool === 'rect') {
+            // 직사각형
             const rect = new window.fabric.Rect({
-                left: 200, top: 150, width: 120, height: 90,
-                fill: 'transparent', stroke: canvasColor, strokeWidth: 3
+                left: 200, top: 150, width: 140, height: 90,
+                fill: currentFill, stroke: currentStroke, strokeWidth: currentStrokeWidth
             });
             canvas.add(rect);
+            canvas.setActiveObject(rect);
+        } else if (canvasTool === 'rounded-rect') {
+            // 둥근 모서리 사각형
+            const roundRect = new window.fabric.Rect({
+                left: 200, top: 150, width: 140, height: 90, rx: 14, ry: 14,
+                fill: currentFill, stroke: currentStroke, strokeWidth: currentStrokeWidth
+            });
+            canvas.add(roundRect);
+            canvas.setActiveObject(roundRect);
         } else if (canvasTool === 'circle') {
+            // 타원 / 원
             const circle = new window.fabric.Circle({
-                left: 220, top: 160, radius: 50,
-                fill: 'transparent', stroke: canvasColor, strokeWidth: 3
+                left: 220, top: 160, radius: 55,
+                fill: currentFill, stroke: currentStroke, strokeWidth: currentStrokeWidth
             });
             canvas.add(circle);
+            canvas.setActiveObject(circle);
+        } else if (canvasTool === 'arrow') {
+            // 화살표 (선 + 삼각형 머리 그룹)
+            const line = new window.fabric.Line([50, 50, 180, 50], {
+                stroke: currentStroke,
+                strokeWidth: currentStrokeWidth,
+                selectable: false
+            });
+            const triangle = new window.fabric.Triangle({
+                left: 180, top: 50, originX: 'center', originY: 'center',
+                angle: 90, width: currentStrokeWidth * 4 + 8, height: currentStrokeWidth * 4 + 8,
+                fill: currentStroke, stroke: currentStroke, strokeWidth: 1, selectable: false
+            });
+            const arrowGroup = new window.fabric.Group([line, triangle], {
+                left: 200, top: 180
+            });
+            canvas.add(arrowGroup);
+            canvas.setActiveObject(arrowGroup);
+        } else if (canvasTool === 'line') {
+            // 직선
+            const line = new window.fabric.Line([200, 150, 360, 150], {
+                stroke: currentStroke, strokeWidth: currentStrokeWidth
+            });
+            canvas.add(line);
+            canvas.setActiveObject(line);
+        } else if (canvasTool === 'callout') {
+            // 말풍선 / 메모 박스 (배경 사각형 + 텍스트)
+            const bgRect = new window.fabric.Rect({
+                width: 190, height: 60, rx: 8, ry: 8,
+                fill: currentFill || 'rgba(255, 255, 255, 0.95)',
+                stroke: currentStroke, strokeWidth: currentStrokeWidth
+            });
+            const textInside = new window.fabric.IText('중요 관리 포인트', {
+                left: 14, top: 18, fontSize: 15, fill: textColor || '#1e293b', fontWeight: 'bold', fontFamily: 'sans-serif',
+                stroke: null, strokeWidth: 0
+            });
+            const calloutGroup = new window.fabric.Group([bgRect, textInside], {
+                left: 180, top: 150
+            });
+            canvas.add(calloutGroup);
+            canvas.setActiveObject(calloutGroup);
         } else if (canvasTool === 'text') {
+            // 단독 글상자 (선명한 텍스트 - 외곽선 간섭 제거)
             const text = new window.fabric.IText('여기에 세부 주석을 입력하세요', {
                 left: 180, top: 180, fontFamily: 'sans-serif', fontSize: 20,
-                fill: canvasColor, fontWeight: 'bold'
+                fill: textColor || '#000000',
+                backgroundColor: (currentFill === 'transparent' || !currentFill) ? '' : currentFill,
+                stroke: null,
+                strokeWidth: 0,
+                fontWeight: 'bold'
             });
             canvas.add(text);
+            canvas.setActiveObject(text);
+        } else if (canvasTool === 'check') {
+            // ✅ 체크 마크
+            const check = new window.fabric.IText('✓', {
+                left: 250, top: 160, fontFamily: 'sans-serif', fontSize: 48,
+                fill: textColor || '#10b981', fontWeight: 'bold',
+                stroke: null, strokeWidth: 0
+            });
+            canvas.add(check);
+            canvas.setActiveObject(check);
+        } else if (canvasTool === 'cross') {
+            // ❌ X 마크
+            const cross = new window.fabric.IText('✕', {
+                left: 250, top: 160, fontFamily: 'sans-serif', fontSize: 44,
+                fill: textColor || '#ef4444', fontWeight: 'bold',
+                stroke: null, strokeWidth: 0
+            });
+            canvas.add(cross);
+            canvas.setActiveObject(cross);
         }
         canvas.renderAll();
+    };
+
+    // 선택된 객체 속성(선 색상, 두께, 면 색상, 투명도, 글자 색상) 실시간 반영
+    const applyStyleToActiveObject = (changes) => {
+        const canvas = fabricCanvasRef.current;
+        if (!canvas) return;
+        const activeObj = canvas.getActiveObject();
+        if (!activeObj) return;
+
+        if (activeObj.type === 'i-text') {
+            // 텍스트 객체: 글자 색상(fill)과 텍스트 배경색(backgroundColor) 독립 제어
+            if (changes.textColor !== undefined) {
+                activeObj.set('fill', changes.textColor);
+                activeObj.set('stroke', null);
+                activeObj.set('strokeWidth', 0);
+                if (activeObj.isEditing) {
+                    activeObj.setSelectionStyles?.({ fill: changes.textColor, stroke: null, strokeWidth: 0 });
+                }
+            }
+            if (changes.fill !== undefined) {
+                activeObj.set('backgroundColor', (changes.fill === 'transparent' || !changes.fill) ? '' : changes.fill);
+            }
+            if (changes.opacity !== undefined) activeObj.set('opacity', changes.opacity);
+            activeObj.initDimensions?.();
+        } else {
+            // 일반 도형 및 화살표
+            if (changes.stroke !== undefined) activeObj.set('stroke', changes.stroke);
+            if (changes.strokeWidth !== undefined) activeObj.set('strokeWidth', changes.strokeWidth);
+            if (changes.fill !== undefined) activeObj.set('fill', changes.fill);
+            if (changes.opacity !== undefined) activeObj.set('opacity', changes.opacity);
+        }
+
+        activeObj.setCoords();
+        canvas.requestRenderAll();
+        setIsCanvasDirty(true);
     };
 
     const deleteSelectedObject = () => {
@@ -871,31 +1251,198 @@ const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, onRegisterSav
                                 </div>
                             ) : (
                                 <>
-                                    <div style={{ display: 'flex', gap: '10px', background: '#fff', padding: '8px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                                            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b' }}>도구:</span>
-                                            <select value={canvasTool} onChange={e => setCanvasTool(e.target.value)} style={{ fontSize: '12px', padding: '4px' }}>
-                                                <option value="rect">사각형 (Rectangle)</option>
-                                                <option value="circle">원 (Circle)</option>
-                                                <option value="text">글 상자 (Text)</option>
-                                            </select>
-                                            
-                                            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', marginLeft: '10px' }}>색상:</span>
-                                            <input type="color" value={canvasColor} onChange={e => setCanvasColor(e.target.value)} style={{ width: '26px', height: '26px', border: 'none', cursor: 'pointer' }} />
-                                            
-                                            <button type="button" onClick={addCanvasShape} style={{ padding: '4px 10px', fontSize: '11px', background: '#003366', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
-                                                ➕ 도형 추가
-                                            </button>
+                                    {/* 🎨 엑셀 스타일 고도화 주석 툴바 */}
+                                    <div style={{
+                                        display: 'flex', flexDirection: 'column', gap: '8px',
+                                        background: '#fff', padding: '10px 16px', borderRadius: '10px',
+                                        border: '1px solid #e2e8f0', width: '100%',
+                                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                                    }}>
+                                        {/* 1행: 도형 선택 및 추가 & 선택 제어 */}
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569' }}>📐 도형:</span>
+                                                <select
+                                                    value={canvasTool}
+                                                    onChange={e => setCanvasTool(e.target.value)}
+                                                    style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                                                >
+                                                    <option value="rect">▭ 직사각형 (Rect)</option>
+                                                    <option value="rounded-rect">▢ 둥근 사각형 (Rounded)</option>
+                                                    <option value="circle">◯ 원 / 타원 (Circle)</option>
+                                                    <option value="arrow">➔ 화살표 (Arrow)</option>
+                                                    <option value="line">― 직선 (Line)</option>
+                                                    <option value="callout">💬 말풍선 / 메모 박스</option>
+                                                    <option value="text">🔤 글 상자 (Text)</option>
+                                                    <option value="check">✅ 체크 마크 (Check)</option>
+                                                    <option value="cross">❌ X 마크 (Cross)</option>
+                                                </select>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={addCanvasShape}
+                                                    style={{
+                                                        padding: '5px 12px', fontSize: '11px', background: '#003366', color: '#fff',
+                                                        border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold',
+                                                        display: 'flex', alignItems: 'center', gap: '4px'
+                                                    }}
+                                                >
+                                                    <span>➕</span> 도형 추가
+                                                </button>
+                                            </div>
+
+                                            {/* 줌 및 화면 이동 (패닝) 컨트롤 */}
+                                            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleZoomOut}
+                                                    title="화면 축소"
+                                                    style={{ padding: '4px 8px', fontSize: '11px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                                                >
+                                                    🔍-
+                                                </button>
+                                                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', minWidth: '42px', textAlign: 'center' }}>
+                                                    {zoomLevel}%
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleZoomIn}
+                                                    title="화면 확대"
+                                                    style={{ padding: '4px 8px', fontSize: '11px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                                                >
+                                                    🔍+
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleZoomReset}
+                                                    title="원래 배율 (100%)"
+                                                    style={{ padding: '4px 8px', fontSize: '11px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer' }}
+                                                >
+                                                    100%
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsPanMode(!isPanMode)}
+                                                    title="화면 드래그 이동 모드 (또는 Alt/Space 키 누른 채 드래그)"
+                                                    style={{
+                                                        padding: '4px 8px', fontSize: '11px',
+                                                        background: isPanMode ? '#dbeafe' : '#f1f5f9',
+                                                        color: isPanMode ? '#1d4ed8' : '#475569',
+                                                        border: isPanMode ? '1px solid #3b82f6' : '1px solid #cbd5e1',
+                                                        borderRadius: '4px', cursor: 'pointer', fontWeight: isPanMode ? 'bold' : 'normal'
+                                                    }}
+                                                >
+                                                    ✋ 이동 모드
+                                                </button>
+
+                                                {/* 상/하/좌/우 미세 이동 버튼 */}
+                                                <div style={{ display: 'inline-flex', gap: '1px', background: '#e2e8f0', padding: '1px', borderRadius: '4px' }}>
+                                                    <button type="button" onClick={() => handlePanStep(-30, 0)} title="좌로 이동" style={{ padding: '3px 5px', fontSize: '10px', background: '#fff', border: 'none', cursor: 'pointer' }}>◀</button>
+                                                    <button type="button" onClick={() => handlePanStep(0, -30)} title="위로 이동" style={{ padding: '3px 5px', fontSize: '10px', background: '#fff', border: 'none', cursor: 'pointer' }}>▲</button>
+                                                    <button type="button" onClick={() => handlePanStep(0, 30)} title="아래로 이동" style={{ padding: '3px 5px', fontSize: '10px', background: '#fff', border: 'none', cursor: 'pointer' }}>▼</button>
+                                                    <button type="button" onClick={() => handlePanStep(30, 0)} title="우로 이동" style={{ padding: '3px 5px', fontSize: '10px', background: '#fff', border: 'none', cursor: 'pointer' }}>▶</button>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={deleteSelectedObject}
+                                                    style={{ padding: '4px 10px', fontSize: '11px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', marginLeft: '6px' }}
+                                                >
+                                                    🗑️ 선택 삭제
+                                                </button>
+                                            </div>
                                         </div>
 
-                                        <div style={{ display: 'flex', gap: '6px' }}>
-                                            <button type="button" onClick={deleteSelectedObject} style={{ padding: '4px 10px', fontSize: '11px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
-                                                🗑️ 선택 지우기
-                                            </button>
+                                        {/* 2행: 선 색상/두께 & 내부 면 색상/투명도 & 글자 색상 분리 설정 */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', borderTop: '1px dashed #e2e8f0', paddingTop: '6px', flexWrap: 'wrap' }}>
+                                            {/* 선(Stroke) 설정 (엑셀 컬러피커) */}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569' }}>🖌️ 테두리 선:</span>
+                                                <ExcelColorPickerPopover
+                                                    title="선 색상 선택"
+                                                    value={strokeColor}
+                                                    onChange={c => {
+                                                        setStrokeColor(c);
+                                                        applyStyleToActiveObject({ stroke: c });
+                                                    }}
+                                                    icon="🖌️"
+                                                    allowTransparent={true}
+                                                />
+                                                <select
+                                                    value={strokeWidth}
+                                                    onChange={e => {
+                                                        const w = Number(e.target.value);
+                                                        setStrokeWidth(w);
+                                                        applyStyleToActiveObject({ strokeWidth: w });
+                                                    }}
+                                                    style={{ fontSize: '11px', padding: '3px 6px', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+                                                    title="선 두께 선택"
+                                                >
+                                                    <option value={1}>두께 1px</option>
+                                                    <option value={2}>두께 2px</option>
+                                                    <option value={3}>두께 3px (기본)</option>
+                                                    <option value={5}>두께 5px (굵게)</option>
+                                                    <option value={8}>두께 8px (매우 굵게)</option>
+                                                </select>
+                                            </div>
+
+                                            {/* 내부 면(Fill) 설정 (엑셀 컬러피커) */}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569' }}>🎨 내부 면:</span>
+                                                <ExcelColorPickerPopover
+                                                    title="내부 면 색상 선택"
+                                                    value={fillColor}
+                                                    onChange={c => {
+                                                        setFillColor(c);
+                                                        const nextOpacity = (c === 'transparent' || c === 'none') ? 0 : (fillOpacity === 0 ? 50 : fillOpacity);
+                                                        if (c !== 'transparent' && fillOpacity === 0) setFillOpacity(50);
+                                                        applyStyleToActiveObject({ fill: getComputedFillColor(c, nextOpacity) });
+                                                    }}
+                                                    icon="🎨"
+                                                    allowTransparent={true}
+                                                />
+                                                <span style={{ fontSize: '11px', color: '#64748b' }}>불투명도:</span>
+                                                <input
+                                                    type="range"
+                                                    min="0"
+                                                    max="100"
+                                                    step="10"
+                                                    value={fillOpacity}
+                                                    onChange={e => {
+                                                        const op = Number(e.target.value);
+                                                        setFillOpacity(op);
+                                                        applyStyleToActiveObject({ fill: getComputedFillColor(fillColor, op) });
+                                                    }}
+                                                    style={{ width: '70px', cursor: 'pointer' }}
+                                                    title={`불투명도: ${fillOpacity}%`}
+                                                />
+                                                <span style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', width: '32px' }}>
+                                                    {fillOpacity}%
+                                                </span>
+                                            </div>
+
+                                            {/* 글자(Text) 색상 설정 (엑셀 컬러피커) */}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569' }}>🔤 글자 색상:</span>
+                                                <ExcelColorPickerPopover
+                                                    title="글자 색상 선택"
+                                                    value={textColor}
+                                                    onChange={c => {
+                                                        setTextColor(c);
+                                                        applyStyleToActiveObject({ textColor: c });
+                                                    }}
+                                                    icon="🔤"
+                                                    allowTransparent={false}
+                                                    align="right"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <div style={{ border: '1px solid #cbd5e1', background: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', borderRadius: '8px', overflow: 'hidden' }}>
+                                    <div style={{
+                                        border: '1px solid #cbd5e1', background: '#fff',
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.08)', borderRadius: '10px',
+                                        overflow: 'hidden', position: 'relative'
+                                    }}>
                                         <canvas ref={canvasRef} />
                                     </div>
                                 </>

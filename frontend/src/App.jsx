@@ -55,6 +55,7 @@ import MailTemplatePage from './MailTemplatePage.jsx';
 import NotificationSettingsPage from './NotificationSettingsPage.jsx';
 import IngredientCompliancePage from './IngredientCompliancePage.jsx';
 import HelpCenterModal from './components/HelpCenterModal';
+import CommandPaletteModal from './components/common/CommandPaletteModal';
 import ProfileModal from './ProfileModal';
 import { getCurrentUser, logout, getMyNotifications, getUnreadNotificationCount, readNotification, readAllNotifications, deleteNotification, submitBugReport, getBaseURL, getFormattedReporterInfo } from './api';
 import ManufacturerAuditItemPage from './ManufacturerAuditItemPage';
@@ -242,8 +243,18 @@ const App = () => {
         return <VendorUploadPage token={token} />;
     }
 
-    const [isLoggedIn, setIsLoggedIn] = useState(false);
-    const [user, setUser] = useState(null);
+    const [isAuthChecking, setIsAuthChecking] = useState(true);
+    const [user, setUser] = useState(() => {
+        try {
+            const saved = localStorage.getItem('user_info');
+            return saved ? JSON.parse(saved) : null;
+        } catch (e) {
+            return null;
+        }
+    });
+    const [isLoggedIn, setIsLoggedIn] = useState(() => {
+        return !!localStorage.getItem('user_info');
+    });
 
     // [전역 감지] 시스템 자바스크립트 uncaught 에러 및 unhandled rejection 감지 후 자동 버그 신고 연동 (모든 에러 100% 수집)
     useEffect(() => {
@@ -296,6 +307,111 @@ const App = () => {
     const [isHelpOpen, setIsHelpOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false); 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+    // Productivity & UX Enhancement States
+    const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+    const [favorites, setFavorites] = useState(() => {
+        try {
+            return JSON.parse(localStorage.getItem('qms_favorites') || '[]');
+        } catch {
+            return [];
+        }
+    });
+    const [isFavOpen, setIsFavOpen] = useState(() => {
+        try {
+            const saved = localStorage.getItem('qms_fav_open');
+            return saved !== null ? JSON.parse(saved) : true;
+        } catch {
+            return true;
+        }
+    });
+    const [tabContextMenu, setTabContextMenu] = useState({ visible: false, x: 0, y: 0, tabId: null });
+
+    // Favorites Toggle
+    const handleToggleFavorite = (pageKey) => {
+        setFavorites(prev => {
+            const next = prev.includes(pageKey) ? prev.filter(k => k !== pageKey) : [...prev, pageKey];
+            localStorage.setItem('qms_favorites', JSON.stringify(next));
+            return next;
+        });
+    };
+
+    const handleToggleFavOpen = () => {
+        setIsFavOpen(prev => {
+            const next = !prev;
+            localStorage.setItem('qms_fav_open', JSON.stringify(next));
+            return next;
+        });
+    };
+
+    // Global Shortcuts (Ctrl+K, Ctrl+W)
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            // Ctrl+K or Cmd+K: Command Palette
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                setIsCommandPaletteOpen(prev => !prev);
+                return;
+            }
+
+            // Ctrl+W: Close active tab (Custom QMS tab closure)
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'w') {
+                if (tabs.length > 1) {
+                    e.preventDefault();
+                    handleCloseTab(activeTabId, e);
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [activeTabId, tabs]);
+
+    // Close Tab Context Menu on Click Outside
+    useEffect(() => {
+        const handleGlobalClick = () => {
+            if (tabContextMenu.visible) {
+                setTabContextMenu({ visible: false, x: 0, y: 0, tabId: null });
+            }
+        };
+        window.addEventListener('click', handleGlobalClick);
+        return () => window.removeEventListener('click', handleGlobalClick);
+    }, [tabContextMenu.visible]);
+
+    // Tab Context Menu Actions
+    const handleTabContextMenu = (e, tabId) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setTabContextMenu({
+            visible: true,
+            x: e.clientX,
+            y: e.clientY,
+            tabId
+        });
+    };
+
+    const handleCloseOtherTabs = (tabId) => {
+        setTabs(prev => prev.filter(t => t.id === tabId || t.id === 'dashboard'));
+        setActiveTabId(tabId);
+        setTabContextMenu({ visible: false, x: 0, y: 0, tabId: null });
+    };
+
+    const handleCloseRightTabs = (tabId) => {
+        const index = tabs.findIndex(t => t.id === tabId);
+        if (index === -1) return;
+        const newTabs = tabs.slice(0, index + 1);
+        setTabs(newTabs);
+        if (!newTabs.some(t => t.id === activeTabId)) {
+            setActiveTabId(tabId);
+        }
+        setTabContextMenu({ visible: false, x: 0, y: 0, tabId: null });
+    };
+
+    const handleCloseAllExceptDashboard = () => {
+        setTabs([{ id: 'dashboard', page: 'dashboard', title: '📊 시스템 대시보드', data: null }]);
+        setActiveTabId('dashboard');
+        setTabContextMenu({ visible: false, x: 0, y: 0, tabId: null });
+    };
 
     // Notification states
     const [notifications, setNotifications] = useState([]);
@@ -704,16 +820,28 @@ const App = () => {
 
     }, [activeTabId, isLoggedIn, user, tabs]);
 
+    const handleLogoutState = () => {
+        localStorage.removeItem('user_info');
+        sessionStorage.removeItem('qms_authenticated');
+        setUser(null);
+        setIsLoggedIn(false);
+    };
+
     const fetchUser = async () => {
         try {
             const response = await getCurrentUser({ skipLoading: true, silentAuthCheck: true });
             if (response && response.data) {
                 setUser(response.data);
                 setIsLoggedIn(true);
+                localStorage.setItem('user_info', JSON.stringify(response.data));
+                sessionStorage.setItem('qms_authenticated', 'true');
+            } else {
+                handleLogoutState();
             }
         } catch (err) {
-            setUser(null);
-            setIsLoggedIn(false);
+            handleLogoutState();
+        } finally {
+            setIsAuthChecking(false);
         }
     };
 
@@ -735,6 +863,13 @@ const App = () => {
         setActiveTabId(page);
         setIsMobileMenuOpen(false);
     };
+
+    useEffect(() => {
+        window.__QMS_NAVIGATE__ = handleNavigate;
+        return () => {
+            delete window.__QMS_NAVIGATE__;
+        };
+    }, []);
 
     const handleCloseTab = (tabId, e) => {
         e.stopPropagation();
@@ -758,8 +893,7 @@ const App = () => {
         } catch (err) {
             console.error("Logout failed", err);
         }
-        setIsLoggedIn(false);
-        setUser(null);
+        handleLogoutState();
         setTabs([{ id: 'dashboard', page: 'dashboard', title: '📊 시스템 대시보드', data: null }]);
         setActiveTabId('dashboard');
         setIsMobileMenuOpen(false);
@@ -815,6 +949,39 @@ const App = () => {
     // 제조사 전용 보안링크 접속 시 비인증 포털 바로 연결
     if (window.location.pathname.startsWith('/vendor/upload') || window.location.search.includes('token=')) {
         return <VendorUploadPage />;
+    }
+
+    // [세션 검증 중 스플래시] 캐시된 유저 정보가 없고 세션 확인 중일 때는 로그인 화면 깜빡임 방지
+    if (isAuthChecking && !isLoggedIn) {
+        return (
+            <div style={{
+                position: 'fixed',
+                inset: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: '#f8fafc',
+                zIndex: 9999
+            }}>
+                <div style={{
+                    width: '40px',
+                    height: '40px',
+                    border: '3px solid #e2e8f0',
+                    borderTopColor: '#2563eb',
+                    borderRadius: '50%',
+                    animation: 'qms-spin 0.8s linear infinite'
+                }} />
+                <p style={{ marginTop: '14px', fontSize: '13px', fontWeight: 600, color: '#475569', letterSpacing: '-0.02em' }}>
+                    QMS 세션 확인 중...
+                </p>
+                <style>{`
+                    @keyframes qms-spin {
+                        to { transform: rotate(360deg); }
+                    }
+                `}</style>
+            </div>
+        );
     }
 
     if (!isLoggedIn) {
@@ -879,6 +1046,32 @@ const App = () => {
             default: return false;
         }
     };
+    const renderSidebarItem = (pageKey, label) => {
+        const isCurrentActive = tabs.find(t => t.id === activeTabId)?.page === pageKey;
+        const isFav = favorites.includes(pageKey);
+        return (
+            <div key={pageKey} className="sidebar-item-wrapper">
+                <button
+                    type="button"
+                    className={`sidebar-item ${isCurrentActive ? 'active' : ''}`}
+                    onClick={() => handleNavigate(pageKey)}
+                >
+                    {label}
+                </button>
+                <button
+                    type="button"
+                    className={`sidebar-pin-btn ${isFav ? 'pinned' : ''}`}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleFavorite(pageKey);
+                    }}
+                    title={isFav ? '즐겨찾기 해제' : '빠른 바로가기 고정'}
+                >
+                    {isFav ? '★' : '☆'}
+                </button>
+            </div>
+        );
+    };
 
     return (
         <ErrorBoundary user={user}>
@@ -914,6 +1107,45 @@ const App = () => {
                 </div>
 
                 <nav className="sidebar-menu">
+                    {favorites.length > 0 && (
+                        <div className="sidebar-fav-group">
+                            <button
+                                type="button"
+                                className={`sidebar-group-header ${isFavOpen ? 'active' : ''}`}
+                                onClick={handleToggleFavOpen}
+                                style={{ padding: '10px 16px', background: 'transparent' }}
+                            >
+                                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#b45309', fontWeight: 700, fontSize: '13px' }}>
+                                    ⭐ 빠른 바로가기 ({favorites.filter(favKey => canAccess(favKey)).length})
+                                </span>
+                                <span className={`arrow ${isFavOpen ? 'open' : ''}`}>▼</span>
+                            </button>
+                            {isFavOpen && (
+                                <div className="sidebar-fav-content">
+                                    {favorites.filter(favKey => canAccess(favKey)).map(favKey => {
+                                        const pageTitle = PAGE_INFO[favKey]?.title || favKey;
+                                        const isCurrentActive = tabs.find(t => t.id === activeTabId)?.page === favKey;
+                                        return (
+                                            <div key={favKey} className="sidebar-fav-item" onClick={() => handleNavigate(favKey)}>
+                                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{pageTitle}</span>
+                                                <span
+                                                    style={{ opacity: 0.6, cursor: 'pointer', padding: '0 4px', fontSize: '11px', color: '#94a3b8' }}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleToggleFavorite(favKey);
+                                                    }}
+                                                    title="즐겨찾기 해제"
+                                                >
+                                                    ✕
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {/* [현황 모니터링] */}
                     {hasMonitoringAccess && (
                     <div className="sidebar-group">
@@ -926,21 +1158,9 @@ const App = () => {
                         </button>
                         {openSections.monitoring && (
                             <div className="sidebar-group-content open">
-                                {canAccess('dashboard') && (
-                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'dashboard' ? 'active' : ''}`} onClick={() => handleNavigate('dashboard')}>
-                                        📊 시스템 대시보드
-                                    </button>
-                                )}
-                                {canAccess('announcements') && (
-                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'announcements' ? 'active' : ''}`} onClick={() => handleNavigate('announcements')}>
-                                        📢 전체공지
-                                    </button>
-                                )}
-                                {canAccess('notifications') && (
-                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'notifications' ? 'active' : ''}`} onClick={() => handleNavigate('notifications')}>
-                                        🔔 수신 알림 확인
-                                    </button>
-                                )}
+                                {canAccess('dashboard') && renderSidebarItem('dashboard', '📊 시스템 대시보드')}
+                                {canAccess('announcements') && renderSidebarItem('announcements', '📢 전체공지')}
+                                {canAccess('notifications') && renderSidebarItem('notifications', '🔔 수신 알림 확인')}
                             </div>
                         )}
                     </div>
@@ -961,68 +1181,28 @@ const App = () => {
                                 {(canAccess('users') || canAccess('roles') || canAccess('accessLogs')) && (
                                     <>
                                         <div className="sidebar-sub-header">사용자 및 보안</div>
-                                        {canAccess('users') && (
-                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'users' ? 'active' : ''}`} onClick={() => handleNavigate('users')}>
-                                                👥 사용자 승인 관리
-                                            </button>
-                                        )}
-                                        {canAccess('roles') && (
-                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'roles' ? 'active' : ''}`} onClick={() => handleNavigate('roles')}>
-                                                🔐 권한 관리
-                                            </button>
-                                        )}
-                                        {canAccess('accessLogs') && (
-                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'accessLogs' ? 'active' : ''}`} onClick={() => handleNavigate('accessLogs')}>
-                                                🕒 사용자 접근 로그
-                                            </button>
-                                        )}
+                                        {canAccess('users') && renderSidebarItem('users', '👥 사용자 승인 관리')}
+                                        {canAccess('roles') && renderSidebarItem('roles', '🔐 권한 관리')}
+                                        {canAccess('accessLogs') && renderSidebarItem('accessLogs', '🕒 사용자 접근 로그')}
                                     </>
                                 )}
 
                                 {(canAccess('logs') || canAccess('bugReports')) && (
                                     <>
                                         <div className="sidebar-sub-header">운영 모니터링</div>
-                                        {canAccess('logs') && (
-                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'logs' ? 'active' : ''}`} onClick={() => handleNavigate('logs')}>
-                                                📜 시스템 변경 이력
-                                            </button>
-                                        )}
-                                        {canAccess('bugReports') && (
-                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'bugReports' ? 'active' : ''}`} onClick={() => handleNavigate('bugReports')}>
-                                                🐞 버그 리포트 관리
-                                            </button>
-                                        )}
+                                        {canAccess('logs') && renderSidebarItem('logs', '📜 시스템 변경 이력')}
+                                        {canAccess('bugReports') && renderSidebarItem('bugReports', '🐞 버그 리포트 관리')}
                                     </>
                                 )}
 
                                 {(canAccess('guideManagement') || canAccess('dashboardMgmt') || canAccess('trashBin') || canAccess('mailTemplates') || canAccess('notificationSettings')) && (
                                     <>
                                         <div className="sidebar-sub-header">설정 및 유지보수</div>
-                                        {canAccess('guideManagement') && (
-                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'guideManagement' ? 'active' : ''}`} onClick={() => handleNavigate('guideManagement')}>
-                                                📖 가이드 관리
-                                            </button>
-                                        )}
-                                        {canAccess('dashboardMgmt') && (
-                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'dashboardMgmt' ? 'active' : ''}`} onClick={() => handleNavigate('dashboardMgmt')}>
-                                                🎨 대시보드 제작/관리
-                                            </button>
-                                        )}
-                                        {canAccess('trashBin') && (
-                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'trashBin' ? 'active' : ''}`} onClick={() => handleNavigate('trashBin')}>
-                                                🗑️ 데이터 복구 (휴지통)
-                                            </button>
-                                        )}
-                                        {canAccess('mailTemplates') && (
-                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'mailTemplates' ? 'active' : ''}`} onClick={() => handleNavigate('mailTemplates')}>
-                                                📧 제조사 전달 메일 관리
-                                            </button>
-                                        )}
-                                        {canAccess('notificationSettings') && (
-                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'notificationSettings' ? 'active' : ''}`} onClick={() => handleNavigate('notificationSettings')}>
-                                                🔔 알림 설정 관리
-                                            </button>
-                                        )}
+                                        {canAccess('guideManagement') && renderSidebarItem('guideManagement', '📖 가이드 관리')}
+                                        {canAccess('dashboardMgmt') && renderSidebarItem('dashboardMgmt', '🎨 대시보드 제작/관리')}
+                                        {canAccess('trashBin') && renderSidebarItem('trashBin', '🗑️ 데이터 복구 (휴지통)')}
+                                        {canAccess('mailTemplates') && renderSidebarItem('mailTemplates', '📧 제조사 전달 메일 관리')}
+                                        {canAccess('notificationSettings') && renderSidebarItem('notificationSettings', '🔔 알림 설정 관리')}
                                     </>
                                 )}
                             </div>
@@ -1045,45 +1225,19 @@ const App = () => {
                                 {(canAccess('products') || canAccess('brands') || canAccess('ingredientCompliance') || canAccess('salesChannels')) && (
                                     <>
                                         <div className="sidebar-sub-header">기본 마스터</div>
-                                        {canAccess('products') && (
-                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'products' ? 'active' : ''}`} onClick={() => handleNavigate('products')}>
-                                                📦 제품코드 마스터
-                                            </button>
-                                        )}
-                                        <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'productDashboard' ? 'active' : ''}`} onClick={() => handleNavigate('productDashboard')}>
-                                            📊 제품코드 대시보드
-                                        </button>
-                                        {canAccess('brands') && (
-                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'brands' ? 'active' : ''}`} onClick={() => handleNavigate('brands')}>
-                                                🏷️ 브랜드 마스터 관리
-                                            </button>
-                                        )}
-                                        {canAccess('salesChannels') && (
-                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'salesChannels' ? 'active' : ''}`} onClick={() => handleNavigate('salesChannels')}>
-                                                🌐 유통 채널 관리
-                                            </button>
-                                        )}
-                                        {canAccess('ingredientCompliance') && (
-                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'ingredientCompliance' ? 'active' : ''}`} onClick={() => handleNavigate('ingredientCompliance')}>
-                                                🧪 성분 안전성 검토 (Global Compliance)
-                                            </button>
-                                        )}
+                                        {canAccess('products') && renderSidebarItem('products', '📦 제품코드 마스터')}
+                                        {renderSidebarItem('productDashboard', '📊 제품코드 대시보드')}
+                                        {canAccess('brands') && renderSidebarItem('brands', '🏷️ 브랜드 마스터 관리')}
+                                        {canAccess('salesChannels') && renderSidebarItem('salesChannels', '🌐 유통 채널 관리')}
+                                        {canAccess('ingredientCompliance') && renderSidebarItem('ingredientCompliance', '🧪 성분 안전성 검토 (Global Compliance)')}
                                     </>
                                 )}
 
                                 {(canAccess('bomMaster') || canAccess('bomCategories')) && (
                                     <>
                                         <div className="sidebar-sub-header">BOM/구성품 관리</div>
-                                        {canAccess('bomMaster') && (
-                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'bomMaster' ? 'active' : ''}`} onClick={() => handleNavigate('bomMaster')}>
-                                                📏 구성품 BOM 마스터 관리
-                                            </button>
-                                        )}
-                                        {canAccess('bomCategories') && (
-                                            <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'bomCategories' ? 'active' : ''}`} onClick={() => handleNavigate('bomCategories')}>
-                                                ⚙️ BOM 유형 설정/관리
-                                            </button>
-                                        )}
+                                        {canAccess('bomMaster') && renderSidebarItem('bomMaster', '📏 구성품 BOM 마스터 관리')}
+                                        {canAccess('bomCategories') && renderSidebarItem('bomCategories', '⚙️ BOM 유형 설정/관리')}
                                     </>
                                 )}
                             </div>
@@ -1103,21 +1257,9 @@ const App = () => {
                         </button>
                         {openSections.partner && (
                             <div className="sidebar-group-content open">
-                                {canAccess('manufacturers') && (
-                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'manufacturers' ? 'active' : ''}`} onClick={() => handleNavigate('manufacturers')}>
-                                        🏭 제조사 정보 관리
-                                    </button>
-                                )}
-                                {canAccess('manufacturerCategories') && (
-                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'manufacturerCategories' ? 'active' : ''}`} onClick={() => handleNavigate('manufacturerCategories')}>
-                                        📂 제조사 구분 관리
-                                    </button>
-                                )}
-                                {canAccess('manufacturerGuide') && (
-                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'manufacturerGuide' ? 'active' : ''}`} onClick={() => handleNavigate('manufacturerGuide')}>
-                                        🤝 제조사 협업 가이드
-                                    </button>
-                                )}
+                                {canAccess('manufacturers') && renderSidebarItem('manufacturers', '🏭 제조사 정보 관리')}
+                                {canAccess('manufacturerCategories') && renderSidebarItem('manufacturerCategories', '📂 제조사 구분 관리')}
+                                {canAccess('manufacturerGuide') && renderSidebarItem('manufacturerGuide', '🤝 제조사 협업 가이드')}
                             </div>
                         )}
                     </div>
@@ -1135,21 +1277,9 @@ const App = () => {
                         </button>
                         {openSections.audit && (
                             <div className="sidebar-group-content open">
-                                {canAccess('manufacturerAudits') && (
-                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'manufacturerAudits' ? 'active' : ''}`} onClick={() => handleNavigate('manufacturerAudits')}>
-                                        📝 제조사 Audit 관리
-                                    </button>
-                                )}
-                                {canAccess('manufacturerAuditDashboard') && (
-                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'manufacturerAuditDashboard' ? 'active' : ''}`} onClick={() => handleNavigate('manufacturerAuditDashboard')}>
-                                        📊 제조사 Audit 대시보드
-                                    </button>
-                                )}
-                                {canAccess('manufacturerAuditItems') && (
-                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'manufacturerAuditItems' ? 'active' : ''}`} onClick={() => handleNavigate('manufacturerAuditItems')}>
-                                        📋 제조사 점검항목 관리
-                                    </button>
-                                )}
+                                {canAccess('manufacturerAudits') && renderSidebarItem('manufacturerAudits', '📝 제조사 Audit 관리')}
+                                {canAccess('manufacturerAuditDashboard') && renderSidebarItem('manufacturerAuditDashboard', '📊 제조사 Audit 대시보드')}
+                                {canAccess('manufacturerAuditItems') && renderSidebarItem('manufacturerAuditItems', '📋 제조사 점검항목 관리')}
                             </div>
                         )}
                     </div>
@@ -1167,21 +1297,9 @@ const App = () => {
                         </button>
                         {openSections.quality && (
                             <div className="sidebar-group-content open">
-                                {canAccess('qualityPhotoAudit') && (
-                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'qualityPhotoAudit' ? 'active' : ''}`} onClick={() => handleNavigate('qualityPhotoAudit')}>
-                                        📸 신제품 생산감리 (사진감리)
-                                    </button>
-                                )}
-                                {canAccess('productionAuditDashboard') && (
-                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'productionAuditDashboard' ? 'active' : ''}`} onClick={() => handleNavigate('productionAuditDashboard')}>
-                                        📊 생산감리 대시보드
-                                    </button>
-                                )}
-                                {canAccess('documentRequests') && (
-                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'documentRequests' ? 'active' : ''}`} onClick={() => handleNavigate('documentRequests')}>
-                                        📋 필수 품질서류 관리
-                                    </button>
-                                )}
+                                {canAccess('qualityPhotoAudit') && renderSidebarItem('qualityPhotoAudit', '📸 신제품 생산감리 (사진감리)')}
+                                {canAccess('productionAuditDashboard') && renderSidebarItem('productionAuditDashboard', '📊 생산감리 대시보드')}
+                                {canAccess('documentRequests') && renderSidebarItem('documentRequests', '📋 필수 품질서류 관리')}
                             </div>
                         )}
                     </div>
@@ -1199,21 +1317,9 @@ const App = () => {
                         </button>
                         {openSections.packaging && (
                             <div className="sidebar-group-content open">
-                                {canAccess('packagingTemplates') && (
-                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'packagingTemplates' ? 'active' : ''}`} onClick={() => handleNavigate('packagingTemplates')}>
-                                        📋 포장공정 템플릿 관리
-                                    </button>
-                                )}
-                                {canAccess('spaceRatioCalculator') && (
-                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'spaceRatioCalculator' ? 'active' : ''}`} onClick={() => handleNavigate('spaceRatioCalculator')}>
-                                        📐 포장공간비율 계산기
-                                    </button>
-                                )}
-                                {canAccess('outboxCalculator') && (
-                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'outboxCalculator' ? 'active' : ''}`} onClick={() => handleNavigate('outboxCalculator')}>
-                                        📦 아웃박스 규격 계산기
-                                    </button>
-                                )}
+                                {canAccess('packagingTemplates') && renderSidebarItem('packagingTemplates', '📋 포장공정 템플릿 관리')}
+                                {canAccess('spaceRatioCalculator') && renderSidebarItem('spaceRatioCalculator', '📐 포장공간비율 계산기')}
+                                {canAccess('outboxCalculator') && renderSidebarItem('outboxCalculator', '📦 아웃박스 규격 계산기')}
                             </div>
                         )}
                     </div>
@@ -1231,21 +1337,9 @@ const App = () => {
                         </button>
                         {openSections.inbound && (
                             <div className="sidebar-group-content open">
-                                {canAccess('qualityDashboard') && (
-                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'qualityDashboard' ? 'active' : ''}`} onClick={() => handleNavigate('qualityDashboard')}>
-                                        🚚 입고 품질 검사 대시보드
-                                    </button>
-                                )}
-                                {canAccess('quality') && (
-                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'quality' ? 'active' : ''}`} onClick={() => handleNavigate('quality')}>
-                                        📦 입고 품질 관리
-                                    </button>
-                                )}
-                                {canAccess('releaseRecord') && (
-                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'releaseRecord' ? 'active' : ''}`} onClick={() => handleNavigate('releaseRecord')}>
-                                        📄 시장출하 적부판정 기록
-                                    </button>
-                                )}
+                                {canAccess('qualityDashboard') && renderSidebarItem('qualityDashboard', '🚚 입고 품질 검사 대시보드')}
+                                {canAccess('quality') && renderSidebarItem('quality', '📦 입고 품질 관리')}
+                                {canAccess('releaseRecord') && renderSidebarItem('releaseRecord', '📄 시장출하 적부판정 기록')}
                             </div>
                         )}
                     </div>
@@ -1264,26 +1358,13 @@ const App = () => {
                         {openSections.claim && (
                             <div className="sidebar-group-content open">
                                 <div className="sidebar-sub-header">클레임 운영</div>
-                                {canAccess('claims') && (
-                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'claims' ? 'active' : ''}`} onClick={() => handleNavigate('claims')}>
-                                        🔍 클레임 조회 및 입력
-                                    </button>
-                                )}
-                                {canAccess('claimDashboard') && (
-                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'claimDashboard' ? 'active' : ''}`} onClick={() => handleNavigate('claimDashboard')}>
-                                        📈 클레임 대시보드
-                                    </button>
-                                )}
-                                {canAccess('lotPpmDashboard') && (
-                                    <button className={`sidebar-item ${tabs.find(t => t.id === activeTabId)?.page === 'lotPpmDashboard' ? 'active' : ''}`} onClick={() => handleNavigate('lotPpmDashboard')}>
-                                        📉 LOT PPM 분석 & 근본원인
-                                    </button>
-                                )}
+                                {canAccess('claims') && renderSidebarItem('claims', '🔍 클레임 조회 및 입력')}
+                                {canAccess('claimDashboard') && renderSidebarItem('claimDashboard', '📈 클레임 대시보드')}
+                                {canAccess('lotPpmDashboard') && renderSidebarItem('lotPpmDashboard', '📉 LOT PPM 분석 & 근본원인')}
                             </div>
                         )}
                     </div>
                     )}
-
                 </nav>
 
                 <div className="sidebar-footer">
@@ -1317,6 +1398,8 @@ const App = () => {
                                 key={tab.id} 
                                 className={`tab-item ${tab.id === activeTabId ? 'active' : ''}`}
                                 onClick={() => setActiveTabId(tab.id)}
+                                onContextMenu={(e) => handleTabContextMenu(e, tab.id)}
+                                title="우클릭 시 탭 정리 메뉴"
                             >
                                 <span className="tab-title">{tab.title}</span>
                                 {tabs.length > 1 && (
@@ -1326,18 +1409,53 @@ const App = () => {
                         ))}
                     </div>
 
-                    {/* 알림 시스템 위젯 상단 탭 바 우측 끝 배치 */}
-                    <div className="notifications-widget-container">
-                        <button 
-                            className={`notification-bell-btn ${unreadCount > 0 ? 'has-unread' : ''} ${bellAnimated ? 'bell-ringing' : ''}`}
-                            onClick={() => setIsNotifOpen(!isNotifOpen)}
-                            title="알림 확인"
+                    {/* 상단 생산성 도구 모음: 퀵 서치, 단축키, 알림 */}
+                    <div className="tab-header-tools" style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingRight: '12px' }}>
+                        {/* 🔍 전역 커맨드 검색 버튼 */}
+                        <button
+                            type="button"
+                            onClick={() => setIsCommandPaletteOpen(true)}
+                            title="전역 화면 퀵 이동 (Ctrl + K)"
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '5px 10px',
+                                background: '#f8fafc',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '6px',
+                                color: '#475569',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                transition: 'all 0.15s'
+                            }}
                         >
-                            🔔
-                            {unreadCount > 0 && (
-                                <span className="notification-badge">{unreadCount}</span>
-                            )}
+                            <span>🔍 이동</span>
+                            <kbd style={{
+                                padding: '1px 4px',
+                                background: '#ffffff',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: '3px',
+                                fontSize: '10px',
+                                color: '#64748b'
+                            }}>
+                                Ctrl+K
+                            </kbd>
                         </button>
+
+                        {/* 알림 시스템 위젯 */}
+                        <div className="notifications-widget-container">
+                            <button 
+                                className={`notification-bell-btn ${unreadCount > 0 ? 'has-unread' : ''} ${bellAnimated ? 'bell-ringing' : ''}`}
+                                onClick={() => setIsNotifOpen(!isNotifOpen)}
+                                title="알림 확인"
+                            >
+                                🔔
+                                {unreadCount > 0 && (
+                                    <span className="notification-badge">{unreadCount}</span>
+                                )}
+                            </button>
 
                         {isNotifOpen && (
                             <div className="notifications-popover" ref={popoverRef}>
@@ -1394,6 +1512,7 @@ const App = () => {
                                 </div>
                             </div>
                         )}
+                        </div>
                     </div>
                 </div>
 
@@ -1536,12 +1655,47 @@ const App = () => {
             {/* Global floating help button */}
             <button 
                 className="floating-help-btn" 
-                onClick={() => setIsHelpOpen(true)}
-                title="도움말 보기"
+                onClick={() => setIsHelpOpen(prev => !prev)}
+                title="작업 병행형 가이드 보기"
             >
                 💡
             </button>
 
+            {/* Smart Tab Context Menu */}
+            {tabContextMenu.visible && (
+                <div
+                    className="tab-context-menu"
+                    style={{ top: tabContextMenu.y, left: tabContextMenu.x }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <button className="tab-context-item" onClick={() => handleCloseTab(tabContextMenu.tabId, { stopPropagation: () => {} })}>
+                        ✕ 현재 탭 닫기 <kbd className="cmd-mini-kbd" style={{ marginLeft: 'auto' }}>Ctrl+W</kbd>
+                    </button>
+                    <button className="tab-context-item" onClick={() => handleCloseOtherTabs(tabContextMenu.tabId)}>
+                        ↔️ 다른 탭 모두 닫기
+                    </button>
+                    <button className="tab-context-item" onClick={() => handleCloseRightTabs(tabContextMenu.tabId)}>
+                        ➡️ 오른쪽 탭 모두 닫기
+                    </button>
+                    <div className="tab-context-divider" />
+                    <button className="tab-context-item danger" onClick={handleCloseAllExceptDashboard}>
+                        🧹 대시보드 외 전체 닫기
+                    </button>
+                </div>
+            )}
+
+            {/* Command Palette Modal (Ctrl + K) */}
+            <CommandPaletteModal
+                isOpen={isCommandPaletteOpen}
+                onClose={() => setIsCommandPaletteOpen(false)}
+                onNavigate={handleNavigate}
+                pageInfo={PAGE_INFO}
+                favorites={favorites}
+                onToggleFavorite={handleToggleFavorite}
+                canAccess={canAccess}
+            />
+
+            {/* Contextual Screen Help Modal (Popup) */}
             {isHelpOpen && (
                 <HelpCenterModal 
                     currentPage={tabs.find(t => t.id === activeTabId)?.page} 

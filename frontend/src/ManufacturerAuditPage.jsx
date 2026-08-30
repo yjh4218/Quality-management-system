@@ -14,9 +14,71 @@ import {
 import { toast } from 'react-toastify';
 import ManufacturerSearchModal from './ManufacturerSearchModal';
 import { usePermissions } from './usePermissions';
+import GridColorLegendPopover from './components/common/GridColorLegendPopover';
+import GridConditionalFormattingModal from './components/common/GridConditionalFormattingModal';
+
+const MFR_AUDIT_LEGENDS = [
+    {
+        title: '제조사 Audit 기본 평가 등급',
+        items: [
+            { label: 'A 등급 (우수/적합)', desc: '총점 90% 이상 우수 평가 제조사', bg: '#f6ffed', text: '#389e0d', border: '#b7eb8f' },
+            { label: 'B 등급 (보통/보완)', desc: '총점 70% ~ 89% 보통 / 보완 권고 제조사', bg: '#e6f7ff', text: '#096dd9', border: '#91d5ff' },
+            { label: 'C 등급 (부적합/시정)', desc: '총점 70% 미만 시정 조치 필요 제조사', bg: '#fff1f0', text: '#cf1322', border: '#ffa39e' }
+        ]
+    }
+];
+
+const MFR_AUDIT_FORMATTABLE_COLUMNS = [
+    { field: 'manufacturerCode', headerName: '제조사 코드' },
+    { field: 'manufacturerName', headerName: '제조사명' },
+    { field: 'classificationName', headerName: '분류' },
+    { field: 'auditDate', headerName: '점검일자' },
+    { field: 'modifierInfo', headerName: '작성자' },
+    { field: 'totalScore', headerName: '총점(%)' },
+    { field: 'grade', headerName: '등급' }
+];
 
 const ManufacturerAuditPage = ({ user }) => {
     const { canEdit, canDelete } = usePermissions(user);
+    const isAdmin = user?.roles?.some(r => r.authority?.includes('ADMIN')) || user?.role === 'ADMIN';
+    const [isFormattingModalOpen, setIsFormattingModalOpen] = useState(false);
+    const [customRules, setCustomRules] = useState(() => {
+        try {
+            const saved = localStorage.getItem('mfr_audit_grid_custom_rules');
+            return saved ? JSON.parse(saved) : [];
+        } catch {
+            return [];
+        }
+    });
+
+    const handleSaveCustomRules = (newRules) => {
+        setCustomRules(newRules);
+        localStorage.setItem('mfr_audit_grid_custom_rules', JSON.stringify(newRules));
+    };
+
+    const getCellStyle = (field, value, fallbackStyle = null) => {
+        if (!customRules || customRules.length === 0) return fallbackStyle;
+        const matchedRule = customRules.find(rule => {
+            if (rule.field !== field) return false;
+            const strVal = String(value ?? '').trim().toLowerCase();
+            const targetVal = String(rule.value ?? '').trim().toLowerCase();
+            if (rule.operator === 'equals') return strVal === targetVal;
+            if (rule.operator === 'contains') return strVal.includes(targetVal);
+            if (rule.operator === 'startsWith') return strVal.startsWith(targetVal);
+            if (rule.operator === 'endsWith') return strVal.endsWith(targetVal);
+            return false;
+        });
+
+        if (matchedRule) {
+            return {
+                ...(fallbackStyle || {}),
+                backgroundColor: matchedRule.bg || matchedRule.bgColor,
+                color: matchedRule.text || matchedRule.textColor,
+                fontWeight: 'bold'
+            };
+        }
+        return fallbackStyle;
+    };
     const gridRef = useRef(null);
     const [rowData, setRowData] = useState([]);
     // [수정] 초기 검색 기간 설정 (종료일: 오늘, 시작일: 6개월 전)
@@ -334,17 +396,46 @@ const ManufacturerAuditPage = ({ user }) => {
         {
             headerName: '제조사 코드',
             width: 130,
-            valueGetter: params => params.data.manufacturer?.manufacturerCode || params.data.manufacturer?.identificationCode || '-'
+            valueGetter: params => params.data.manufacturer?.manufacturerCode || params.data.manufacturer?.identificationCode || '-',
+            cellStyle: params => getCellStyle('manufacturerCode', params.value)
         },
-        { headerName: '제조사명', field: 'manufacturer.name', filter: true, width: 180, sortable: true },
-        { field: 'template.classificationName', headerName: '분류', width: 150 },
-        { field: 'auditDate', headerName: '점검일자', width: 110 },
-        { field: 'modifierInfo', headerName: '작성자', width: 100 },
-        { field: 'totalScore', headerName: '총점(%)', width: 90 },
+        { 
+            headerName: '제조사명', 
+            field: 'manufacturer.name', 
+            filter: true, 
+            width: 180, 
+            sortable: true,
+            cellStyle: params => getCellStyle('manufacturerName', params.value)
+        },
+        { 
+            field: 'template.classificationName', 
+            headerName: '분류', 
+            width: 150,
+            cellStyle: params => getCellStyle('classificationName', params.value)
+        },
+        { 
+            field: 'auditDate', 
+            headerName: '점검일자', 
+            width: 110,
+            cellStyle: params => getCellStyle('auditDate', params.value)
+        },
+        { 
+            field: 'modifierInfo', 
+            headerName: '작성자', 
+            width: 100,
+            cellStyle: params => getCellStyle('modifierInfo', params.value)
+        },
+        { 
+            field: 'totalScore', 
+            headerName: '총점(%)', 
+            width: 90,
+            cellStyle: params => getCellStyle('totalScore', params.value)
+        },
         {
             field: 'grade',
             headerName: '등급',
             width: 80,
+            cellStyle: params => getCellStyle('grade', params.value),
             cellRenderer: (p) => <b style={{ color: p.value === 'A' ? '#389e0d' : p.value === 'B' ? '#096dd9' : '#cf1322' }}>{p.value}</b>
         },
         { field: 'updatedAt', headerName: '최종 수정일자', width: 160, valueFormatter: p => p.value ? p.value.replace('T', ' ').substring(0, 19) : '' },
@@ -363,7 +454,7 @@ const ManufacturerAuditPage = ({ user }) => {
                 </div>
             )
         }
-    ], [canDelete]);
+    ], [canDelete, customRules]);
 
     return (
         <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: '#f1f5f9' }}>
@@ -412,7 +503,41 @@ const ManufacturerAuditPage = ({ user }) => {
                     <div style={{ color: '#64748b', fontSize: '13px' }}>
                         제조사별 현장 점검 결과 및 등급을 관리합니다.
                     </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        {/* 🎨 색상 범례 팝오버 */}
+                        <GridColorLegendPopover 
+                            legends={MFR_AUDIT_LEGENDS}
+                            customRules={customRules}
+                            onDeleteCustomRule={(idx) => {
+                                handleSaveCustomRules(customRules.filter((_, i) => i !== idx));
+                            }}
+                        />
+
+                        {/* ⚙️ 조건부 서식 설정 (관리자 전용) */}
+                        {isAdmin && (
+                            <button
+                                type="button"
+                                className="outline"
+                                onClick={() => setIsFormattingModalOpen(true)}
+                                style={{
+                                    fontSize: '13px',
+                                    padding: '8px 14px',
+                                    backgroundColor: '#fff',
+                                    color: '#475569',
+                                    borderColor: '#cbd5e1',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    fontWeight: 'bold',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer'
+                                }}
+                                title="그리드 셀 조건부 서식 규칙 추가/관리"
+                            >
+                                ⚙️ 서식 설정
+                            </button>
+                        )}
+
                         <button
                             className="outline"
                             onClick={() => toast.info('검색 결과 엑셀 다운로드 기능 준비 중입니다.')}
@@ -759,6 +884,16 @@ const ManufacturerAuditPage = ({ user }) => {
                     </div>
                 </div>
             )}
+
+            {/* 조건부 서식 설정 모달 (관리자 전용) */}
+            <GridConditionalFormattingModal
+                isOpen={isFormattingModalOpen}
+                onClose={() => setIsFormattingModalOpen(false)}
+                columns={MFR_AUDIT_FORMATTABLE_COLUMNS}
+                rules={customRules}
+                legends={MFR_AUDIT_LEGENDS}
+                onSave={handleSaveCustomRules}
+            />
         </div>
     );
 };

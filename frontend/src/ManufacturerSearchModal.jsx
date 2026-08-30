@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import * as api from './api';
 import { toast } from 'react-toastify';
+import { matchesMultiFieldTokens } from './utils/searchUtils';
 
 const ManufacturerSearchModal = ({ onClose, onSelect }) => {
     const [searchQuery, setSearchQuery] = useState('');
@@ -24,15 +25,23 @@ const ManufacturerSearchModal = ({ onClose, onSelect }) => {
         }
     };
 
-    const filteredManufacturers = manufacturers.filter(m => 
-        (m.name && m.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (m.manufacturerCode && m.manufacturerCode.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (m.identificationCode && m.identificationCode.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
+    const filteredManufacturers = useMemo(() => {
+        return manufacturers.filter(m => 
+            matchesMultiFieldTokens([
+                m.name,
+                m.manufacturerCode,
+                m.identificationCode,
+                m.category,
+                m.representativeName,
+                m.managerName,
+                m.businessNumber
+            ], searchQuery)
+        );
+    }, [manufacturers, searchQuery]);
 
     return (
         <div className="drawer-overlay" style={{ zIndex: 3001 }}>
-            <div className="modal-content" style={{ width: '700px' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-content" style={{ width: '750px' }} onClick={e => e.stopPropagation()}>
                 {/* 1. Modal Header */}
                 <div className="modal-header">
                     <h3>🔍 제조사 검색</h3>
@@ -43,14 +52,14 @@ const ManufacturerSearchModal = ({ onClose, onSelect }) => {
 
                 {/* 2. Modal Body */}
                 <div className="modal-body white-bg">
-                    <div className="form-group" style={{ marginBottom: '25px', padding: '15px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                        <label style={{ fontSize: '13px', fontWeight: '800', color: '#444', marginBottom: '10px', display: 'block' }}>🔍 제조사명 또는 코드 검색</label>
+                    <div className="form-group" style={{ marginBottom: '20px', padding: '15px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                        <label style={{ fontSize: '13px', fontWeight: '800', color: '#444', marginBottom: '8px', display: 'block' }}>🔍 제조사명, 코드, 카테고리, 담당자 다중 검색 (쉼표[,] 또는 띄어쓰기 구분)</label>
                         <input 
                             value={searchQuery} 
                             onChange={e => setSearchQuery(e.target.value)} 
-                            placeholder="업체명, 업체코드를 입력하여 실시간 필터링하세요..." 
+                            placeholder="예: 한국콜마 화장품 또는 콜마, OEM" 
                             autoFocus
-                            style={{ padding: '12px 15px', fontSize: '15px' }}
+                            style={{ padding: '10px 14px', fontSize: '14px' }}
                         />
                     </div>
 

@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { getMyNotifications, readNotification, readAllNotifications, deleteNotification, getClaimById } from './api';
 import { toast } from 'react-toastify';
+import { matchesMultiFieldTokens } from './utils/searchUtils';
 
 /**
  * 🔔 알림 확인 페이지
@@ -10,6 +11,7 @@ import { toast } from 'react-toastify';
 const NotificationListPage = ({ user, onNavigate }) => {
     const [notifications, setNotifications] = useState([]);
     const [filter, setFilter] = useState('ALL'); // ALL, UNREAD, READ
+    const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
     const fetchNotifications = async () => {
@@ -30,6 +32,23 @@ const NotificationListPage = ({ user, onNavigate }) => {
     useEffect(() => {
         fetchNotifications();
     }, []);
+
+    // 필터링된 알림 목록 (탭 필터 + 다중 키워드 AND 검색)
+    const filteredNotifications = useMemo(() => {
+        return notifications.filter(n => {
+            if (filter === 'UNREAD' && n.read) return false;
+            if (filter === 'READ' && !n.read) return false;
+
+            if (searchQuery.trim()) {
+                const combinedFields = [n.title, n.message, n.type];
+                if (!matchesMultiFieldTokens(combinedFields, searchQuery)) {
+                    return false;
+                }
+            }
+
+            return true;
+        });
+    }, [notifications, filter, searchQuery]);
 
     const handleRead = async (id, linkUrl) => {
         try {
@@ -99,13 +118,6 @@ const NotificationListPage = ({ user, onNavigate }) => {
         }
     };
 
-    // 필터링된 알림 목록
-    const filteredNotifications = notifications.filter(n => {
-        if (filter === 'UNREAD') return !n.read;
-        if (filter === 'READ') return n.read;
-        return true;
-    });
-
     const getTypeBadgeClass = (type) => {
         switch (type) {
             case 'CLAIM': return 'notification-type-badge claim';
@@ -141,31 +153,43 @@ const NotificationListPage = ({ user, onNavigate }) => {
                 </button>
             </div>
 
-            {/* 필터 탭 바 */}
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
-                {[
-                    { key: 'ALL', label: '전체 알림' },
-                    { key: 'UNREAD', label: `미확인 (${notifications.filter(n => !n.read).length})` },
-                    { key: 'READ', label: '확인 완료' }
-                ].map(tab => (
-                    <button
-                        key={tab.key}
-                        onClick={() => setFilter(tab.key)}
-                        style={{
-                            padding: '8px 16px',
-                            borderRadius: '8px',
-                            border: 'none',
-                            fontSize: '13.5px',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            backgroundColor: filter === tab.key ? '#e2e8f0' : 'transparent',
-                            color: filter === tab.key ? '#0f172a' : '#64748b',
-                            transition: 'all 0.2s'
-                        }}
-                    >
-                        {tab.label}
-                    </button>
-                ))}
+            {/* 필터 탭 바 및 다중 키워드 검색창 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    {[
+                        { key: 'ALL', label: '전체 알림' },
+                        { key: 'UNREAD', label: `미확인 (${notifications.filter(n => !n.read).length})` },
+                        { key: 'READ', label: '확인 완료' }
+                    ].map(tab => (
+                        <button
+                            key={tab.key}
+                            onClick={() => setFilter(tab.key)}
+                            style={{
+                                padding: '8px 16px',
+                                borderRadius: '8px',
+                                border: 'none',
+                                fontSize: '13.5px',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                                backgroundColor: filter === tab.key ? '#e2e8f0' : 'transparent',
+                                color: filter === tab.key ? '#0f172a' : '#64748b',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
+
+                <div style={{ minWidth: '280px' }}>
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        placeholder="🔍 알림 내용/제목 다중 검색 (예: 클레임, 토너)"
+                        style={{ width: '100%', padding: '8px 12px', fontSize: '13px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#fff' }}
+                    />
+                </div>
             </div>
 
             {/* 알림 리스트 영역 */}

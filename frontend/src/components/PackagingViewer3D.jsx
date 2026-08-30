@@ -92,6 +92,8 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
   }, [mode, savedViewConfig]);
 
   const [isCapturing, setIsCapturing] = useState(false);
+  const [boxOpacity, setBoxOpacity] = useState(1.0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // ── Procedural Eco Green Air Pillow Texture Generator (실제 현장 에어쿠션 100% 동일 구현) ──
   const airPillowTextureRef = useRef(null);
@@ -591,7 +593,7 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
       const rows = arrangement.rows || 1;
       const layers = arrangement.layers || 1;
 
-      const sc = Math.min(0.014, 3.8 / Math.max(ibw, ibd));
+      const sc = Math.min(0.020, 5.5 / Math.max(ibw, ibd));
       const bw = ibw * sc, bd = ibd * sc, bh = ibh * sc;
 
       // Outer container (Inbox frame)
@@ -656,7 +658,7 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
       const popH = Math.max((popHeight || 15) * sc, 0.012);
       const totalHeight = bh + (hasPop ? popH : (useAirCap ? (hasPop ? popH : 0.024) : 0));
       const maxDim = Math.max(bw, bd, totalHeight);
-      const defaultDist = Math.max(maxDim * 2.2, 1.8);
+      const defaultDist = Math.max(maxDim * 1.6, 1.3);
       const defaultLookY = totalHeight * 0.50;
       const defaultPhi = 0.95; // 약 35° 아이소메트릭 앙각으로 전면/측면 입체감과 상단 배열을 균형 있게 노출
       const defaultTheta = 0.68;
@@ -676,7 +678,7 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
       const rows = arrangement.rows || 1;
       const layers = arrangement.layers || 1;
 
-      const sc = Math.min(0.014, 4.0 / Math.max(obw, obd));
+      const sc = Math.min(0.020, 5.5 / Math.max(obw, obd));
       const bw = obw * sc, bd = obd * sc, bh = obh * sc;
 
       // Outer Box (Clean Blue Frame)
@@ -822,7 +824,7 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
       const popH = Math.max((popHeight || 15) * sc, 0.012);
       const totalHeight = bh + (hasPop ? popH : (useAirCap ? 0.024 : 0));
       const maxDim = Math.max(bw, bd, totalHeight);
-      const defaultDist = Math.max(maxDim * 2.2, 1.8);
+      const defaultDist = Math.max(maxDim * 1.6, 1.3);
       const defaultLookY = totalHeight * 0.50;
       const defaultPhi = 0.95; // 약 35° 아이소메트릭 앙각으로 전면/측면 입체감과 상단 배열을 균형 있게 노출
       const defaultTheta = 0.68;
@@ -1055,6 +1057,35 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
     performSnapshotCapture();
   };
 
+  // 📸 고화질 3D PNG 직접 다운로드 핸들러
+  const handleDownloadPNG = () => {
+    const dataUrl = performSnapshotCapture();
+    if (dataUrl) {
+      const link = document.createElement('a');
+      const now = new Date();
+      const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+      link.download = `packaging_3d_${mode}_${timestamp}.png`;
+      link.href = dataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  // ⛶ 3D 뷰어 전체화면(Fullscreen) 토글
+  const handleToggleFullscreen = () => {
+    if (!containerRef.current) return;
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen().then(() => {
+        setIsFullscreen(true);
+      }).catch(err => console.error("Fullscreen request failed", err));
+    } else {
+      document.exitFullscreen().then(() => {
+        setIsFullscreen(false);
+      }).catch(err => console.error("Exit fullscreen failed", err));
+    }
+  };
+
   const handleResetView = () => {
     const s = stateRef.current;
     s.hasCustomAngle = false;
@@ -1062,12 +1093,12 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
       const ibw = (inbox?.w || unitBox.w * arrangement.cols + 16) || 120;
       const ibd = (inbox?.d || unitBox.d * arrangement.rows + 16) || 120;
       const ibh = (inbox?.h || unitBox.h * arrangement.layers + 16) || 150;
-      const sc = Math.min(0.014, 3.8 / Math.max(ibw, ibd));
+      const sc = Math.min(0.020, 5.5 / Math.max(ibw, ibd));
       const bw = ibw * sc, bd = ibd * sc, bh = ibh * sc;
       const popH = Math.max((popHeight || 15) * sc, 0.012);
       const totalHeight = bh + (hasPop ? popH : (useAirCap ? (hasPop ? popH : 0.024) : 0));
       const maxDim = Math.max(bw, bd, totalHeight);
-      s.tgtDist = Math.max(maxDim * 2.2, 1.8);
+      s.tgtDist = Math.max(maxDim * 1.6, 1.3);
       s.tgtLookY = totalHeight * 0.50;
       s.tgtPhi = 0.95;
       s.tgtTheta = 0.68;
@@ -1075,12 +1106,12 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
       const obw = outbox?.w || 300;
       const obd = outbox?.d || 200;
       const obh = outbox?.h || 150;
-      const sc = Math.min(0.014, 4.0 / Math.max(obw, obd));
+      const sc = Math.min(0.020, 5.5 / Math.max(obw, obd));
       const bw = obw * sc, bd = obd * sc, bh = obh * sc;
       const popH = Math.max((popHeight || 15) * sc, 0.012);
       const totalHeight = bh + (hasPop ? popH : (useAirCap ? 0.024 : 0));
       const maxDim = Math.max(bw, bd, totalHeight);
-      s.tgtDist = Math.max(maxDim * 2.2, 1.8);
+      s.tgtDist = Math.max(maxDim * 1.6, 1.3);
       s.tgtLookY = totalHeight * 0.50;
       s.tgtPhi = 0.95;
       s.tgtTheta = 0.68;
@@ -1157,9 +1188,31 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
     }
   };
 
+  const handleSetPresetView = (preset) => {
+    const s = stateRef.current;
+    s.hasCustomAngle = true;
+    if (preset === 'iso') {
+      s.tgtTheta = mode.startsWith('pallet') ? 0.65 : 0.68;
+      s.tgtPhi = mode.startsWith('pallet') ? 0.98 : 0.95;
+    } else if (preset === 'top') {
+      s.tgtTheta = 0;
+      s.tgtPhi = 0.08;
+    } else if (preset === 'front') {
+      s.tgtTheta = 0;
+      s.tgtPhi = 1.50;
+    } else if (preset === 'side') {
+      s.tgtTheta = Math.PI / 2;
+      s.tgtPhi = 1.50;
+    }
+    if (onViewChange) {
+      onViewChange({ theta: s.tgtTheta, phi: s.tgtPhi, dist: s.tgtDist, lookY: s.tgtLookY });
+    }
+  };
+
   useImperativeHandle(ref, () => ({
     capture: performSnapshotCapture,
     resetView: handleResetView,
+    setPresetView: handleSetPresetView,
     getViewConfig: () => {
       const s = stateRef.current;
       return {
@@ -1361,10 +1414,11 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
     const ro = new ResizeObserver(entries => {
       for (const entry of entries) {
         const width = entry.contentRect.width;
-        if (width > 0 && stateRef.current.renderer && stateRef.current.camera) {
-          stateRef.current.camera.aspect = width / height;
+        const currentHeight = entry.contentRect.height || (typeof height === 'number' ? height : container.clientHeight || 520);
+        if (width > 0 && currentHeight > 0 && stateRef.current.renderer && stateRef.current.camera) {
+          stateRef.current.camera.aspect = width / currentHeight;
           stateRef.current.camera.updateProjectionMatrix();
-          stateRef.current.renderer.setSize(width, height);
+          stateRef.current.renderer.setSize(width, currentHeight);
         }
       }
     });
@@ -1389,13 +1443,16 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
     buildScene();
   }, [buildScene]);
 
+  const containerHeightStyle = typeof height === 'number' ? `${height}px` : (height || '100%');
+
   return (
     <div
       ref={containerRef}
       style={{
         position: 'relative',
         width: '100%',
-        height: `${height}px`,
+        height: containerHeightStyle,
+        minHeight: '420px',
         borderRadius: '10px',
         overflow: 'hidden',
         border: '1px solid #E2E8F0',
@@ -1427,6 +1484,87 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
           justifyContent: 'flex-end'
         }}
       >
+        {/* View Angle Presets Group */}
+        <div style={{
+          display: 'flex',
+          gap: '2px',
+          background: 'rgba(255, 255, 255, 0.90)',
+          backdropFilter: 'blur(4px)',
+          padding: '2px 4px',
+          borderRadius: '6px',
+          border: '1px solid #CBD5E1',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.06)'
+        }}>
+          <button
+            type="button"
+            onClick={() => handleSetPresetView('iso')}
+            style={{
+              background: '#F1F5F9',
+              border: '1px solid #E2E8F0',
+              borderRadius: '4px',
+              padding: '3px 6px',
+              fontSize: '11px',
+              fontWeight: 700,
+              color: '#1E293B',
+              cursor: 'pointer'
+            }}
+            title="아이소메트릭 입체뷰 (Isometric 3D)"
+          >
+            입체
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSetPresetView('top')}
+            style={{
+              background: '#F1F5F9',
+              border: '1px solid #E2E8F0',
+              borderRadius: '4px',
+              padding: '3px 6px',
+              fontSize: '11px',
+              fontWeight: 700,
+              color: '#1E293B',
+              cursor: 'pointer'
+            }}
+            title="상단 평면도 (Top View)"
+          >
+            탑뷰
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSetPresetView('front')}
+            style={{
+              background: '#F1F5F9',
+              border: '1px solid #E2E8F0',
+              borderRadius: '4px',
+              padding: '3px 6px',
+              fontSize: '11px',
+              fontWeight: 700,
+              color: '#1E293B',
+              cursor: 'pointer'
+            }}
+            title="정면 뷰 (Front View)"
+          >
+            정면
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSetPresetView('side')}
+            style={{
+              background: '#F1F5F9',
+              border: '1px solid #E2E8F0',
+              borderRadius: '4px',
+              padding: '3px 6px',
+              fontSize: '11px',
+              fontWeight: 700,
+              color: '#1E293B',
+              cursor: 'pointer'
+            }}
+            title="측면 뷰 (Side View)"
+          >
+            측면
+          </button>
+        </div>
+
         {/* Navigation Controls Group */}
         <div style={{
           display: 'flex',
@@ -1542,6 +1680,91 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
           </button>
         </div>
 
+        {/* 🧭 카메라 표준 뷰포트 프리셋 버튼 모음 */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            background: 'rgba(255, 255, 255, 0.90)',
+            backdropFilter: 'blur(4px)',
+            border: '1px solid #CBD5E1',
+            borderRadius: '6px',
+            padding: '2px',
+            gap: '2px',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+          }}
+          title="카메라 시점 프리셋"
+        >
+          <button
+            type="button"
+            onClick={() => handleSetPresetView('iso')}
+            style={{
+              background: '#F1F5F9',
+              border: 'none',
+              borderRadius: '4px',
+              padding: '3px 6px',
+              fontSize: '11px',
+              fontWeight: 700,
+              color: '#334155',
+              cursor: 'pointer'
+            }}
+            title="등각 입체뷰 (Isometric)"
+          >
+            🧭 입체
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSetPresetView('top')}
+            style={{
+              background: '#F1F5F9',
+              border: 'none',
+              borderRadius: '4px',
+              padding: '3px 6px',
+              fontSize: '11px',
+              fontWeight: 700,
+              color: '#334155',
+              cursor: 'pointer'
+            }}
+            title="위에서 내려다보기 (Top View)"
+          >
+            ⬆️ 탑
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSetPresetView('front')}
+            style={{
+              background: '#F1F5F9',
+              border: 'none',
+              borderRadius: '4px',
+              padding: '3px 6px',
+              fontSize: '11px',
+              fontWeight: 700,
+              color: '#334155',
+              cursor: 'pointer'
+            }}
+            title="정면에서 바라보기 (Front View)"
+          >
+            👁️ 정면
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSetPresetView('side')}
+            style={{
+              background: '#F1F5F9',
+              border: 'none',
+              borderRadius: '4px',
+              padding: '3px 6px',
+              fontSize: '11px',
+              fontWeight: 700,
+              color: '#334155',
+              cursor: 'pointer'
+            }}
+            title="측면에서 바라보기 (Side View)"
+          >
+            👈 측면
+          </button>
+        </div>
+
         <button
           type="button"
           onClick={handleResetView}
@@ -1560,6 +1783,31 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
           title="시점 초기화"
         >
           🔄 초기화
+        </button>
+
+        {/* 📸 3D 고화질 PNG 직접 다운로드 */}
+        <button
+          type="button"
+          onClick={handleDownloadPNG}
+          disabled={isCapturing}
+          style={{
+            background: '#059669',
+            border: 'none',
+            borderRadius: '6px',
+            padding: '4px 10px',
+            fontSize: '11px',
+            fontWeight: 700,
+            color: '#FFFFFF',
+            cursor: isCapturing ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            boxShadow: '0 2px 4px rgba(5,150,105,0.3)',
+            opacity: isCapturing ? 0.6 : 1
+          }}
+          title="현재 3D 렌더링 화면을 고해상도 PNG 파일로 저장"
+        >
+          📸 PNG 저장
         </button>
 
         {onCapture && (
@@ -1583,9 +1831,30 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
               opacity: isCapturing ? 0.6 : 1
             }}
           >
-            📸 3D 스냅샷 저장
+            📸 3D 스냅샷 첨부
           </button>
         )}
+
+        {/* ⛶ 전체화면 확대 버튼 */}
+        <button
+          type="button"
+          onClick={handleToggleFullscreen}
+          style={{
+            background: 'rgba(255, 255, 255, 0.90)',
+            backdropFilter: 'blur(4px)',
+            border: '1px solid #CBD5E1',
+            borderRadius: '6px',
+            padding: '4px 8px',
+            fontSize: '11px',
+            fontWeight: 700,
+            color: '#334155',
+            cursor: 'pointer',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+          }}
+          title={isFullscreen ? "전체화면 종료" : "3D 뷰어 전체화면 확대"}
+        >
+          {isFullscreen ? "🗗 축소" : "⛶ 전체화면"}
+        </button>
       </div>
 
       {/* Guide Note */}

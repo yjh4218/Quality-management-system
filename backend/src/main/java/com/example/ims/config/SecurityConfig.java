@@ -61,9 +61,10 @@ public class SecurityConfig {
                     }
                 }, org.springframework.security.web.authentication.www.BasicAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
-                        // [CORS PATCH] OPTIONS preflight 요청 무조건 허용
+                        // [CORS & Static Resources PATCH] 정적 업로드 파일 및 OPTIONS 허용
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/error").permitAll()
+                        .requestMatchers("/uploads/**", "/uploads/*").permitAll()
+                        .requestMatchers("/error", "/favicon.ico", "/assets/**", "/index.html").permitAll()
                         .requestMatchers("/api/bug-reports", "/api/bug-reports/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/bug-reports", "/api/bug-reports/**").permitAll()
                         .requestMatchers("/api/logs/access/**", "/api/logs/access/page-move").permitAll()

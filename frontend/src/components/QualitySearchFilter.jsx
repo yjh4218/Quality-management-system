@@ -16,6 +16,7 @@ import { IconButton, InputAdornment } from '@mui/material';
 import ProductSearchPopup from '../ProductSearchPopup';
 import * as api from '../api';
 import useDateRangePreset from '../hooks/useDateRangePreset';
+import GridColorLegendPopover from './common/GridColorLegendPopover';
 
 
 const QualitySearchFilter = ({
@@ -31,7 +32,12 @@ const QualitySearchFilter = ({
     isInternalQuality,
     manufacturers,
     canViewInbound,
-    inboundCount
+    inboundCount,
+    isAdmin,
+    customRules = [],
+    setCustomRules,
+    onOpenFormattingModal,
+    legends = []
 }) => {
     const [showSearchPopup, setShowSearchPopup] = React.useState(false);
 
@@ -111,7 +117,43 @@ const QualitySearchFilter = ({
                     <div style={{ color: '#64748b', fontSize: '13px' }}>
                         검색 필터를 설정하고 데이터를 조회하세요.
                     </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        {/* 🎨 색상 범례 팝오버 */}
+                        <GridColorLegendPopover 
+                            legends={legends}
+                            customRules={customRules}
+                            onDeleteCustomRule={(idx) => {
+                                if (setCustomRules) {
+                                    setCustomRules(customRules.filter((_, i) => i !== idx));
+                                }
+                            }}
+                        />
+
+                        {/* ⚙️ 조건부 서식 설정 (관리자 전용) */}
+                        {isAdmin && onOpenFormattingModal && (
+                            <button
+                                type="button"
+                                className="outline"
+                                onClick={onOpenFormattingModal}
+                                style={{
+                                    fontSize: '13px',
+                                    padding: '8px 14px',
+                                    backgroundColor: '#fff',
+                                    color: '#475569',
+                                    borderColor: '#cbd5e1',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    fontWeight: 'bold',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer'
+                                }}
+                                title="그리드 셀 조건부 서식 규칙 추가/관리"
+                            >
+                                ⚙️ 서식 설정
+                            </button>
+                        )}
+
                         {canViewInbound && (
                             <button 
                                 className="outline" 

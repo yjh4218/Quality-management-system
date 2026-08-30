@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { searchProducts, getPackagingSpecs, getPackagingMethodImages, getBaseURL } from './api';
+import { splitSearchTokens, matchesAllTokens } from './utils/searchUtils';
 
 const ProductSearchPopup = ({ 
     isOpen = true,
@@ -62,14 +63,20 @@ const ProductSearchPopup = ({
         setPreviewProduct(null);
         setPreviewImages([]);
         try {
+            // 다중 키워드가 입력된 경우 백엔드에는 첫 번째 핵심 토큰을 전송하여 후보군을 넓게 수집
+            const itemCodeTokens = splitSearchTokens(searchFields.itemCode);
+            const nameTokens = splitSearchTokens(searchFields.productName);
+            const engTokens = splitSearchTokens(searchFields.englishProductName);
+            const mfrTokens = splitSearchTokens(searchFields.manufacturer);
+
             const queryParams = {
-                itemCode: searchFields.itemCode,
-                productName: searchFields.productName,
-                englishProductName: searchFields.englishProductName,
-                manufacturer: searchFields.manufacturer,
-                ingredients: searchFields.ingredients,
+                itemCode: itemCodeTokens.length > 0 ? itemCodeTokens[0] : undefined,
+                productName: nameTokens.length > 0 ? nameTokens[0] : undefined,
+                englishProductName: engTokens.length > 0 ? engTokens[0] : undefined,
+                manufacturer: mfrTokens.length > 0 ? mfrTokens[0] : undefined,
+                ingredients: searchFields.ingredients ? searchFields.ingredients.trim() : undefined,
                 isMaster: searchFields.isMasterOnly ? true : undefined,
-                size: 50
+                size: 100
             };
             const res = await searchProducts(queryParams);
             const data = res.data.content !== undefined ? res.data.content : res.data;
@@ -78,6 +85,17 @@ const ProductSearchPopup = ({
             if (searchFields.isMasterOnly) {
                 list = list.filter(p => p.isMaster === true || p.isMaster === 'true' || p.isMaster === 1);
             }
+
+            // 클라이언트 단에서 입력된 모든 다중 토큰(AND 조건) 정밀 필터링 적용
+            list = list.filter(p => {
+                if (searchFields.itemCode.trim() && !matchesAllTokens(p.itemCode, searchFields.itemCode)) return false;
+                if (searchFields.productName.trim() && !matchesAllTokens(p.productName, searchFields.productName)) return false;
+                if (searchFields.englishProductName.trim() && !matchesAllTokens(p.englishProductName, searchFields.englishProductName)) return false;
+                if (searchFields.manufacturer.trim() && !matchesAllTokens(p.manufacturer, searchFields.manufacturer)) return false;
+                if (searchFields.ingredients.trim() && !matchesAllTokens(p.ingredients, searchFields.ingredients)) return false;
+                return true;
+            });
+
             setResults(list);
         } catch (error) {
             alert("검색에 실패했습니다.");
@@ -186,7 +204,7 @@ const ProductSearchPopup = ({
                                             handleSearch();
                                         }
                                     }}
-                                    placeholder="제품명 검색" 
+                                    placeholder="예: 어성초, 250 또는 토너" 
                                     style={{ fontSize: '13px' }}
                                 />
                             </div>

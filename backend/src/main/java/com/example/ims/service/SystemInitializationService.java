@@ -345,6 +345,15 @@ public class SystemInitializationService {
                 name, roleKey);
     }
 
+    private void seedAndRepairPageGuides() {
+        try {
+            Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM system_page_guides", Integer.class);
+            log.info(">>>> [SYSTEM INIT] Verified system_page_guides table (current active guides: {}).", count != null ? count : 0);
+        } catch (Exception e) {
+            log.warn(">>>> [SYSTEM INIT] system_page_guides verification check warning: {}", e.getMessage());
+        }
+    }
+
     private void seedTestUsers() {
         createIfMissing("qc", "품질담당", "더파운더즈", "ROLE_QUALITY");
         createIfMissing("qa", "QA담당", "더파운더즈", "ROLE_QUALITY");

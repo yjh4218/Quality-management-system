@@ -26,6 +26,8 @@ import { usePermissions } from './usePermissions';
 import PackagingMethodTab from './components/dashboard/PackagingMethodTab';
 import { calculateAllCountrySpaceRatios, generateOptimizationSuggestions } from './utils/packagingRatioCalculator';
 import PackagingViewer3D from './components/PackagingViewer3D';
+import useFormDraft from './hooks/useFormDraft';
+import DraftRestoreBanner from './components/common/DraftRestoreBanner';
 import {
     calcAllPalletPatterns,
     generateArrangementOptions,
@@ -1660,6 +1662,14 @@ const ProductDrawer = ({ product, onClose, user }) => {
     const canEditBoxes = canEdit && !isDimensionsConfirmed;
     const canEditPackaging = canEdit && formData.isMaster;
 
+    // 폼 자동 임시저장(Autosave) 및 복원 훅
+    const { hasDraft, draftSavedAt, restoreDraft, clearDraft } = useFormDraft(
+        product ? `product_edit_${product.id || product.itemCode}` : 'product_new',
+        formData,
+        setFormData,
+        { enabled: canEdit }
+    );
+
     useEffect(() => {
         loadData();
     }, []);
@@ -2409,10 +2419,132 @@ const ProductDrawer = ({ product, onClose, user }) => {
         }
     };
 
+    // 제품 마스터 및 포장사양서 일괄 저장 실행 함수 (silent: 성공 alert 생략 여부)
+    const executeSaveAll = async (silent = false) => {
+        if (!formData.itemCode || !formData.itemCode.trim()) {
+            alert("⚠️ 품목코드는 필수 입력 항목입니다.");
+            return false;
+        }
+
+        if (!formData.productName || !formData.productName.trim()) {
+            alert("⚠️ 제품명은 필수 입력 항목입니다.");
+            return false;
+        }
+
+        // 채널 정보가 선택되지 않은 경우 필수 안내 알림 및 진행 차단
+        if (!formData.channels || formData.channels.length === 0) {
+            alert("⚠️ 유통 채널 정보가 선택되지 않았습니다.\n제품 등록 및 수정 시 반드시 1개 이상의 유통 채널을 선택해야 합니다.");
+            return false;
+        }
+
+        const payload = { ...formData };
+        if (payload.brand && !payload.brand.id && !payload.brand.name) payload.brand = null;
+        if (payload.manufacturerInfo && !payload.manufacturerInfo.id && !payload.manufacturerInfo.name) payload.manufacturerInfo = null;
+
+        if (payload.capacity && !String(payload.capacity).includes('mL')) payload.capacity = `${payload.capacity}mL`;
+        if (payload.weight && !String(payload.weight).includes('g')) payload.weight = `${payload.weight}g`;
+
+        // 유통 채널 payload 규격화 (JPA ManyToMany 룩업 및 영속화 완벽 보장)
+        if (payload.channels && Array.isArray(payload.channels)) {
+            payload.channels = payload.channels.map(ch => (ch && ch.id ? { ...ch } : {
+                id: ch?.id || null,
+                name: ch?.name || '',
+                channelCode: ch?.channelCode || ''
+            })).filter(c => c.id || c.name);
+        }
+
+        console.log(">>>> [FRONTEND SAVE PAYLOAD] Channels:", payload.channels);
+
+        try {
+            if (product) {
+                await updateProduct(product.id, payload);
+                if (isSpecLoaded) {
+                    const specToSave = { ...currentSpec };
+                    delete specToSave.methodImages;
+                    delete specToSave.bomItems;
+
+                    // 바코드 fallback 보장
+                    if (!specToSave.barcode && (formData.productBarcode || formData.barcode)) {
+                        specToSave.barcode = formData.productBarcode || formData.barcode;
+                    }
+                    if (!specToSave.inboxBarcode && formData.inboxBarcode) {
+                        specToSave.inboxBarcode = formData.inboxBarcode;
+                    }
+                    if (!specToSave.outboxBarcode && formData.outboxBarcode) {
+                        specToSave.outboxBarcode = formData.outboxBarcode;
+                    }
+
+                    const dynamicPalletWt = calcPalletWeight(currentSpec, formData);
+                    if (dynamicPalletWt) {
+                        specToSave.onePalletWeight = dynamicPalletWt;
+                    }
+
+                    const specPayload = {
+                        spec: {
+                            ...specToSave,
+                            product: { id: product.id }
+                        },
+                        revisions: specRevisions,
+                        components: specComponents,
+                        methodImages: null
+                    };
+                    const res = await api.saveFullPackagingSpec(specPayload);
+                    const savedSpec = res.data?.spec || res.data;
+                    const savedSpecId = savedSpec?.id || res.data?.id || currentSpec?.id;
+
+                    if (savedSpecId && packagingMethodSaveRef.current) {
+                        await packagingMethodSaveRef.current(savedSpecId);
+                    }
+                }
+                if (!silent) {
+                    alert("제품 기본정보, 유통채널 및 포장재 사양서/포장방법 사진이 일괄 저장되었습니다.");
+                }
+            } else {
+                await createProduct(payload);
+                if (!silent) {
+                    alert("신규 제품이 등록되었습니다.");
+                }
+            }
+            clearDraft();
+            return true;
+        } catch (error) {
+            console.error("Batch save error:", error);
+            let serverMsg = error.response?.data?.message || (typeof error.response?.data === 'string' ? error.response.data : null);
+            if (!serverMsg && error.response?.data && typeof error.response.data === 'object') {
+                serverMsg = Object.entries(error.response.data).map(([k, v]) => `${k}: ${v}`).join(', ');
+            }
+            serverMsg = serverMsg || error.message || "서버 통신 오류";
+            alert(`저장 중 오류가 발생했습니다.\n사유: ${serverMsg}`);
+
+            // [오류 추적 및 버그 리포트] 저장 실패 시 시스템 버그 리포트에 자동 적재
+            try {
+                await api.submitBugReport({
+                    screenName: '제품코드 마스터 (ProductDrawer)',
+                    url: window.location.href,
+                    errorCategory: 'API_400_SAVE_ERROR',
+                    errorMessage: `제품 저장 실패 (itemCode: ${formData.itemCode || '미입력'}): ${serverMsg}`,
+                    description: `제품 저장 실패 (itemCode: ${formData.itemCode || '미입력'}). 사유: ${serverMsg}`,
+                    serverError: typeof error.response?.data === 'object' ? JSON.stringify(error.response.data) : (error.response?.data || error.message),
+                    steps: error.stack || 'No Stack Trace',
+                    severity: 'HIGH'
+                });
+            } catch (reportErr) {
+                console.warn("[QMS] Failed to submit bug report on save error:", reportErr);
+            }
+            return false;
+        }
+    };
+
     const handleDownloadSpecExcel = async () => {
         if (!product || !product.id) return;
 
-        // 1. 유효성 엄격 검증 (Strict Validation)
+        // 1. 사용자 확인 알림창 (Confirm Dialog)
+        const confirmSave = window.confirm(
+            "현재 작성 및 수정한 내용으로 저장 후 엑셀을 다운로드합니다.\n저장해도 될까요?"
+        );
+        if (!confirmSave) return;
+
+        // 2. 유효성 엄격 검증 (Strict Validation)
         const hasInbox = currentSpec.inboxUseYn === 'O';
         const missing3D = [];
         if (hasInbox && !currentSpec.inboxLayoutImage) missing3D.push('인박스 3D 입수 도면');
@@ -2443,9 +2575,17 @@ const ProductDrawer = ({ product, onClose, user }) => {
             return; // 누락 항목 존재 시 엑셀 다운로드 완전 차단!
         }
 
-        // 2. 검증 완료 시 초고속 다운로드
+        // 3. 수정된 내용 먼저 자동 저장 실행
+        const toastId = toast.loading("💾 작성 및 수정 내용을 저장 중입니다...");
         try {
-            setGlobalLoading(true);
+            const isSaved = await executeSaveAll(true);
+            if (!isSaved) {
+                toast.update(toastId, { render: "저장에 실패하여 엑셀 다운로드가 취소되었습니다.", type: "error", isLoading: false, autoClose: 3000 });
+                return;
+            }
+
+            // 4. 저장 완료 후 엑셀 다운로드
+            toast.update(toastId, { render: "📑 포장사양서 엑셀을 생성 중입니다...", type: "info", isLoading: true });
             const response = await downloadPackagingSpecExcel(product.id);
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
@@ -2454,19 +2594,23 @@ const ProductDrawer = ({ product, onClose, user }) => {
             document.body.appendChild(link);
             link.click();
             link.remove();
-            toast.success("📑 포장사양서 엑셀 다운로드가 완료되었습니다!");
+            toast.update(toastId, { render: "💾 저장 완료 후 📑 포장사양서 엑셀 다운로드가 완료되었습니다!", type: "success", isLoading: false, autoClose: 3000 });
         } catch (error) {
-            toast.error("엑셀 다운로드에 실패했습니다.");
+            toast.update(toastId, { render: "엑셀 다운로드에 실패했습니다.", type: "error", isLoading: false, autoClose: 3000 });
             console.error(error);
-        } finally {
-            setGlobalLoading(false);
         }
     };
 
     const handleDownloadSpecPdf = async () => {
         if (!product || !product.id) return;
 
-        // 1. 유효성 엄격 검증 (Strict Validation)
+        // 1. 사용자 확인 알림창 (Confirm Dialog)
+        const confirmSave = window.confirm(
+            "현재 작성 및 수정한 내용으로 저장 후 PDF를 다운로드합니다.\n저장해도 될까요?"
+        );
+        if (!confirmSave) return;
+
+        // 2. 유효성 엄격 검증 (Strict Validation)
         const hasInbox = currentSpec.inboxUseYn === 'O';
         const missing3D = [];
         if (hasInbox && !currentSpec.inboxLayoutImage) missing3D.push('인박스 3D 입수 도면');
@@ -2497,8 +2641,17 @@ const ProductDrawer = ({ product, onClose, user }) => {
             return; // 누락 항목 존재 시 PDF 다운로드 완전 차단!
         }
 
+        // 3. 수정된 내용 먼저 자동 저장 실행
+        const toastId = toast.loading("💾 작성 및 수정 내용을 저장 중입니다...");
         try {
-            setGlobalLoading(true);
+            const isSaved = await executeSaveAll(true);
+            if (!isSaved) {
+                toast.update(toastId, { render: "저장에 실패하여 PDF 다운로드가 취소되었습니다.", type: "error", isLoading: false, autoClose: 3000 });
+                return;
+            }
+
+            // 4. 저장 완료 후 PDF 다운로드
+            toast.update(toastId, { render: "📄 포장사양서 PDF를 생성 중입니다...", type: "info", isLoading: true });
             const response = await downloadPackagingSpecPdf(product.id);
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
@@ -2507,12 +2660,10 @@ const ProductDrawer = ({ product, onClose, user }) => {
             document.body.appendChild(link);
             link.click();
             link.remove();
-            toast.success("📄 포장사양서 PDF 다운로드가 완료되었습니다!");
+            toast.update(toastId, { render: "💾 저장 완료 후 📄 포장사양서 PDF 다운로드가 완료되었습니다!", type: "success", isLoading: false, autoClose: 3000 });
         } catch (error) {
-            toast.error("PDF 다운로드에 실패했습니다.");
+            toast.update(toastId, { render: "PDF 다운로드에 실패했습니다.", type: "error", isLoading: false, autoClose: 3000 });
             console.error(error);
-        } finally {
-            setGlobalLoading(false);
         }
     };
 
@@ -2884,96 +3035,9 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
     const handleConfirmSave = async () => {
         setIsConfirmOpen(false);
-        const payload = { ...formData };
-        if (payload.brand && !payload.brand.id && !payload.brand.name) payload.brand = null;
-        if (payload.manufacturerInfo && !payload.manufacturerInfo.id && !payload.manufacturerInfo.name) payload.manufacturerInfo = null;
-
-        if (payload.capacity && !String(payload.capacity).includes('mL')) payload.capacity = `${payload.capacity}mL`;
-        if (payload.weight && !String(payload.weight).includes('g')) payload.weight = `${payload.weight}g`;
-
-        // 유통 채널 payload 규격화 (JPA ManyToMany 룩업 및 영속화 완벽 보장)
-        if (payload.channels && Array.isArray(payload.channels)) {
-            payload.channels = payload.channels.map(ch => (ch && ch.id ? { ...ch } : {
-                id: ch?.id || null,
-                name: ch?.name || '',
-                channelCode: ch?.channelCode || ''
-            })).filter(c => c.id || c.name);
-        }
-
-        console.log(">>>> [FRONTEND SAVE PAYLOAD] Channels:", payload.channels);
-
-        try {
-            if (product) {
-                const updatedRes = await updateProduct(product.id, payload);
-                if (isSpecLoaded) {
-                    const specToSave = { ...currentSpec };
-                    delete specToSave.methodImages;
-                    delete specToSave.bomItems;
-
-                    // 바코드 fallback 보장
-                    if (!specToSave.barcode && (formData.productBarcode || formData.barcode)) {
-                        specToSave.barcode = formData.productBarcode || formData.barcode;
-                    }
-                    if (!specToSave.inboxBarcode && formData.inboxBarcode) {
-                        specToSave.inboxBarcode = formData.inboxBarcode;
-                    }
-                    if (!specToSave.outboxBarcode && formData.outboxBarcode) {
-                        specToSave.outboxBarcode = formData.outboxBarcode;
-                    }
-
-                    const dynamicPalletWt = calcPalletWeight(currentSpec, formData);
-                    if (dynamicPalletWt) {
-                        specToSave.onePalletWeight = dynamicPalletWt;
-                    }
-
-                    const specPayload = {
-                        spec: {
-                            ...specToSave,
-                            product: { id: product.id }
-                        },
-                        revisions: specRevisions,
-                        components: specComponents,
-                        methodImages: null
-                    };
-                    const res = await api.saveFullPackagingSpec(specPayload);
-                    const savedSpec = res.data?.spec || res.data;
-                    const savedSpecId = savedSpec?.id || res.data?.id || currentSpec?.id;
-
-                    if (savedSpecId && packagingMethodSaveRef.current) {
-                        await packagingMethodSaveRef.current(savedSpecId);
-                    }
-                }
-                alert("제품 기본정보, 유통채널 및 포장재 사양서/포장방법 사진이 일괄 저장되었습니다.");
-            } else {
-                await createProduct(payload);
-                alert("신규 제품이 등록되었습니다.");
-            }
+        const isSaved = await executeSaveAll(false);
+        if (isSaved) {
             onClose(true);
-        } catch (error) {
-            console.error("Batch save error:", error);
-            let serverMsg = error.response?.data?.message || (typeof error.response?.data === 'string' ? error.response.data : null);
-            if (!serverMsg && error.response?.data && typeof error.response.data === 'object') {
-                serverMsg = Object.entries(error.response.data).map(([k, v]) => `${k}: ${v}`).join(', ');
-            }
-            serverMsg = serverMsg || error.message || "서버 통신 오류";
-            alert(`저장 중 오류가 발생했습니다.\n사유: ${serverMsg}`);
-
-            // [오류 추적 및 버그 리포트] 저장 실패 시 시스템 버그 리포트에 자동 적재
-            try {
-                await api.submitBugReport({
-                    screenName: '제품코드 마스터 (ProductDrawer)',
-                    url: window.location.href,
-                    errorCategory: 'API_400_SAVE_ERROR',
-                    errorMessage: `제품 저장 실패 (itemCode: ${formData.itemCode || '미입력'}): ${serverMsg}`,
-                    description: `제품 저장 실패 (itemCode: ${formData.itemCode || '미입력'}). 사유: ${serverMsg}`,
-                    serverError: typeof error.response?.data === 'object' ? JSON.stringify(error.response.data) : (error.response?.data || error.message),
-                    steps: error.stack || 'No Stack Trace',
-                    severity: 'HIGH'
-                });
-                console.log("[QMS] Bug report auto-submitted for save error.");
-            } catch (reportErr) {
-                console.warn("[QMS] Failed to submit bug report on save error:", reportErr);
-            }
         }
     };
 
@@ -3039,6 +3103,17 @@ const ProductDrawer = ({ product, onClose, user }) => {
                         <span className="icon">×</span> 닫기
                     </button>
                 </div>
+
+                {hasDraft && (
+                    <div style={{ padding: '0 24px', paddingTop: '12px' }}>
+                        <DraftRestoreBanner
+                            hasDraft={hasDraft}
+                            draftSavedAt={draftSavedAt}
+                            onRestore={restoreDraft}
+                            onClear={clearDraft}
+                        />
+                    </div>
+                )}
 
                 <div className="drawer-tabs-wrapper">
                     <div className="drawer-tabs">
@@ -6879,6 +6954,20 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                             {(currentSpec.popUseYn === 'O' || (currentSpec.popRequiredStandard && !currentSpec.popRequiredStandard.includes('해당 없음') && currentSpec.popRequiredStandard.includes('POP'))) ? 'ON (동봉)' : 'OFF'}
                                                                         </button>
                                                                     </div>
+                                                                    {hasInbox && (currentSpec.popUseYn === 'O' || (currentSpec.popRequiredStandard && !currentSpec.popRequiredStandard.includes('해당 없음') && currentSpec.popRequiredStandard.includes('POP'))) && (
+                                                                        <div style={{ fontSize: '11px', color: '#b45309', background: '#fffbeb', padding: '6px 10px', borderRadius: '6px', border: '1px solid #fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                                                                            <span>💡 단상자 POP 마주보기 형상은 <strong>[📥 인박스 3D]</strong> 탭에서 확인/캡처됩니다.</span>
+                                                                            {sim3DTab !== 'inbox' && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => setSim3DTab('inbox')}
+                                                                                    style={{ padding: '2px 8px', fontSize: '10px', fontWeight: 'bold', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                                                                                >
+                                                                                    인박스 3D 보기 ➔
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
 
                                                                     {/* 2. 비닐 에어캡 완충재 토글 & 3. 코너 각대 나란히 */}
                                                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>

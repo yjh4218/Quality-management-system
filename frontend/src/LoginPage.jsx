@@ -24,7 +24,11 @@ const LoginPage = ({ onLoginSuccess }) => {
 
             // Check if password reset is required
             const userRes = await getCurrentUser();
-            if (userRes.data.passwordResetRequired) {
+            if (userRes?.data) {
+                localStorage.setItem('user_info', JSON.stringify(userRes.data));
+                sessionStorage.setItem('qms_authenticated', 'true');
+            }
+            if (userRes?.data?.passwordResetRequired) {
                 setIsForcedResetOpen(true);
             } else {
                 onLoginSuccess();

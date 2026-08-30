@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AgGridReact } from 'ag-grid-react'; // React Grid Logic
 import { getUsers, getRoles, approveUser, toggleUserStatus, updateUserRole, unlockUser, resetUserPassword, getSystemSettings, saveSystemSettings } from './api';
 import { usePermissions } from './usePermissions';
+import { matchesAllTokens, matchesMultiFieldTokens } from './utils/searchUtils';
 
 const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) => {
     const { canEdit, canDelete } = usePermissions(currentUser);
@@ -86,6 +87,16 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
             showAlert("사용자 목록을 불러오지 못했습니다. 관리자 권한을 확인하세요.");
         }
     }, [searchFields, showAlert]);
+
+    const filteredRowData = useMemo(() => {
+        if (!quickFilterText) return rowData;
+        return rowData.filter(item =>
+            matchesMultiFieldTokens(
+                [item.username, item.name, item.companyName, item.department, item.email, item.role],
+                quickFilterText
+            )
+        );
+    }, [rowData, quickFilterText]);
 
     const handleApprove = React.useCallback(async (id) => {
         showConfirm("이 사용자의 가입을 승인하시겠습니까?", async () => {
@@ -257,7 +268,7 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
             sortable: false,
             filter: false
         }
-    ], [rowData]);
+    ], [roles]);
 
     return (
         <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: '#f1f5f9' }}>
@@ -464,7 +475,7 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
                     <div className="ag-theme-alpine" style={{ flex: 1, width: '100%', marginTop: '10px' }}>
                         <AgGridReact theme="legacy"
                             rowHeight={54}
-                            rowData={rowData}
+                            rowData={filteredRowData}
                             columnDefs={colDefs}
                             pagination={true}
                             paginationPageSize={100}

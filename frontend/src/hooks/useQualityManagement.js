@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
 import { usePermissions } from '../usePermissions';
+import { splitSearchTokens, matchesAllTokens } from '../utils/searchUtils';
 import api, { 
     getInboundData, 
     updateInboundData, 
@@ -119,7 +120,20 @@ export const useQualityManagement = (user, navigationData, onNavigated) => {
     const fetchInboundData = async () => {
         setIsLoading(true);
         try {
-            const response = await getInboundData(searchParams);
+            const itemCodeTokens = splitSearchTokens(searchParams.itemCode);
+            const nameTokens = splitSearchTokens(searchParams.productName);
+            const lotTokens = splitSearchTokens(searchParams.lotNumber);
+            const mfrTokens = splitSearchTokens(searchParams.manufacturer);
+
+            const queryParams = {
+                ...searchParams,
+                itemCode: itemCodeTokens.length > 0 ? itemCodeTokens[0] : undefined,
+                productName: nameTokens.length > 0 ? nameTokens[0] : undefined,
+                lotNumber: lotTokens.length > 0 ? lotTokens[0] : undefined,
+                manufacturer: mfrTokens.length > 0 ? mfrTokens[0] : undefined
+            };
+
+            const response = await getInboundData(queryParams);
             let data = response.data || [];
             
             // excludeStatus 필터값에 따른 입고검사 상태 필터링
@@ -134,6 +148,15 @@ export const useQualityManagement = (user, navigationData, onNavigated) => {
                     });
                 }
             }
+
+            // 다중 키워드(쉼표/공백 구분 AND 조건) 정밀 필터링
+            data = data.filter(item => {
+                if (searchParams.itemCode?.trim() && !matchesAllTokens(item.itemCode, searchParams.itemCode)) return false;
+                if (searchParams.productName?.trim() && !matchesAllTokens(item.productName, searchParams.productName)) return false;
+                if (searchParams.lotNumber?.trim() && !matchesAllTokens(item.lotNumber, searchParams.lotNumber)) return false;
+                if (searchParams.manufacturer?.trim() && !matchesAllTokens(item.manufacturer, searchParams.manufacturer)) return false;
+                return true;
+            });
             
             setRowData(data);
         } catch (error) {

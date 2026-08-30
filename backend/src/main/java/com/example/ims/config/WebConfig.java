@@ -27,6 +27,9 @@ public class WebConfig implements WebMvcConfigurer {
             public boolean preHandle(jakarta.servlet.http.HttpServletRequest request, jakarta.servlet.http.HttpServletResponse response, Object handler) {
                 String uri = request.getRequestURI().toLowerCase();
                 if (uri.startsWith("/uploads/")) {
+                    response.setHeader("Access-Control-Allow-Origin", "*");
+                    response.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+                    response.setHeader("Access-Control-Allow-Headers", "*");
                     response.setHeader("X-Content-Type-Options", "nosniff");
                     response.setHeader("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'");
 
