@@ -14,10 +14,7 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addResourceHandlers(
             org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry registry) {
-        registry.addResourceHandler("/uploads/**")
-                .addResourceLocations("file:uploads/");
-        
-        // 정적 리소스 핸들러에서 API 경로는 제외되도록 명시 (필요 시)
+        // /uploads/**는 FileServingController에서 자가 복구 캐시(Self-Healing Cache) 및 DB 영구 저장소 연동으로 전담 처리
     }
 
     @Override

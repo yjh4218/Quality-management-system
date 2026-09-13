@@ -84,6 +84,19 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 정적 리소스 부재 시 예외 처리 (404 Not Found).
+     * 500 Fatal Error 로그 오염을 방지합니다.
+     */
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<Map<String, String>> handleNoResourceFoundException(org.springframework.web.servlet.resource.NoResourceFoundException ex) {
+        log.debug("Resource not found: {}", ex.getResourcePath());
+        Map<String, String> response = new HashMap<>();
+        response.put("error", "ResourceNotFound");
+        response.put("message", "요청하신 리소스를 찾을 수 없습니다: " + ex.getResourcePath());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+    }
+
+    /**
      * 비즈니스 로직 충돌 및 정밀 상태 전이 실패 시 예외 처리 (409 Conflict).
      */
     @ExceptionHandler(IllegalStateException.class)

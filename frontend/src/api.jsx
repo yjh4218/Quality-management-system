@@ -21,12 +21,33 @@ export const getBaseURL = () => {
 
 /**
  * [공통 유틸] 파일/이미지 경로를 백엔드 BaseURL 포함 풀 URL로 변환합니다.
+ * - 배포 환경(HTTPS)에서 HTTP/localhost URL 자동 보정
+ * - 누락된 /uploads/ 프리픽스 자동 보정
  */
 export const getFileUrl = (path) => {
     if (!path) return '';
-    if (path.startsWith('http://') || path.startsWith('https://')) return path;
     const baseURL = getBaseURL();
-    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+
+    // 1. 이미 완전한 URL인 경우 (http:// 또는 https://)
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+        try {
+            const url = new URL(path);
+            // 현재 페이지가 https인데 http 링크이거나, 로컬호스트 주소가 배포 DB에 들어간 경우 현재 baseURL 경로로 보정
+            if ((window.location.protocol === 'https:' && url.protocol === 'http:') ||
+                (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1'))) {
+                return `${baseURL}${url.pathname}`;
+            }
+            return path;
+        } catch (e) {
+            return path;
+        }
+    }
+
+    // 2. 상대 경로인 경우 /uploads/ 자동 보정
+    let cleanPath = path.startsWith('/') ? path : `/${path}`;
+    if (!cleanPath.startsWith('/uploads/') && !cleanPath.startsWith('/api/')) {
+        cleanPath = `/uploads${cleanPath}`;
+    }
     return `${baseURL}${cleanPath}`;
 };
 

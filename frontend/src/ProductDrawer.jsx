@@ -4610,6 +4610,10 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                         alt={`Product ${idx}`} 
                                                         style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
                                                         title="클릭하여 크게 보기"
+                                                        onError={(e) => {
+                                                            e.target.onerror = null;
+                                                            e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect fill='%23f1f5f9' width='100' height='100'/%3E%3Ctext fill='%2394a3b8' font-size='11' font-family='sans-serif' x='50%25' y='50%25' text-anchor='middle' dominant-baseline='middle'%3E%EC%9D%B4%EB%AF%B8%EC%A7%80%20%EC%86%8C%EC%8B%A4%3C/text%3E%3C/svg%3E";
+                                                        }}
                                                     />
                                                 </div>
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -7305,6 +7309,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                                             src={getFileUrl(currentSpec.inboxLayoutImage)}
                                                                                             alt="인박스 도면"
                                                                                             style={{ width: '32px', height: '32px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #e2e8f0' }}
+                                                                                            onError={(e) => { e.target.onerror = null; e.target.style.opacity = '0.3'; e.target.title = '도면 파일 없음 (재캡처 권장)'; }}
                                                                                         />
                                                                                     ) : (
                                                                                         <div style={{ width: '32px', height: '32px', background: '#f5f3ff', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>
@@ -7360,6 +7365,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                                             src={getFileUrl(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage)}
                                                                                             alt="아웃박스 도면"
                                                                                             style={{ width: '32px', height: '32px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #e2e8f0' }}
+                                                                                            onError={(e) => { e.target.onerror = null; e.target.style.opacity = '0.3'; e.target.title = '도면 파일 없음 (재캡처 권장)'; }}
                                                                                         />
                                                                                     ) : (
                                                                                         <div style={{ width: '32px', height: '32px', background: '#eff6ff', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>
@@ -7413,6 +7419,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                                             src={getFileUrl(currentSpec.palletLayoutImage)}
                                                                                             alt="팔레트 도면"
                                                                                             style={{ width: '32px', height: '32px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #e2e8f0' }}
+                                                                                            onError={(e) => { e.target.onerror = null; e.target.style.opacity = '0.3'; e.target.title = '도면 파일 없음 (재캡처 권장)'; }}
                                                                                         />
                                                                                     ) : (
                                                                                         <div style={{ width: '32px', height: '32px', background: '#fef3c7', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>

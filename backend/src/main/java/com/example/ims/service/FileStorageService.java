@@ -3,24 +3,32 @@ package com.example.ims.service;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.example.ims.entity.StoredFile;
+import com.example.ims.repository.StoredFileRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tika.Tika;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.Set;
 
 /**
  * 파일 저장 및 관리 서비스.
  * [보안] MIME 타입 검증, Path Traversal 방지, 용량 재검증 로직 포함.
+ * [영구 보존 & 캐시] 로컬 디스크 캐시 및 Supabase PostgreSQL(stored_files) 자동 동기화/자가 복구(Self-Healing).
  */
 @Service
 @Slf4j
@@ -28,6 +36,7 @@ public class FileStorageService {
 
     private final Path fileStorageLocation;
     private final AmazonS3 s3Client;
+    private final StoredFileRepository storedFileRepository;
     private final Tika tika = new Tika();
     private static final long MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -38,8 +47,10 @@ public class FileStorageService {
     private String bucketName;
 
     public FileStorageService(@Value("${file.upload-dir:uploads}") String uploadDir,
-            @org.springframework.lang.Nullable AmazonS3 s3Client) {
+            @org.springframework.lang.Nullable AmazonS3 s3Client,
+            @org.springframework.lang.Nullable StoredFileRepository storedFileRepository) {
         this.s3Client = s3Client;
+        this.storedFileRepository = storedFileRepository;
         this.fileStorageLocation = Paths.get(uploadDir).toAbsolutePath().normalize();
         try {
             Files.createDirectories(this.fileStorageLocation);
@@ -258,27 +269,95 @@ public class FileStorageService {
                     break;
             }
 
+            byte[] fileBytes = file.getBytes();
+            saveToLocal(fileBytes, fileName);
+            saveToDatabase(fileBytes, fileName, originalFileName, file.getContentType());
+
             if ("s3".equalsIgnoreCase(storageType) && s3Client != null) {
-                return uploadToS3(file, fileName);
-            } else {
-                return saveToLocal(file, fileName);
+                uploadToS3(fileBytes, fileName, file.getContentType());
             }
+            return fileName;
         } catch (IOException ex) {
             throw new RuntimeException("Could not store file " + originalFileName + ". Please try again!", ex);
         }
     }
 
-    private String uploadToS3(MultipartFile file, String fileName) throws IOException {
+    public String normalizeRelativePath(String path) {
+        if (path == null) return "";
+        String clean = path.trim().replace('\\', '/');
+        while (clean.startsWith("/")) {
+            clean = clean.substring(1);
+        }
+        if (clean.toLowerCase().startsWith("uploads/")) {
+            clean = clean.substring("uploads/".length());
+        }
+        while (clean.startsWith("/")) {
+            clean = clean.substring(1);
+        }
+        clean = StringUtils.cleanPath(clean);
+        if (clean.contains("..")) {
+            throw new SecurityException("보안 위험: 상위 디렉터리 접근(..)이 차단되었습니다.");
+        }
+        return clean;
+    }
+
+    private void saveToDatabase(byte[] data, String relativePath, String originalFileName, String contentType) {
+        if (storedFileRepository == null || data == null || data.length == 0) return;
+        try {
+            String normalizedPath = normalizeRelativePath(relativePath);
+            String detectedType = contentType;
+            if (detectedType == null || detectedType.isBlank() || "application/octet-stream".equals(detectedType)) {
+                try {
+                    detectedType = tika.detect(data, originalFileName);
+                } catch (Exception ignored) {}
+            }
+            StoredFile storedFile = StoredFile.builder()
+                    .filePath(normalizedPath)
+                    .fileName(originalFileName != null ? originalFileName : Paths.get(normalizedPath).getFileName().toString())
+                    .contentType(detectedType)
+                    .fileSize((long) data.length)
+                    .fileData(data)
+                    .build();
+            storedFileRepository.save(storedFile);
+            log.info("[FILE-PERSISTENCE] Stored in DB: {} ({} bytes)", normalizedPath, data.length);
+        } catch (Exception e) {
+            log.error("[FILE-PERSISTENCE-ERROR] Failed to save {} to DB: {}", relativePath, e.getMessage());
+        }
+    }
+
+    public String storeFileBytes(byte[] bytes, String relativePath, String contentType, String originalName) {
+        if (bytes == null || bytes.length == 0) {
+            throw new RuntimeException("업로드할 파일 내용이 비어있습니다.");
+        }
+        if (bytes.length > MAX_FILE_SIZE) {
+            throw new RuntimeException("보안 경고: 파일 크기가 허용 범위를 초과했습니다. (Max 10MB)");
+        }
+        try {
+            String normalizedPath = normalizeRelativePath(relativePath);
+            saveToLocal(bytes, normalizedPath);
+            saveToDatabase(bytes, normalizedPath, originalName != null ? originalName : Paths.get(normalizedPath).getFileName().toString(), contentType);
+            if ("s3".equalsIgnoreCase(storageType) && s3Client != null) {
+                uploadToS3(bytes, normalizedPath, contentType);
+            }
+            return normalizedPath;
+        } catch (IOException e) {
+            throw new RuntimeException("파일 저장 중 오류가 발생했습니다: " + relativePath, e);
+        }
+    }
+
+    private String uploadToS3(byte[] data, String fileName, String mimeType) throws IOException {
         ObjectMetadata metadata = new ObjectMetadata();
-        String contentType = tika.detect(file.getInputStream());
+        String contentType = mimeType;
         if (contentType == null || contentType.isEmpty() || "application/octet-stream".equals(contentType)) {
-            contentType = file.getContentType();
+            try {
+                contentType = tika.detect(data, fileName);
+            } catch (Exception ignored) {}
         }
         if (contentType == null || contentType.isEmpty()) {
             contentType = "application/octet-stream";
         }
         metadata.setContentType(contentType);
-        metadata.setContentLength(file.getSize());
+        metadata.setContentLength(data.length);
 
         // 비이미지 파일(PDF, 엑셀, Word, HWP 등)은 강제 다운로드(attachment) 설정
         boolean isImage = contentType.startsWith("image/") && !contentType.contains("svg");
@@ -289,19 +368,24 @@ public class FileStorageService {
             metadata.setContentDisposition("inline");
         }
 
-        s3Client.putObject(new PutObjectRequest(bucketName, fileName, file.getInputStream(), metadata));
+        try (java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(data)) {
+            s3Client.putObject(new PutObjectRequest(bucketName, fileName, bais, metadata));
+        }
         return fileName;
     }
 
-    private String saveToLocal(MultipartFile file, String fileName) throws IOException {
-        // [Task 6] Path Traversal 방어
-        Path targetLocation = this.fileStorageLocation.resolve(fileName).normalize();
+    private String saveToLocal(byte[] data, String fileName) throws IOException {
+        String normalizedPath = normalizeRelativePath(fileName);
+        Path targetLocation = this.fileStorageLocation.resolve(normalizedPath).normalize();
         if (!targetLocation.startsWith(this.fileStorageLocation)) {
             throw new RuntimeException("보안 위험: 지정된 업로드 경로를 벗어날 수 없습니다.");
         }
+        if (targetLocation.getParent() != null && !Files.exists(targetLocation.getParent())) {
+            Files.createDirectories(targetLocation.getParent());
+        }
 
-        Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
-        return fileName;
+        Files.write(targetLocation, data, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        return normalizedPath;
     }
 
     public String storeBase64Image(String base64Data, String prefix) {
@@ -322,36 +406,167 @@ public class FileStorageService {
             String uuidPart = UUID.randomUUID().toString().substring(0, 8);
             String fileName = String.format("%s_%s_%s.png", safePrefix, timeStamp, uuidPart);
 
-            Path targetLocation = this.fileStorageLocation.resolve(fileName).normalize();
-            if (!targetLocation.startsWith(this.fileStorageLocation)) {
-                throw new RuntimeException("보안 위험: 지정된 업로드 경로를 벗어날 수 없습니다.");
+            saveToLocal(bytes, fileName);
+            saveToDatabase(bytes, fileName, fileName, "image/png");
+            if ("s3".equalsIgnoreCase(storageType) && s3Client != null) {
+                uploadToS3(bytes, fileName, "image/png");
             }
-
-            Files.write(targetLocation, bytes);
             return fileName;
         } catch (Exception ex) {
             throw new RuntimeException("Could not store base64 image.", ex);
         }
     }
 
+    public Resource loadResourceOrRestore(String relativePath) {
+        if (relativePath == null || relativePath.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            String normalizedPath = normalizeRelativePath(relativePath);
+            Path targetLocation = this.fileStorageLocation.resolve(normalizedPath).normalize();
+            if (!targetLocation.startsWith(this.fileStorageLocation)) {
+                log.warn("[SECURITY] Path traversal attempt detected: {}", relativePath);
+                return null;
+            }
+
+            // 1. Check local disk cache (fast path, 0 DB queries)
+            if (Files.exists(targetLocation) && Files.isReadable(targetLocation)) {
+                try {
+                    return new UrlResource(targetLocation.toUri());
+                } catch (MalformedURLException e) {
+                    log.error("Malformed URL for existing file: {}", targetLocation, e);
+                }
+            }
+
+            // 2. Cache miss: check DB and self-heal
+            if (storedFileRepository != null) {
+                try {
+                    Optional<StoredFile> storedOpt = storedFileRepository.findById(normalizedPath);
+                    if (storedOpt.isEmpty() && normalizedPath.contains("/")) {
+                        String fileNameOnly = Paths.get(normalizedPath).getFileName().toString();
+                        storedOpt = storedFileRepository.findById(fileNameOnly);
+                    }
+
+                    if (storedOpt.isPresent()) {
+                        StoredFile stored = storedOpt.get();
+                        byte[] data = stored.getFileData();
+                        if (data != null && data.length > 0) {
+                            if (targetLocation.getParent() != null && !Files.exists(targetLocation.getParent())) {
+                                Files.createDirectories(targetLocation.getParent());
+                            }
+                            Files.write(targetLocation, data, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+                            log.info("[SELF-HEALING] Restored file from DB to local disk: {} ({} bytes)", normalizedPath, data.length);
+                            return new UrlResource(targetLocation.toUri());
+                        }
+                    }
+                } catch (Exception e) {
+                    log.error("[SELF-HEALING-ERROR] Failed to restore file from DB: {}", normalizedPath, e);
+                }
+            }
+
+            // 3. Fallback: S3 check (if configured)
+            if ("s3".equalsIgnoreCase(storageType) && s3Client != null) {
+                try {
+                    String fileName = Paths.get(normalizedPath).getFileName().toString();
+                    if (s3Client.doesObjectExist(bucketName, fileName)) {
+                        com.amazonaws.services.s3.model.S3Object s3Object = s3Client.getObject(bucketName, fileName);
+                        try (var is = s3Object.getObjectContent()) {
+                            if (targetLocation.getParent() != null && !Files.exists(targetLocation.getParent())) {
+                                Files.createDirectories(targetLocation.getParent());
+                            }
+                            Files.copy(is, targetLocation, StandardCopyOption.REPLACE_EXISTING);
+                            log.info("[SELF-HEALING] Restored file from S3 to local disk: {}", normalizedPath);
+                            return new UrlResource(targetLocation.toUri());
+                        }
+                    }
+                } catch (Exception e) {
+                    log.error("[SELF-HEALING-ERROR] Failed to restore file from S3: {}", normalizedPath, e);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[FILE-LOAD-ERROR] Error loading resource {}: {}", relativePath, e.getMessage());
+        }
+
+        return null;
+    }
+
     public boolean deleteFile(String fileName) {
         if (fileName == null || fileName.isEmpty()) return false;
 
         try {
+            String normalizedPath = normalizeRelativePath(fileName);
+            boolean deleted = false;
             if ("s3".equalsIgnoreCase(storageType) && s3Client != null) {
-                s3Client.deleteObject(bucketName, fileName);
-                return true;
-            } else {
-                Path targetLocation = this.fileStorageLocation.resolve(fileName).normalize();
-                if (!targetLocation.startsWith(this.fileStorageLocation)) {
-                    log.error("[SECURITY] Attempted to delete file outside upload zone: {}", fileName);
-                    return false;
+                try {
+                    s3Client.deleteObject(bucketName, normalizedPath);
+                    deleted = true;
+                } catch (Exception e) {
+                    log.warn("S3 delete failed for {}: {}", normalizedPath, e.getMessage());
                 }
-                return Files.deleteIfExists(targetLocation);
             }
+
+            Path targetLocation = this.fileStorageLocation.resolve(normalizedPath).normalize();
+            if (targetLocation.startsWith(this.fileStorageLocation)) {
+                deleted = Files.deleteIfExists(targetLocation) || deleted;
+            }
+
+            if (storedFileRepository != null) {
+                try {
+                    storedFileRepository.deleteById(normalizedPath);
+                    deleted = true;
+                } catch (Exception e) {
+                    log.warn("DB delete failed for {}: {}", normalizedPath, e.getMessage());
+                }
+            }
+            return deleted;
         } catch (Exception e) {
             log.error("[FILE] Failed to delete file {}: {}", fileName, e.getMessage());
             return false;
         }
+    }
+
+    public java.util.Map<String, Object> getStorageStats() {
+        java.util.Map<String, Object> stats = new java.util.HashMap<>();
+        if (storedFileRepository != null) {
+            long count = storedFileRepository.count();
+            Long totalBytes = storedFileRepository.getTotalStorageSize();
+            stats.put("totalFiles", count);
+            stats.put("totalSizeBytes", totalBytes != null ? totalBytes : 0L);
+            stats.put("totalSizeMB", String.format("%.2f MB", (totalBytes != null ? totalBytes : 0L) / (1024.0 * 1024.0)));
+        }
+        return stats;
+    }
+
+    /**
+     * [영구 보존 초기 동기화] 로컬 디스크에 이미 존재하는 파일들을 비동기 백그라운드로 DB에 영구 백업합니다.
+     */
+    @org.springframework.context.event.EventListener(org.springframework.boot.context.event.ApplicationReadyEvent.class)
+    public void syncExistingLocalFilesToDatabase() {
+        if (storedFileRepository == null) return;
+        new Thread(() -> {
+            try {
+                log.info("[FILE-SYNC] Starting scan of local upload directory for DB backup sync...");
+                try (java.util.stream.Stream<Path> stream = Files.walk(this.fileStorageLocation)) {
+                    stream.filter(Files::isRegularFile)
+                            .filter(p -> !p.toString().contains("isolated"))
+                            .forEach(path -> {
+                                try {
+                                    Path relPath = this.fileStorageLocation.relativize(path);
+                                    String relativePathStr = relPath.toString().replace('\\', '/');
+                                    String normalizedPath = normalizeRelativePath(relativePathStr);
+                                    if (!storedFileRepository.existsById(normalizedPath)) {
+                                        byte[] bytes = Files.readAllBytes(path);
+                                        saveToDatabase(bytes, normalizedPath, path.getFileName().toString(), null);
+                                    }
+                                } catch (Exception e) {
+                                    log.debug("[FILE-SYNC-SKIP] Skipped file {}: {}", path.getFileName(), e.getMessage());
+                                }
+                            });
+                }
+                log.info("[FILE-SYNC] Completed local upload directory sync to DB. Current status: {}", getStorageStats());
+            } catch (Exception e) {
+                log.warn("[FILE-SYNC-ERROR] Could not complete sync: {}", e.getMessage());
+            }
+        }, "FileStorageSyncThread").start();
     }
 }

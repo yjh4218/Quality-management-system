@@ -31,6 +31,7 @@ public class ChannelNoteConfigController {
     private final ChannelNoteCategoryRepository categoryRepository;
     private final ChannelSpecialNoteRepository noteRepository;
     private final SalesChannelRepository channelRepository;
+    private final com.example.ims.service.FileStorageService fileStorageService;
 
     private static final String UPLOAD_DIR = "uploads/channel_stickers/";
 
@@ -112,16 +113,11 @@ public class ChannelNoteConfigController {
                 return ResponseEntity.badRequest().body("{\"message\": \"허용되지 않은 파일 형식입니다. (jpg, jpeg, png, webp, pdf만 허용)\"}");
             }
 
-            File dir = new File(UPLOAD_DIR);
-            if (!dir.exists()) {
-                dir.mkdirs();
-            }
-
             String savedName = UUID.randomUUID().toString() + ext;
-            Path filePath = Paths.get(UPLOAD_DIR + savedName);
-            Files.write(filePath, file.getBytes());
+            String relativePath = "channel_stickers/" + savedName;
+            fileStorageService.storeFileBytes(file.getBytes(), relativePath, file.getContentType(), originalName);
 
-            String fileUrl = "/uploads/channel_stickers/" + savedName;
+            String fileUrl = "/uploads/" + relativePath;
             String fileType = ext.contains("pdf") ? "PDF" : "IMAGE";
 
             return ResponseEntity.ok(Map.of(
@@ -129,9 +125,9 @@ public class ChannelNoteConfigController {
                     "fileType", fileType,
                     "fileName", originalName != null ? originalName : savedName
             ));
-        } catch (IOException e) {
+        } catch (Exception e) {
             log.error("스티커 파일 업로드 실패:", e);
-            return ResponseEntity.internalServerError().body("{\"message\": \"파일 업로드 실패\"}");
+            return ResponseEntity.internalServerError().body("{\"message\": \"파일 업로드 실패: " + e.getMessage() + "\"}");
         }
     }
 
