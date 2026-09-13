@@ -17,19 +17,20 @@ public class ManufacturerCategoryController {
     private final ManufacturerCategoryRepository repository;
 
     @GetMapping
+    @PreAuthorize("isAuthenticated()")
     public List<ManufacturerCategory> getAll() {
         return repository.findByActiveTrueOrderByNameAsc();
     }
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
-    public ManufacturerCategory create(@RequestBody ManufacturerCategory category) {
+    public ManufacturerCategory create(@jakarta.validation.Valid @RequestBody ManufacturerCategory category) {
         return repository.save(category);
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
-    public ManufacturerCategory update(@PathVariable Long id, @RequestBody ManufacturerCategory category) {
+    public ManufacturerCategory update(@PathVariable Long id, @jakarta.validation.Valid @RequestBody ManufacturerCategory category) {
         ManufacturerCategory existing = repository.findById(id).orElseThrow();
         existing.setName(category.getName());
         existing.setActive(category.isActive());

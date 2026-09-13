@@ -23,15 +23,19 @@ public class MailTemplate {
     private Long id;
 
     @Column(nullable = false, unique = true)
+    @jakarta.validation.constraints.NotBlank(message = "템플릿 코드는 필수입니다.")
     private String templateCode; // e.g. CLAIM_NOTIFICATION
 
     @Column(nullable = false)
+    @jakarta.validation.constraints.NotBlank(message = "템플릿 이름은 필수입니다.")
     private String templateName; // e.g. 클레임 접수 통보
 
     @Column(nullable = false)
+    @jakarta.validation.constraints.NotBlank(message = "메일 제목은 필수입니다.")
     private String subject; // e.g. [품질관리] 신규 클레임이 접수되었습니다.
 
     @Column(columnDefinition = "TEXT", nullable = false)
+    @jakarta.validation.constraints.NotBlank(message = "메일 본문은 필수입니다.")
     private String body; // HTML or Text template with placeholders like ${claimNumber}
 
     @Column(nullable = false)

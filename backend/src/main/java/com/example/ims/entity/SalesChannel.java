@@ -34,6 +34,7 @@ public class SalesChannel {
     private LocalDateTime createdAt;
 
     @Column(unique = true, nullable = false)
+    @jakarta.validation.constraints.NotBlank(message = "채널명은 필수입니다.")
     private String name; // e.g., 올리브영(OY), 일본/오프라인(JP/OFF)
 
     private String description;

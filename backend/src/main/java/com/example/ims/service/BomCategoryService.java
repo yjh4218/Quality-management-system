@@ -17,16 +17,19 @@ public class BomCategoryService {
     private final com.example.ims.repository.UserRepository userRepository;
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
+    @org.springframework.cache.annotation.Cacheable(value = "bomCategories", key = "'active'")
     @Transactional(readOnly = true)
     public List<BomCategory> getAllActiveCategories() {
         return repository.findByActiveTrue();
     }
 
+    @org.springframework.cache.annotation.Cacheable(value = "bomCategories", key = "'all'")
     @Transactional(readOnly = true)
     public List<BomCategory> getAllCategories() {
         return repository.findAll();
     }
 
+    @org.springframework.cache.annotation.CacheEvict(value = "bomCategories", allEntries = true)
     @Transactional
     public BomCategory saveCategory(BomCategory category, String username) {
         com.example.ims.entity.User user = userRepository.findByUsername(username).orElseThrow();
@@ -51,6 +54,7 @@ public class BomCategoryService {
         return saved;
     }
 
+    @org.springframework.cache.annotation.CacheEvict(value = "bomCategories", allEntries = true)
     @Transactional
     public void softDelete(Long id, String username) {
         repository.findById(id).ifPresent(cat -> {
@@ -75,6 +79,7 @@ public class BomCategoryService {
         });
     }
 
+    @org.springframework.cache.annotation.CacheEvict(value = "bomCategories", allEntries = true)
     @Transactional
     public void hardDelete(Long id, String username) {
         com.example.ims.entity.User user = userRepository.findByUsername(username).orElseThrow();

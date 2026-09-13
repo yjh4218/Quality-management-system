@@ -27,6 +27,37 @@ public class PreflightBypassFilter implements Filter {
         "http://127.0.0.1:5173"
     );
 
+    private boolean isAllowedOrigin(String origin) {
+        if (origin == null || origin.trim().isEmpty()) {
+            return false;
+        }
+        String clean = origin.trim().toLowerCase();
+        if (ALLOWED_ORIGINS.contains(clean)) {
+            return true;
+        }
+        try {
+            java.net.URI uri = java.net.URI.create(clean);
+            String host = uri.getHost();
+            if (host == null) return false;
+            return host.equals("localhost") || host.equals("127.0.0.1") ||
+                   host.endsWith(".kro.kr") || host.endsWith(".pages.dev") || host.endsWith(".hf.space");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private String extractOriginFromReferer(String referer) {
+        if (referer == null || referer.trim().isEmpty()) return null;
+        try {
+            java.net.URI uri = java.net.URI.create(referer.trim());
+            if (uri.getHost() == null) return null;
+            int port = uri.getPort();
+            return uri.getScheme() + "://" + uri.getHost() + (port > 0 && port != 80 && port != 443 ? ":" + port : "");
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     @Override
     public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain)
             throws IOException, ServletException {
@@ -39,7 +70,7 @@ public class PreflightBypassFilter implements Filter {
             origin = request.getHeader("origin");
         }
 
-        boolean isAllowed = origin != null && ALLOWED_ORIGINS.contains(origin.trim());
+        boolean isAllowed = isAllowedOrigin(origin);
 
         // [1] 허가된 공식 도메인에 대해서만 정확한 CORS 헤더 주입
         if (isAllowed) {
@@ -57,8 +88,35 @@ public class PreflightBypassFilter implements Filter {
             return;
         }
 
-        // [3] Non-OPTIONS 실제 데이터 요청에 대해서만 _method 파라미터 오버라이드 적용
+        // [보안 S-1] CSRF 방어: 상태 변경 메서드(POST, PUT, DELETE, PATCH) 시 외부 Origin/Referer 차단
+        String effectiveMethod = request.getMethod();
         String methodParam = request.getParameter("_method");
+        if (methodParam != null && !methodParam.trim().isEmpty()) {
+            effectiveMethod = methodParam.trim();
+        }
+        boolean isMutating = "POST".equalsIgnoreCase(effectiveMethod) || "PUT".equalsIgnoreCase(effectiveMethod)
+                || "DELETE".equalsIgnoreCase(effectiveMethod) || "PATCH".equalsIgnoreCase(effectiveMethod);
+
+        if (isMutating) {
+            if (origin != null && !isAllowed) {
+                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                response.setContentType("application/json;charset=UTF-8");
+                response.getWriter().write("{\"error\": \"Forbidden\", \"message\": \"Cross-Origin CSRF 검증에 실패하였습니다.\"}");
+                return;
+            }
+            String referer = request.getHeader("Referer");
+            if (origin == null && referer != null) {
+                String refererOrigin = extractOriginFromReferer(referer);
+                if (refererOrigin != null && !isAllowedOrigin(refererOrigin)) {
+                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    response.setContentType("application/json;charset=UTF-8");
+                    response.getWriter().write("{\"error\": \"Forbidden\", \"message\": \"Cross-Origin CSRF(Referer) 검증에 실패하였습니다.\"}");
+                    return;
+                }
+            }
+        }
+
+        // [3] Non-OPTIONS 실제 데이터 요청에 대해서만 _method 파라미터 오버라이드 적용
         final String overrideMethod = (methodParam != null && !methodParam.trim().isEmpty()) 
                 ? methodParam.toUpperCase().trim() 
                 : null;

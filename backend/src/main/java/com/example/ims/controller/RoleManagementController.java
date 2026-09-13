@@ -26,13 +26,13 @@ public class RoleManagementController {
 
     @PostMapping
     @PreAuthorize("@perm.can('roles', 'EDIT')")
-    public ResponseEntity<Role> createRole(@RequestBody Role role, @AuthenticationPrincipal UserDetails userDetails) {
+    public ResponseEntity<Role> createRole(@jakarta.validation.Valid @RequestBody Role role, @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(roleService.createRole(role, userDetails.getUsername()));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("@perm.can('roles', 'EDIT')")
-    public ResponseEntity<Role> updateRole(@PathVariable Long id, @RequestBody Role role, @AuthenticationPrincipal UserDetails userDetails) {
+    public ResponseEntity<Role> updateRole(@PathVariable Long id, @jakarta.validation.Valid @RequestBody Role role, @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(roleService.updateRole(id, role, userDetails.getUsername()));
     }
 

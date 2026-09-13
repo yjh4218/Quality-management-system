@@ -43,7 +43,6 @@ public class QmsFullE2EComprehensiveTest {
     @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private ManufacturerRepository manufacturerRepository;
     @Autowired private ManufacturerAuditRepository manufacturerAuditRepository;
-    @Autowired private ProductRepository productRepository;
     @Autowired private BrandRepository brandRepository;
     @Autowired private SalesChannelRepository salesChannelRepository;
     @Autowired private ProductService productService;
@@ -51,17 +50,12 @@ public class QmsFullE2EComprehensiveTest {
     @Autowired private SpaceRatioService spaceRatioService;
     @Autowired private ProductionAuditRepository productionAuditRepository;
     @Autowired private WmsInboundRepository wmsInboundRepository;
-    @Autowired private ClaimRepository claimRepository;
     @Autowired private ClaimService claimService;
     @Autowired private AnnouncementRepository announcementRepository;
     @Autowired private NotificationRepository notificationRepository;
     @Autowired private MailTemplateRepository mailTemplateRepository;
     @Autowired private BugReportRepository bugReportRepository;
     @Autowired private JdbcTemplate jdbcTemplate;
-
-    private static Long testManufacturerId;
-    private static Long testSingleProductId;
-    private static Long testSetProductId;
 
     @BeforeEach
     void setupUsersAndBasics() {
@@ -141,7 +135,6 @@ public class QmsFullE2EComprehensiveTest {
                 .deleted(false)
                 .build();
         Manufacturer savedMfr = manufacturerRepository.save(mfr);
-        testManufacturerId = savedMfr.getId();
         assertThat(savedMfr.getId()).isNotNull();
 
         // 2. 제조사 심사(Audit) 생성 및 체크리스트 평가
@@ -190,7 +183,6 @@ public class QmsFullE2EComprehensiveTest {
         single.setActive(true);
 
         Product savedSingle = productService.createProduct(single, "admin");
-        testSingleProductId = savedSingle.getId();
 
         // 접미사 자동 동기화 검증
         assertThat(savedSingle.getProductName()).contains("어성초 77 진정 토너");
@@ -219,7 +211,6 @@ public class QmsFullE2EComprehensiveTest {
         setProduct.setComponents(new ArrayList<>(List.of(comp1)));
 
         Product savedSet = productService.createProduct(setProduct, "admin");
-        testSetProductId = savedSet.getId();
 
         assertThat(savedSet.isPlanningSet()).isTrue();
         assertThat(savedSet.getComponents()).hasSize(1);

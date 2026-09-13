@@ -39,7 +39,7 @@ public class IngredientSafetyController {
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "50") int size) {
         try {
-            org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+            org.springframework.data.domain.Pageable pageable = com.example.ims.util.PageableUtils.of(page, size);
             org.springframework.data.domain.Page<com.example.ims.entity.RegulatoryIngredient> result = 
                     ingredientService.getRegulatoryIngredientsPaged(search, pageable);
             return ResponseEntity.ok(ApiResponse.success(result));
@@ -55,7 +55,7 @@ public class IngredientSafetyController {
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "50") int size) {
         try {
-            org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+            org.springframework.data.domain.Pageable pageable = com.example.ims.util.PageableUtils.of(page, size);
             org.springframework.data.domain.Page<com.example.ims.entity.IngredientRegulationHistory> result = 
                     ingredientService.getRegulationHistoryPaged(search, pageable);
             return ResponseEntity.ok(ApiResponse.success(result));

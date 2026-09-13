@@ -20,6 +20,7 @@ public class RoleService {
     private final RoleRepository roleRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final AuditLogService auditLogService;
+    private final PermissionService permissionService;
 
     public List<Role> getAllRoles() {
         return roleRepository.findAll();
@@ -43,6 +44,7 @@ public class RoleService {
         }
 
         Role saved = roleRepository.save(role);
+        permissionService.invalidateCache();
         
         eventPublisher.publishEvent(EntityChangeEvent.builder()
                 .entityType("ROLE")
@@ -119,6 +121,7 @@ public class RoleService {
                 .newEntity(updated)
                 .build());
 
+        permissionService.invalidateCache();
         return updated;
     }
 
@@ -138,6 +141,7 @@ public class RoleService {
         // Since it's a string, we'll allow but log warning.
         
         roleRepository.delete(role);
+        permissionService.invalidateCache();
 
         eventPublisher.publishEvent(EntityChangeEvent.builder()
                 .entityType("ROLE")

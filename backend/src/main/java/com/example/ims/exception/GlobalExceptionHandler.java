@@ -143,6 +143,30 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * [보안/안정성 O-1] 데이터 무결성 제약조건 위반 (중복 키, 외래키 위반 등 - 409 Conflict)
+     */
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, String>> handleDataIntegrityViolationException(org.springframework.dao.DataIntegrityViolationException ex) {
+        log.warn("Data integrity violation: {}", ex.getMessage());
+        Map<String, String> response = new HashMap<>();
+        response.put("error", "DataIntegrityViolation");
+        response.put("message", "이미 등록된 고유 데이터(품목코드/식별번호/아이디 등)가 존재하거나 참조 무결성 제약조건에 위배됩니다.");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    /**
+     * [보안/안정성 O-1] 잘못된 형식의 HTTP 요청 본문 (JSON 파싱 오류 등 - 400 Bad Request)
+     */
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, String>> handleHttpMessageNotReadableException(org.springframework.http.converter.HttpMessageNotReadableException ex) {
+        log.warn("Malformed HTTP message body: {}", ex.getMessage());
+        Map<String, String> response = new HashMap<>();
+        response.put("error", "MalformedJson");
+        response.put("message", "요청 데이터(JSON) 형식이 올바르지 않습니다.");
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    /**
      * 런타임 예외 처리.
      * 비즈니스 유효성 검사 메시지(채널 규격 오류 등)는 마스킹 없이 400 Bad Request로 반환합니다.
      */

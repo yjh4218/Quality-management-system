@@ -46,7 +46,7 @@ public class MasterDataController {
     @PostMapping("/templates")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM')")
     public ResponseEntity<PackagingMethodTemplate> saveTemplate(
-            @RequestBody PackagingMethodTemplate template,
+            @jakarta.validation.Valid @RequestBody PackagingMethodTemplate template,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(masterDataService.saveTemplate(template, userDetails.getUsername()));
     }
@@ -62,7 +62,7 @@ public class MasterDataController {
     @PostMapping("/materials")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM')")
     public ResponseEntity<MasterPackagingMaterial> saveMaterial(
-            @RequestBody MasterPackagingMaterial material,
+            @jakarta.validation.Valid @RequestBody MasterPackagingMaterial material,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(masterDataService.saveMaterial(material, userDetails.getUsername()));
     }
@@ -119,7 +119,7 @@ public class MasterDataController {
 
     @PostMapping("/bom-categories")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> saveBomCategory(@RequestBody BomCategory category, @AuthenticationPrincipal UserDetails userDetails) {
+    public ResponseEntity<?> saveBomCategory(@jakarta.validation.Valid @RequestBody BomCategory category, @AuthenticationPrincipal UserDetails userDetails) {
         try {
             return ResponseEntity.ok(ApiResponse.success(bomCategoryService.saveCategory(category, userDetails.getUsername())));
         } catch (Exception e) {
@@ -158,7 +158,7 @@ public class MasterDataController {
     @PostMapping("/stickers")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM')")
     public ResponseEntity<ChannelStickerImage> saveSticker(
-            @RequestBody ChannelStickerImage sticker,
+            @jakarta.validation.Valid @RequestBody ChannelStickerImage sticker,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(masterDataService.saveSticker(sticker, userDetails.getUsername()));
     }

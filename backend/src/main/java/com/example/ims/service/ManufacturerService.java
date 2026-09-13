@@ -65,6 +65,8 @@ public class ManufacturerService {
                 .build();
     }
 
+    @org.springframework.cache.annotation.Cacheable(value = "manufacturers", key = "#username")
+    @Transactional(readOnly = true)
     public List<Manufacturer> getAll(String username) {
         com.example.ims.entity.User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new org.springframework.security.core.userdetails.UsernameNotFoundException("User not found"));
@@ -86,6 +88,7 @@ public class ManufacturerService {
         return manufacturerRepository.findByActiveTrueAndIsDeletedFalse(pageable);
     }
 
+    @org.springframework.cache.annotation.CacheEvict(value = "manufacturers", allEntries = true)
     @Transactional
     public Manufacturer save(Manufacturer manufacturer, String username) {
         if (manufacturer.getFiles() != null) {
@@ -105,6 +108,7 @@ public class ManufacturerService {
         return saved;
     }
 
+    @org.springframework.cache.annotation.CacheEvict(value = "manufacturers", allEntries = true)
     @Transactional
     public void delete(Long id, String username) {
         Manufacturer manufacturer = getById(id);
@@ -118,6 +122,7 @@ public class ManufacturerService {
                 "제조사 삭제(비활성화): " + manufacturer.getName(), oldJson, saved);
     }
 
+    @org.springframework.cache.annotation.CacheEvict(value = "manufacturers", allEntries = true)
     @Transactional
     public void restore(Long id, String username) {
         Manufacturer manufacturer = getById(id);
@@ -129,6 +134,7 @@ public class ManufacturerService {
                 "제조사 복구: " + manufacturer.getName(), manufacturer, saved);
     }
 
+    @org.springframework.cache.annotation.CacheEvict(value = "manufacturers", allEntries = true)
     @Transactional
     public void hardDelete(Long id, String username) {
         com.example.ims.entity.User user = userRepository.findByUsername(username)

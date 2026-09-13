@@ -18,6 +18,7 @@ public class BomCategoryController {
     private final BomCategoryService service;
 
     @GetMapping("/active")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<BomCategory>> getActiveCategories() {
         return ResponseEntity.ok(service.getAllActiveCategories());
     }
@@ -31,7 +32,7 @@ public class BomCategoryController {
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<BomCategory> saveCategory(
-            @RequestBody BomCategory category,
+            @jakarta.validation.Valid @RequestBody BomCategory category,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(service.saveCategory(category, userDetails.getUsername()));
     }

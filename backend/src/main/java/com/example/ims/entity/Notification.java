@@ -17,6 +17,7 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "notifications")
+@org.hibernate.annotations.SQLRestriction("(is_deleted = false OR is_deleted IS NULL)")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

@@ -28,6 +28,7 @@ public class Brand {
     private LocalDateTime updatedAt;
 
     @Column(nullable = false, unique = true)
+    @jakarta.validation.constraints.NotBlank(message = "브랜드명은 필수입니다.")
     private String name; // 브랜드명
 
     @Builder.Default

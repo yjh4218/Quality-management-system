@@ -16,7 +16,14 @@ public class EtagConfig {
     @Bean
     public FilterRegistrationBean<ShallowEtagHeaderFilter> shallowEtagHeaderFilter() {
         FilterRegistrationBean<ShallowEtagHeaderFilter> filterRegistrationBean = new FilterRegistrationBean<>(new ShallowEtagHeaderFilter());
-        filterRegistrationBean.addUrlPatterns("/api/master/*", "/api/regulatory-ingredients/*", "/api/packaging-templates/*");
+        filterRegistrationBean.addUrlPatterns(
+                "/api/master/*", 
+                "/api/regulatory-ingredients/*", 
+                "/api/packaging-templates/*",
+                "/api/products/*",
+                "/api/claims/*",
+                "/api/manufacturers/*"
+        );
         filterRegistrationBean.setName("etagFilter");
         filterRegistrationBean.setOrder(20);
         return filterRegistrationBean;

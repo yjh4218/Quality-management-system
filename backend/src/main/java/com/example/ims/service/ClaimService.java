@@ -181,9 +181,20 @@ public class ClaimService {
         };
     }
 
+    private void sanitizeClaimFields(Claim claim) {
+        if (claim == null) return;
+        claim.setClaimContent(com.example.ims.util.XssSanitizer.sanitize(claim.getClaimContent()));
+        claim.setRootCauseAnalysis(com.example.ims.util.XssSanitizer.sanitize(claim.getRootCauseAnalysis()));
+        claim.setPreventativeAction(com.example.ims.util.XssSanitizer.sanitize(claim.getPreventativeAction()));
+        claim.setMfrRootCauseAnalysis(com.example.ims.util.XssSanitizer.sanitize(claim.getMfrRootCauseAnalysis()));
+        claim.setMfrPreventativeAction(com.example.ims.util.XssSanitizer.sanitize(claim.getMfrPreventativeAction()));
+        claim.setMfrRemarks(com.example.ims.util.XssSanitizer.sanitize(claim.getMfrRemarks()));
+    }
+
     @Transactional
     @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
     public Claim saveClaim(Claim claim) {
+        sanitizeClaimFields(claim);
         if (claim.getReceiptDate() == null) {
             claim.setReceiptDate(LocalDate.now());
         }
@@ -363,6 +374,7 @@ public class ClaimService {
     @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
     public Claim updateClaim(Long id, Claim updatedData, User user) {
         Claim existing = getClaim(id, user, false);
+        sanitizeClaimFields(updatedData);
         
         // [보안] 제조사 권한인 경우 본사 전용 관리 필드 수정 차단
         boolean isManufacturer = user.getRole().contains("ROLE_MANUFACTURER") || "제조사".equals(user.getDepartment());

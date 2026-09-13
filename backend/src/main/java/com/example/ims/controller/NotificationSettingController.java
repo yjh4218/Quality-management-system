@@ -9,7 +9,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/notifications/settings")
@@ -40,26 +39,25 @@ public class NotificationSettingController {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<NotificationSetting>> updateSetting(
             @PathVariable Long id,
-            @RequestBody Map<String, String> payload) {
+            @jakarta.validation.Valid @RequestBody com.example.ims.dto.NotificationSettingUpdateDto payload) {
         
         NotificationSetting setting = notificationSettingRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("알림 설정을 찾을 수 없습니다."));
 
-        if (payload.containsKey("displayName")) {
-            setting.setDisplayName(payload.get("displayName"));
+        if (payload.displayName() != null) {
+            setting.setDisplayName(payload.displayName());
         }
-        if (payload.containsKey("description")) {
-            setting.setDescription(payload.get("description"));
+        if (payload.description() != null) {
+            setting.setDescription(payload.description());
         }
-        if (payload.containsKey("targetRoles")) {
-            setting.setTargetRoles(payload.get("targetRoles"));
+        if (payload.targetRoles() != null) {
+            setting.setTargetRoles(payload.targetRoles());
         }
-        if (payload.containsKey("sourceDomain")) {
-            setting.setSourceDomain(payload.get("sourceDomain"));
+        if (payload.sourceDomain() != null) {
+            setting.setSourceDomain(payload.sourceDomain());
         }
-        if (payload.containsKey("sourceAction")) {
-            String action = payload.get("sourceAction");
-            setting.setSourceAction(action != null && !action.trim().isEmpty() ? action : "CREATE");
+        if (payload.sourceAction() != null && !payload.sourceAction().trim().isEmpty()) {
+            setting.setSourceAction(payload.sourceAction());
         }
         
         NotificationSetting saved = notificationSettingRepository.save(setting);

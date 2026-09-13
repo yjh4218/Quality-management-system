@@ -89,33 +89,52 @@ public class FileStorageService {
      * [Task 6 & 보안 강화] 파일 MIME 타입 및 무결성 검증 (Whitelist 방식)
      * [보안] SVG/XML 차단, 실행 파일 및 알 수 없는 바이너리(octet-stream) 차단
      */
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
+            ".xlsx", ".xls", ".doc", ".docx", ".hwp", ".pdf",
+            ".jpg", ".jpeg", ".png", ".gif", ".webp"
+    );
+
+    private static final Set<String> DANGEROUS_MIME_TYPES = Set.of(
+            "application/x-msdownload", "application/x-executable", "application/x-sh",
+            "application/x-bat", "application/x-msdos-program", "application/javascript",
+            "text/javascript", "text/html", "application/xhtml+xml", "application/x-php",
+            "application/x-httpd-php", "application/java-archive"
+    );
+
+    /**
+     * [Task 6 & 보안 강화 S-5] 파일 MIME 타입 및 무결성 검증 (Strict Whitelist 방식)
+     * [보안] SVG/XML 차단, 실행 파일 및 알 수 없는 스크립트 차단, 확장자 사전 검증 강제
+     */
     private void validateFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new RuntimeException("업로드할 파일이 비어있습니다.");
+        }
+
         // 1. 서비스 레이어 용량 재검증 (10MB)
         if (file.getSize() > MAX_FILE_SIZE) {
             throw new RuntimeException("보안 경고: 파일 크기가 허용 범위를 초과했습니다. (Max 10MB)");
         }
 
+        // 2. 확장자 사전 엄격 검증 (Whitelist)
+        String originalName = file.getOriginalFilename();
+        if (originalName == null || originalName.trim().isEmpty()) {
+            throw new RuntimeException("파일명이 존재하지 않습니다.");
+        }
+        validateByExtension(originalName);
+
         try {
-            // Tika를 이용한 실제 컨텐츠 분석
+            // 3. Tika를 이용한 실제 컨텐츠 매직 넘버/MIME 분석
             String detectedType = tika.detect(file.getInputStream());
             log.debug("[SECURITY] Content detection: {}", detectedType);
 
-            // [보안] SVG / XML 저장형 XSS 시도 즉시 차단 (image/ 시작 검사보다 먼저 실행)
             if (detectedType != null) {
                 String lowerType = detectedType.toLowerCase();
-                if (lowerType.contains("svg") || lowerType.contains("xml")) {
-                    log.warn("[SECURITY] Blocked SVG/XML XSS upload attempt: {}", detectedType);
-                    throw new RuntimeException("보안 경고: SVG 및 XML 파일 업로드는 XSS 위험으로 금지되어 있습니다.");
-                }
-            }
 
-            // 파일명 확장자 기반 차단 선 검증
-            String originalName = file.getOriginalFilename();
-            if (originalName != null) {
-                String lowerName = originalName.toLowerCase();
-                if (lowerName.endsWith(".svg") || lowerName.endsWith(".xml") || lowerName.endsWith(".html") || lowerName.endsWith(".htm")) {
-                    log.warn("[SECURITY] Blocked dangerous extension attempt: {}", originalName);
-                    throw new RuntimeException("보안 경고: 허용되지 않는 파일 확장자입니다. (.svg, .xml 등 불가)");
+                // 위험 MIME 타입 또는 SVG/XML/스크립트 즉시 차단
+                if (lowerType.contains("svg") || lowerType.contains("xml") || lowerType.contains("html")
+                        || DANGEROUS_MIME_TYPES.contains(lowerType)) {
+                    log.warn("[SECURITY] Blocked dangerous file upload attempt: {} (MIME: {})", originalName, detectedType);
+                    throw new RuntimeException("보안 경고: 허용되지 않는 위험 파일 형식입니다. (MIME: " + detectedType + ")");
                 }
             }
 
@@ -131,16 +150,10 @@ public class FileStorageService {
                     "application/zip" // Tika sometimes detects .docx/.xlsx as zip
             );
 
-            // 2. MIME 타입 검증
-            if (!safeTypes.contains(detectedType) && !detectedType.startsWith("image/")) {
-                // Tika가 파일 타입을 잘못 식별하는 경우가 많으므로 확장자 기반 검증
-                try {
-                    validateByExtension(file.getOriginalFilename());
-                    log.info("[FILE] Allowed file with MIME type '{}' based on extension fallback.", detectedType);
-                } catch (Exception extEx) {
-                    log.warn("[SECURITY] Blocked malicious file type: {} (Extension check failed: {})", detectedType, extEx.getMessage());
-                    throw new RuntimeException("허용되지 않은 파일 규격입니다. (PDF, 이미지, 엑셀, Word, HWP만 가능)");
-                }
+            // 4. MIME 타입 허용 목록 또는 안전한 이미지 확인
+            if (detectedType != null && !safeTypes.contains(detectedType) && !detectedType.startsWith("image/")) {
+                log.warn("[SECURITY] Blocked unrecognized MIME type: {} for file: {}", detectedType, originalName);
+                throw new RuntimeException("허용되지 않은 파일 규격입니다. (PDF, 이미지, 엑셀, Word, HWP만 가능)");
             }
         } catch (IOException e) {
             log.error("[SECURITY] File validation failed: {}", e.getMessage());
@@ -149,20 +162,18 @@ public class FileStorageService {
     }
 
     /**
-     * 확장자 이중 검증 (MIME 추론 실패 시 보조 수단)
+     * 확장자 이중 검증 (MIME 추론 전/후 필수 검증)
      */
     private void validateByExtension(String originalFilename) {
         if (originalFilename == null) throw new RuntimeException("파일명이 존재하지 않습니다.");
         String ext = originalFilename.toLowerCase();
-        if (ext.endsWith(".svg") || ext.endsWith(".xml") || ext.endsWith(".html") || ext.endsWith(".htm")) {
-            throw new RuntimeException("보안 위험: SVG 및 XML/HTML 파일은 업로드할 수 없습니다.");
+        if (ext.endsWith(".svg") || ext.endsWith(".xml") || ext.endsWith(".html") || ext.endsWith(".htm") || ext.endsWith(".exe") || ext.endsWith(".sh")) {
+            throw new RuntimeException("보안 위험: 실행 파일, 스크립트 및 SVG/XML 파일은 업로드할 수 없습니다.");
         }
 
-        Set<String> allowedExtensions = Set.of(".xlsx", ".xls", ".doc", ".docx", ".hwp", ".pdf",
-                ".jpg", ".jpeg", ".png", ".gif", ".webp");
-        boolean allowed = allowedExtensions.stream().anyMatch(ext::endsWith);
+        boolean allowed = ALLOWED_EXTENSIONS.stream().anyMatch(ext::endsWith);
         if (!allowed) {
-            throw new RuntimeException("보안 위험: 허용되지 않은 파일 형식입니다.");
+            throw new RuntimeException("보안 위험: 허용되지 않은 파일 확장자입니다. (허용: xlsx, docx, pdf, jpg, png, webp 등)");
         }
     }
 
@@ -181,9 +192,10 @@ public class FileStorageService {
     public String storeFile(MultipartFile file, com.example.ims.util.UploadType uploadType, String prefix, String extraInfo) {
         validateFile(file);
 
-        String originalFileName = StringUtils.cleanPath(file.getOriginalFilename());
+        String rawFilename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "upload_file";
+        String originalFileName = StringUtils.cleanPath(rawFilename);
         try {
-            if (originalFileName.contains("..")) {
+            if (originalFileName.contains("..") || originalFileName.contains("/") || originalFileName.contains("\\")) {
                 throw new RuntimeException("Invalid path sequence in filename: " + originalFileName);
             }
 

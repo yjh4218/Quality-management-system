@@ -39,8 +39,8 @@ public class AuthController {
      * 사용자 아이디 중복 여부를 확인합니다.
      */
     @PostMapping("/check-username")
-    public ResponseEntity<ApiResponse<Map<String, Boolean>>> checkUsername(@RequestBody Map<String, String> body) {
-        String username = body.get("username");
+    public ResponseEntity<ApiResponse<Map<String, Boolean>>> checkUsername(@Valid @RequestBody com.example.ims.dto.CheckUsernameRequestDto body) {
+        String username = body.username();
         boolean exists = userRepository.findByUsername(username).isPresent();
         return ResponseEntity.ok(ApiResponse.success(Map.of("exists", exists)));
     }
@@ -81,10 +81,10 @@ public class AuthController {
      * 비밀번호 분실 시 임시 비밀번호 발급 절차를 진행합니다.
      */
     @PostMapping("/find-password")
-    public ResponseEntity<ApiResponse<Map<String, String>>> findPassword(@RequestBody Map<String, String> body) {
-        String username = body.get("username");
-        String name = body.get("name");
-        String email = body.get("email");
+    public ResponseEntity<ApiResponse<Map<String, String>>> findPassword(@Valid @RequestBody com.example.ims.dto.FindPasswordRequestDto body) {
+        String username = body.username();
+        String name = body.name();
+        String email = body.email();
 
         authService.processFindPassword(username, name, email);
 

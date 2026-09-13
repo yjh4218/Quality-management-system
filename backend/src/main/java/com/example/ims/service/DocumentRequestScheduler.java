@@ -37,6 +37,7 @@ public class DocumentRequestScheduler {
     private final ProductRepository productRepository;
     private final ManufacturerRepository manufacturerRepository;
     private final com.example.ims.repository.UserRepository userRepository;
+    private final BugReportService bugReportService;
 
     public DocumentRequestScheduler(
             DocumentRequestService requestService,
@@ -45,7 +46,8 @@ public class DocumentRequestScheduler {
             CustomDocumentTypeRepository customDocumentTypeRepository,
             ProductRepository productRepository,
             ManufacturerRepository manufacturerRepository,
-            com.example.ims.repository.UserRepository userRepository) {
+            com.example.ims.repository.UserRepository userRepository,
+            BugReportService bugReportService) {
         this.requestService = requestService;
         this.requirementRepository = requirementRepository;
         this.requestLogRepository = requestLogRepository;
@@ -53,6 +55,7 @@ public class DocumentRequestScheduler {
         this.productRepository = productRepository;
         this.manufacturerRepository = manufacturerRepository;
         this.userRepository = userRepository;
+        this.bugReportService = bugReportService;
     }
 
     /**
@@ -76,6 +79,16 @@ public class DocumentRequestScheduler {
             log.info("[SCHEDULE] Scheduled document request management task completed successfully.");
         } catch (Exception e) {
             log.error("[SCHEDULE] Scheduled document request management task failed: {}", e.getMessage(), e);
+            try {
+                bugReportService.submitReport(com.example.ims.entity.BugReport.builder()
+                        .reporterUsername("SYSTEM_SCHEDULER")
+                        .screenName("DocumentRequestScheduler")
+                        .description("필수서류 자동 요청 스케줄러 실패: " + e.getMessage())
+                        .errorCategory("SCHEDULER_ERROR")
+                        .build());
+            } catch (Exception reportEx) {
+                log.error("[SCHEDULE] Failed to submit bug report for scheduler error: {}", reportEx.getMessage());
+            }
         }
     }
 

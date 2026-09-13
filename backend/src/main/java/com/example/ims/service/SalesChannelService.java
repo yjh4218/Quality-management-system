@@ -14,16 +14,19 @@ public class SalesChannelService {
     private final SalesChannelRepository repository;
     private final AuditLogService auditLogService;
 
+    @org.springframework.cache.annotation.Cacheable(value = "salesChannels", key = "'all'")
     @Transactional(readOnly = true)
     public List<SalesChannel> getAllChannels() {
         return repository.findAll();
     }
 
+    @org.springframework.cache.annotation.Cacheable(value = "salesChannels", key = "'active'")
     @Transactional(readOnly = true)
     public List<SalesChannel> getActiveChannels() {
         return repository.findAll().stream().filter(SalesChannel::isActive).toList();
     }
 
+    @org.springframework.cache.annotation.CacheEvict(value = "salesChannels", allEntries = true)
     @Transactional
     public SalesChannel saveChannel(SalesChannel channel, String username) {
         boolean isNew = channel.getId() == null;
@@ -39,6 +42,7 @@ public class SalesChannelService {
         return saved;
     }
 
+    @org.springframework.cache.annotation.CacheEvict(value = "salesChannels", allEntries = true)
     @Transactional
     public void deleteChannel(Long id) {
         repository.findById(id).ifPresent(ch -> {
@@ -49,6 +53,7 @@ public class SalesChannelService {
         });
     }
 
+    @org.springframework.cache.annotation.CacheEvict(value = "salesChannels", allEntries = true)
     @Transactional
     public void toggleActive(Long id) {
         repository.findById(id).ifPresent(ch -> {

@@ -174,7 +174,7 @@ public class ProductController {
             @RequestParam(required = false) java.util.List<String> channelNames,
             org.springframework.data.domain.Pageable pageable) {
         return ResponseEntity
-                .ok(productService.searchProducts(userDetails.getUsername(), itemCode, productName, englishProductName, brand, manufacturer, ingredients, isMaster, channelNames, pageable));
+                .ok(productService.searchProducts(userDetails.getUsername(), itemCode, productName, englishProductName, brand, manufacturer, ingredients, isMaster, channelNames, com.example.ims.util.PageableUtils.clamp(pageable)));
     }
 
     @GetMapping("/export")

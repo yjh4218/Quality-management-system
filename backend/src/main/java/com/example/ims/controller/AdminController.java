@@ -8,7 +8,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin/users")
@@ -83,8 +82,8 @@ public class AdminController {
 
     @PutMapping("/{id}/role")
     @PreAuthorize("@perm.can('users', 'EDIT')")
-    public ResponseEntity<?> updateUserRole(@PathVariable Long id, @RequestBody Map<String, String> payload) {
-        String newRole = payload.get("role");
+    public ResponseEntity<?> updateUserRole(@PathVariable Long id, @jakarta.validation.Valid @RequestBody com.example.ims.dto.RoleUpdateRequestDto payload) {
+        String newRole = payload.role();
         
         // [수정] 하드코딩된 RoleConstants 대신 동적 RoleService를 통해 유효성 검증
         if (!roleService.isValidRole(newRole)) {

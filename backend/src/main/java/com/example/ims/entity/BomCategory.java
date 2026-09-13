@@ -31,9 +31,11 @@ public class BomCategory {
     private LocalDateTime updatedAt;
 
     @Column(name = "main_type", nullable = false)
+    @jakarta.validation.constraints.NotBlank(message = "BOM 유형은 필수입니다.")
     private String mainType; // 유형 (예: 용기, 캡, 라벨)
 
     @Column(name = "sub_type", nullable = false)
+    @jakarta.validation.constraints.NotBlank(message = "BOM 세부유형은 필수입니다.")
     private String subType; // 세부유형 (예: PET병, PP)
 
     @Column(name = "active")

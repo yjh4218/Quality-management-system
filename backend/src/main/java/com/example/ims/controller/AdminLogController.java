@@ -24,7 +24,7 @@ public class AdminLogController {
             @org.springframework.web.bind.annotation.RequestParam(required = false) String endDate,
             org.springframework.data.domain.Pageable pageable) {
         log.info("[DEBUG] Accessing Global Audit Logs. Params: entityType={}, search={}", entityType, search);
-        return ResponseEntity.ok(auditLogService.searchLogs(entityType, search, startDate, endDate, pageable));
+        return ResponseEntity.ok(auditLogService.searchLogs(entityType, search, startDate, endDate, com.example.ims.util.PageableUtils.clamp(pageable)));
     }
 
     @org.springframework.web.bind.annotation.PostMapping("/{logId}/restore")

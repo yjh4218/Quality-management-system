@@ -29,7 +29,7 @@ public class ProductTestReportController {
 
     @PostMapping("/{id}/test-reports")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
-    public ResponseEntity<?> addTestReport(@PathVariable Long id, @RequestBody Map<String, String> payload) {
+    public ResponseEntity<?> addTestReport(@PathVariable Long id, @jakarta.validation.Valid @RequestBody com.example.ims.dto.ProductTestReportCreateDto payload) {
         Product product = productRepository.findById(id).orElse(null);
         if (product == null) {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Product not found"));
@@ -37,10 +37,10 @@ public class ProductTestReportController {
 
         ProductTestReport report = new ProductTestReport();
         report.setProduct(product);
-        report.setReportName(payload.get("reportName"));
-        report.setFileName(payload.get("fileName"));
-        report.setFilePath(payload.get("filePath"));
-        report.setFileType(payload.get("fileType"));
+        report.setReportName(payload.reportName());
+        report.setFileName(payload.fileName());
+        report.setFilePath(payload.filePath());
+        report.setFileType(payload.fileType());
 
         testReportRepository.save(report);
         return ResponseEntity.ok(Map.of("success", true, "data", report));

@@ -168,13 +168,17 @@ public class AuthService {
     }
 
     /**
-     * 비밀번호 복잡도 유효성 검사 (영문 + 숫자 조합 필수)
+     * 비밀번호 복잡도 유효성 검사 (영문, 숫자, 특수기호 포함 8~64자리)
      */
     private void validatePasswordComplexity(String password) {
+        if (password == null || password.length() < 8 || password.length() > 64) {
+            throw new IllegalArgumentException("비밀번호는 8자 이상 64자 이하이어야 합니다.");
+        }
         boolean hasLetter = password.matches(".*[a-zA-Z].*");
         boolean hasDigit = password.matches(".*[0-9].*");
-        if (!hasLetter || !hasDigit) {
-            throw new IllegalArgumentException("비밀번호는 영문과 숫자를 모두 포함해야 합니다.");
+        boolean hasSpecial = password.matches(".*[!@#$%^&*()_+={}\\[\\]:;\"'<>,.?/\\\\|~`-].*");
+        if (!hasLetter || !hasDigit || !hasSpecial) {
+            throw new IllegalArgumentException("비밀번호는 영문, 숫자, 특수기호를 모두 포함해야 합니다.");
         }
     }
 }

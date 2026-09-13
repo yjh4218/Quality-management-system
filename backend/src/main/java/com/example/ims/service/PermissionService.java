@@ -95,4 +95,11 @@ public class PermissionService {
         }
         return false;
     }
+
+    /**
+     * [보안/권한 R-4] 역할 수정/삭제 시 권한 캐시 즉시 무효화
+     */
+    public void invalidateCache() {
+        permCache.invalidateAll();
+    }
 }

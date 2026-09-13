@@ -116,8 +116,13 @@ public class RateLimitFilter implements Filter {
         }
 
         // 5. 버그 리포트 전송 엔드포인트: 분당 10회 제한
-        if (path.equals("/api/bug-reports") && "POST".equalsIgnoreCase(method)) {
+        if (path.startsWith("/api/bug-reports") && "POST".equalsIgnoreCase(method)) {
             return new BucketLimitConfig("BUG_REPORT", 10, "버그 리포트 제출 한도를 초과했습니다. 1분 뒤 시도해 주십시오.");
+        }
+
+        // 6. 페이지 이동 및 접근 로그 엔드포인트: 분당 60회 제한 (플러딩 방지)
+        if (path.startsWith("/api/logs/access") && "POST".equalsIgnoreCase(method)) {
+            return new BucketLimitConfig("ACCESS_LOG", 60, "접근 로그 전송 빈도가 너무 높습니다. 잠시 후 다시 시도해 주십시오.");
         }
 
         return null; // 제한 대상이 아님

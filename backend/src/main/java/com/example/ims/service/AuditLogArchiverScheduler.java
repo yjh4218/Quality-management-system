@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 public class AuditLogArchiverScheduler {
 
     private final AuditLogService auditLogService;
+    private final BugReportService bugReportService;
 
     /**
      * 매일 새벽 3시에 6개월 이상 된 로그를 아카이빙합니다.
@@ -28,6 +29,16 @@ public class AuditLogArchiverScheduler {
             log.info("[SCHEDULE] Scheduled audit log archiving task completed successfully.");
         } catch (Exception e) {
             log.error("[SCHEDULE] Scheduled audit log archiving task failed: {}", e.getMessage());
+            try {
+                bugReportService.submitReport(com.example.ims.entity.BugReport.builder()
+                        .reporterUsername("SYSTEM_SCHEDULER")
+                        .screenName("AuditLogArchiverScheduler")
+                        .description("감사 로그 아카이빙 스케줄러 실패: " + e.getMessage())
+                        .errorCategory("SCHEDULER_ERROR")
+                        .build());
+            } catch (Exception reportEx) {
+                log.error("[SCHEDULE] Failed to submit bug report for scheduler error: {}", reportEx.getMessage());
+            }
         }
     }
 }

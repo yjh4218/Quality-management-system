@@ -23,7 +23,7 @@ public class MailCategoryController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN','QUALITY','QUALITY_TEAM')")
-    public ResponseEntity<?> createCategory(@RequestBody MailCategory category) {
+    public ResponseEntity<?> createCategory(@jakarta.validation.Valid @RequestBody MailCategory category) {
         try {
             return ResponseEntity.ok(service.saveCategory(category));
         } catch (IllegalArgumentException e) {
@@ -33,7 +33,7 @@ public class MailCategoryController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','QUALITY','QUALITY_TEAM')")
-    public ResponseEntity<?> updateCategory(@PathVariable Long id, @RequestBody MailCategory category) {
+    public ResponseEntity<?> updateCategory(@PathVariable Long id, @jakarta.validation.Valid @RequestBody MailCategory category) {
         try {
             category.setId(id);
             return ResponseEntity.ok(service.saveCategory(category));

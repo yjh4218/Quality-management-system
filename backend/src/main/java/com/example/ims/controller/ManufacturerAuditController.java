@@ -49,7 +49,7 @@ public class ManufacturerAuditController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM') or @perm.can('manufacturerAudits', 'EDIT')")
-    public ResponseEntity<ManufacturerAudit> createAudit(@RequestBody ManufacturerAudit audit, Authentication authentication) {
+    public ResponseEntity<ManufacturerAudit> createAudit(@jakarta.validation.Valid @RequestBody ManufacturerAudit audit, Authentication authentication) {
         if (authentication != null) {
             audit.setModifierInfo(authentication.getName());
         }
@@ -74,7 +74,7 @@ public class ManufacturerAuditController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM') or @perm.can('manufacturerAudits', 'EDIT')")
-    public ResponseEntity<ManufacturerAudit> updateAudit(@PathVariable Long id, @RequestBody ManufacturerAudit audit, Authentication authentication) {
+    public ResponseEntity<ManufacturerAudit> updateAudit(@PathVariable Long id, @jakarta.validation.Valid @RequestBody ManufacturerAudit audit, Authentication authentication) {
         if (authentication != null) {
             audit.setModifierInfo(authentication.getName());
         }

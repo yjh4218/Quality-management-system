@@ -29,7 +29,7 @@ public class AuditTemplateController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM') or @perm.can('manufacturerAuditItems', 'EDIT')")
-    public ResponseEntity<AuditTemplate> saveTemplate(@RequestBody AuditTemplate template) {
+    public ResponseEntity<AuditTemplate> saveTemplate(@jakarta.validation.Valid @RequestBody AuditTemplate template) {
         return ResponseEntity.ok(auditService.saveTemplate(template));
     }
 

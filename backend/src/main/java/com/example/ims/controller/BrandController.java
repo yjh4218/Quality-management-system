@@ -25,7 +25,7 @@ public class BrandController {
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Brand> create(@RequestBody Brand brand, @AuthenticationPrincipal UserDetails userDetails) {
+    public ResponseEntity<Brand> create(@jakarta.validation.Valid @RequestBody Brand brand, @AuthenticationPrincipal UserDetails userDetails) {
         Brand saved = brandRepository.save(brand);
         auditLogService.logEntityChange("BRAND", saved.getId(), "CREATE", userDetails.getUsername(),
                 null, userDetails.getUsername(), null, null,
@@ -35,7 +35,7 @@ public class BrandController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Brand> update(@PathVariable Long id, @RequestBody Brand brandDetails, @AuthenticationPrincipal UserDetails userDetails) {
+    public ResponseEntity<Brand> update(@PathVariable Long id, @jakarta.validation.Valid @RequestBody Brand brandDetails, @AuthenticationPrincipal UserDetails userDetails) {
         Brand brand = brandRepository.findById(id).orElse(null);
         if (brand == null) {
             return ResponseEntity.notFound().build();

@@ -57,7 +57,7 @@ public class SpaceRatioController {
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
     public ResponseEntity<Page<SpaceRatioCheckLog>> getLogs(
             @PageableDefault(size = 20, sort = "checkedAt") Pageable pageable) {
-        Page<SpaceRatioCheckLog> logs = spaceRatioService.getCheckLogs(pageable);
+        Page<SpaceRatioCheckLog> logs = spaceRatioService.getCheckLogs(com.example.ims.util.PageableUtils.clamp(pageable));
         return ResponseEntity.ok(logs);
     }
 }

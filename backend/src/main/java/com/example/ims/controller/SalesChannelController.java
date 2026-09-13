@@ -29,7 +29,7 @@ public class SalesChannelController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM')")
-    public ResponseEntity<SalesChannel> saveChannel(@RequestBody SalesChannel channel, @AuthenticationPrincipal UserDetails userDetails) {
+    public ResponseEntity<SalesChannel> saveChannel(@jakarta.validation.Valid @RequestBody SalesChannel channel, @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(service.saveChannel(channel, userDetails.getUsername()));
     }
 

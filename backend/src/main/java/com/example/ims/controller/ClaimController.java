@@ -93,7 +93,7 @@ public class ClaimController {
             roleStr = "ROLE_" + roleStr;
         }
         org.springframework.data.domain.Pageable pageable =
-            org.springframework.data.domain.PageRequest.of(page, size,
+            com.example.ims.util.PageableUtils.of(page, size,
                 org.springframework.data.domain.Sort.by("receiptDate").descending());
 
         String effectiveCompany = getEffectiveCompanyName(user);

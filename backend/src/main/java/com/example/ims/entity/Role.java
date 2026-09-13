@@ -24,9 +24,11 @@ public class Role {
     private Long id;
 
     @Column(name = "role_key", unique = true, nullable = false)
+    @jakarta.validation.constraints.NotBlank(message = "역할 키는 필수입니다.")
     private String roleKey;
 
     @Column(name = "display_name", nullable = false)
+    @jakarta.validation.constraints.NotBlank(message = "역할 표시명은 필수입니다.")
     private String displayName;
 
     @Column(columnDefinition = "TEXT")

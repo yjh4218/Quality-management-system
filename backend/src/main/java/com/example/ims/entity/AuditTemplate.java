@@ -21,6 +21,7 @@ public class AuditTemplate {
     private Long id;
 
     @Column(nullable = false, unique = true)
+    @jakarta.validation.constraints.NotBlank(message = "분류명은 필수입니다.")
     private String classificationName; // 분류명 (화장품 제조사 등)
 
     private String targetCategory; // 자동 맵핑 대상 제조사 분류 (화장품, 공산품 등)

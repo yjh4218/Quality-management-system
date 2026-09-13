@@ -23,9 +23,11 @@ public class MailCategory {
     private Long id;
 
     @Column(nullable = false, unique = true)
+    @jakarta.validation.constraints.NotBlank(message = "카테고리 코드는 필수입니다.")
     private String categoryCode; // e.g. CLAIM, PRODUCTION_AUDIT
 
     @Column(nullable = false)
+    @jakarta.validation.constraints.NotBlank(message = "카테고리 이름은 필수입니다.")
     private String categoryName; // e.g. 클레임 관리, 생산감리
 
     @Column(columnDefinition = "TEXT")

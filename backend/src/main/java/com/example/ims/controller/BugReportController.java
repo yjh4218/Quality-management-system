@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.*;
 
 import com.example.ims.repository.UserRepository;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/bug-reports")
@@ -62,8 +61,8 @@ public class BugReportController {
 
     @PatchMapping("/{id}/status")
     @PreAuthorize("@perm.can('bugReports', 'EDIT')")
-    public ResponseEntity<BugReport> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> payload) {
-        String status = payload.get("status");
+    public ResponseEntity<BugReport> updateStatus(@PathVariable Long id, @jakarta.validation.Valid @RequestBody com.example.ims.dto.BugReportStatusUpdateDto payload) {
+        String status = payload.status();
         return ResponseEntity.ok(bugReportService.updateStatus(id, status));
     }
 }

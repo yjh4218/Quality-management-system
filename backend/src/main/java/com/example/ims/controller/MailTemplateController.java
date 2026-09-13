@@ -31,13 +31,13 @@ public class MailTemplateController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN','QUALITY','QUALITY_TEAM')")
-    public ResponseEntity<MailTemplate> createTemplate(@RequestBody MailTemplate template) {
+    public ResponseEntity<MailTemplate> createTemplate(@jakarta.validation.Valid @RequestBody MailTemplate template) {
         return ResponseEntity.ok(mailTemplateService.saveTemplate(template));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','QUALITY','QUALITY_TEAM')")
-    public ResponseEntity<MailTemplate> updateTemplate(@PathVariable Long id, @RequestBody MailTemplate template) {
+    public ResponseEntity<MailTemplate> updateTemplate(@PathVariable Long id, @jakarta.validation.Valid @RequestBody MailTemplate template) {
         template.setId(id);
         return ResponseEntity.ok(mailTemplateService.saveTemplate(template));
     }

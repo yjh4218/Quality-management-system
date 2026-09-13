@@ -10,8 +10,13 @@ import com.example.ims.repository.PackagingSpecRevisionRepository;
 import com.example.ims.repository.ProductRepository;
 import com.itextpdf.text.Document;
 import com.itextpdf.text.Font;
-import com.itextpdf.text.Paragraph;
+import com.itextpdf.text.Phrase;
+import com.itextpdf.text.BaseColor;
+import com.itextpdf.text.Element;
+import com.itextpdf.text.PageSize;
 import com.itextpdf.text.pdf.BaseFont;
+import com.itextpdf.text.pdf.PdfPCell;
+import com.itextpdf.text.pdf.PdfPTable;
 import com.itextpdf.text.pdf.PdfWriter;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Row;
@@ -196,9 +201,15 @@ public class PackagingSpecExportService {
             PackagingSpecification spec = specs.isEmpty() ? PackagingSpecification.builder().product(product).build() : specs.get(0);
 
             com.example.ims.entity.SalesChannel firstChannel = (product.getChannels() != null && !product.getChannels().isEmpty()) ? product.getChannels().get(0) : null;
-            String inboxMarkingRule = (firstChannel != null && firstChannel.getInboxLabelMarkingRule() != null) ? firstChannel.getInboxLabelMarkingRule() : "인박스 현품표 표준 규격 적용";
-            String outboxMarkingRule = (firstChannel != null && firstChannel.getOutboxLabelMarkingRule() != null) ? firstChannel.getOutboxLabelMarkingRule() : "아웃박스 현품표 표준 규격 적용";
-            String palletMarkingRule = (firstChannel != null && firstChannel.getPalletLabelMarkingRule() != null) ? firstChannel.getPalletLabelMarkingRule() : "팔레트 현품표 표준 규격 적용";
+            String inboxMarkingRule = (spec.getInboxLabelMarkingRule() != null && !spec.getInboxLabelMarkingRule().isBlank())
+                    ? spec.getInboxLabelMarkingRule()
+                    : ((firstChannel != null && firstChannel.getInboxLabelMarkingRule() != null) ? firstChannel.getInboxLabelMarkingRule() : "인박스 현품표 표준 규격 적용");
+            String outboxMarkingRule = (spec.getOutboxLabelMarkingRule() != null && !spec.getOutboxLabelMarkingRule().isBlank())
+                    ? spec.getOutboxLabelMarkingRule()
+                    : ((firstChannel != null && firstChannel.getOutboxLabelMarkingRule() != null) ? firstChannel.getOutboxLabelMarkingRule() : "아웃박스 현품표 표준 규격 적용");
+            String palletMarkingRule = (spec.getPalletLabelMarkingRule() != null && !spec.getPalletLabelMarkingRule().isBlank())
+                    ? spec.getPalletLabelMarkingRule()
+                    : ((firstChannel != null && firstChannel.getPalletLabelMarkingRule() != null) ? firstChannel.getPalletLabelMarkingRule() : "팔레트 현품표 표준 규격 적용");
 
             String inboxDateFormatStr = (spec.getInboxDateFormat() != null && !spec.getInboxDateFormat().trim().isEmpty()) ? spec.getInboxDateFormat() : (firstChannel != null && firstChannel.getInboxDateFormat() != null ? firstChannel.getInboxDateFormat() : "[ YYYY.MM.DD 표기 ]");
             String outboxDateFormatStr = (spec.getOutboxDateFormat() != null && !spec.getOutboxDateFormat().trim().isEmpty()) ? spec.getOutboxDateFormat() : (firstChannel != null && firstChannel.getOutboxDateFormat() != null ? firstChannel.getOutboxDateFormat() : "[ YYYY.MM.DD 표기 ]");
@@ -881,7 +892,7 @@ public class PackagingSpecExportService {
     }
 
     /**
-     * Generates a simple PDF export for the given product's packaging specs.
+     * Generates a landscape PDF export that faithfully mirrors the Excel layout and visuals.
      * @param productId Product ID
      * @return byte array containing the PDF file bytes
      * @throws Exception if an error occurs during generation
@@ -893,225 +904,585 @@ public class PackagingSpecExportService {
         specs.sort((a,b) -> {
             int vA = a.getVersion() == null ? 0 : a.getVersion();
             int vB = b.getVersion() == null ? 0 : b.getVersion();
-            if (vA != vB) return Integer.compare(vB, vA); // descending version
+            if (vA != vB) return Integer.compare(vB, vA);
             Long idA = a.getId() == null ? 0L : a.getId();
             Long idB = b.getId() == null ? 0L : b.getId();
-            return Long.compare(idB, idA); // descending ID
+            return Long.compare(idB, idA);
         });
 
-        Document document = new Document();
+        PackagingSpecification spec = specs.isEmpty() ? PackagingSpecification.builder().product(product).build() : specs.get(0);
+
+        // A4 가로(Landscape) 및 18pt 여백으로 엑셀 화면의 8열 와이드 레이아웃 완벽 수용
+        Document document = new Document(PageSize.A4.rotate(), 18, 18, 18, 18);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         PdfWriter.getInstance(document, out);
-
         document.open();
 
-        // Font configuration
         BaseFont baseFont;
         try {
             baseFont = BaseFont.createFont("c:/windows/fonts/malgun.ttf", BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
-        } catch (Exception e) {
-            baseFont = BaseFont.createFont(BaseFont.HELVETICA, BaseFont.WINANSI, BaseFont.NOT_EMBEDDED);
+        } catch (Exception e1) {
+            try {
+                baseFont = BaseFont.createFont("c:/windows/fonts/gulim.ttc,0", BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+            } catch (Exception e2) {
+                baseFont = BaseFont.createFont(BaseFont.HELVETICA, BaseFont.WINANSI, BaseFont.NOT_EMBEDDED);
+            }
         }
 
-        Font titleFont = new Font(baseFont, 18, Font.BOLD);
-        Font sectionFont = new Font(baseFont, 12, Font.BOLD);
-        Font normalFont = new Font(baseFont, 9, Font.NORMAL);
+        // 디자인 테마 색상 (엑셀 스타일과 일치)
+        BaseColor BORDER_COLOR = new BaseColor(203, 213, 225);
+        BaseColor BG_TITLE = new BaseColor(30, 58, 138);
+        BaseColor BG_SECTION = new BaseColor(224, 231, 255);
+        BaseColor TEXT_SECTION = new BaseColor(30, 58, 138);
+        BaseColor BG_LABEL = new BaseColor(241, 245, 249);
+        BaseColor BG_SUBHEADER = new BaseColor(248, 250, 252);
+        BaseColor BG_DATA = BaseColor.WHITE;
+        BaseColor TEXT_DARK = new BaseColor(15, 23, 42);
 
-        // 제품 특징 반영
+        Font titleFont = new Font(baseFont, 13, Font.BOLD, BaseColor.WHITE);
+        Font sectionFont = new Font(baseFont, 8.5f, Font.BOLD, TEXT_SECTION);
+        Font subHeaderFont = new Font(baseFont, 7.5f, Font.BOLD, TEXT_DARK);
+        Font labelFont = new Font(baseFont, 7f, Font.BOLD, new BaseColor(51, 65, 85));
+        Font dataFont = new Font(baseFont, 7f, Font.NORMAL, TEXT_DARK);
+
+        // 8열 메인 테이블 구성 (엑셀 시트 1의 8열 비율과 동일)
+        PdfPTable table = new PdfPTable(8);
+        table.setWidthPercentage(100);
+        table.setWidths(new float[]{ 11f, 15f, 11f, 15f, 11f, 14f, 11f, 12f });
+
+        // 대제목
+        PdfPCell titleCell = new PdfPCell(new Phrase("📦 제품 포장 사양서 (Packaging Specification)", titleFont));
+        titleCell.setColspan(8);
+        titleCell.setBackgroundColor(BG_TITLE);
+        titleCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+        titleCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        titleCell.setPadding(6f);
+        titleCell.setBorderColor(BORDER_COLOR);
+        table.addCell(titleCell);
+
         String capacityInfo = product.getCapacity() != null && !product.getCapacity().isEmpty() ? " " + product.getCapacity() : "";
-        String prodWeightInfo = product.getWeight() != null && !product.getWeight().isEmpty() ? " (" + product.getWeight() + ")" : "";
-        String productNameWithSpecs = product.getProductName() + capacityInfo + prodWeightInfo;
-        String englishProductNameWithSpecs = (product.getEnglishProductName() != null ? product.getEnglishProductName() : "") + capacityInfo;
+        String weightInfo = product.getWeight() != null && !product.getWeight().isEmpty() ? " (" + product.getWeight() + ")" : "";
+        String productNameWithSpecs = product.getProductName() + capacityInfo + weightInfo;
+        String englishProductNameWithSpecs = (product.getEnglishProductName() != null && !product.getEnglishProductName().isBlank()) 
+            ? (product.getEnglishProductName() + capacityInfo) 
+            : "-";
+        String channelNames = product.getChannels() != null && !product.getChannels().isEmpty() 
+            ? product.getChannels().stream().map(com.example.ims.entity.SalesChannel::getName).collect(Collectors.joining(", "))
+            : "미지정";
 
-        document.add(new Paragraph("포장사양서 (Packaging Specification Report)", titleFont));
-        document.add(new Paragraph("----------------------------------------------------------------------------------------------------------------", normalFont));
+        com.example.ims.entity.SalesChannel firstChannel = (product.getChannels() != null && !product.getChannels().isEmpty()) ? product.getChannels().get(0) : null;
+        String inboxMarkingRule = (spec.getInboxLabelMarkingRule() != null && !spec.getInboxLabelMarkingRule().isBlank())
+            ? spec.getInboxLabelMarkingRule()
+            : ((firstChannel != null && firstChannel.getInboxLabelMarkingRule() != null) ? firstChannel.getInboxLabelMarkingRule() : "인박스 현품표 표준 규격 적용");
+        String outboxMarkingRule = (spec.getOutboxLabelMarkingRule() != null && !spec.getOutboxLabelMarkingRule().isBlank())
+            ? spec.getOutboxLabelMarkingRule()
+            : ((firstChannel != null && firstChannel.getOutboxLabelMarkingRule() != null) ? firstChannel.getOutboxLabelMarkingRule() : "아웃박스 현품표 표준 규격 적용");
+        String palletMarkingRule = (spec.getPalletLabelMarkingRule() != null && !spec.getPalletLabelMarkingRule().isBlank())
+            ? spec.getPalletLabelMarkingRule()
+            : ((firstChannel != null && firstChannel.getPalletLabelMarkingRule() != null) ? firstChannel.getPalletLabelMarkingRule() : "팔레트 현품표 표준 규격 적용");
 
-        // 1. 기본 정보 (Product Details)
-        document.add(new Paragraph("[기본 정보 / Product Info]", sectionFont));
-        document.add(new Paragraph("브랜드명 (Brand): " + (product.getBrand() != null ? product.getBrand().getName() : "-"), normalFont));
-        document.add(new Paragraph("품명(국문) (Product Name): " + productNameWithSpecs, normalFont));
-        document.add(new Paragraph("품명(영문) (English Name): " + englishProductNameWithSpecs, normalFont));
-        document.add(new Paragraph("품목코드 (Item Code): " + product.getItemCode(), normalFont));
-        document.add(new Paragraph("제조사 (Manufacturer): " + (product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-"), normalFont));
-        document.add(new Paragraph("사용기한 (Shelf Life): " + (product.getShelfLifeMonths() != null ? "제조일로부터 " + product.getShelfLifeMonths() + "개월" : "-"), normalFont));
-        if (product.getOpenedShelfLifeMonths() != null) {
-            document.add(new Paragraph("개봉 후 사용기한 (After Opening): 개봉 후 " + product.getOpenedShelfLifeMonths() + "개월", normalFont));
-        }
-        document.add(new Paragraph("----------------------------------------------------------------------------------------------------------------", normalFont));
+        String inboxDateFormatStr = (spec.getInboxDateFormat() != null && !spec.getInboxDateFormat().trim().isEmpty()) ? spec.getInboxDateFormat() : (firstChannel != null && firstChannel.getInboxDateFormat() != null ? firstChannel.getInboxDateFormat() : "[ YYYY.MM.DD 표기 ]");
+        String outboxDateFormatStr = (spec.getOutboxDateFormat() != null && !spec.getOutboxDateFormat().trim().isEmpty()) ? spec.getOutboxDateFormat() : (firstChannel != null && firstChannel.getOutboxDateFormat() != null ? firstChannel.getOutboxDateFormat() : "[ YYYY.MM.DD 표기 ]");
+        String palletDateFormatStr = (spec.getPalletDateFormat() != null && !spec.getPalletDateFormat().trim().isEmpty()) ? spec.getPalletDateFormat() : (firstChannel != null && firstChannel.getPalletDateFormat() != null ? firstChannel.getPalletDateFormat() : "[ YYYY.MM.DD 표기 ]");
 
-        if (!specs.isEmpty()) {
-            PackagingSpecification spec = specs.get(0); // Use latest or first spec
+        // [1. 제품 및 기본 정보]
+        addPdfSectionHeader(table, "1. 📌 제품 및 기본 정보", sectionFont, BG_SECTION, BORDER_COLOR);
+        addPdfKeyValueRow(table, labelFont, dataFont, BG_LABEL, BG_DATA, BORDER_COLOR,
+                "품목코드", product.getItemCode(), "브랜드명", product.getBrand() != null ? product.getBrand().getName() : "-",
+                "유통채널", channelNames, "버전", "v" + (spec.getVersion() != null ? spec.getVersion() : 1));
+        addPdfKeyValueRow(table, labelFont, dataFont, BG_LABEL, BG_DATA, BORDER_COLOR,
+                "제품명(국문)", productNameWithSpecs, "제품명(영문)", englishProductNameWithSpecs,
+                "제조사", product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-",
+                "제품구분", product.getProductType() != null ? product.getProductType().toString() : "-");
+        String effectiveProductBarcode = (product.getProductBarcode() != null && !product.getProductBarcode().isBlank()) 
+            ? product.getProductBarcode() 
+            : (spec.getBarcode() != null && !spec.getBarcode().isBlank() ? spec.getBarcode() : "-");
+        String effectiveOutboxBarcode = (product.getOutboxBarcode() != null && !product.getOutboxBarcode().isBlank()) ? product.getOutboxBarcode() : "-";
+        addPdfKeyValueRow(table, labelFont, dataFont, BG_LABEL, BG_DATA, BORDER_COLOR,
+                "사용기한", (product.getShelfLifeMonths() != null ? "제조일로부터 " + product.getShelfLifeMonths() + "개월" : "-"),
+                "개봉후기한", (product.getOpenedShelfLifeMonths() != null ? "개봉 후 " + product.getOpenedShelfLifeMonths() + "개월" : "-"),
+                "제품 바코드", effectiveProductBarcode, "아웃박스 바코드", effectiveOutboxBarcode);
+        addPdfKeyValueRow(table, labelFont, dataFont, BG_LABEL, BG_DATA, BORDER_COLOR,
+                "기획 담당", (spec.getPlannerName() != null ? spec.getPlannerName() : "-"),
+                "디자인 담당", (spec.getDesignerName() != null ? spec.getDesignerName() : "-"),
+                "품질관리 담당", (spec.getQcName() != null ? spec.getQcName() : "-"),
+                "바코드 담당자", (spec.getBarcodeManager() != null ? spec.getBarcodeManager() : "-"));
 
-            // 2. 포장 사양서 상세 정보
-            document.add(new Paragraph("[포장사양 상세 / Packaging Spec Details]", sectionFont));
-            document.add(new Paragraph("버전 (Version): v" + (spec.getVersion() != null ? spec.getVersion() : 1) + 
-                (spec.getRevisionNotes() != null ? " (" + spec.getRevisionNotes() + ")" : ""), normalFont));
-            document.add(new Paragraph("바코드 (Barcode): " + (spec.getBarcode() != null ? spec.getBarcode() : "-"), normalFont));
-            document.add(new Paragraph("랩 넘버 (Lab Number): " + (spec.getLabNumber() != null ? spec.getLabNumber() : "-"), normalFont));
-            document.add(new Paragraph("기획 담당: " + (spec.getPlannerName() != null ? spec.getPlannerName() : "-") + 
-                " | 디자인 담당: " + (spec.getDesignerName() != null ? spec.getDesignerName() : "-") + 
-                " | 품질관리 담당: " + (spec.getQcName() != null ? spec.getQcName() : "-"), normalFont));
-            document.add(new Paragraph("바코드 담당자: " + (spec.getBarcodeManager() != null ? spec.getBarcodeManager() : "-"), normalFont));
-            document.add(new Paragraph("----------------------------------------------------------------------------------------------------------------", normalFont));
+        // [2. 제개정 이력]
+        addPdfSectionHeader(table, "2. 🔄 개정 이력 (Revision History)", sectionFont, BG_SECTION, BORDER_COLOR);
+        addPdfCell(table, "No.", subHeaderFont, BG_SUBHEADER, BORDER_COLOR, 1, Element.ALIGN_CENTER, 3f);
+        addPdfCell(table, "개정 내용", subHeaderFont, BG_SUBHEADER, BORDER_COLOR, 4, Element.ALIGN_CENTER, 3f);
+        addPdfCell(table, "개정일", subHeaderFont, BG_SUBHEADER, BORDER_COLOR, 1, Element.ALIGN_CENTER, 3f);
+        addPdfCell(table, "개정자", subHeaderFont, BG_SUBHEADER, BORDER_COLOR, 2, Element.ALIGN_CENTER, 3f);
 
-            // 3. 구성품 리스트 (BOM)
-            document.add(new Paragraph("[구성품 리스트 / Components BOM]", sectionFont));
-            List<PackagingSpecComponent> components = componentRepository.findBySpecId(spec.getId());
-            if (components.isEmpty()) {
-                document.add(new Paragraph("등록된 구성품이 없습니다.", normalFont));
-            } else {
-                for (int i = 0; i < components.size(); i++) {
-                    PackagingSpecComponent comp = components.get(i);
-                    String bomCodePrefix = comp.getBomCode() != null && !comp.getBomCode().isEmpty() ? "[" + comp.getBomCode() + "] " : "";
-                    double w = comp.getWeight() != null ? comp.getWeight() : 0.0;
-                    int q = comp.getQuantity() != null ? comp.getQuantity() : 1;
-                    String compWeightInfo = w > 0 ? String.format(" | 중량: %.2fg (합계: %.2fg)", w, w * q) : "";
-                    document.add(new Paragraph(String.format(" - %s%s (%s) | 규격: %s | 수량: %sea%s | 업체: %s | 비고: %s",
-                        bomCodePrefix,
-                        comp.getComponentName() != null ? comp.getComponentName() : "-",
-                        comp.getSpecDetails() != null ? comp.getSpecDetails() : "-",
-                        comp.getSizeDimension() != null ? comp.getSizeDimension() : "-",
-                        q,
-                        compWeightInfo,
-                        comp.getSupplier() != null ? comp.getSupplier() : "-",
-                        comp.getRemarks() != null ? comp.getRemarks() : "-"
-                    ), normalFont));
-                }
-            }
-            document.add(new Paragraph("----------------------------------------------------------------------------------------------------------------", normalFont));
-
-            // 4. 포장방법 사진 및 3줄 캡션 상세 (PDF 내 직접 포함)
-            document.add(new Paragraph("[포장방법 사진 및 캡션 / Packaging Method Images]", sectionFont));
-            List<com.example.ims.entity.PackagingMethodImage> methodImages = methodImageRepository.findActiveBySpecId(spec.getId());
-            if (methodImages == null || methodImages.isEmpty()) {
-                document.add(new Paragraph("등록된 포장방법 사진이 없습니다.", normalFont));
-            } else {
-                for (int i = 0; i < methodImages.size(); i++) {
-                    com.example.ims.entity.PackagingMethodImage imgEntity = methodImages.get(i);
-                    document.add(new Paragraph(String.format("NO %d. %s", (i + 1), 
-                        imgEntity.getCaptionText() != null ? imgEntity.getCaptionText() : ""), normalFont));
-                    
-                    byte[] imgBytes = getAnnotatedImageBytes(imgEntity);
-                    if (imgBytes != null && imgBytes.length > 0) {
-                        try {
-                            com.itextpdf.text.Image pdfImg = com.itextpdf.text.Image.getInstance(imgBytes);
-                            pdfImg.scaleToFit(450f, 280f); // 450f, 280f로 스케일 향상
-                            pdfImg.setAlignment(com.itextpdf.text.Element.ALIGN_LEFT);
-                            pdfImg.setSpacingAfter(10f);
-                            document.add(pdfImg);
-                        } catch (Exception e) {
-                            log.error("Failed to render PDF image for " + imgEntity.getImageUrl(), e);
-                        }
-                    }
-                }
-            }
-            document.add(new Paragraph("----------------------------------------------------------------------------------------------------------------", normalFont));
-
-            // 5. 아웃박스 & 착인 기준 및 포장방법 (서술)
-            document.add(new Paragraph("[아웃박스 및 착인기준 / Marking & Packaging Method]", sectionFont));
-            document.add(new Paragraph("표기 방법: " + (spec.getMarkingMethod() != null ? spec.getMarkingMethod() : "-"), normalFont));
-            document.add(new Paragraph("표기 기준: " + (spec.getMarkingStandard() != null ? spec.getMarkingStandard() : "-"), normalFont));
-            document.add(new Paragraph("포장방법 (서술):\n" + (spec.getPackagingMethodText() != null ? spec.getPackagingMethodText() : "-"), normalFont));
-            document.add(new Paragraph("----------------------------------------------------------------------------------------------------------------", normalFont));
-
-            // 5-1. 유통 채널 포장 규정 및 스티커/완충재/현품표 기준
-            com.example.ims.entity.SalesChannel pdfFirstChannel = (product.getChannels() != null && !product.getChannels().isEmpty()) ? product.getChannels().get(0) : null;
-            String pdfInboxMarkingRule = (pdfFirstChannel != null && pdfFirstChannel.getInboxLabelMarkingRule() != null) ? pdfFirstChannel.getInboxLabelMarkingRule() : "인박스 현품표 표준 규격 적용";
-            String pdfOutboxMarkingRule = (pdfFirstChannel != null && pdfFirstChannel.getOutboxLabelMarkingRule() != null) ? pdfFirstChannel.getOutboxLabelMarkingRule() : "아웃박스 현품표 표준 규격 적용";
-            String pdfPalletMarkingRule = (pdfFirstChannel != null && pdfFirstChannel.getPalletLabelMarkingRule() != null) ? pdfFirstChannel.getPalletLabelMarkingRule() : "팔레트 현품표 표준 규격 적용";
-            String pdfInboxDateFormatStr = (spec.getInboxDateFormat() != null && !spec.getInboxDateFormat().trim().isEmpty()) ? spec.getInboxDateFormat() : (pdfFirstChannel != null && pdfFirstChannel.getInboxDateFormat() != null ? pdfFirstChannel.getInboxDateFormat() : "[ YYYY.MM.DD 표기 ]");
-            String pdfOutboxDateFormatStr = (spec.getOutboxDateFormat() != null && !spec.getOutboxDateFormat().trim().isEmpty()) ? spec.getOutboxDateFormat() : (pdfFirstChannel != null && pdfFirstChannel.getOutboxDateFormat() != null ? pdfFirstChannel.getOutboxDateFormat() : "[ YYYY.MM.DD 표기 ]");
-            String pdfPalletDateFormatStr = (spec.getPalletDateFormat() != null && !spec.getPalletDateFormat().trim().isEmpty()) ? spec.getPalletDateFormat() : (pdfFirstChannel != null && pdfFirstChannel.getPalletDateFormat() != null ? pdfFirstChannel.getPalletDateFormat() : "[ YYYY.MM.DD 표기 ]");
-
-            String pdfStickerStr = spec.getOutboxChannelStickerStandard() != null && !spec.getOutboxChannelStickerStandard().isEmpty()
-                    ? spec.getOutboxChannelStickerStandard()
-                    : (pdfFirstChannel != null && Boolean.TRUE.equals(pdfFirstChannel.getChannelStickerRequired()) ? (pdfFirstChannel.getName() + " 채널 스티커 부착 필수") : "해당 없음");
-            String pdfCushionStr = spec.getOutboxCushioningStandard() != null && !spec.getOutboxCushioningStandard().isEmpty()
-                    ? spec.getOutboxCushioningStandard()
-                    : (pdfFirstChannel != null && pdfFirstChannel.getCushioningStandard() != null ? pdfFirstChannel.getCushioningStandard() : "-");
-            String pdfPopStr = spec.getPopRequiredStandard() != null && !spec.getPopRequiredStandard().isEmpty()
-                    ? spec.getPopRequiredStandard()
-                    : (pdfFirstChannel != null && Boolean.TRUE.equals(pdfFirstChannel.getPopRequired()) ? (pdfFirstChannel.getName() + " POP 부착/동봉 필수") : "해당 없음");
-
-            document.add(new Paragraph("[유통 채널 전용 포장 규정 및 스티커 / 완충재 / 현품표 기준]", sectionFont));
-            document.add(new Paragraph("🏷️ 채널 스티커 부착 규정: " + pdfStickerStr, normalFont));
-            document.add(new Paragraph("🎈 빈공간 완충재 처리 기준: " + pdfCushionStr, normalFont));
-            document.add(new Paragraph("📣 제품 POP 부착/동봉 여부: " + pdfPopStr, normalFont));
-            document.add(new Paragraph("📥 인박스 현품표 착인기준: " + pdfInboxMarkingRule + " | 날짜표기: " + pdfInboxDateFormatStr, normalFont));
-            document.add(new Paragraph("📦 아웃박스 현품표 착인기준: " + pdfOutboxMarkingRule + " | 날짜표기: " + pdfOutboxDateFormatStr, normalFont));
-            document.add(new Paragraph("🏷️ 팔레트 현품표 착인기준: " + pdfPalletMarkingRule + " | 날짜표기: " + pdfPalletDateFormatStr, normalFont));
-
-            com.example.ims.entity.ChannelSpecialNote pdfStickerNote = null;
-            if (pdfFirstChannel != null) {
-                try {
-                    List<com.example.ims.entity.ChannelSpecialNote> notes = specialNoteRepository.findByChannelId(pdfFirstChannel.getId());
-                    if (notes != null) {
-                        for (com.example.ims.entity.ChannelSpecialNote n : notes) {
-                            if (n.getCategory() != null && ("CHANNEL_STICKER".equals(n.getCategory().getCategoryKey()) || 
-                                (n.getCategory().getCategoryLabel() != null && n.getCategory().getCategoryLabel().contains("스티커")))) {
-                                pdfStickerNote = n;
-                                break;
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    log.warn("Failed to find channel sticker note for PDF", e);
-                }
-            }
-
-            if (pdfStickerNote != null) {
-                if (pdfStickerNote.getNoteContent() != null && !pdfStickerNote.getNoteContent().isBlank()) {
-                    document.add(new Paragraph("💡 채널 스티커 규정 메모: " + pdfStickerNote.getNoteContent(), normalFont));
-                }
-                if (pdfStickerNote.getFileUrl() != null) {
-                    byte[] stickerImgBytes = getImageBytesFromFileOrUrl(pdfStickerNote.getFileUrl());
-                    if (stickerImgBytes != null && stickerImgBytes.length > 0) {
-                        try {
-                            com.itextpdf.text.Image pdfStickerImg = com.itextpdf.text.Image.getInstance(stickerImgBytes);
-                            pdfStickerImg.scaleToFit(380f, 220f);
-                            pdfStickerImg.setAlignment(com.itextpdf.text.Element.ALIGN_LEFT);
-                            pdfStickerImg.setSpacingAfter(8f);
-                            document.add(pdfStickerImg);
-                        } catch (Exception e) {
-                            log.error("Failed to render channel sticker image in PDF for " + pdfStickerNote.getFileUrl(), e);
-                        }
-                    } else if (pdfStickerNote.getFileType() != null && pdfStickerNote.getFileType().equalsIgnoreCase("PDF")) {
-                        document.add(new Paragraph("📄 채널 스티커 규정 문서 (PDF 첨부됨): " + (pdfStickerNote.getNoteContent() != null ? pdfStickerNote.getNoteContent() : ""), normalFont));
-                    }
-                }
-            }
-            document.add(new Paragraph("----------------------------------------------------------------------------------------------------------------", normalFont));
-
-            // 5. 적재사항 및 검증 (Loading Specifications & Verification)
-            document.add(new Paragraph("[적재 사양 및 검증 / Loading Specs & Verification]", sectionFont));
-            document.add(new Paragraph("인박스 구분: " + (spec.getInboxType() != null ? spec.getInboxType() : "-") + 
-                " | 입수량: " + (spec.getInboxQty() != null ? spec.getInboxQty() + " ea" : "-") + 
-                " | 사이즈: " + (spec.getInboxSize() != null ? spec.getInboxSize() : "-") +
-                " | 재질: " + (spec.getInboxMaterial() != null ? spec.getInboxMaterial() : "-"), normalFont));
-
-            document.add(new Paragraph("아웃박스 구분: " + (spec.getOutboxType() != null ? spec.getOutboxType() : "-") + 
-                " | 입수량: " + (spec.getOutboxQty() != null ? spec.getOutboxQty() + " ea" : "-") + 
-                " | 사이즈: " + (spec.getOutboxSize() != null ? spec.getOutboxSize() : "-") +
-                " | 재질: " + (spec.getOutboxMaterial() != null ? spec.getOutboxMaterial() : "-"), normalFont));
-
-            document.add(new Paragraph("팔레트 종류: " + (spec.getPalletTypeStr() != null ? spec.getPalletTypeStr() : "-") + 
-                " | 적재방법: " + (spec.getPalletStackingMethod() != null ? spec.getPalletStackingMethod() : "-") + 
-                " | 사이즈: " + (spec.getPalletSize() != null ? spec.getPalletSize() : "-"), normalFont));
-
-            document.add(new Paragraph("1 아웃박스 중량: " + (spec.getOneOutboxWeight() != null ? spec.getOneOutboxWeight() + " kg" : "-") + 
-                " | 1 팔레트 중량: " + (spec.getOnePalletWeight() != null ? spec.getOnePalletWeight() + " kg" : "-") + 
-                " | 1 팔레트 높이: " + (spec.getOnePalletHeight() != null ? spec.getOnePalletHeight() + " mm" : "-"), normalFont));
-            document.add(new Paragraph("----------------------------------------------------------------------------------------------------------------", normalFont));
-
-            // 6. 특이사항
-            document.add(new Paragraph("[특이사항 / Remarks]", sectionFont));
-            document.add(new Paragraph(spec.getRemarks() != null ? spec.getRemarks() : "-", normalFont));
+        List<PackagingSpecRevision> revisions = spec.getId() != null ? revisionRepository.findBySpecId(spec.getId()) : Collections.emptyList();
+        if (revisions.isEmpty()) {
+            addPdfCell(table, "-", dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_CENTER, 3f);
+            addPdfCell(table, "등록된 개정이력이 없습니다.", dataFont, BG_DATA, BORDER_COLOR, 4, Element.ALIGN_LEFT, 3f);
+            addPdfCell(table, "-", dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_CENTER, 3f);
+            addPdfCell(table, "-", dataFont, BG_DATA, BORDER_COLOR, 2, Element.ALIGN_CENTER, 3f);
         } else {
-            document.add(new Paragraph("등록된 포장 사양서 내용이 없습니다.", normalFont));
+            for (PackagingSpecRevision rev : revisions) {
+                addPdfCell(table, String.valueOf(rev.getRevisionNo() != null ? rev.getRevisionNo() : 1), dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_CENTER, 3f);
+                addPdfCell(table, rev.getContent() != null ? rev.getContent() : "-", dataFont, BG_DATA, BORDER_COLOR, 4, Element.ALIGN_LEFT, 3f);
+                addPdfCell(table, rev.getRevisionDate() != null ? rev.getRevisionDate().toString() : "-", dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_CENTER, 3f);
+                addPdfCell(table, rev.getRevisionAuthor() != null ? rev.getRevisionAuthor() : "-", dataFont, BG_DATA, BORDER_COLOR, 2, Element.ALIGN_CENTER, 3f);
+            }
         }
+
+        // [3. 구성품 정보 및 BOM 리스트]
+        addPdfSectionHeader(table, "3. 🧩 제품 구성품 리스트 (BOM Components)", sectionFont, BG_SECTION, BORDER_COLOR);
+        addPdfCell(table, "BOM 코드", subHeaderFont, BG_SUBHEADER, BORDER_COLOR, 1, Element.ALIGN_CENTER, 3f);
+        addPdfCell(table, "구성품명", subHeaderFont, BG_SUBHEADER, BORDER_COLOR, 1, Element.ALIGN_CENTER, 3f);
+        addPdfCell(table, "재질 및 세부사양", subHeaderFont, BG_SUBHEADER, BORDER_COLOR, 1, Element.ALIGN_CENTER, 3f);
+        addPdfCell(table, "규격 및 사이즈", subHeaderFont, BG_SUBHEADER, BORDER_COLOR, 1, Element.ALIGN_CENTER, 3f);
+        addPdfCell(table, "개별중량(g)", subHeaderFont, BG_SUBHEADER, BORDER_COLOR, 1, Element.ALIGN_CENTER, 3f);
+        addPdfCell(table, "수량", subHeaderFont, BG_SUBHEADER, BORDER_COLOR, 1, Element.ALIGN_CENTER, 3f);
+        addPdfCell(table, "합산중량(g)", subHeaderFont, BG_SUBHEADER, BORDER_COLOR, 1, Element.ALIGN_CENTER, 3f);
+        addPdfCell(table, "제조/공급사 (비고)", subHeaderFont, BG_SUBHEADER, BORDER_COLOR, 1, Element.ALIGN_CENTER, 3f);
+
+        List<PackagingSpecComponent> components = spec.getId() != null ? componentRepository.findBySpecId(spec.getId()) : Collections.emptyList();
+        if (components.isEmpty()) {
+            addPdfCell(table, "등록된 구성품이 없습니다.", dataFont, BG_DATA, BORDER_COLOR, 8, Element.ALIGN_CENTER, 3f);
+        } else {
+            for (PackagingSpecComponent comp : components) {
+                double w = comp.getWeight() != null ? comp.getWeight() : 0.0;
+                int q = comp.getQuantity() != null ? comp.getQuantity() : 1;
+                addPdfCell(table, comp.getBomCode() != null ? comp.getBomCode() : "-", dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_CENTER, 3f);
+                addPdfCell(table, comp.getComponentName() != null ? comp.getComponentName() : "-", dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 3f);
+                addPdfCell(table, comp.getSpecDetails() != null ? comp.getSpecDetails() : "-", dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 3f);
+                addPdfCell(table, comp.getSizeDimension() != null ? comp.getSizeDimension() : "-", dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 3f);
+                addPdfCell(table, w > 0 ? String.format("%.2f", w) : "-", dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_RIGHT, 3f);
+                addPdfCell(table, q + " ea", dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_CENTER, 3f);
+                addPdfCell(table, w > 0 ? String.format("%.2f", w * q) : "-", dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_RIGHT, 3f);
+                String supplierAndRemarks = (comp.getSupplier() != null ? comp.getSupplier() : "") + (comp.getRemarks() != null && !comp.getRemarks().isBlank() ? " (" + comp.getRemarks() + ")" : "");
+                addPdfCell(table, !supplierAndRemarks.isBlank() ? supplierAndRemarks : "-", dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 3f);
+            }
+        }
+
+        // [4. 표기사항 및 인박스/아웃박스 표시]
+        addPdfSectionHeader(table, "4. 🏷️ 표기사항 및 인박스/아웃박스 표시 (Marking Standards)", sectionFont, BG_SECTION, BORDER_COLOR);
+        addPdfKeyValueRow(table, labelFont, dataFont, BG_LABEL, BG_DATA, BORDER_COLOR,
+                "착인 방법", spec.getMarkingMethod() != null ? spec.getMarkingMethod() : "인쇄/스티커",
+                "착인 기준", spec.getMarkingStandard() != null ? spec.getMarkingStandard() : "표준 규격",
+                "인박스 현품표", inboxMarkingRule, "날짜 표기", inboxDateFormatStr);
+        addPdfKeyValueRow(table, labelFont, dataFont, BG_LABEL, BG_DATA, BORDER_COLOR,
+                "아웃박스 현품표", outboxMarkingRule, "날짜 표기", outboxDateFormatStr,
+                "팔레트 현품표", palletMarkingRule, "날짜 표기", palletDateFormatStr);
+
+        // [5. 체적/적재 사양 및 검증 기준]
+        addPdfSectionHeader(table, "5. 🚚 체적/적재 사양 및 검증 기준 (Volume & Loading Spec)", sectionFont, BG_SECTION, BORDER_COLOR);
+        String effInboxType = (spec.getInboxType() != null && !spec.getInboxType().isBlank()) ? spec.getInboxType() : "인박스";
+        String effInboxQty = spec.getInboxQty() != null ? spec.getInboxQty() + " ea" 
+            : (product.getInboxInfo() != null && product.getInboxInfo().getInboxQuantity() != null && product.getInboxInfo().getInboxQuantity() > 0 ? product.getInboxInfo().getInboxQuantity() + " ea" : "-");
+        String effInboxSize = (spec.getInboxSize() != null && !spec.getInboxSize().isBlank()) ? spec.getInboxSize()
+            : (product.getInboxInfo() != null && product.getInboxInfo().getInboxWidth() != null && product.getInboxInfo().getInboxLength() != null && product.getInboxInfo().getInboxHeight() != null ? String.format("%sx%sx%s", product.getInboxInfo().getInboxWidth(), product.getInboxInfo().getInboxLength(), product.getInboxInfo().getInboxHeight()) : "-");
+        String effInboxMat = (spec.getInboxMaterial() != null && !spec.getInboxMaterial().isBlank()) ? spec.getInboxMaterial() : "-";
+
+        String effOutboxType = (spec.getOutboxType() != null && !spec.getOutboxType().isBlank()) ? spec.getOutboxType() : "아웃박스";
+        String effOutboxQty = spec.getOutboxQty() != null ? spec.getOutboxQty() + " ea" 
+            : (product.getOutboxInfo() != null && product.getOutboxInfo().getOutboxQuantity() != null && product.getOutboxInfo().getOutboxQuantity() > 0 ? product.getOutboxInfo().getOutboxQuantity() + " ea" : "-");
+        String effOutboxSize = (spec.getOutboxSize() != null && !spec.getOutboxSize().isBlank()) ? spec.getOutboxSize()
+            : (product.getOutboxInfo() != null && product.getOutboxInfo().getOutboxWidth() != null && product.getOutboxInfo().getOutboxLength() != null && product.getOutboxInfo().getOutboxHeight() != null ? String.format("%sx%sx%s", product.getOutboxInfo().getOutboxWidth(), product.getOutboxInfo().getOutboxLength(), product.getOutboxInfo().getOutboxHeight()) : "-");
+        String effOutboxMat = (spec.getOutboxMaterial() != null && !spec.getOutboxMaterial().isBlank()) ? spec.getOutboxMaterial() : "KLB.S.S.K.K";
+
+        String effPalletType = (spec.getPalletTypeStr() != null && !spec.getPalletTypeStr().isBlank()) ? spec.getPalletTypeStr() : "-";
+        String effStackMethod = (spec.getPalletStackingMethod() != null && !spec.getPalletStackingMethod().isBlank() && !"-".equals(spec.getPalletStackingMethod().trim())) 
+            ? spec.getPalletStackingMethod() 
+            : ((spec.getPalletStackingPattern() != null && !spec.getPalletStackingPattern().isBlank() && !"-".equals(spec.getPalletStackingPattern().trim())) 
+                ? spec.getPalletStackingPattern() 
+                : "핀휠 교차 적재");
+        String effPalletSize = (spec.getPalletSize() != null && !spec.getPalletSize().isBlank()) ? spec.getPalletSize()
+            : (product.getPalletInfo() != null && product.getPalletInfo().getPalletWidth() != null && product.getPalletInfo().getPalletLength() != null ? String.format("%sx%s", product.getPalletInfo().getPalletWidth(), product.getPalletInfo().getPalletLength()) : "-");
+        String rawHeightLimit = (spec.getPalletHeightLimit() != null && !spec.getPalletHeightLimit().isBlank()) ? spec.getPalletHeightLimit()
+            : (product.getPalletInfo() != null && product.getPalletInfo().getPalletHeight() != null ? product.getPalletInfo().getPalletHeight().toString() : "-");
+        String effPalletHeightLimit = (rawHeightLimit != null && !rawHeightLimit.equals("-") && !rawHeightLimit.toLowerCase().endsWith("mm")) 
+            ? (rawHeightLimit + " mm") 
+            : rawHeightLimit;
+
+        String effOneOutboxWt = (spec.getOneOutboxWeight() != null) ? spec.getOneOutboxWeight() + " kg"
+            : (product.getOutboxInfo() != null && product.getOutboxInfo().getOutboxWeight() != null ? product.getOutboxInfo().getOutboxWeight() + " kg" : "-");
+        String effOnePalletWt = (spec.getOnePalletWeight() != null) ? spec.getOnePalletWeight() + " kg" : "-";
+        String effOnePalletHt = (spec.getOnePalletHeight() != null) ? spec.getOnePalletHeight() + " mm"
+            : (product.getPalletInfo() != null && product.getPalletInfo().getPalletHeight() != null ? product.getPalletInfo().getPalletHeight() + " mm" : "-");
+
+        addPdfKeyValueRow(table, labelFont, dataFont, BG_LABEL, BG_DATA, BORDER_COLOR,
+                "인박스 구분", effInboxType, "인박스 입수량", effInboxQty, "인박스 규격", effInboxSize, "인박스 재질", effInboxMat);
+        addPdfKeyValueRow(table, labelFont, dataFont, BG_LABEL, BG_DATA, BORDER_COLOR,
+                "아웃박스 구분", effOutboxType, "아웃박스 입수량", effOutboxQty, "아웃박스 규격", effOutboxSize, "아웃박스 재질", effOutboxMat);
+        addPdfKeyValueRow(table, labelFont, dataFont, BG_LABEL, BG_DATA, BORDER_COLOR,
+                "팔레트 종류", effPalletType, "적재 방법", effStackMethod, "팔레트 규격", effPalletSize, "높이 제한", effPalletHeightLimit);
+        addPdfKeyValueRow(table, labelFont, dataFont, BG_LABEL, BG_DATA, BORDER_COLOR,
+                "1아웃박스 중량", effOneOutboxWt, "1팔레트 중량", effOnePalletWt, "1팔레트 높이", effOnePalletHt, "검증 상태", "정상 규격");
+
+        // [5-1. 3D 제품 입수 및 팔레트 적재 형태 (3D Loading Layout)]
+        addPdfSectionHeader(table, "5-1. 3D 제품 입수 및 팔레트 적재 형태 (3D Loading Layout)", sectionFont, BG_SECTION, BORDER_COLOR);
+
+        boolean isInboxUsed = "O".equalsIgnoreCase(spec.getInboxUseYn()) || (spec.getInboxQty() != null && spec.getInboxQty() > 0);
+        int inQty = spec.getInboxQty() != null && spec.getInboxQty() > 0 ? spec.getInboxQty() : 10;
+        int outQty = spec.getOutboxQty() != null && spec.getOutboxQty() > 0 ? spec.getOutboxQty() : 40;
+        int inboxesInOutbox = isInboxUsed ? Math.max(1, outQty / Math.max(1, inQty)) : 1;
+
+        String defaultInboxPattern = isInboxUsed ? "2열×5행×1단 (" + inQty + "개입)" : "인박스 미사용 (Direct)";
+        String defaultOutboxPattern = isInboxUsed 
+            ? "2열×2행×1단 (인박스 " + inboxesInOutbox + "박스입, 총 " + outQty + "개입)"
+            : "4열×5행×2단 (총 " + outQty + "개입)";
+
+        int tierCount = spec.getPalletTierCount() != null && spec.getPalletTierCount() > 0 ? spec.getPalletTierCount() : 5;
+        int tierQty = spec.getPalletTierQty() != null && spec.getPalletTierQty() > 0 ? spec.getPalletTierQty() : 8;
+        String defaultPalletPattern = "8방 핀휠 교차적재 (" + tierCount + "단, 1단당 " + tierQty + "박스, 총 " + (tierCount * tierQty) + "박스)";
+
+        String inboxPatternText = (spec.getInboxPackingPattern() != null && !spec.getInboxPackingPattern().trim().isEmpty() && !spec.getInboxPackingPattern().equals("-"))
+            ? spec.getInboxPackingPattern() : defaultInboxPattern;
+        String outboxPatternText = (spec.getOutboxPackingPattern() != null && !spec.getOutboxPackingPattern().trim().isEmpty() && !spec.getOutboxPackingPattern().equals("-"))
+            ? spec.getOutboxPackingPattern() : defaultOutboxPattern;
+        String palletPatternText = (spec.getPalletStackingPattern() != null && !spec.getPalletStackingPattern().trim().isEmpty() && !spec.getPalletStackingPattern().equals("-"))
+            ? spec.getPalletStackingPattern() 
+            : ((spec.getPalletStackingMethod() != null && !spec.getPalletStackingMethod().trim().isEmpty() && !spec.getPalletStackingMethod().equals("-")) 
+                ? spec.getPalletStackingMethod() : defaultPalletPattern);
+
+        addPdfKeyValueRow(table, labelFont, dataFont, BG_LABEL, BG_DATA, BORDER_COLOR,
+                "인박스 입수패턴", inboxPatternText, "아웃박스 입수패턴", outboxPatternText,
+                "팔레트 적재패턴", palletPatternText, "적재 단수", tierCount + "단");
+
+        // 3D 도면 타이틀 행 (3열 / 3열 / 2열)
+        addPdfCell(table, "📥 인박스 3D 입수 도면", subHeaderFont, BG_SUBHEADER, BORDER_COLOR, 3, Element.ALIGN_CENTER, 3f);
+        addPdfCell(table, "📦 아웃박스 3D 입수 도면", subHeaderFont, BG_SUBHEADER, BORDER_COLOR, 3, Element.ALIGN_CENTER, 3f);
+        addPdfCell(table, "🏗️ 팔레트 3D 적재 도면", subHeaderFont, BG_SUBHEADER, BORDER_COLOR, 2, Element.ALIGN_CENTER, 3f);
+
+        // 3D 이미지 3개 로드 & 크롭
+        byte[] inboxImgBytes = getImageBytesFromFileOrUrl(spec.getInboxLayoutImage());
+        if (inboxImgBytes == null || inboxImgBytes.length == 0) {
+            inboxImgBytes = generateIsometricInboxLayoutImage(product, spec);
+        }
+        inboxImgBytes = autoCropWhitespace(inboxImgBytes, 8);
+
+        byte[] outboxImgBytes = getImageBytesFromFileOrUrl(spec.getOutboxLayoutImageFile() != null ? spec.getOutboxLayoutImageFile() : spec.getOutboxLayoutImage());
+        if (outboxImgBytes == null || outboxImgBytes.length == 0) {
+            outboxImgBytes = generateIsometricOutboxLayoutImage(product, spec);
+        }
+        outboxImgBytes = autoCropWhitespace(outboxImgBytes, 8);
+
+        byte[] palletImgBytes = getImageBytesFromFileOrUrl(spec.getPalletLayoutImage());
+        if (palletImgBytes == null || palletImgBytes.length == 0) {
+            palletImgBytes = generateIsometricPalletLayoutImage(product, spec);
+        }
+        palletImgBytes = autoCropWhitespace(palletImgBytes, 8);
+
+        // 3D 도면 이미지 셀 (엑셀의 360pt 비율에 맞춰 큼직하고 시원하게 렌더링)
+        addPdfImageCell(table, inboxImgBytes, 3, 260f, 150f, BORDER_COLOR);
+        addPdfImageCell(table, outboxImgBytes, 3, 260f, 150f, BORDER_COLOR);
+        addPdfImageCell(table, palletImgBytes, 2, 190f, 150f, BORDER_COLOR);
+
+        // [6. 사양서 특이사항]
+        addPdfSectionHeader(table, "6. 📝 사양서 특이사항 (Remarks)", sectionFont, BG_SECTION, BORDER_COLOR);
+        addPdfCell(table, "특이사항", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        String remText = spec.getRemarks() != null && !spec.getRemarks().isBlank() ? spec.getRemarks() : "등록된 특이사항이 없습니다.";
+        addPdfCell(table, remText, dataFont, BG_DATA, BORDER_COLOR, 7, Element.ALIGN_LEFT, 4f);
+
+        document.add(table);
+
+        // --- Sheet 2 대응: 포장방법 사진 지침 (별도 페이지로 가로 렌더링) ---
+        List<com.example.ims.entity.PackagingMethodImage> methodImages = methodImageRepository.findActiveBySpecId(spec.getId());
+        List<com.example.ims.entity.PackagingMethodImage> validMethodImages = methodImages != null 
+            ? methodImages.stream()
+                .filter(img -> (img.getImageUrl() != null && !img.getImageUrl().isBlank()) || 
+                               (img.getCaptionText() != null && !img.getCaptionText().isBlank() && !"-".equals(img.getCaptionText().trim())))
+                .collect(Collectors.toList())
+            : Collections.emptyList();
+
+        if (!validMethodImages.isEmpty()) {
+            document.newPage(); // 가로 다음 페이지로 이동
+
+            PdfPTable methodTable = new PdfPTable(3);
+            methodTable.setWidthPercentage(100);
+            methodTable.setWidths(new float[]{ 8f, 44f, 48f });
+
+            PdfPCell methodTitle = new PdfPCell(new Phrase("📸 순서별 포장 방법 이미지 지침 (Packaging Method Images)", titleFont));
+            methodTitle.setColspan(3);
+            methodTitle.setBackgroundColor(BG_TITLE);
+            methodTitle.setHorizontalAlignment(Element.ALIGN_CENTER);
+            methodTitle.setVerticalAlignment(Element.ALIGN_MIDDLE);
+            methodTitle.setPadding(6f);
+            methodTitle.setBorderColor(BORDER_COLOR);
+            methodTable.addCell(methodTitle);
+
+            addPdfCell(methodTable, "순서", subHeaderFont, BG_SUBHEADER, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+            addPdfCell(methodTable, "포장 방법 사진 (Image)", subHeaderFont, BG_SUBHEADER, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+            addPdfCell(methodTable, "포장 공정 단계 캡션 / 상세 지침", subHeaderFont, BG_SUBHEADER, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+
+            for (int i = 0; i < validMethodImages.size(); i++) {
+                com.example.ims.entity.PackagingMethodImage imgEntity = validMethodImages.get(i);
+                
+                // 순서
+                addPdfCell(methodTable, "NO." + (i + 1), labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 6f);
+                
+                // 사진 (주석 합성 이미지, 엑셀 360pt에 비례하여 320x180pt로 선명하게 삽입)
+                byte[] imgBytes = getAnnotatedImageBytes(imgEntity);
+                addPdfImageCell(methodTable, imgBytes, 1, 320f, 180f, BORDER_COLOR);
+
+                // 캡션
+                String caption = (imgEntity.getCaptionText() != null && !imgEntity.getCaptionText().isBlank()) ? imgEntity.getCaptionText().trim() : "-";
+                addPdfCell(methodTable, caption, dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 6f);
+            }
+
+            document.add(methodTable);
+        }
+
+        // --- Sheet 3 대응: 인박스 현품표 (INBOX LABEL) ---
+        document.newPage();
+        PdfPTable inboxLabelTable = new PdfPTable(4);
+        inboxLabelTable.setWidthPercentage(95);
+        inboxLabelTable.setWidths(new float[]{ 22f, 28f, 22f, 28f });
+
+        float ibTitleLeading = 12f * 1.4f;
+        Phrase ibTitlePhrase = new Phrase(ibTitleLeading, "[ 인 박 스 현 품 표 / INBOX LABEL ]", new Font(baseFont, 12, Font.BOLD, BaseColor.WHITE));
+        PdfPCell ibTitle = new PdfPCell(ibTitlePhrase);
+        ibTitle.setLeading(ibTitleLeading, 0f);
+        ibTitle.setColspan(4);
+        ibTitle.setBackgroundColor(BG_TITLE);
+        ibTitle.setHorizontalAlignment(Element.ALIGN_CENTER);
+        ibTitle.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        ibTitle.setPadding(8f);
+        ibTitle.setBorderColor(BORDER_COLOR);
+        inboxLabelTable.addCell(ibTitle);
+
+        addPdfCell(inboxLabelTable, "품목코드 (Product Code)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(inboxLabelTable, product.getItemCode(), dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+        addPdfCell(inboxLabelTable, "입수량 (Quantity)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(inboxLabelTable, (spec.getInboxQty() != null ? spec.getInboxQty() + " EA" : "0 EA"), dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+
+        addPdfCell(inboxLabelTable, "국문 제품명 (Product Name KOR)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(inboxLabelTable, product.getProductName(), dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+        addPdfCell(inboxLabelTable, "제조사 (Manufacturer)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(inboxLabelTable, (product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-"), dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+
+        addPdfCell(inboxLabelTable, "영문 제품명 (Product Name ENG)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(inboxLabelTable, (product.getEnglishProductName() != null ? product.getEnglishProductName() : "-"), dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+        addPdfCell(inboxLabelTable, "제조일자 (Mfg. Date)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(inboxLabelTable, extractMfgDateDisplay(inboxDateFormatStr, firstChannel), dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+
+        addPdfCell(inboxLabelTable, "제조번호 (Lot No.)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(inboxLabelTable, "LOT(제조번호)", dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+        addPdfCell(inboxLabelTable, "사용기한 (Exp. Date)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(inboxLabelTable, extractExpDateDisplay(inboxDateFormatStr, firstChannel), dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+
+        addPdfCell(inboxLabelTable, "🏷️ 현품표 착인/기재 기준", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 6f);
+        addPdfCell(inboxLabelTable, inboxMarkingRule, dataFont, BG_DATA, BORDER_COLOR, 3, Element.ALIGN_LEFT, 6f);
+
+        addPdfCell(inboxLabelTable, "바코드 규정", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 5f);
+        addPdfCell(inboxLabelTable, "⚠️ 인박스 현품표에는 바코드를 부착/표기하지 않습니다. (규정 준수)", dataFont, BG_DATA, BORDER_COLOR, 3, Element.ALIGN_LEFT, 5f);
+
+        document.add(inboxLabelTable);
+
+        // --- Sheet 4 대응: 아웃박스 현품표 (OUTBOX LABEL) ---
+        document.newPage();
+        PdfPTable outboxLabelTable = new PdfPTable(4);
+        outboxLabelTable.setWidthPercentage(95);
+        outboxLabelTable.setWidths(new float[]{ 22f, 28f, 22f, 28f });
+
+        float obTitleLeading = 12f * 1.4f;
+        Phrase obTitlePhrase = new Phrase(obTitleLeading, "[ 아 웃 박 스 현 품 표 / OUTBOX LABEL ]", new Font(baseFont, 12, Font.BOLD, BaseColor.WHITE));
+        PdfPCell obTitle = new PdfPCell(obTitlePhrase);
+        obTitle.setLeading(obTitleLeading, 0f);
+        obTitle.setColspan(4);
+        obTitle.setBackgroundColor(BG_TITLE);
+        obTitle.setHorizontalAlignment(Element.ALIGN_CENTER);
+        obTitle.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        obTitle.setPadding(8f);
+        obTitle.setBorderColor(BORDER_COLOR);
+        outboxLabelTable.addCell(obTitle);
+
+        addPdfCell(outboxLabelTable, "품목코드 (Product Code)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(outboxLabelTable, product.getItemCode(), dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+        addPdfCell(outboxLabelTable, "입수량 (Quantity)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(outboxLabelTable, (spec.getOutboxQty() != null ? spec.getOutboxQty() + " EA" : "0 EA"), dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+
+        addPdfCell(outboxLabelTable, "국문 제품명 (Product Name KOR)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(outboxLabelTable, product.getProductName(), dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+        addPdfCell(outboxLabelTable, "제품무게 (Gross Weight)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(outboxLabelTable, (spec.getOneOutboxWeight() != null ? spec.getOneOutboxWeight() + " kg" : "- kg"), dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+
+        addPdfCell(outboxLabelTable, "영문 제품명 (Product Name ENG)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(outboxLabelTable, (product.getEnglishProductName() != null ? product.getEnglishProductName() : "-"), dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+        addPdfCell(outboxLabelTable, "제조일자 (Mfg. Date)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(outboxLabelTable, extractMfgDateDisplay(outboxDateFormatStr, firstChannel), dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+
+        addPdfCell(outboxLabelTable, "제조번호 (Lot No.)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(outboxLabelTable, "LOT(제조번호)", dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+        addPdfCell(outboxLabelTable, "사용기한 (Exp. Date)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(outboxLabelTable, extractExpDateDisplay(outboxDateFormatStr, firstChannel), dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+
+        String outboxBarcodeText = (product.getOutboxBarcode() != null && !product.getOutboxBarcode().isEmpty()) 
+            ? product.getOutboxBarcode() 
+            : (product.getProductBarcode() != null ? product.getProductBarcode() : (spec.getBarcode() != null ? spec.getBarcode() : "BARCODE-NOT-SET"));
+
+        addPdfCell(outboxLabelTable, "제조사 (Manufacturer)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(outboxLabelTable, (product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-"), dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+        addPdfCell(outboxLabelTable, "바코드 텍스트", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(outboxLabelTable, outboxBarcodeText, dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+
+        addPdfCell(outboxLabelTable, "🏷️ 현품표 착인/기재 기준", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 6f);
+        addPdfCell(outboxLabelTable, outboxMarkingRule, dataFont, BG_DATA, BORDER_COLOR, 3, Element.ALIGN_LEFT, 6f);
+
+        byte[] obBarcodeBytes = generateBarcodeImageBytes(outboxBarcodeText, 450, 140);
+        addPdfCell(outboxLabelTable, "바코드 스캔 이미지", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 6f);
+        addPdfImageCell(outboxLabelTable, obBarcodeBytes, 3, 360f, 90f, BORDER_COLOR);
+
+        document.add(outboxLabelTable);
+
+        // --- Sheet 5 대응: 팔레트 현품표 (PALLET LABEL) ---
+        document.newPage();
+        PdfPTable palletLabelTable = new PdfPTable(4);
+        palletLabelTable.setWidthPercentage(95);
+        palletLabelTable.setWidths(new float[]{ 22f, 28f, 22f, 28f });
+
+        float pltTitleLeading = 12f * 1.4f;
+        Phrase pltTitlePhrase = new Phrase(pltTitleLeading, "[ 팔 레 트 현 품 표 / PALLET LABEL ]", new Font(baseFont, 12, Font.BOLD, BaseColor.WHITE));
+        PdfPCell pltTitle = new PdfPCell(pltTitlePhrase);
+        pltTitle.setLeading(pltTitleLeading, 0f);
+        pltTitle.setColspan(4);
+        pltTitle.setBackgroundColor(BG_TITLE);
+        pltTitle.setHorizontalAlignment(Element.ALIGN_CENTER);
+        pltTitle.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        pltTitle.setPadding(8f);
+        pltTitle.setBorderColor(BORDER_COLOR);
+        palletLabelTable.addCell(pltTitle);
+
+        int effPalletTierCount = (spec.getPalletTierCount() != null && spec.getPalletTierCount() > 0) ? spec.getPalletTierCount() : 5;
+        int effPalletTierQty = (spec.getPalletTierQty() != null && spec.getPalletTierQty() > 0) ? spec.getPalletTierQty() : 8;
+        int calculatedPalletBoxQty = effPalletTierCount * effPalletTierQty;
+
+        Integer pBoxQty = null;
+        if (spec.getPalletTotalOutboxQty() != null && spec.getPalletTotalOutboxQty() > 0) {
+            pBoxQty = spec.getPalletTotalOutboxQty();
+        } else if (spec.getPalletTierCount() != null && spec.getPalletTierQty() != null && spec.getPalletTierCount() > 0 && spec.getPalletTierQty() > 0) {
+            pBoxQty = spec.getPalletTierCount() * spec.getPalletTierQty();
+        } else if (product.getPalletInfo() != null && product.getPalletInfo().getPalletQuantity() != null && product.getPalletInfo().getPalletQuantity() > 0 && product.getPalletInfo().getPalletQuantity() <= 200) {
+            pBoxQty = product.getPalletInfo().getPalletQuantity();
+        } else {
+            pBoxQty = calculatedPalletBoxQty;
+        }
+
+        int effOutQtyForPallet = (spec.getOutboxQty() != null && spec.getOutboxQty() > 0) 
+            ? spec.getOutboxQty() 
+            : (product.getOutboxInfo() != null && product.getOutboxInfo().getOutboxQuantity() != null && product.getOutboxInfo().getOutboxQuantity() > 0 ? product.getOutboxInfo().getOutboxQuantity() : 40);
+
+        String palletBoxQtyStr = (pBoxQty != null) ? (pBoxQty + " Box") : "- Box";
+        String totalPcsStr = (pBoxQty != null) ? (pBoxQty * effOutQtyForPallet + " EA") : "- EA";
+
+        addPdfCell(palletLabelTable, "품목코드 (Product Code)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(palletLabelTable, product.getItemCode(), dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+        addPdfCell(palletLabelTable, "적재 박스 수량 (Box Qty/Pallet)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(palletLabelTable, palletBoxQtyStr, dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+
+        addPdfCell(palletLabelTable, "국문 제품명 (Product Name KOR)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(palletLabelTable, product.getProductName(), dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+        addPdfCell(palletLabelTable, "적재 낱개 수량 (Total Pcs/Pallet)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(palletLabelTable, totalPcsStr, dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+
+        addPdfCell(palletLabelTable, "영문 제품명 (Product Name ENG)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(palletLabelTable, (product.getEnglishProductName() != null ? product.getEnglishProductName() : "-"), dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+        addPdfCell(palletLabelTable, "제조일자 (Mfg. Date)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(palletLabelTable, extractMfgDateDisplay(palletDateFormatStr, firstChannel), dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+
+        addPdfCell(palletLabelTable, "제조번호 (Lot No.)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(palletLabelTable, "LOT(제조번호)", dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+        addPdfCell(palletLabelTable, "사용기한 (Exp. Date)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(palletLabelTable, extractExpDateDisplay(palletDateFormatStr, firstChannel), dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+
+        String palletBarcodeText = (product.getProductBarcode() != null && !product.getProductBarcode().isEmpty()) 
+            ? product.getProductBarcode() 
+            : (spec.getBarcode() != null ? spec.getBarcode() : "BARCODE-NOT-SET");
+
+        addPdfCell(palletLabelTable, "제조사 (Manufacturer)", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(palletLabelTable, (product.getManufacturerInfo() != null ? product.getManufacturerInfo().getName() : "-"), dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+        addPdfCell(palletLabelTable, "바코드 텍스트", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
+        addPdfCell(palletLabelTable, palletBarcodeText, dataFont, BG_DATA, BORDER_COLOR, 1, Element.ALIGN_LEFT, 4f);
+
+        addPdfCell(palletLabelTable, "🏷️ 현품표 착인/기재 기준", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 6f);
+        addPdfCell(palletLabelTable, palletMarkingRule, dataFont, BG_DATA, BORDER_COLOR, 3, Element.ALIGN_LEFT, 6f);
+
+        byte[] pltBarcodeBytes = generateBarcodeImageBytes(palletBarcodeText, 450, 140);
+        addPdfCell(palletLabelTable, "바코드 스캔 이미지", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 6f);
+        addPdfImageCell(palletLabelTable, pltBarcodeBytes, 3, 360f, 90f, BORDER_COLOR);
+
+        document.add(palletLabelTable);
 
         document.close();
         return out.toByteArray();
+    }
+
+    private void addPdfSectionHeader(PdfPTable table, String title, Font font, BaseColor bgColor, BaseColor borderColor) {
+        float fontSize = font != null ? font.getSize() : 9f;
+        float leading = fontSize * 1.4f;
+        Phrase phrase = new Phrase(leading, title, font);
+        PdfPCell cell = new PdfPCell(phrase);
+        cell.setLeading(leading, 0f);
+        cell.setColspan(table.getNumberOfColumns());
+        cell.setBackgroundColor(bgColor);
+        cell.setHorizontalAlignment(Element.ALIGN_LEFT);
+        cell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        cell.setPadding(4.5f);
+        cell.setPaddingTop(6f);
+        cell.setPaddingBottom(6f);
+        cell.setPaddingLeft(6f);
+        cell.setBorderColor(borderColor);
+        table.addCell(cell);
+    }
+
+    private void addPdfKeyValueRow(PdfPTable table, Font labelFont, Font dataFont, BaseColor bgLabel, BaseColor bgData, BaseColor borderColor,
+                                   String k1, String v1, String k2, String v2, String k3, String v3, String k4, String v4) {
+        addPdfCell(table, k1, labelFont, bgLabel, borderColor, 1, Element.ALIGN_CENTER, 3.5f);
+        addPdfCell(table, v1 != null ? v1 : "-", dataFont, bgData, borderColor, 1, Element.ALIGN_LEFT, 3.5f);
+        addPdfCell(table, k2, labelFont, bgLabel, borderColor, 1, Element.ALIGN_CENTER, 3.5f);
+        addPdfCell(table, v2 != null ? v2 : "-", dataFont, bgData, borderColor, 1, Element.ALIGN_LEFT, 3.5f);
+        addPdfCell(table, k3, labelFont, bgLabel, borderColor, 1, Element.ALIGN_CENTER, 3.5f);
+        addPdfCell(table, v3 != null ? v3 : "-", dataFont, bgData, borderColor, 1, Element.ALIGN_LEFT, 3.5f);
+        addPdfCell(table, k4, labelFont, bgLabel, borderColor, 1, Element.ALIGN_CENTER, 3.5f);
+        addPdfCell(table, v4 != null ? v4 : "-", dataFont, bgData, borderColor, 1, Element.ALIGN_LEFT, 3.5f);
+    }
+
+    private void addPdfCell(PdfPTable table, String text, Font font, BaseColor bgColor, BaseColor borderColor, int colSpan, int align, float padding) {
+        float fontSize = font != null ? font.getSize() : 7.5f;
+        float leading = fontSize * 1.45f;
+        Phrase phrase = new Phrase(leading, text != null ? text : "-", font);
+        PdfPCell cell = new PdfPCell(phrase);
+        cell.setLeading(leading, 0f);
+        cell.setColspan(colSpan);
+        cell.setBackgroundColor(bgColor);
+        cell.setHorizontalAlignment(align);
+        cell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        cell.setPadding(padding);
+        cell.setPaddingTop(padding + 2.5f);
+        cell.setPaddingBottom(padding + 2.5f);
+        cell.setPaddingLeft(padding + 2f);
+        cell.setPaddingRight(padding + 2f);
+        cell.setBorderColor(borderColor);
+        table.addCell(cell);
+    }
+
+    private void addPdfImageCell(PdfPTable table, byte[] imgBytes, int colSpan, float maxW, float maxH, BaseColor borderColor) {
+        PdfPCell cell;
+        if (imgBytes != null && imgBytes.length > 0) {
+            try {
+                com.itextpdf.text.Image img = com.itextpdf.text.Image.getInstance(imgBytes);
+                img.scaleToFit(maxW, maxH);
+                img.setAlignment(Element.ALIGN_CENTER);
+                cell = new PdfPCell(img, false);
+            } catch (Exception e) {
+                cell = new PdfPCell(new Phrase("-"));
+            }
+        } else {
+            cell = new PdfPCell(new Phrase("-"));
+        }
+        cell.setColspan(colSpan);
+        cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+        cell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+        cell.setPadding(4f);
+        cell.setBorderColor(borderColor);
+        cell.setBackgroundColor(BaseColor.WHITE);
+        table.addCell(cell);
     }
 
     private final java.util.Map<String, byte[]> executionImageCache = new java.util.concurrent.ConcurrentHashMap<>();
@@ -1696,7 +2067,7 @@ public class PackagingSpecExportService {
 
         int imgRowIdx = currentRow + 1;
         Row layoutImgRow = sheet0.createRow(imgRowIdx);
-        layoutImgRow.setHeightInPoints(190); // [요청 반영] 크롭된 3D 피사체가 큼직하고 시원하게 보이도록 190pt로 확장
+        layoutImgRow.setHeightInPoints(360); // [요청 반영] 3D 제품 입수 및 팔레트 적재 형태 사진 높이 360pt로 확장
         for (int col = 0; col <= 7; col++) {
             createCell(layoutImgRow, col, "", dataStyle);
         }
@@ -2268,7 +2639,7 @@ public class PackagingSpecExportService {
             // 2. 이미지 본체 행
             int imgRowIdx = currentRow;
             Row imgRow = sheet0.createRow(imgRowIdx);
-            imgRow.setHeightInPoints(180);
+            imgRow.setHeightInPoints(360); // [요청 반영] 실물 패키지 사진 높이 2배 확대 (180pt -> 360pt)
             for (int col = 0; col <= 7; col++) {
                 createCell(imgRow, col, "", dataStyle);
             }

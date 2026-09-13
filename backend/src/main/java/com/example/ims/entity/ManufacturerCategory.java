@@ -19,6 +19,7 @@ public class ManufacturerCategory {
     private Long id;
 
     @Column(nullable = false, unique = true)
+    @jakarta.validation.constraints.NotBlank(message = "제조사 카테고리명은 필수입니다.")
     private String name;
 
     @Builder.Default

@@ -321,12 +321,30 @@ api.interceptors.response.use(
                             }
                         }
 
+                        const correlationId = (serverErrorData && typeof serverErrorData === 'object') ? serverErrorData.correlationId : null;
+                        const safeStringify = (obj) => {
+                            try {
+                                const seen = new WeakSet();
+                                const str = JSON.stringify(obj, (k, v) => {
+                                    if (typeof v === 'object' && v !== null) {
+                                        if (seen.has(v)) return '[Circular]';
+                                        seen.add(v);
+                                    }
+                                    return v;
+                                }, 2);
+                                return str ? (str.length > 3000 ? str.substring(0, 3000) + '...[truncated]' : str) : 'N/A';
+                            } catch (e) {
+                                return String(obj);
+                            }
+                        };
+
                         const bugReportPayload = {
-                            description: `[시스템 자동 감지] API 에러 발생: ${errorMsg}`,
+                            description: `${correlationId ? `[CID: ${correlationId}] ` : ''}[시스템 자동 감지] API 에러: ${errorMsg}`,
                             steps: [
                                 error.stack || 'API 요청 중 에러 발생',
                                 '',
                                 `[요청 정보]`,
+                                `Correlation-ID: ${correlationId || 'N/A'}`,
                                 `Method: ${error.config?.method?.toUpperCase() || 'N/A'}`,
                                 `URL: ${error.config?.url || 'N/A'}`,
                                 `Status: ${error.response?.status || 'N/A'} ${error.response?.statusText || ''}`,
@@ -337,7 +355,8 @@ api.interceptors.response.use(
                             screenName: window.__QMS_ACTIVE_PAGE__ || window.location.pathname,
                             url: window.location.href,
                             severity: 'CRITICAL',
-                            serverError: serverErrorData ? JSON.stringify(serverErrorData, null, 2) : 'N/A'
+                            serverError: safeStringify(serverErrorData),
+                            correlationId: correlationId || undefined
                         };
 
                         try {

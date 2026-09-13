@@ -41,7 +41,7 @@ public class PackagingSpecificationController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MENU_PRODUCTS_EDIT') or hasAuthority('MENU_PACKAGING_EDIT')")
-    public ResponseEntity<PackagingSpecification> saveSpec(@RequestBody PackagingSpecification spec,
+    public ResponseEntity<PackagingSpecification> saveSpec(@jakarta.validation.Valid @RequestBody PackagingSpecification spec,
             @AuthenticationPrincipal UserDetails userDetails) {
         spec.setLastModifiedBy(userDetails.getUsername());
         
@@ -191,7 +191,7 @@ public class PackagingSpecificationController {
 
     @PostMapping("/save-full")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MENU_PRODUCTS_EDIT') or hasAuthority('MENU_PACKAGING_EDIT')")
-    public ResponseEntity<PackagingSpecFullDto> saveFullSpec(@RequestBody PackagingSpecFullDto dto,
+    public ResponseEntity<PackagingSpecFullDto> saveFullSpec(@jakarta.validation.Valid @RequestBody PackagingSpecFullDto dto,
             @AuthenticationPrincipal UserDetails userDetails) {
         try {
             String username = userDetails != null ? userDetails.getUsername() : "system";

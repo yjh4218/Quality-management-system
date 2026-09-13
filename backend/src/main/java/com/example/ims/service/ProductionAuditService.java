@@ -389,20 +389,10 @@ public class ProductionAuditService {
     }
 
     @Transactional
-    public boolean sendAuditCustomEmail(String idOrItemCode, java.util.Map<String, String> emailRequest, org.springframework.security.core.userdetails.UserDetails userDetails) {
-        String toEmail = emailRequest.get("toEmail");
-        String subject = emailRequest.get("subject");
-        String body = emailRequest.get("body");
-
-        if (toEmail == null || toEmail.trim().isEmpty()) {
-            throw new RuntimeException("수신자 메일 주소가 입력되지 않았습니다.");
-        }
-        if (subject == null || subject.trim().isEmpty()) {
-            throw new RuntimeException("메일 제목이 입력되지 않았습니다.");
-        }
-        if (body == null || body.trim().isEmpty()) {
-            throw new RuntimeException("메일 내용이 입력되지 않았습니다.");
-        }
+    public boolean sendAuditCustomEmail(String idOrItemCode, com.example.ims.dto.AuditCustomEmailRequestDto emailRequest, org.springframework.security.core.userdetails.UserDetails userDetails) {
+        String toEmail = emailRequest.toEmail();
+        String subject = emailRequest.subject();
+        String body = emailRequest.body();
 
         boolean isMock = false;
         // Split by comma in case multiple emails are provided

@@ -17,6 +17,7 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class PackagingSpecFullDto {
+    @jakarta.validation.Valid
     private PackagingSpecification spec;
     private List<PackagingSpecRevision> revisions;
     private List<PackagingSpecComponent> components;

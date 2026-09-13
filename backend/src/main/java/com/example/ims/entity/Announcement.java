@@ -16,6 +16,7 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "announcements")
+@org.hibernate.annotations.SQLRestriction("(is_deleted = false OR is_deleted IS NULL)")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -30,9 +31,11 @@ public class Announcement {
     private String announcementNumber;
 
     @Column(nullable = false)
+    @jakarta.validation.constraints.NotBlank(message = "공지사항 제목은 필수입니다.")
     private String title;
 
     @Column(columnDefinition = "TEXT", nullable = false)
+    @jakarta.validation.constraints.NotBlank(message = "공지사항 내용은 필수입니다.")
     private String content;
 
     @Column(name = "target_roles", columnDefinition = "TEXT")

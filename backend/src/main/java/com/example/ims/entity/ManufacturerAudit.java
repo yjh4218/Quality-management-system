@@ -41,6 +41,7 @@ public class ManufacturerAudit {
     private LocalDateTime deletedAt;
 
     @Column(nullable = false)
+    @jakarta.validation.constraints.NotNull(message = "감사 일자는 필수입니다.")
     private LocalDate auditDate;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -52,6 +53,7 @@ public class ManufacturerAudit {
     private AuditTemplate template;
 
     @Column(nullable = false)
+    @jakarta.validation.constraints.NotBlank(message = "감사 구분은 필수입니다.")
     private String auditType; // 신규, 정기, 비정기
 
     private int totalScore;

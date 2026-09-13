@@ -29,6 +29,7 @@ public class Manufacturer {
     private LocalDateTime updatedAt;
 
     @Column(nullable = false, unique = true)
+    @jakarta.validation.constraints.NotBlank(message = "제조사명은 필수입니다.")
     private String name; // 제조사명
 
     private String category; // 제조사 구분 (화장품, 부자재, 공산품, 반려동물 제품)

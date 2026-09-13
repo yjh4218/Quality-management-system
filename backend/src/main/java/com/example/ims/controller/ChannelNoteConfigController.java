@@ -38,6 +38,7 @@ public class ChannelNoteConfigController {
      * 카테고리 항목 목록 조회 (활성만 or 전체)
      */
     @GetMapping("/channel-note-categories")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<?> getCategories(@RequestParam(required = false, defaultValue = "false") boolean all) {
         if (all) {
             return ResponseEntity.ok(categoryRepository.findAllByOrderByDisplayOrderAsc());
@@ -101,15 +102,19 @@ public class ChannelNoteConfigController {
         }
 
         try {
-            File dir = new File(UPLOAD_DIR);
-            if (!dir.exists()) {
-                dir.mkdirs();
-            }
-
             String originalName = file.getOriginalFilename();
             String ext = "";
             if (originalName != null && originalName.contains(".")) {
-                ext = originalName.substring(originalName.lastIndexOf("."));
+                ext = originalName.substring(originalName.lastIndexOf(".")).toLowerCase();
+            }
+
+            if (!List.of(".jpg", ".jpeg", ".png", ".webp", ".pdf").contains(ext)) {
+                return ResponseEntity.badRequest().body("{\"message\": \"허용되지 않은 파일 형식입니다. (jpg, jpeg, png, webp, pdf만 허용)\"}");
+            }
+
+            File dir = new File(UPLOAD_DIR);
+            if (!dir.exists()) {
+                dir.mkdirs();
             }
 
             String savedName = UUID.randomUUID().toString() + ext;
@@ -117,7 +122,7 @@ public class ChannelNoteConfigController {
             Files.write(filePath, file.getBytes());
 
             String fileUrl = "/uploads/channel_stickers/" + savedName;
-            String fileType = ext.toLowerCase().contains("pdf") ? "PDF" : "IMAGE";
+            String fileType = ext.contains("pdf") ? "PDF" : "IMAGE";
 
             return ResponseEntity.ok(Map.of(
                     "fileUrl", fileUrl,
@@ -134,6 +139,7 @@ public class ChannelNoteConfigController {
      * 특정 유통 채널의 항목별 특이사항 목록 조회
      */
     @GetMapping("/sales-channels/{channelId}/special-notes")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<?> getChannelSpecialNotes(@PathVariable Long channelId) {
         SalesChannel channel = channelRepository.findById(channelId).orElse(null);
         if (channel == null) {

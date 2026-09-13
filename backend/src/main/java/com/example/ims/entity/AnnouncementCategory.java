@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "announcement_categories")
+@org.hibernate.annotations.SQLRestriction("(is_deleted = false OR is_deleted IS NULL)")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

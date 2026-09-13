@@ -36,7 +36,7 @@ public class ManufacturerController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
-    public ResponseEntity<Manufacturer> create(@RequestBody Manufacturer manufacturer,
+    public ResponseEntity<Manufacturer> create(@jakarta.validation.Valid @RequestBody Manufacturer manufacturer,
             @AuthenticationPrincipal UserDetails userDetails) {
         manufacturer.setId(null); // Mass Assignment 방어
         return ResponseEntity.ok(manufacturerService.save(manufacturer, userDetails.getUsername()));
@@ -44,7 +44,7 @@ public class ManufacturerController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
-    public ResponseEntity<Manufacturer> update(@PathVariable Long id, @RequestBody Manufacturer manufacturer,
+    public ResponseEntity<Manufacturer> update(@PathVariable Long id, @jakarta.validation.Valid @RequestBody Manufacturer manufacturer,
             @AuthenticationPrincipal UserDetails userDetails) {
         manufacturer.setId(id);
         return ResponseEntity.ok(manufacturerService.save(manufacturer, userDetails.getUsername()));

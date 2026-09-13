@@ -51,7 +51,7 @@ public class ProductionAuditController {
      */
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES')")
-    public ResponseEntity<ProductionAuditDTO> createAudit(@RequestBody ProductionAuditDTO dto,
+    public ResponseEntity<ProductionAuditDTO> createAudit(@jakarta.validation.Valid @RequestBody ProductionAuditDTO dto,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(service.createAudit(dto, userDetails.getUsername()));
     }
@@ -61,7 +61,7 @@ public class ProductionAuditController {
      */
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES')")
-    public ResponseEntity<ProductionAuditDTO> updateAudit(@PathVariable Long id, @RequestBody ProductionAuditDTO dto,
+    public ResponseEntity<ProductionAuditDTO> updateAudit(@PathVariable Long id, @jakarta.validation.Valid @RequestBody ProductionAuditDTO dto,
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(service.updateAudit(id, dto, userDetails.getUsername()));
     }
@@ -86,7 +86,7 @@ public class ProductionAuditController {
 
     @PostMapping("/{id}/send-email")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES')")
-    public ResponseEntity<java.util.Map<String, Object>> sendAuditCustomEmail(@PathVariable String id, @RequestBody Map<String, String> emailRequest, @AuthenticationPrincipal UserDetails userDetails) {
+    public ResponseEntity<java.util.Map<String, Object>> sendAuditCustomEmail(@PathVariable String id, @jakarta.validation.Valid @RequestBody com.example.ims.dto.AuditCustomEmailRequestDto emailRequest, @AuthenticationPrincipal UserDetails userDetails) {
         boolean isMock = service.sendAuditCustomEmail(id, emailRequest, userDetails);
         java.util.Map<String, Object> res = new java.util.HashMap<>();
         res.put("success", true);
@@ -111,8 +111,8 @@ public class ProductionAuditController {
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES')")
     public ResponseEntity<Void> toggleProductDisclosure(
             @PathVariable String itemCode,
-            @RequestBody Map<String, Boolean> body) {
-        boolean isDisclosed = body.getOrDefault("isDisclosed", false);
+            @jakarta.validation.Valid @RequestBody com.example.ims.dto.ProductDisclosureUpdateDto body) {
+        boolean isDisclosed = Boolean.TRUE.equals(body.isDisclosed());
         log.info("[CONTROLLER] Toggle Disclosure - ItemCode: {}, isDisclosed: {}", itemCode, isDisclosed);
         service.toggleProductDisclosure(itemCode, isDisclosed);
         return ResponseEntity.ok().build();

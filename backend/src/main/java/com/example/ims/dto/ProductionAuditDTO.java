@@ -7,7 +7,11 @@ import java.time.LocalDateTime;
 @Data
 public class ProductionAuditDTO {
     private Long id;
+
+    @jakarta.validation.constraints.NotBlank(message = "품목 코드는 필수입니다.")
     private String itemCode;
+
+    @jakarta.validation.constraints.NotBlank(message = "제품명은 필수입니다.")
     private String productName;
     private String manufacturerName;
     private LocalDate productionDate;

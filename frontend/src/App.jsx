@@ -41,26 +41,28 @@ const PackagingSpaceRatioCalculatorPage = lazyRetry(() => import('./PackagingSpa
 const OutboxSpecCalculatorPage = lazyRetry(() => import('./OutboxSpecCalculatorPage.jsx'));
 const LotPpmDashboardPage = lazyRetry(() => import('./LotPpmDashboardPage.jsx'));
 
-import MarketReleaseRecordPage from './MarketReleaseRecordPage.jsx';
-import BomMasterPage from './BomMasterPage.jsx';
+const MarketReleaseRecordPage = lazyRetry(() => import('./MarketReleaseRecordPage.jsx'));
+const BomMasterPage = lazyRetry(() => import('./BomMasterPage.jsx'));
+const ProductionAuditPage = lazyRetry(() => import('./ProductionAuditPage.jsx'));
+const ManufacturerAuditPage = lazyRetry(() => import('./ManufacturerAuditPage.jsx'));
+const ManufacturerAuditDashboard = lazyRetry(() => import('./ManufacturerAuditDashboard.jsx'));
+const IngredientCompliancePage = lazyRetry(() => import('./IngredientCompliancePage.jsx'));
+const DocumentRequestManagementPage = lazyRetry(() => import('./DocumentRequestManagementPage.jsx'));
+
 import BomCategoryManagementPage from './BomCategoryManagementPage.jsx';
 import PackagingTemplatePage from './PackagingTemplatePage.jsx';
 import SalesChannelManagement from './SalesChannelManagement.jsx';
 import RoleManagementPage from './RoleManagementPage.jsx';
 import GuideManagementPage from './GuideManagementPage.jsx';
-import ProductionAuditPage from './ProductionAuditPage.jsx';
 import DashboardManagementPage from './DashboardManagementPage.jsx';
 import TrashBinPage from './TrashBinPage.jsx';
 import MailTemplatePage from './MailTemplatePage.jsx';
 import NotificationSettingsPage from './NotificationSettingsPage.jsx';
-import IngredientCompliancePage from './IngredientCompliancePage.jsx';
 import HelpCenterModal from './components/HelpCenterModal';
 import CommandPaletteModal from './components/common/CommandPaletteModal';
 import ProfileModal from './ProfileModal';
 import { getCurrentUser, logout, getMyNotifications, getUnreadNotificationCount, readNotification, readAllNotifications, deleteNotification, submitBugReport, getBaseURL, getFormattedReporterInfo } from './api';
 import ManufacturerAuditItemPage from './ManufacturerAuditItemPage';
-import ManufacturerAuditPage from './ManufacturerAuditPage';
-import ManufacturerAuditDashboard from './ManufacturerAuditDashboard';
 import ManufacturerCategoryPage from './ManufacturerCategoryPage';
 import AccessLogPage from './AccessLogPage.jsx';
 import BugReportPage from './BugReportPage.jsx';
@@ -68,7 +70,6 @@ import AnnouncementManagementPage from './AnnouncementManagementPage.jsx';
 import NotificationListPage from './NotificationListPage.jsx';
 import ManufacturerGuidePage from './ManufacturerGuidePage.jsx';
 import VendorUploadPage from './VendorUploadPage.jsx';
-import DocumentRequestManagementPage from './DocumentRequestManagementPage.jsx';
 import DocumentCycleConfigPage from './DocumentCycleConfigPage.jsx';
 import ChannelNoteCategoryConfigPage from './ChannelNoteCategoryConfigPage.jsx';
 

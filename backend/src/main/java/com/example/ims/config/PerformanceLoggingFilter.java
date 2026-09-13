@@ -28,9 +28,9 @@ public class PerformanceLoggingFilter implements Filter {
     private static final Logger log = LoggerFactory.getLogger(PerformanceLoggingFilter.class);
     private static final long SLOW_THRESHOLD_MS = 500L;
 
-    // 민감 정보 파라미터 마스킹 정규식 (token, password, secret, key, credential, auth 등)
+    // 민감 정보 파라미터 마스킹 정규식 (token, password, secret, key, credential, auth, email, phone 등)
     private static final Pattern SENSITIVE_PARAM_PATTERN = Pattern.compile(
-        "(?i)(token|password|passwd|secret|key|credential|authorization|auth|accessToken|refreshToken)=([^&]+)"
+        "(?i)(token|password|passwd|secret|key|credential|authorization|auth|accessToken|refreshToken|email|phone)=([^&]+)"
     );
 
     @Override

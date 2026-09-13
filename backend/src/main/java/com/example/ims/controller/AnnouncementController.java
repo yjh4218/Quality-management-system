@@ -50,7 +50,7 @@ public class AnnouncementController {
      */
     @PostMapping
     @PreAuthorize("@perm.can('announcements', 'EDIT')")
-    public ResponseEntity<Announcement> createAnnouncement(@RequestBody Announcement announcement,
+    public ResponseEntity<Announcement> createAnnouncement(@jakarta.validation.Valid @RequestBody Announcement announcement,
                                                            @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(announcementService.createAnnouncement(announcement, userDetails.getUsername()));
     }
@@ -61,7 +61,7 @@ public class AnnouncementController {
     @PutMapping("/{id}")
     @PreAuthorize("@perm.can('announcements', 'EDIT')")
     public ResponseEntity<Announcement> updateAnnouncement(@PathVariable Long id,
-                                                           @RequestBody Announcement announcement,
+                                                           @jakarta.validation.Valid @RequestBody Announcement announcement,
                                                            @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(announcementService.updateAnnouncement(id, announcement, userDetails.getUsername()));
     }

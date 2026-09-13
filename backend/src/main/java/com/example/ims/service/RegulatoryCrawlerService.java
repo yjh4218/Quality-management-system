@@ -7,7 +7,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
@@ -22,6 +21,7 @@ public class RegulatoryCrawlerService {
 
     private final RegulatoryIngredientRepository repository;
     private final com.example.ims.repository.IngredientRegulationHistoryRepository historyRepository;
+    private final BugReportService bugReportService;
     private final RestTemplate restTemplate = createRestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
     
@@ -78,23 +78,36 @@ public class RegulatoryCrawlerService {
     }
 
     @Scheduled(cron = "0 0 3 * * SUN")
-    @Transactional
     public void runBiweeklyUpdate() {
-        log.info(">>>> [SCHEDULER] Checking Biweekly Regulatory Sync...");
-        java.util.Optional<com.example.ims.entity.IngredientRegulationHistory> latestSync = 
-                historyRepository.findFirstByUpdatedByOrderByUpdatedAtDesc("SYSTEM_AUTO");
-        
-        if (latestSync.isPresent()) {
-            java.time.LocalDateTime lastSyncTime = latestSync.get().getUpdatedAt();
-            long daysSinceLastSync = java.time.temporal.ChronoUnit.DAYS.between(lastSyncTime, java.time.LocalDateTime.now());
-            if (daysSinceLastSync < 14) {
-                log.info(">>>> [SCHEDULER] Skipping Sync. Last sync was {} days ago (minimum 14 days required).", daysSinceLastSync);
-                return;
+        try {
+            log.info(">>>> [SCHEDULER] Checking Biweekly Regulatory Sync...");
+            java.util.Optional<com.example.ims.entity.IngredientRegulationHistory> latestSync = 
+                    historyRepository.findFirstByUpdatedByOrderByUpdatedAtDesc("SYSTEM_AUTO");
+            
+            if (latestSync.isPresent()) {
+                java.time.LocalDateTime lastSyncTime = latestSync.get().getUpdatedAt();
+                long daysSinceLastSync = java.time.temporal.ChronoUnit.DAYS.between(lastSyncTime, java.time.LocalDateTime.now());
+                if (daysSinceLastSync < 14) {
+                    log.info(">>>> [SCHEDULER] Skipping Sync. Last sync was {} days ago (minimum 14 days required).", daysSinceLastSync);
+                    return;
+                }
+            }
+            
+            log.info(">>>> [SCHEDULER] 14 days elapsed since last sync. Initiating sync...");
+            syncByCountries(List.of("KR", "EU", "US", "CN", "JP"), true);
+        } catch (Exception e) {
+            log.error(">>>> [SCHEDULER] Biweekly Regulatory Sync failed: {}", e.getMessage(), e);
+            try {
+                bugReportService.submitReport(com.example.ims.entity.BugReport.builder()
+                        .reporterUsername("SYSTEM_SCHEDULER")
+                        .screenName("RegulatoryCrawlerService")
+                        .description("규제정보 정기 동기화 스케줄러 실패: " + e.getMessage())
+                        .errorCategory("SCHEDULER_ERROR")
+                        .build());
+            } catch (Exception reportEx) {
+                log.error(">>>> [SCHEDULER] Failed to submit bug report for scheduler error: {}", reportEx.getMessage());
             }
         }
-        
-        log.info(">>>> [SCHEDULER] 14 days elapsed since last sync. Initiating sync...");
-        syncByCountries(List.of("KR", "EU", "US", "CN", "JP"), true);
     }
 
     public void syncByCountries(List<String> countries) {
