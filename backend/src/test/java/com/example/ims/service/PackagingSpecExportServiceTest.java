@@ -133,10 +133,10 @@ public class PackagingSpecExportServiceTest {
                         assertNotNull(c1);
                         assertTrue(c1.getStringCellValue().contains("포장방법 사진 참조"), "포장방법에는 '포장방법 사진 참조'가 포함되어야 함");
                     } else if (val.contains("인박스 3D 입수 도면")) {
-                        // 바로 다음 행이 3D 도면 이미지 행
+                        // 바로 다음 행이 3D 도면 이미지 행 (높이 360pt)
                         org.apache.poi.ss.usermodel.Row imgRow = sheet0.getRow(r + 1);
                         assertNotNull(imgRow);
-                        assertEquals(190.0f, imgRow.getHeightInPoints(), "3D 도면 이미지 행 높이는 190pt여야 함");
+                        assertEquals(360.0f, imgRow.getHeightInPoints(), "3D 도면 이미지 행 높이는 360pt여야 함");
                         foundLayout3DRow = true;
                     }
                 }
@@ -218,10 +218,10 @@ public class PackagingSpecExportServiceTest {
                         foundPackageImageHeader = true;
                     } else if (val.contains("📷 패키지 이미지 #1")) {
                         foundImageLabels = true;
-                        // 다음 행은 이미지 행 (높이 180pt)
+                        // 다음 행은 이미지 행 (높이 360pt)
                         org.apache.poi.ss.usermodel.Row imgRow = sheet0.getRow(r + 1);
                         assertNotNull(imgRow);
-                        assertEquals(180.0f, imgRow.getHeightInPoints(), "패키지 이미지 행 높이는 180pt여야 함");
+                        assertEquals(360.0f, imgRow.getHeightInPoints(), "패키지 이미지 행 높이는 360pt여야 함");
                     }
                 }
             }

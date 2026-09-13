@@ -96,9 +96,15 @@ public class QmsFullE2EComprehensiveTest {
         if (brandRepository.findByName("아누아").isEmpty()) {
             brandRepository.save(Brand.builder().name("아누아").type("기본").build());
         }
-        if (salesChannelRepository.findByName("올리브영(OY)").isEmpty()) {
-            salesChannelRepository.save(SalesChannel.builder().name("올리브영(OY)").channelCode("OY").active(true).build());
-        }
+        try {
+            Integer scCount = jdbcTemplate.queryForObject(
+                    "SELECT count(*) FROM sales_channels WHERE name = '올리브영(OY)'", Integer.class);
+            if (scCount == null || scCount == 0) {
+                salesChannelRepository.save(SalesChannel.builder().name("올리브영(OY)").channelCode("OY").active(true).build());
+            } else {
+                jdbcTemplate.execute("UPDATE sales_channels SET is_deleted = false, active = true WHERE name = '올리브영(OY)'");
+            }
+        } catch (Exception ignored) {}
     }
 
     @Test

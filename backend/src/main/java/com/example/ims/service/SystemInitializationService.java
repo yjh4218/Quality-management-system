@@ -1541,19 +1541,19 @@ public class SystemInitializationService {
     private void seedMasterProductBomsAndPlanningSets() {
         log.info(">>>> [SYSTEM INIT] Starting seedMasterProductBomsAndPlanningSets...");
         try {
-            Long brandId = jdbcTemplate.queryForObject("SELECT id FROM brands WHERE name = '아누아' LIMIT 1", Long.class);
+            Long brandId = jdbcTemplate.query("SELECT id FROM brands WHERE name = '아누아' LIMIT 1", (rs, rowNum) -> rs.getLong(1)).stream().findFirst().orElse(null);
             if (brandId == null) {
-                brandId = jdbcTemplate.queryForObject("SELECT id FROM brands LIMIT 1", Long.class);
+                brandId = jdbcTemplate.query("SELECT id FROM brands LIMIT 1", (rs, rowNum) -> rs.getLong(1)).stream().findFirst().orElse(null);
             }
-            Long mfrId = jdbcTemplate.queryForObject("SELECT id FROM manufacturers WHERE name = '한국콜마' LIMIT 1", Long.class);
+            Long mfrId = jdbcTemplate.query("SELECT id FROM manufacturers WHERE name = '한국콜마' LIMIT 1", (rs, rowNum) -> rs.getLong(1)).stream().findFirst().orElse(null);
             if (mfrId == null) {
-                mfrId = jdbcTemplate.queryForObject("SELECT id FROM manufacturers LIMIT 1", Long.class);
+                mfrId = jdbcTemplate.query("SELECT id FROM manufacturers LIMIT 1", (rs, rowNum) -> rs.getLong(1)).stream().findFirst().orElse(null);
             }
 
             // =========================================================================
             // 1. 마스터 제품 1: PARENT-001 ([기준 마스터] 프리미엄 센텔라 수분 크림) BOM & 성분 완성
             // =========================================================================
-            Long parentProdId = jdbcTemplate.queryForObject("SELECT id FROM products WHERE item_code = 'PARENT-001' LIMIT 1", Long.class);
+            Long parentProdId = jdbcTemplate.query("SELECT id FROM products WHERE item_code = 'PARENT-001' LIMIT 1", (rs, rowNum) -> rs.getLong(1)).stream().findFirst().orElse(null);
             if (parentProdId != null) {
                 // 포장사양서 ID 목록 조회
                 var specIds = jdbcTemplate.queryForList("SELECT id FROM packaging_specifications WHERE product_id = ?", Long.class, parentProdId);
