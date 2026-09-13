@@ -67,9 +67,8 @@ public class NotificationService {
         emitter.onError((ex) -> {
             sseConnections.remove(connection);
             try {
-                emitter.completeWithError(ex);
-            } catch (Exception e) {
-                // Ignore
+                emitter.complete();
+            } catch (Exception ignored) {
             }
         });
 
@@ -303,6 +302,10 @@ public class NotificationService {
                 conn.getEmitter().send(SseEmitter.event().name("ping").data("keepalive"));
             } catch (Exception e) {
                 deadConnections.add(conn);
+                try {
+                    conn.getEmitter().complete();
+                } catch (Exception ignored) {
+                }
             }
         }
         if (!deadConnections.isEmpty()) {

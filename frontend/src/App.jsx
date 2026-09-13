@@ -260,6 +260,13 @@ const App = () => {
     // [전역 감지] 시스템 자바스크립트 uncaught 에러 및 unhandled rejection 감지 후 자동 버그 신고 연동 (모든 에러 100% 수집)
     useEffect(() => {
         const submitGlobalBugReport = async (errorMsg, stackTrace, source = 'Global JS Error', category = 'RUNTIME') => {
+            // 브라우저 확장 프로그램(Chrome Extension) 발 외부 오류는 시스템 결함이 아니므로 버그 리포트 전송 제외
+            if (errorMsg.includes("A listener indicated an asynchronous response") ||
+                errorMsg.includes("message channel closed") ||
+                errorMsg.includes("chrome-extension://") ||
+                errorMsg.includes("moz-extension://")) {
+                return;
+            }
             try {
                 const reporterInfo = getFormattedReporterInfo(user);
                 await submitBugReport({
@@ -420,6 +427,10 @@ const App = () => {
     const [isNotifOpen, setIsNotifOpen] = useState(false);
     const [bellAnimated, setBellAnimated] = useState(false);
     const popoverRef = React.useRef(null);
+    const isNotifOpenRef = React.useRef(isNotifOpen);
+    useEffect(() => {
+        isNotifOpenRef.current = isNotifOpen;
+    }, [isNotifOpen]);
 
     // [고도화 1] 사이드바 그룹 열림/닫힘 상태 관리 (Accordion Behavior)
     const [openSections, setOpenSections] = useState({
@@ -658,7 +669,7 @@ const App = () => {
         // 30 seconds Short Polling fallback
         const interval = setInterval(() => {
             fetchUnreadCount();
-            if (isNotifOpen) {
+            if (isNotifOpenRef.current) {
                 fetchNotifications();
             }
         }, 30000);
@@ -682,7 +693,7 @@ const App = () => {
             clearInterval(interval);
             document.removeEventListener('mousedown', handleOutsideClick);
         };
-    }, [isLoggedIn, isNotifOpen]);
+    }, [isLoggedIn]);
 
     useEffect(() => {
         // [변경] sessionStorage token 체크 제거 -> 항상 세션 쿠키로 fetchUser() 시도

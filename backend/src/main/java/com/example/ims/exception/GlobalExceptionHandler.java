@@ -33,6 +33,30 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 클라이언트 연결 강제 종료(Broken pipe, Connection reset by peer) 예외 처리.
+     * SSE 스트림 중 브라우저 탭 닫기/새로고침 시 발생하며, 응답 헤더가 이미 커밋되었거나 text/event-stream 상태이므로 204 No Content로 종료합니다.
+     */
+    @ExceptionHandler(java.io.IOException.class)
+    public ResponseEntity<Void> handleIOException(java.io.IOException ex) {
+        String msg = ex.getMessage();
+        if (msg != null && (msg.contains("Broken pipe") || msg.contains("Connection reset") || msg.contains("connection was aborted") || msg.contains("SocketException"))) {
+            log.debug("Client disconnected abruptly ({}): {}", ex.getClass().getSimpleName(), msg);
+            return ResponseEntity.noContent().build();
+        }
+        log.warn("IOException encountered: {}", msg);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+    }
+
+    /**
+     * SSE 스트림 중 응답 바디 작성 실패(미디어 타입 불일치 등) 예외 처리.
+     */
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotWritableException.class)
+    public ResponseEntity<Void> handleHttpMessageNotWritableException(org.springframework.http.converter.HttpMessageNotWritableException ex) {
+        log.debug("HttpMessageNotWritableException (stream closed or incompatible media type): {}", ex.getMessage());
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
      * [Task 11] Bean Validation(@Valid) 실패 시 발생하는 예외 처리.
      * 필드별 상세 오류 메시지를 400 Bad Request와 함께 반환합니다.
      */
@@ -214,6 +238,12 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleGlobalException(Exception ex, WebRequest request) {
+        String msg = ex.getMessage();
+        if (msg != null && (msg.contains("Broken pipe") || msg.contains("Connection reset") || msg.contains("connection was aborted"))) {
+            log.debug("Client disconnected abruptly in global handler: {}", msg);
+            return ResponseEntity.noContent().build();
+        }
+
         String correlationId = UUID.randomUUID().toString();
         
         // 운영 로그에만 상세 내용 기록 (스택트레이스 포함)
