@@ -622,6 +622,8 @@ const BomMasterPage = ({ user }) => {
                 columns={BOM_FORMATTABLE_COLUMNS}
                 rules={customRules}
                 legends={BOM_LEGENDS}
+                gridId="bom_master"
+                user={user}
                 onSave={handleSaveCustomRules}
             />
         </div>

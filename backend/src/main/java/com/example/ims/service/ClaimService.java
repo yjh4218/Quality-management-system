@@ -51,10 +51,18 @@ public class ClaimService {
     public List<Claim> searchClaims(String role, String companyName, String startDate, String endDate, String itemCode,
             String productName, String lotNumber, String country, String qualityStatus, String claimNumber,
             String manufacturer, String sharedFilterStr, Boolean isCriticalClaim) {
+        return searchClaims(role, companyName, startDate, endDate, itemCode, productName, lotNumber, country,
+                qualityStatus, claimNumber, manufacturer, sharedFilterStr, isCriticalClaim, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Claim> searchClaims(String role, String companyName, String startDate, String endDate, String itemCode,
+            String productName, String lotNumber, String country, String qualityStatus, String claimNumber,
+            String manufacturer, String sharedFilterStr, Boolean isCriticalClaim, String consumerReplyNeeded) {
         Specification<Claim> spec = buildClaimSpecification(
             role, companyName, startDate, endDate, itemCode,
             productName, lotNumber, country, qualityStatus, claimNumber,
-            manufacturer, sharedFilterStr, isCriticalClaim
+            manufacturer, sharedFilterStr, isCriticalClaim, consumerReplyNeeded
         );
 
         try {
@@ -79,10 +87,19 @@ public class ClaimService {
     public org.springframework.data.domain.Page<Claim> searchClaimsPaged(String role, String companyName, String startDate, String endDate, String itemCode,
             String productName, String lotNumber, String country, String qualityStatus, String claimNumber,
             String manufacturer, String sharedFilterStr, Boolean isCriticalClaim, org.springframework.data.domain.Pageable pageable) {
+        return searchClaimsPaged(role, companyName, startDate, endDate, itemCode, productName, lotNumber, country,
+                qualityStatus, claimNumber, manufacturer, sharedFilterStr, isCriticalClaim, null, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<Claim> searchClaimsPaged(String role, String companyName, String startDate, String endDate, String itemCode,
+            String productName, String lotNumber, String country, String qualityStatus, String claimNumber,
+            String manufacturer, String sharedFilterStr, Boolean isCriticalClaim, String consumerReplyNeeded,
+            org.springframework.data.domain.Pageable pageable) {
         Specification<Claim> spec = buildClaimSpecification(
             role, companyName, startDate, endDate, itemCode,
             productName, lotNumber, country, qualityStatus, claimNumber,
-            manufacturer, sharedFilterStr, isCriticalClaim
+            manufacturer, sharedFilterStr, isCriticalClaim, consumerReplyNeeded
         );
 
         try {
@@ -105,6 +122,13 @@ public class ClaimService {
     private Specification<Claim> buildClaimSpecification(String role, String companyName, String startDate, String endDate, String itemCode,
             String productName, String lotNumber, String country, String qualityStatus, String claimNumber,
             String manufacturer, String sharedFilterStr, Boolean isCriticalClaim) {
+        return buildClaimSpecification(role, companyName, startDate, endDate, itemCode, productName, lotNumber,
+                country, qualityStatus, claimNumber, manufacturer, sharedFilterStr, isCriticalClaim, null);
+    }
+
+    private Specification<Claim> buildClaimSpecification(String role, String companyName, String startDate, String endDate, String itemCode,
+            String productName, String lotNumber, String country, String qualityStatus, String claimNumber,
+            String manufacturer, String sharedFilterStr, Boolean isCriticalClaim, String consumerReplyNeeded) {
         Boolean sharedWithManufacturer = null;
         if (sharedFilterStr != null && !sharedFilterStr.trim().isEmpty()) {
             if (sharedFilterStr.equalsIgnoreCase("true") || sharedFilterStr.equals("1")) {
@@ -170,6 +194,11 @@ public class ClaimService {
                 // 5. [크리티컬 클레임 필터]
                 if (isCriticalClaim != null) {
                     predicates.add(cb.equal(root.get("isCriticalClaim"), isCriticalClaim));
+                }
+
+                // 6. [고객 회신 필요 필터]
+                if (consumerReplyNeeded != null && !consumerReplyNeeded.trim().isEmpty()) {
+                    predicates.add(cb.equal(root.get("consumerReplyNeeded"), consumerReplyNeeded.trim()));
                 }
 
                 query.orderBy(cb.desc(root.get("receiptDate")));
@@ -857,7 +886,11 @@ public class ClaimService {
      * [고도화] 클레임 목록을 엑셀 파일로 추출합니다.
      */
     public byte[] exportClaims(String username, String role, String companyName, String startDate, String endDate, String itemCode, String productName, String lotNumber, String country, String qualityStatus, String claimNumber, String manufacturer, String sharedFilterStr, Boolean isCriticalClaim) throws java.io.IOException {
-        List<Claim> data = searchClaims(role, companyName, startDate, endDate, itemCode, productName, lotNumber, country, qualityStatus, claimNumber, manufacturer, sharedFilterStr, isCriticalClaim);
+        return exportClaims(username, role, companyName, startDate, endDate, itemCode, productName, lotNumber, country, qualityStatus, claimNumber, manufacturer, sharedFilterStr, isCriticalClaim, null);
+    }
+
+    public byte[] exportClaims(String username, String role, String companyName, String startDate, String endDate, String itemCode, String productName, String lotNumber, String country, String qualityStatus, String claimNumber, String manufacturer, String sharedFilterStr, Boolean isCriticalClaim, String consumerReplyNeeded) throws java.io.IOException {
+        List<Claim> data = searchClaims(role, companyName, startDate, endDate, itemCode, productName, lotNumber, country, qualityStatus, claimNumber, manufacturer, sharedFilterStr, isCriticalClaim, consumerReplyNeeded);
         
         // [감사 로그] 엑셀 다운로드 이력 기록
         User userObj = userRepository.findByUsername(username).orElse(null);
@@ -887,13 +920,15 @@ public class ClaimService {
 
         String[] headers = {
             "클레임번호", "접수일", "국가", "품목코드", "제품명", "LOT번호", "제조사", "발생수량",
-            "대분류", "중분류", "품질상태", "제조사상태", "공유여부"
+            "고객회신필요", "대분류", "중분류", "품질상태", "제조사상태", "공유여부"
         };
         
         return excelExportService.exportToExcel("클레임내역", headers, data, c -> new Object[]{
             c.getClaimNumber(), c.getReceiptDate() != null ? c.getReceiptDate().toString() : "-",
             c.getCountry(), c.getItemCode(), c.getProductName(), c.getLotNumber(), c.getManufacturer(),
-            c.getOccurrenceQty(), c.getPrimaryCategory(), c.getSecondaryCategory(),
+            c.getOccurrenceQty(),
+            c.getConsumerReplyNeeded() != null ? c.getConsumerReplyNeeded() : "불필요",
+            c.getPrimaryCategory(), c.getSecondaryCategory(),
             c.getQualityStatus(), c.getMfrStatus(), c.isSharedWithManufacturer()
         });
     }

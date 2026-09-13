@@ -117,4 +117,22 @@ public class SystemSettingService {
         }
         return map;
     }
+
+    @Transactional
+    public void deleteSetting(String key) {
+        if (systemSettingRepository.existsById(key)) {
+            systemSettingRepository.deleteById(key);
+            try {
+                auditLogService.logAction(
+                        "SYSTEM",
+                        "SYSTEM_SETTING_DELETE",
+                        "시스템 설정 삭제/초기화",
+                        String.format("시스템 설정 삭제/초기화 [Key: %s]", key)
+                );
+            } catch (Exception ex) {
+                log.warn("감사 로그 적재 실패 (시스템 설정 삭제): {}", ex.getMessage());
+            }
+            log.info("[SETTINGS] Deleted setting key: {}", key);
+        }
+    }
 }

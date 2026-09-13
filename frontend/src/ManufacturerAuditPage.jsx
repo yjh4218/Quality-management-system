@@ -892,6 +892,8 @@ const ManufacturerAuditPage = ({ user }) => {
                 columns={MFR_AUDIT_FORMATTABLE_COLUMNS}
                 rules={customRules}
                 legends={MFR_AUDIT_LEGENDS}
+                gridId="manufacturer_audit"
+                user={user}
                 onSave={handleSaveCustomRules}
             />
         </div>

@@ -708,6 +708,8 @@ const ProductionAuditPage = ({ user, navigationData, onNavigated }) => {
                 columns={PROD_AUDIT_FORMATTABLE_COLUMNS}
                 rules={customRules}
                 legends={PROD_AUDIT_LEGENDS}
+                gridId="production_audit"
+                user={user}
                 onSave={handleSaveCustomRules}
             />
         </div>

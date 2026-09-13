@@ -1,20 +1,60 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { toast } from 'react-toastify';
+import { usePermissions } from '../../usePermissions';
+import { getSystemSetting, saveSystemSetting, deleteSystemSetting } from '../../api';
 
 const PRESET_COLORS = [
-    { bg: '#fee2e2', text: '#dc2626', label: '연빨강 (경고/위험)' },
-    { bg: '#fef3c7', text: '#d97706', label: '연노랑 (주의/대기)' },
-    { bg: '#dcfce7', text: '#16a34a', label: '연초록 (적합/완료)' },
-    { bg: '#e0f2fe', text: '#0284c7', label: '연파랑 (정보/진행)' },
-    { bg: '#ede9fe', text: '#7c3aed', label: '연보라 (기획/특수)' },
-    { bg: '#f1f5f9', text: '#475569', label: '연회색 (기본/비활성)' }
+    { bg: '#fee2e2', text: '#dc2626', border: '#fca5a5', label: '연빨강 (경고/위험)' },
+    { bg: '#fef3c7', text: '#d97706', border: '#fcd34d', label: '연노랑 (주의/대기)' },
+    { bg: '#dcfce7', text: '#16a34a', border: '#86efac', label: '연초록 (적합/완료)' },
+    { bg: '#e0f2fe', text: '#0284c7', border: '#7dd3fc', label: '연파랑 (정보/진행)' },
+    { bg: '#ede9fe', text: '#7c3aed', border: '#c4b5fd', label: '연보라 (기획/특수)' },
+    { bg: '#f1f5f9', text: '#475569', border: '#cbd5e1', label: '연회색 (기본/비활성)' }
 ];
+
+/**
+ * 범례 배열 정규화 헬퍼 (단일 평탄 배열 및 그룹화 배열 모두 지원)
+ */
+const normalizeRawLegends = (rawLegends) => {
+    if (!rawLegends || !Array.isArray(rawLegends) || rawLegends.length === 0) return [];
+
+    const firstItem = rawLegends[0];
+    if (firstItem && (firstItem.label || firstItem.color || firstItem.bg || firstItem.scope || firstItem.text)) {
+        return [{
+            title: '시스템 기본 서식 범례',
+            items: rawLegends.map((item, idx) => ({
+                id: item.id || `leg_item_${idx}_${Date.now()}`,
+                label: item.label || item.scope || '범례',
+                desc: item.desc || item.scope || '',
+                bg: item.bg || '#f1f5f9',
+                text: item.color || item.text || '#1e293b',
+                border: item.border || item.color || item.text || '#cbd5e1',
+                icon: item.icon || '🏷️',
+                scope: item.scope
+            }))
+        }];
+    }
+
+    return rawLegends.map((group, gIdx) => ({
+        title: group.title || `범례 그룹 ${gIdx + 1}`,
+        items: (group.items || []).map((item, iIdx) => ({
+            id: item.id || `leg_${gIdx}_${iIdx}_${Date.now()}`,
+            label: item.label || item.scope || '범례',
+            desc: item.desc || item.scope || '',
+            bg: item.bg || '#f1f5f9',
+            text: item.text || item.color || '#1e293b',
+            border: item.border || item.text || item.color || '#cbd5e1',
+            icon: item.icon || '🏷️',
+            scope: item.scope
+        }))
+    }));
+};
 
 /**
  * ⚙️ 그리드 맞춤형 조건부 서식 관리자 설정 모달
  * 
- * - 시스템 기본 색상 범례 (평탄 배열 / 그룹 배열 자동 정규화 지원)
- * - 관리자 전용 사용자 지정 조건부 서식 규칙 추가 / 항목별 수정 / 삭제 / 취소
- * - 모든 화면의 호출 규격 (rules/onSave or gridId/onApplyRules) 완벽 지원
+ * - 시스템 기본 색상 범례: 권한(GRID_SYSTEM_LEGEND_VIEW / MANAGE)에 따른 노출/숨김 및 수정/저장/복원
+ * - 사용자 정의 조건부 서식 규칙 추가 / 항목별 수정 / 삭제 / 취소
  */
 const GridConditionalFormattingModal = ({
     isOpen,
@@ -24,69 +64,99 @@ const GridConditionalFormattingModal = ({
     onSave,
     onApplyRules,
     legends = [],
-    gridId = 'default_grid'
+    gridId = 'default_grid',
+    user = null,
+    onLegendsChange = null
 }) => {
-    const storageKey = `qms_grid_rules_${gridId}`;
+    // 🔐 1. 사용자 권한 판정
+    const effectiveUser = useMemo(() => {
+        if (user) return user;
+        try {
+            const cached = localStorage.getItem('user_info');
+            return cached ? JSON.parse(cached) : null;
+        } catch {
+            return null;
+        }
+    }, [user]);
+
+    const { canViewSystemLegend, canManageSystemLegend } = usePermissions(effectiveUser);
+
+    // 🔑 2. 스토리지 및 설정 키 계산
+    const effectiveGridId = useMemo(() => {
+        if (gridId && gridId !== 'default_grid') return gridId;
+        if (legends?.[0]?.title) return encodeURIComponent(legends[0].title);
+        return 'default_grid';
+    }, [gridId, legends]);
+
+    const rulesStorageKey = `qms_grid_rules_${effectiveGridId}`;
+    const legendStorageKey = `qms_system_legends_${effectiveGridId}`;
+    const legendSettingKey = `GRID_SYSTEM_LEGENDS_${effectiveGridId}`;
+
+    // 🎨 3. 기본 범례 데이터 정규화 및 커스텀 범례 상태
+    const defaultNormalizedLegends = useMemo(() => normalizeRawLegends(legends), [legends]);
+
     const [activeRules, setActiveRules] = useState([]);
     const [showLegends, setShowLegends] = useState(true);
-    
-    // 수정 모드 상태 (null이면 신규 추가 모드, 숫자면 해당 인덱스 수정 중)
+
+    // 시스템 범례 상태
+    const [currentLegends, setCurrentLegends] = useState(() => {
+        try {
+            const saved = localStorage.getItem(legendStorageKey);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) return normalizeRawLegends(parsed);
+            }
+        } catch {
+            // fallback
+        }
+        return defaultNormalizedLegends;
+    });
+
+    // 시스템 범례 편집 모드 상태
+    const [isLegendEditing, setIsLegendEditing] = useState(false);
+    const [editingLegendsDraft, setEditingLegendsDraft] = useState([]);
+    const [isSavingLegends, setIsSavingLegends] = useState(false);
+
+    // 서식 규칙 수정 모드 상태 (null이면 신규 추가 모드, 숫자면 해당 인덱스 수정 중)
     const [editingIndex, setEditingIndex] = useState(null);
     const [selectedLegendHint, setSelectedLegendHint] = useState('');
 
-    // 폼 상태
+    // 서식 규칙 폼 상태
     const [field, setField] = useState('');
     const [operator, setOperator] = useState('equals'); // 'equals' | 'contains' | 'startsWith' | 'endsWith'
     const [value, setValue] = useState('');
     const [bg, setBg] = useState('#fee2e2');
     const [text, setText] = useState('#dc2626');
 
-    // 🎨 시스템 기본 범례 데이터 정규화 (1차원 평탄 배열 & 2차원 그룹 배열 100% 자동 지원)
-    const normalizedLegends = useMemo(() => {
-        if (!legends || !Array.isArray(legends) || legends.length === 0) return [];
-
-        // 1. 단일 평탄 배열 형태 ([{ label, color, bg, desc, icon, scope }, ...])
-        const firstItem = legends[0];
-        if (firstItem && (firstItem.label || firstItem.color || firstItem.bg || firstItem.scope)) {
-            return [{
-                title: '시스템 기본 서식 범례',
-                items: legends.map(item => ({
-                    label: item.label || item.scope || '범례',
-                    desc: item.desc || item.scope || '',
-                    bg: item.bg || '#f1f5f9',
-                    text: item.color || item.text || '#1e293b',
-                    border: item.border || item.color || item.text || '#cbd5e1',
-                    icon: item.icon || '🏷️',
-                    scope: item.scope
-                }))
-            }];
+    // 🔄 원격 백엔드 시스템 범례 비동기 동기화
+    const syncRemoteLegends = useCallback(async () => {
+        if (!canViewSystemLegend) return;
+        try {
+            const res = await getSystemSetting(legendSettingKey);
+            if (res?.data?.settingValue) {
+                const parsed = JSON.parse(res.data.settingValue);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    const normalized = normalizeRawLegends(parsed);
+                    setCurrentLegends(normalized);
+                    localStorage.setItem(legendStorageKey, JSON.stringify(normalized));
+                    if (onLegendsChange) onLegendsChange(normalized);
+                }
+            }
+        } catch {
+            // 원격 설정 미존재 시 로컬/기본값 유지
         }
-
-        // 2. 그룹화된 배열 형태 ([{ title: '...', items: [...] }, ...])
-        return legends.map((group, idx) => ({
-            title: group.title || `범례 그룹 ${idx + 1}`,
-            items: (group.items || []).map(item => ({
-                label: item.label || item.scope || '범례',
-                desc: item.desc || item.scope || '',
-                bg: item.bg || '#f1f5f9',
-                text: item.text || item.color || '#1e293b',
-                border: item.border || item.text || item.color || '#cbd5e1',
-                icon: item.icon || '🏷️',
-                scope: item.scope
-            }))
-        }));
-    }, [legends]);
+    }, [canViewSystemLegend, legendSettingKey, legendStorageKey, onLegendsChange]);
 
     useEffect(() => {
         if (isOpen) {
-            // rules prop 우선 사용
+            // 1. rules 설정
             if (Array.isArray(rules) && rules.length > 0) {
                 setActiveRules(rules);
             } else if (Array.isArray(rules)) {
                 setActiveRules(rules);
             } else {
                 try {
-                    const saved = localStorage.getItem(storageKey);
+                    const saved = localStorage.getItem(rulesStorageKey);
                     setActiveRules(saved ? JSON.parse(saved) : []);
                 } catch {
                     setActiveRules([]);
@@ -99,14 +169,19 @@ const GridConditionalFormattingModal = ({
             setEditingIndex(null);
             setSelectedLegendHint('');
             setValue('');
+            setIsLegendEditing(false);
+
+            // 2. 백엔드 시스템 범례 동기화
+            syncRemoteLegends();
         }
-    }, [isOpen, rules, storageKey, columns]);
+    }, [isOpen, rules, rulesStorageKey, columns, syncRemoteLegends]);
 
     if (!isOpen) return null;
 
     // 💡 기본 범례 항목을 선택하여 커스텀 규칙 폼에 불러오기 (수정/커스터마이징 모드)
     const handleSelectLegend = (item) => {
-        // 1. 해당 범례의 scope 또는 label과 일치하는 컬럼 자동 매칭
+        if (isLegendEditing) return; // 편집 중에는 선택 불가
+
         let matchedCol = columns.find(c => {
             const header = (c.headerName || '').toLowerCase();
             const fieldName = (c.field || '').toLowerCase();
@@ -130,7 +205,6 @@ const GridConditionalFormattingModal = ({
             setField(matchedCol.field);
         }
 
-        // 2. 키워드 추출 (예: '기획세트 (Planning Set)' -> '기획세트', '대표 마스터 제품 (M)' -> '마스터')
         let extractedVal = item.label || '';
         if (extractedVal.includes('(')) {
             extractedVal = extractedVal.split('(')[0].trim();
@@ -145,11 +219,104 @@ const GridConditionalFormattingModal = ({
         setBg(item.bg || '#fee2e2');
         setText(item.text || '#dc2626');
         setOperator('contains');
-        setEditingIndex(null); // 신규 추가 폼에 세팅
+        setEditingIndex(null);
         setSelectedLegendHint(`[${item.label}] 기본 서식의 색상과 조건이 세팅되었습니다. 원하는 대로 수정 후 '규칙 추가'를 누르세요.`);
     };
 
-    // 신규 규칙 추가
+    // ==========================================
+    // 🎨 시스템 범례 편집 모드 관련 액션 핸들러
+    // ==========================================
+    const handleStartLegendEdit = () => {
+        setEditingLegendsDraft(JSON.parse(JSON.stringify(currentLegends)));
+        setIsLegendEditing(true);
+        setShowLegends(true);
+    };
+
+    const handleCancelLegendEdit = () => {
+        setIsLegendEditing(false);
+        setEditingLegendsDraft([]);
+    };
+
+    const handleUpdateLegendItem = (groupIndex, itemIndex, fieldKey, val) => {
+        setEditingLegendsDraft(prev => {
+            const next = JSON.parse(JSON.stringify(prev));
+            if (next[groupIndex]?.items?.[itemIndex]) {
+                next[groupIndex].items[itemIndex][fieldKey] = val;
+                // 배경색 변경 시 테두리 색상도 기본적으로 연동
+                if (fieldKey === 'bg') {
+                    next[groupIndex].items[itemIndex].border = val;
+                }
+            }
+            return next;
+        });
+    };
+
+    const handleAddLegendItem = (groupIndex) => {
+        setEditingLegendsDraft(prev => {
+            const next = JSON.parse(JSON.stringify(prev));
+            if (!next[groupIndex]) return prev;
+            next[groupIndex].items.push({
+                id: `leg_custom_${Date.now()}`,
+                label: '신규 범례 항목',
+                desc: '범례 설명을 입력하세요',
+                bg: '#fee2e2',
+                text: '#dc2626',
+                border: '#fca5a5',
+                icon: '🏷️'
+            });
+            return next;
+        });
+    };
+
+    const handleDeleteLegendItem = (groupIndex, itemIndex) => {
+        setEditingLegendsDraft(prev => {
+            const next = JSON.parse(JSON.stringify(prev));
+            if (next[groupIndex]?.items) {
+                next[groupIndex].items.splice(itemIndex, 1);
+            }
+            return next;
+        });
+    };
+
+    const handleSaveSystemLegends = async () => {
+        setIsSavingLegends(true);
+        try {
+            const jsonStr = JSON.stringify(editingLegendsDraft);
+            await saveSystemSetting(legendSettingKey, jsonStr);
+            localStorage.setItem(legendStorageKey, jsonStr);
+            setCurrentLegends(editingLegendsDraft);
+            setIsLegendEditing(false);
+            toast.success('시스템 기본 서식 범례가 성공적으로 저장되었습니다.');
+            if (onLegendsChange) onLegendsChange(editingLegendsDraft);
+        } catch (err) {
+            toast.error('시스템 범례 저장 실패: ' + (err.response?.data?.message || err.message));
+        } finally {
+            setIsSavingLegends(false);
+        }
+    };
+
+    const handleResetSystemLegends = async () => {
+        if (!window.confirm('시스템 기본 범례를 최초 시스템 기본값으로 복원하시겠습니까?')) return;
+        setIsSavingLegends(true);
+        try {
+            await deleteSystemSetting(legendSettingKey).catch(() => {});
+            localStorage.removeItem(legendStorageKey);
+            const resetLegends = normalizeRawLegends(legends);
+            setCurrentLegends(resetLegends);
+            setIsLegendEditing(false);
+            setEditingLegendsDraft([]);
+            toast.info('시스템 기본 서식 범례가 최초 기본값으로 복원되었습니다.');
+            if (onLegendsChange) onLegendsChange(resetLegends);
+        } catch (err) {
+            toast.error('시스템 범례 복원 실패: ' + (err.response?.data?.message || err.message));
+        } finally {
+            setIsSavingLegends(false);
+        }
+    };
+
+    // ==========================================
+    // 📋 조건부 서식 커스텀 규칙 관련 핸들러
+    // ==========================================
     const handleAddRule = () => {
         if (!field || !value.trim()) {
             alert('적용 대상 열과 조건 값을 모두 입력해주세요.');
@@ -170,7 +337,6 @@ const GridConditionalFormattingModal = ({
         setSelectedLegendHint('');
     };
 
-    // 항목 수정 모드 진입
     const handleStartEdit = (rule, index) => {
         setEditingIndex(index);
         setSelectedLegendHint('');
@@ -181,7 +347,6 @@ const GridConditionalFormattingModal = ({
         setText(rule.text || rule.textColor || '#dc2626');
     };
 
-    // 항목 수정 완료 반영
     const handleSaveEdit = () => {
         if (editingIndex === null) return;
         if (!field || !value.trim()) {
@@ -204,14 +369,12 @@ const GridConditionalFormattingModal = ({
         nextRules[editingIndex] = updatedRule;
         setActiveRules(nextRules);
 
-        // 수정 모드 종료 및 폼 리셋
         setEditingIndex(null);
         setSelectedLegendHint('');
         setValue('');
         if (columns.length > 0) setField(columns[0].field);
     };
 
-    // 항목 수정 취소
     const handleCancelEdit = () => {
         setEditingIndex(null);
         setSelectedLegendHint('');
@@ -219,7 +382,6 @@ const GridConditionalFormattingModal = ({
         if (columns.length > 0) setField(columns[0].field);
     };
 
-    // 항목 삭제
     const handleDeleteRule = (index) => {
         if (editingIndex === index) {
             handleCancelEdit();
@@ -229,69 +391,61 @@ const GridConditionalFormattingModal = ({
         setActiveRules(prev => prev.filter((_, i) => i !== index));
     };
 
-    // 최종 저장 및 적용
     const handleSave = () => {
         try {
-            if (storageKey) {
-                localStorage.setItem(storageKey, JSON.stringify(activeRules));
+            if (rulesStorageKey) {
+                localStorage.setItem(rulesStorageKey, JSON.stringify(activeRules));
             }
         } catch (e) {
             console.error('Failed to save rules to localStorage', e);
         }
 
-        if (onSave) {
-            onSave(activeRules);
-        }
-        if (onApplyRules) {
-            onApplyRules(activeRules);
-        }
+        if (onSave) onSave(activeRules);
+        if (onApplyRules) onApplyRules(activeRules);
         onClose();
     };
 
-    // 전체 초기화
     const handleReset = () => {
         if (window.confirm('모든 사용자 정의 서식 규칙을 초기화하시겠습니까?')) {
             setActiveRules([]);
             setEditingIndex(null);
             setSelectedLegendHint('');
             try {
-                if (storageKey) {
-                    localStorage.removeItem(storageKey);
+                if (rulesStorageKey) {
+                    localStorage.removeItem(rulesStorageKey);
                 }
             } catch (e) {
                 console.error('Failed to clear rules from localStorage', e);
             }
 
-            if (onSave) {
-                onSave([]);
-            }
-            if (onApplyRules) {
-                onApplyRules([]);
-            }
+            if (onSave) onSave([]);
+            if (onApplyRules) onApplyRules([]);
             onClose();
         }
     };
 
-    // 범례 총 아이템 개수 계산
-    const totalLegendItems = normalizedLegends.reduce((acc, g) => acc + (g.items?.length || 0), 0);
+    // 범례 표시용 데이터 (편집 모드 시 draft, 뷰 모드 시 currentLegends)
+    const displayedLegends = isLegendEditing ? editingLegendsDraft : currentLegends;
+    const totalLegendItems = (displayedLegends || []).reduce((acc, g) => acc + (g.items?.length || 0), 0);
 
     return (
         <div className="modal-overlay" onClick={onClose} style={{ zIndex: 10000 }}>
             <div 
                 className="modal-content" 
                 style={{ 
-                    width: '740px', 
-                    maxWidth: '94vw', 
+                    width: '800px', 
+                    maxWidth: '95vw', 
                     maxHeight: '92vh',
                     display: 'flex',
                     flexDirection: 'column',
-                    borderRadius: '12px',
-                    boxShadow: '0 20px 40px rgba(0,0,0,0.2)'
+                    borderRadius: '14px',
+                    boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+                    background: '#ffffff'
                 }} 
                 onClick={e => e.stopPropagation()}
             >
                 {/* Modal Header */}
-                <div className="modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                <div className="modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', borderTopLeftRadius: '14px', borderTopRightRadius: '14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{ fontSize: '20px' }}>⚙️</span>
                         <div>
@@ -299,7 +453,7 @@ const GridConditionalFormattingModal = ({
                                 조건부 서식 (열/셀 색상 규칙) 설정
                             </h2>
                             <p style={{ margin: '2px 0 0', fontSize: '11.5px', color: '#64748b' }}>
-                                시스템 기본 규칙을 클릭하여 원하는 색상/조건으로 수정·추가하거나 신규 서식 규칙을 생성합니다.
+                                시스템 기본 규칙 및 사용자 맞춤형 열/셀 강조 색상 규칙을 관리합니다.
                             </p>
                         </div>
                     </div>
@@ -311,97 +465,377 @@ const GridConditionalFormattingModal = ({
                 {/* Modal Body */}
                 <div className="modal-body white-bg" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto', flex: 1 }}>
                     
-                    {/* 1. 🎨 시스템 기본 서식 범례 섹션 (클릭 시 선택 및 폼 로드 지원) */}
-                    {normalizedLegends && normalizedLegends.length > 0 && totalLegendItems > 0 && (
+                    {/* 1. 🎨 시스템 기본 서식 범례 섹션 (권한 보유자에게만 노출 & 권한에 따라 편집 지원) */}
+                    {canViewSystemLegend && displayedLegends && displayedLegends.length > 0 && (
                         <div style={{ 
-                            background: '#f8fafc', 
-                            border: '1px solid #e2e8f0', 
-                            borderRadius: '8px', 
-                            padding: '12px 14px' 
+                            background: isLegendEditing ? '#f5f3ff' : '#f8fafc', 
+                            border: isLegendEditing ? '2px solid #8b5cf6' : '1px solid #e2e8f0', 
+                            borderRadius: '10px', 
+                            padding: '14px',
+                            transition: 'all 0.2s ease'
                         }}>
                             <div 
-                                onClick={() => setShowLegends(!showLegends)}
                                 style={{ 
                                     display: 'flex', 
                                     justifyContent: 'space-between', 
                                     alignItems: 'center', 
-                                    cursor: 'pointer',
                                     userSelect: 'none'
                                 }}
                             >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
                                     <span>🎨</span>
                                     <span>시스템 기본 색상 범례 ({totalLegendItems}개)</span>
-                                    <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 'normal' }}>— 항목을 클릭하면 수정 폼으로 바로 불러옵니다.</span>
+                                    {isLegendEditing ? (
+                                        <span style={{ fontSize: '11px', color: '#7c3aed', fontWeight: 700, background: '#ede9fe', padding: '2px 8px', borderRadius: '12px' }}>
+                                            ✏️ 시스템 범례 편집 모드
+                                        </span>
+                                    ) : (
+                                        <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 'normal' }}>
+                                            — 항목 클릭 시 맞춤 규칙 폼으로 세팅됩니다.
+                                        </span>
+                                    )}
                                 </div>
-                                <span style={{ fontSize: '11px', color: '#2563eb', fontWeight: 600 }}>
-                                    {showLegends ? '▲ 접기' : '▼ 펼쳐서 확인'}
-                                </span>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    {/* 수정 권한 보유 시 편집 제어 버튼 노출 */}
+                                    {canManageSystemLegend && !isLegendEditing && (
+                                        <button
+                                            type="button"
+                                            onClick={handleStartLegendEdit}
+                                            style={{
+                                                padding: '4px 10px',
+                                                fontSize: '11.5px',
+                                                fontWeight: 700,
+                                                color: '#4338ca',
+                                                background: '#e0e7ff',
+                                                border: '1px solid #c7d2fe',
+                                                borderRadius: '6px',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '4px'
+                                            }}
+                                            title="시스템 기본 범례의 명칭, 색상, 설명을 직접 수정합니다."
+                                        >
+                                            ✏️ 범례 편집
+                                        </button>
+                                    )}
+
+                                    {canManageSystemLegend && isLegendEditing && (
+                                        <div style={{ display: 'flex', gap: '6px' }}>
+                                            <button
+                                                type="button"
+                                                onClick={handleResetSystemLegends}
+                                                disabled={isSavingLegends}
+                                                style={{
+                                                    padding: '4px 8px',
+                                                    fontSize: '11px',
+                                                    fontWeight: 600,
+                                                    color: '#b91c1c',
+                                                    background: '#fee2e2',
+                                                    border: '1px solid #fca5a5',
+                                                    borderRadius: '6px',
+                                                    cursor: isSavingLegends ? 'not-allowed' : 'pointer'
+                                                }}
+                                                title="최초 시스템 기본값으로 복원"
+                                            >
+                                                🔄 기본값 복원
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleCancelLegendEdit}
+                                                disabled={isSavingLegends}
+                                                style={{
+                                                    padding: '4px 8px',
+                                                    fontSize: '11px',
+                                                    color: '#475569',
+                                                    background: '#ffffff',
+                                                    border: '1px solid #cbd5e1',
+                                                    borderRadius: '6px',
+                                                    cursor: isSavingLegends ? 'not-allowed' : 'pointer'
+                                                }}
+                                            >
+                                                ✕ 취소
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleSaveSystemLegends}
+                                                disabled={isSavingLegends}
+                                                style={{
+                                                    padding: '4px 12px',
+                                                    fontSize: '11.5px',
+                                                    fontWeight: 700,
+                                                    color: '#ffffff',
+                                                    background: '#7c3aed',
+                                                    border: 'none',
+                                                    borderRadius: '6px',
+                                                    cursor: isSavingLegends ? 'not-allowed' : 'pointer',
+                                                    boxShadow: '0 2px 4px rgba(124, 58, 237, 0.3)'
+                                                }}
+                                            >
+                                                {isSavingLegends ? '저장 중...' : '💾 시스템 범례 저장'}
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {!isLegendEditing && (
+                                        <span 
+                                            onClick={() => setShowLegends(!showLegends)}
+                                            style={{ fontSize: '11.5px', color: '#2563eb', fontWeight: 600, cursor: 'pointer', padding: '2px 4px' }}
+                                        >
+                                            {showLegends ? '▲ 접기' : '▼ 펼치기'}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
 
                             {showLegends && (
-                                <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    {normalizedLegends.map((group, gIdx) => (
-                                        <div key={gIdx} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '10px 12px' }}>
-                                            <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#475569', marginBottom: '8px' }}>
-                                                📌 {group.title}
-                                            </div>
-                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '8px' }}>
-                                                {group.items?.map((item, iIdx) => (
-                                                    <div 
-                                                        key={iIdx}
-                                                        onClick={() => handleSelectLegend(item)}
-                                                        style={{ 
-                                                            display: 'flex', 
-                                                            alignItems: 'center', 
-                                                            justifyContent: 'space-between',
-                                                            gap: '8px', 
-                                                            padding: '8px 10px',
-                                                            borderRadius: '6px',
-                                                            background: item.bg,
-                                                            border: `1.5px solid ${item.border}`,
+                                <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                    {displayedLegends.map((group, gIdx) => (
+                                        <div key={gIdx} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px' }}>
+                                            <div style={{ fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <span>📌 {group.title}</span>
+                                                {isLegendEditing && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleAddLegendItem(gIdx)}
+                                                        style={{
+                                                            fontSize: '11px',
+                                                            padding: '2px 8px',
+                                                            background: '#f1f5f9',
+                                                            border: '1px dashed #94a3b8',
+                                                            borderRadius: '4px',
                                                             cursor: 'pointer',
-                                                            transition: 'all 0.15s ease',
-                                                            boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+                                                            color: '#0284c7',
+                                                            fontWeight: 600
                                                         }}
-                                                        title="클릭하여 이 기본 서식을 폼으로 불러와서 수정/적용합니다."
                                                     >
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
-                                                            {item.icon && <span style={{ fontSize: '15px' }}>{item.icon}</span>}
-                                                            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
-                                                                <span style={{ 
-                                                                    fontSize: '11.5px', 
-                                                                    fontWeight: 800, 
-                                                                    color: item.text,
-                                                                    whiteSpace: 'nowrap',
-                                                                    overflow: 'hidden',
-                                                                    textOverflow: 'ellipsis'
-                                                                }}>
-                                                                    {item.label}
-                                                                </span>
-                                                                {item.desc && (
-                                                                    <span style={{ fontSize: '10px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                                        {item.desc}
+                                                        ➕ 항목 추가
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {/* 일반 뷰 모드: 범례 목록 카드 그리드 */}
+                                            {!isLegendEditing && (
+                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '8px' }}>
+                                                    {group.items?.map((item, iIdx) => (
+                                                        <div 
+                                                            key={item.id || iIdx}
+                                                            onClick={() => handleSelectLegend(item)}
+                                                            style={{ 
+                                                                display: 'flex', 
+                                                                alignItems: 'center', 
+                                                                justifyContent: 'space-between',
+                                                                gap: '8px', 
+                                                                padding: '8px 10px',
+                                                                borderRadius: '6px',
+                                                                background: item.bg,
+                                                                border: `1.5px solid ${item.border}`,
+                                                                cursor: 'pointer',
+                                                                transition: 'all 0.15s ease',
+                                                                boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+                                                            }}
+                                                            title="클릭하여 이 기본 서식을 폼으로 불러와서 수정/적용합니다."
+                                                        >
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                                                                {item.icon && <span style={{ fontSize: '15px' }}>{item.icon}</span>}
+                                                                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+                                                                    <span style={{ 
+                                                                        fontSize: '11.5px', 
+                                                                        fontWeight: 800, 
+                                                                        color: item.text,
+                                                                        whiteSpace: 'nowrap',
+                                                                        overflow: 'hidden',
+                                                                        textOverflow: 'ellipsis'
+                                                                    }}>
+                                                                        {item.label}
                                                                     </span>
-                                                                )}
+                                                                    {item.desc && (
+                                                                        <span style={{ fontSize: '10px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                            {item.desc}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            <span style={{
+                                                                fontSize: '10px',
+                                                                fontWeight: 700,
+                                                                color: '#2563eb',
+                                                                background: '#ffffff',
+                                                                border: '1px solid #bfdbfe',
+                                                                padding: '2px 6px',
+                                                                borderRadius: '4px',
+                                                                whiteSpace: 'nowrap'
+                                                            }}>
+                                                                ✏️ 선택 적용
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {/* 편집 모드: 각 항목별 인라인 수정 폼 */}
+                                            {isLegendEditing && (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                    {group.items?.map((item, iIdx) => (
+                                                        <div 
+                                                            key={item.id || iIdx}
+                                                            style={{
+                                                                display: 'flex',
+                                                                flexDirection: 'column',
+                                                                gap: '8px',
+                                                                padding: '10px 12px',
+                                                                background: '#f8fafc',
+                                                                border: '1px solid #cbd5e1',
+                                                                borderRadius: '8px'
+                                                            }}
+                                                        >
+                                                            {/* 상단: 미리보기 뱃지 및 삭제 버튼 */}
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                    <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700 }}>#{iIdx + 1} 미리보기:</span>
+                                                                    <span style={{
+                                                                        padding: '3px 10px',
+                                                                        borderRadius: '6px',
+                                                                        background: item.bg,
+                                                                        color: item.text,
+                                                                        border: `1.5px solid ${item.border}`,
+                                                                        fontSize: '11.5px',
+                                                                        fontWeight: 800,
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        gap: '4px'
+                                                                    }}>
+                                                                        <span>{item.icon || '🏷️'}</span>
+                                                                        <span>{item.label || '범례 라벨'}</span>
+                                                                    </span>
+                                                                </div>
+
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleDeleteLegendItem(gIdx, iIdx)}
+                                                                    style={{
+                                                                        background: '#fee2e2',
+                                                                        border: '1px solid #fca5a5',
+                                                                        color: '#dc2626',
+                                                                        borderRadius: '4px',
+                                                                        padding: '2px 8px',
+                                                                        fontSize: '11px',
+                                                                        fontWeight: 600,
+                                                                        cursor: 'pointer'
+                                                                    }}
+                                                                    title="이 범례 항목 삭제"
+                                                                >
+                                                                    🗑️ 삭제
+                                                                </button>
+                                                            </div>
+
+                                                            {/* 중단: 라벨명 및 설명 입력 */}
+                                                            <div style={{ display: 'grid', gridTemplateColumns: '70px 1.5fr 2fr', gap: '8px' }}>
+                                                                <div>
+                                                                    <label style={{ fontSize: '10.5px', color: '#64748b', display: 'block', marginBottom: '2px', fontWeight: 600 }}>아이콘</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="form-control"
+                                                                        value={item.icon || ''}
+                                                                        onChange={e => handleUpdateLegendItem(gIdx, iIdx, 'icon', e.target.value)}
+                                                                        placeholder="🏷️"
+                                                                        style={{ fontSize: '12px', padding: '4px 6px', textAlign: 'center', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label style={{ fontSize: '10.5px', color: '#64748b', display: 'block', marginBottom: '2px', fontWeight: 600 }}>범례 명칭</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="form-control"
+                                                                        value={item.label || ''}
+                                                                        onChange={e => handleUpdateLegendItem(gIdx, iIdx, 'label', e.target.value)}
+                                                                        placeholder="예: 5단계 최종 완료"
+                                                                        style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label style={{ fontSize: '10.5px', color: '#64748b', display: 'block', marginBottom: '2px', fontWeight: 600 }}>설명 문구</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        className="form-control"
+                                                                        value={item.desc || ''}
+                                                                        onChange={e => handleUpdateLegendItem(gIdx, iIdx, 'desc', e.target.value)}
+                                                                        placeholder="예: 모든 검사 및 승인이 종결된 입고 건"
+                                                                        style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+                                                                    />
+                                                                </div>
+                                                            </div>
+
+                                                            {/* 하단: 배경색/글자색 피커 & 프리셋 */}
+                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                        <span style={{ fontSize: '10.5px', color: '#64748b', fontWeight: 600 }}>배경:</span>
+                                                                        <input
+                                                                            type="color"
+                                                                            value={item.bg || '#ffffff'}
+                                                                            onChange={e => handleUpdateLegendItem(gIdx, iIdx, 'bg', e.target.value)}
+                                                                            style={{ width: '24px', height: '24px', padding: 0, border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                                                        />
+                                                                        <input
+                                                                            type="text"
+                                                                            value={item.bg || ''}
+                                                                            onChange={e => handleUpdateLegendItem(gIdx, iIdx, 'bg', e.target.value)}
+                                                                            style={{ width: '65px', fontSize: '11px', padding: '2px 4px', fontFamily: 'monospace', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+                                                                        />
+                                                                    </div>
+
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                        <span style={{ fontSize: '10.5px', color: '#64748b', fontWeight: 600 }}>글자:</span>
+                                                                        <input
+                                                                            type="color"
+                                                                            value={item.text || '#000000'}
+                                                                            onChange={e => handleUpdateLegendItem(gIdx, iIdx, 'text', e.target.value)}
+                                                                            style={{ width: '24px', height: '24px', padding: 0, border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                                                        />
+                                                                        <input
+                                                                            type="text"
+                                                                            value={item.text || ''}
+                                                                            onChange={e => handleUpdateLegendItem(gIdx, iIdx, 'text', e.target.value)}
+                                                                            style={{ width: '65px', fontSize: '11px', padding: '2px 4px', fontFamily: 'monospace', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* 빠른 프리셋 색상 적용 */}
+                                                                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                                                    <span style={{ fontSize: '10px', color: '#94a3b8' }}>빠른 프리셋:</span>
+                                                                    {PRESET_COLORS.map((p, pIdx) => (
+                                                                        <button
+                                                                            key={pIdx}
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                handleUpdateLegendItem(gIdx, iIdx, 'bg', p.bg);
+                                                                                handleUpdateLegendItem(gIdx, iIdx, 'text', p.text);
+                                                                                handleUpdateLegendItem(gIdx, iIdx, 'border', p.border);
+                                                                            }}
+                                                                            style={{
+                                                                                padding: '2px 6px',
+                                                                                borderRadius: '3px',
+                                                                                fontSize: '10px',
+                                                                                fontWeight: 700,
+                                                                                background: p.bg,
+                                                                                color: p.text,
+                                                                                border: `1px solid ${p.border}`,
+                                                                                cursor: 'pointer'
+                                                                            }}
+                                                                        >
+                                                                            {p.label.split(' ')[0]}
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
                                                             </div>
                                                         </div>
-
-                                                        <span style={{
-                                                            fontSize: '10px',
-                                                            fontWeight: 700,
-                                                            color: '#2563eb',
-                                                            background: '#ffffff',
-                                                            border: '1px solid #bfdbfe',
-                                                            padding: '2px 6px',
-                                                            borderRadius: '4px',
-                                                            whiteSpace: 'nowrap'
-                                                        }}>
-                                                            ✏️ 선택 수정
-                                                        </span>
-                                                    </div>
-                                                ))}
-                                            </div>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -413,7 +847,7 @@ const GridConditionalFormattingModal = ({
                     <div style={{ 
                         background: editingIndex !== null ? '#f0f9ff' : (selectedLegendHint ? '#f0fdf4' : '#f8fafc'), 
                         border: editingIndex !== null ? '2px solid #3b82f6' : (selectedLegendHint ? '2px solid #10b981' : '1px solid #cbd5e1'), 
-                        borderRadius: '8px', 
+                        borderRadius: '10px', 
                         padding: '14px',
                         transition: 'all 0.2s ease-in-out'
                     }}>
@@ -421,7 +855,7 @@ const GridConditionalFormattingModal = ({
                         {selectedLegendHint && editingIndex === null && (
                             <div style={{ 
                                 background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#065f46', 
-                                padding: '6px 10px', borderRadius: '4px', fontSize: '11px', marginBottom: '8px',
+                                padding: '6px 10px', borderRadius: '6px', fontSize: '11px', marginBottom: '8px',
                                 display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                             }}>
                                 <span>💡 {selectedLegendHint}</span>
@@ -636,7 +1070,7 @@ const GridConditionalFormattingModal = ({
                 </div>
 
                 {/* Modal Footer */}
-                <div className="modal-footer" style={{ padding: '12px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="modal-footer" style={{ padding: '12px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottomLeftRadius: '14px', borderBottomRightRadius: '14px' }}>
                     <button
                         type="button"
                         onClick={handleReset}

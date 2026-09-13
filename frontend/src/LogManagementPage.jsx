@@ -673,6 +673,8 @@ const LogManagementPage = ({ user }) => {
                 columns={LOG_FORMATTABLE_COLUMNS}
                 rules={customRules}
                 legends={LOG_LEGENDS}
+                gridId="log_management"
+                user={user}
                 onSave={handleSaveCustomRules}
             />
         </div>

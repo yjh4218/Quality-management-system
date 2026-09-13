@@ -571,6 +571,17 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
     const [masterMethodImagesForInherit, setMasterMethodImagesForInherit] = useState({ images: [], masterSpecId: null });
     const [packagingMethodImages, setPackagingMethodImages] = useState([]);
+    const [preview3DModal, setPreview3DModal] = useState({
+        isOpen: false,
+        type: '', // 'inbox' | 'outbox' | 'pallet'
+        title: '',
+        imageUrl: '',
+        rawPath: '',
+        pattern: '',
+        size: '',
+        isConfirmed: false
+    });
+    const [imageErrorMap, setImageErrorMap] = useState({});
     const [specValidationModalState, setSpecValidationModalState] = useState({
         isOpen: false,
         title: '',
@@ -1223,6 +1234,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                         palletViewConfig: viewConfigStr || prev.palletViewConfig
                     }));
                 }
+                setImageErrorMap(prev => ({ ...prev, [normalizedMode]: false }));
                 toast.success(`📸 ${normalizedMode === 'inbox' ? '인박스' : normalizedMode === 'outbox' ? '아웃박스' : '팔레트'} 3D 도면이 확정 저장되었습니다! (엑셀 출력 100% 반영)`);
             }
         } catch (err) {
@@ -1408,6 +1420,49 @@ const ProductDrawer = ({ product, onClose, user }) => {
                 }
                 toast.info(`🔄 ${normalizedMode === 'inbox' ? '인박스' : normalizedMode === 'outbox' ? '아웃박스' : '팔레트'} 도면이 자동 3D 모드로 복원되었습니다. (사양서 저장 시 적용)`);
             }
+        });
+    };
+
+    const open3DPreview = (type) => {
+        const targetType = type || sim3DTab;
+        let title = '';
+        let imgPath = '';
+        let pattern = '';
+        let size = '';
+
+        const uBox = get3DUnitBoxDims();
+        const oBox = get3DOutboxDims();
+        const iBox = get3DInboxDims();
+        const pBox = get3DPalletDims();
+        const hasInbox = currentSpec?.inboxUseYn === 'O';
+        const palletStacks = parseInt(currentSpec?.palletTierCount || 8, 10) || 8;
+
+        if (targetType === 'inbox') {
+            title = '📥 인박스 3D 입수 도면';
+            imgPath = currentSpec?.inboxLayoutImage || '';
+            pattern = currentSpec?.inboxPackingPattern || `2열×5행×1단 (${currentSpec?.inboxQty || 10}개입)`;
+            size = currentSpec?.inboxSize || `${iBox.w}×${iBox.d}×${iBox.h} mm`;
+        } else if (targetType === 'outbox') {
+            title = '📦 아웃박스 3D 입수 도면';
+            imgPath = currentSpec?.outboxLayoutImageFile || currentSpec?.outboxLayoutImage || '';
+            pattern = currentSpec?.outboxPackingPattern || (hasInbox ? `2열×2행×1단 (인박스 4박스입, 총 ${currentSpec?.outboxQty || 40}개)` : `4열×5행×2단 (총 ${currentSpec?.outboxQty || 40}개)`);
+            size = currentSpec?.outboxSize || `${oBox.w}×${oBox.d}×${oBox.h} mm`;
+        } else {
+            title = '🏗️ 팔레트 3D 적재 도면';
+            imgPath = currentSpec?.palletLayoutImage || '';
+            pattern = currentSpec?.palletStackingPattern || currentSpec?.palletStackingMethod || '8방 핀휠 교차적재';
+            size = currentSpec?.palletSize || currentSpec?.palletSpec || `${pBox.w}×${pBox.d} mm (${palletStacks}단)`;
+        }
+
+        setPreview3DModal({
+            isOpen: true,
+            type: targetType,
+            title,
+            imageUrl: imgPath ? getFileUrl(imgPath) : '',
+            rawPath: imgPath,
+            pattern,
+            size,
+            isConfirmed: Boolean(imgPath)
         });
     };
 
@@ -7114,6 +7169,30 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
                                                                             {/* 도면 확정 및 관리 액션 버튼들 */}
                                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                {/* -1. 3D 도면 크게보기/미리보기 버튼 */}
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => open3DPreview(sim3DTab)}
+                                                                                    style={{
+                                                                                        display: 'flex',
+                                                                                        alignItems: 'center',
+                                                                                        gap: '4px',
+                                                                                        padding: '5px 10px',
+                                                                                        borderRadius: '6px',
+                                                                                        fontSize: '12px',
+                                                                                        fontWeight: 600,
+                                                                                        background: '#ffffff',
+                                                                                        color: '#1e293b',
+                                                                                        border: '1px solid #cbd5e1',
+                                                                                        cursor: 'pointer',
+                                                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+                                                                                    }}
+                                                                                    title="현재 포장사양서 3D 도면을 고화질 라이트박스로 확대 미리보기합니다."
+                                                                                >
+                                                                                    <span>🔍</span>
+                                                                                    <span>도면 크게보기</span>
+                                                                                </button>
+
                                                                                 {/* 0. 3D 도면 일괄 확정/저장 버튼 */}
                                                                                 <button
                                                                                     type="button"
@@ -7297,165 +7376,294 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                                 {/* 1. 인박스 */}
                                                                                 <div style={{
                                                                                     background: '#ffffff',
-                                                                                    padding: '6px 8px',
-                                                                                    borderRadius: '6px',
-                                                                                    border: currentSpec.inboxLayoutImage ? '1px solid #ddd6fe' : '1px dashed #cbd5e1',
+                                                                                    padding: '8px 10px',
+                                                                                    borderRadius: '8px',
+                                                                                    border: currentSpec.inboxLayoutImage ? (imageErrorMap.inbox ? '1px dashed #f87171' : '1px solid #ddd6fe') : '1px dashed #cbd5e1',
                                                                                     display: 'flex',
                                                                                     alignItems: 'center',
-                                                                                    gap: '6px'
+                                                                                    gap: '8px',
+                                                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
                                                                                 }}>
-                                                                                    {currentSpec.inboxLayoutImage ? (
+                                                                                    {currentSpec.inboxLayoutImage && !imageErrorMap.inbox ? (
                                                                                         <img
                                                                                             src={getFileUrl(currentSpec.inboxLayoutImage)}
                                                                                             alt="인박스 도면"
-                                                                                            style={{ width: '32px', height: '32px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #e2e8f0' }}
-                                                                                            onError={(e) => { e.target.onerror = null; e.target.style.opacity = '0.3'; e.target.title = '도면 파일 없음 (재캡처 권장)'; }}
+                                                                                            style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #ddd6fe', cursor: 'pointer', flexShrink: 0 }}
+                                                                                            title="클릭하여 인박스 3D 도면 크게보기"
+                                                                                            onClick={() => open3DPreview('inbox')}
+                                                                                            onError={() => setImageErrorMap(prev => ({ ...prev, inbox: true }))}
                                                                                         />
                                                                                     ) : (
-                                                                                        <div style={{ width: '32px', height: '32px', background: '#f5f3ff', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>
-                                                                                            📥
+                                                                                        <div
+                                                                                            onClick={() => open3DPreview('inbox')}
+                                                                                            style={{
+                                                                                                width: '36px',
+                                                                                                height: '36px',
+                                                                                                background: imageErrorMap.inbox ? '#fef2f2' : '#f5f3ff',
+                                                                                                border: imageErrorMap.inbox ? '1px dashed #f87171' : '1px solid #ddd6fe',
+                                                                                                borderRadius: '4px',
+                                                                                                display: 'flex',
+                                                                                                alignItems: 'center',
+                                                                                                justifyContent: 'center',
+                                                                                                fontSize: '15px',
+                                                                                                cursor: 'pointer',
+                                                                                                flexShrink: 0
+                                                                                            }}
+                                                                                            title={imageErrorMap.inbox ? '도면 파일 소실됨 (클릭하여 재캡처 안내)' : '인박스 3D 도면 미리보기'}
+                                                                                        >
+                                                                                            {imageErrorMap.inbox ? '⚠️' : '📥'}
                                                                                         </div>
                                                                                     )}
-                                                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                                                    <div
+                                                                                        style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+                                                                                        onClick={() => open3DPreview('inbox')}
+                                                                                        title="클릭하여 크게보기"
+                                                                                    >
                                                                                         <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#6d28d9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                                                             1. 인박스 도면
                                                                                         </div>
-                                                                                        <div style={{ fontSize: '10px', color: currentSpec.inboxLayoutImage ? '#15803d' : '#94a3b8' }}>
-                                                                                            {currentSpec.inboxLayoutImage ? '✓ 도면 확정됨' : '자동 3D 도면'}
+                                                                                        <div style={{ fontSize: '10px', color: imageErrorMap.inbox ? '#dc2626' : (currentSpec.inboxLayoutImage ? '#15803d' : '#94a3b8'), fontWeight: imageErrorMap.inbox ? 600 : 'normal' }}>
+                                                                                            {imageErrorMap.inbox ? '⚠️ 파일 소실 (재캡처)' : (currentSpec.inboxLayoutImage ? '✓ 도면 확정됨' : '자동 3D 도면')}
                                                                                         </div>
                                                                                     </div>
-                                                                                    {hasInbox && (
+                                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0 }}>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => open3DPreview('inbox')}
+                                                                                            style={{
+                                                                                                padding: '3px 6px',
+                                                                                                fontSize: '10px',
+                                                                                                fontWeight: 600,
+                                                                                                borderRadius: '4px',
+                                                                                                border: '1px solid #cbd5e1',
+                                                                                                background: '#ffffff',
+                                                                                                color: '#334155',
+                                                                                                cursor: 'pointer',
+                                                                                                whiteSpace: 'nowrap'
+                                                                                            }}
+                                                                                            title="인박스 3D 도면을 확대 미리보기합니다."
+                                                                                        >
+                                                                                            🔍
+                                                                                        </button>
+                                                                                        {hasInbox && (
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                disabled={snapshotUploading}
+                                                                                                onClick={() => {
+                                                                                                    setSim3DTab('inbox');
+                                                                                                    setTimeout(() => handleCaptureCurrent3D('inbox'), 250);
+                                                                                                }}
+                                                                                                style={{
+                                                                                                    padding: '3px 6px',
+                                                                                                    fontSize: '10px',
+                                                                                                    fontWeight: 600,
+                                                                                                    borderRadius: '4px',
+                                                                                                    border: '1px solid #ddd6fe',
+                                                                                                    background: '#f5f3ff',
+                                                                                                    color: '#6d28d9',
+                                                                                                    cursor: 'pointer',
+                                                                                                    whiteSpace: 'nowrap'
+                                                                                                }}
+                                                                                                title="인박스 3D 뷰로 이동하여 즉시 캡처/저장합니다."
+                                                                                            >
+                                                                                                📸 {currentSpec.inboxLayoutImage ? '재캡처' : '캡처'}
+                                                                                            </button>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                {/* 2. 아웃박스 */}
+                                                                                <div style={{
+                                                                                    background: '#ffffff',
+                                                                                    padding: '8px 10px',
+                                                                                    borderRadius: '8px',
+                                                                                    border: (currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) ? (imageErrorMap.outbox ? '1px dashed #f87171' : '1px solid #bfdbfe') : '1px dashed #cbd5e1',
+                                                                                    display: 'flex',
+                                                                                    alignItems: 'center',
+                                                                                    gap: '8px',
+                                                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                                                                                }}>
+                                                                                    {(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) && !imageErrorMap.outbox ? (
+                                                                                        <img
+                                                                                            src={getFileUrl(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage)}
+                                                                                            alt="아웃박스 도면"
+                                                                                            style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #bfdbfe', cursor: 'pointer', flexShrink: 0 }}
+                                                                                            title="클릭하여 아웃박스 3D 도면 크게보기"
+                                                                                            onClick={() => open3DPreview('outbox')}
+                                                                                            onError={() => setImageErrorMap(prev => ({ ...prev, outbox: true }))}
+                                                                                        />
+                                                                                    ) : (
+                                                                                        <div
+                                                                                            onClick={() => open3DPreview('outbox')}
+                                                                                            style={{
+                                                                                                width: '36px',
+                                                                                                height: '36px',
+                                                                                                background: imageErrorMap.outbox ? '#fef2f2' : '#eff6ff',
+                                                                                                border: imageErrorMap.outbox ? '1px dashed #f87171' : '1px solid #bfdbfe',
+                                                                                                borderRadius: '4px',
+                                                                                                display: 'flex',
+                                                                                                alignItems: 'center',
+                                                                                                justifyContent: 'center',
+                                                                                                fontSize: '15px',
+                                                                                                cursor: 'pointer',
+                                                                                                flexShrink: 0
+                                                                                            }}
+                                                                                            title={imageErrorMap.outbox ? '도면 파일 소실됨 (클릭하여 재캡처 안내)' : '아웃박스 3D 도면 미리보기'}
+                                                                                        >
+                                                                                            {imageErrorMap.outbox ? '⚠️' : '📦'}
+                                                                                        </div>
+                                                                                    )}
+                                                                                    <div
+                                                                                        style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+                                                                                        onClick={() => open3DPreview('outbox')}
+                                                                                        title="클릭하여 크게보기"
+                                                                                    >
+                                                                                        <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#1d4ed8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                                            2. 아웃박스 도면
+                                                                                        </div>
+                                                                                        <div style={{ fontSize: '10px', color: imageErrorMap.outbox ? '#dc2626' : ((currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) ? '#15803d' : '#94a3b8'), fontWeight: imageErrorMap.outbox ? 600 : 'normal' }}>
+                                                                                            {imageErrorMap.outbox ? '⚠️ 파일 소실 (재캡처)' : ((currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) ? '✓ 도면 확정됨' : '자동 3D 도면')}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0 }}>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => open3DPreview('outbox')}
+                                                                                            style={{
+                                                                                                padding: '3px 6px',
+                                                                                                fontSize: '10px',
+                                                                                                fontWeight: 600,
+                                                                                                borderRadius: '4px',
+                                                                                                border: '1px solid #cbd5e1',
+                                                                                                background: '#ffffff',
+                                                                                                color: '#334155',
+                                                                                                cursor: 'pointer',
+                                                                                                whiteSpace: 'nowrap'
+                                                                                            }}
+                                                                                            title="아웃박스 3D 도면을 확대 미리보기합니다."
+                                                                                        >
+                                                                                            🔍
+                                                                                        </button>
                                                                                         <button
                                                                                             type="button"
                                                                                             disabled={snapshotUploading}
                                                                                             onClick={() => {
-                                                                                                setSim3DTab('inbox');
-                                                                                                setTimeout(() => handleCaptureCurrent3D('inbox'), 250);
+                                                                                                setSim3DTab('outbox');
+                                                                                                setTimeout(() => handleCaptureCurrent3D('outbox'), 250);
                                                                                             }}
                                                                                             style={{
                                                                                                 padding: '3px 6px',
                                                                                                 fontSize: '10px',
                                                                                                 fontWeight: 600,
                                                                                                 borderRadius: '4px',
-                                                                                                border: '1px solid #ddd6fe',
-                                                                                                background: '#f5f3ff',
-                                                                                                color: '#6d28d9',
+                                                                                                border: '1px solid #bfdbfe',
+                                                                                                background: '#eff6ff',
+                                                                                                color: '#1d4ed8',
                                                                                                 cursor: 'pointer',
                                                                                                 whiteSpace: 'nowrap'
                                                                                             }}
-                                                                                            title="인박스 3D 뷰로 이동하여 즉시 캡처/저장합니다."
+                                                                                            title="아웃박스 3D 뷰로 이동하여 즉시 캡처/저장합니다."
                                                                                         >
-                                                                                            📸 {currentSpec.inboxLayoutImage ? '재캡처' : '캡처'}
+                                                                                            📸 {(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) ? '재캡처' : '캡처'}
                                                                                         </button>
-                                                                                    )}
-                                                                                </div>
-
-                                                                                {/* 2. 아웃박스 */}
-                                                                                <div style={{
-                                                                                    background: '#ffffff',
-                                                                                    padding: '6px 8px',
-                                                                                    borderRadius: '6px',
-                                                                                    border: (currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) ? '1px solid #bfdbfe' : '1px dashed #cbd5e1',
-                                                                                    display: 'flex',
-                                                                                    alignItems: 'center',
-                                                                                    gap: '6px'
-                                                                                }}>
-                                                                                    {(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) ? (
-                                                                                        <img
-                                                                                            src={getFileUrl(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage)}
-                                                                                            alt="아웃박스 도면"
-                                                                                            style={{ width: '32px', height: '32px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #e2e8f0' }}
-                                                                                            onError={(e) => { e.target.onerror = null; e.target.style.opacity = '0.3'; e.target.title = '도면 파일 없음 (재캡처 권장)'; }}
-                                                                                        />
-                                                                                    ) : (
-                                                                                        <div style={{ width: '32px', height: '32px', background: '#eff6ff', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>
-                                                                                            📦
-                                                                                        </div>
-                                                                                    )}
-                                                                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                                                                        <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#1d4ed8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                                                            2. 아웃박스 도면
-                                                                                        </div>
-                                                                                        <div style={{ fontSize: '10px', color: (currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) ? '#15803d' : '#94a3b8' }}>
-                                                                                            {(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) ? '✓ 도면 확정됨' : '자동 3D 도면'}
-                                                                                        </div>
                                                                                     </div>
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        disabled={snapshotUploading}
-                                                                                        onClick={() => {
-                                                                                            setSim3DTab('outbox');
-                                                                                            setTimeout(() => handleCaptureCurrent3D('outbox'), 250);
-                                                                                        }}
-                                                                                        style={{
-                                                                                            padding: '3px 6px',
-                                                                                            fontSize: '10px',
-                                                                                            fontWeight: 600,
-                                                                                            borderRadius: '4px',
-                                                                                            border: '1px solid #bfdbfe',
-                                                                                            background: '#eff6ff',
-                                                                                            color: '#1d4ed8',
-                                                                                            cursor: 'pointer',
-                                                                                            whiteSpace: 'nowrap'
-                                                                                        }}
-                                                                                        title="아웃박스 3D 뷰로 이동하여 즉시 캡처/저장합니다."
-                                                                                    >
-                                                                                        📸 {(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) ? '재캡처' : '캡처'}
-                                                                                    </button>
                                                                                 </div>
 
                                                                                 {/* 3. 팔레트 */}
                                                                                 <div style={{
                                                                                     background: '#ffffff',
-                                                                                    padding: '6px 8px',
-                                                                                    borderRadius: '6px',
-                                                                                    border: currentSpec.palletLayoutImage ? '1px solid #fde68a' : '1px dashed #cbd5e1',
+                                                                                    padding: '8px 10px',
+                                                                                    borderRadius: '8px',
+                                                                                    border: currentSpec.palletLayoutImage ? (imageErrorMap.pallet ? '1px dashed #f87171' : '1px solid #fde68a') : '1px dashed #cbd5e1',
                                                                                     display: 'flex',
                                                                                     alignItems: 'center',
-                                                                                    gap: '6px'
+                                                                                    gap: '8px',
+                                                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
                                                                                 }}>
-                                                                                    {currentSpec.palletLayoutImage ? (
+                                                                                    {currentSpec.palletLayoutImage && !imageErrorMap.pallet ? (
                                                                                         <img
                                                                                             src={getFileUrl(currentSpec.palletLayoutImage)}
                                                                                             alt="팔레트 도면"
-                                                                                            style={{ width: '32px', height: '32px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #e2e8f0' }}
-                                                                                            onError={(e) => { e.target.onerror = null; e.target.style.opacity = '0.3'; e.target.title = '도면 파일 없음 (재캡처 권장)'; }}
+                                                                                            style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #fde68a', cursor: 'pointer', flexShrink: 0 }}
+                                                                                            title="클릭하여 팔레트 3D 도면 크게보기"
+                                                                                            onClick={() => open3DPreview('pallet')}
+                                                                                            onError={() => setImageErrorMap(prev => ({ ...prev, pallet: true }))}
                                                                                         />
                                                                                     ) : (
-                                                                                        <div style={{ width: '32px', height: '32px', background: '#fef3c7', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>
-                                                                                            🏗️
+                                                                                        <div
+                                                                                            onClick={() => open3DPreview('pallet')}
+                                                                                            style={{
+                                                                                                width: '36px',
+                                                                                                height: '36px',
+                                                                                                background: imageErrorMap.pallet ? '#fef2f2' : '#fef3c7',
+                                                                                                border: imageErrorMap.pallet ? '1px dashed #f87171' : '1px solid #fde68a',
+                                                                                                borderRadius: '4px',
+                                                                                                display: 'flex',
+                                                                                                alignItems: 'center',
+                                                                                                justifyContent: 'center',
+                                                                                                fontSize: '15px',
+                                                                                                cursor: 'pointer',
+                                                                                                flexShrink: 0
+                                                                                            }}
+                                                                                            title={imageErrorMap.pallet ? '도면 파일 소실됨 (클릭하여 재캡처 안내)' : '팔레트 3D 도면 미리보기'}
+                                                                                        >
+                                                                                            {imageErrorMap.pallet ? '⚠️' : '🏗️'}
                                                                                         </div>
                                                                                     )}
-                                                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                                                    <div
+                                                                                        style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+                                                                                        onClick={() => open3DPreview('pallet')}
+                                                                                        title="클릭하여 크게보기"
+                                                                                    >
                                                                                         <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#b45309', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                                                             3. 팔레트 도면
                                                                                         </div>
-                                                                                        <div style={{ fontSize: '10px', color: currentSpec.palletLayoutImage ? '#15803d' : '#94a3b8' }}>
-                                                                                            {currentSpec.palletLayoutImage ? '✓ 도면 확정됨' : '자동 3D 도면'}
+                                                                                        <div style={{ fontSize: '10px', color: imageErrorMap.pallet ? '#dc2626' : (currentSpec.palletLayoutImage ? '#15803d' : '#94a3b8'), fontWeight: imageErrorMap.pallet ? 600 : 'normal' }}>
+                                                                                            {imageErrorMap.pallet ? '⚠️ 파일 소실 (재캡처)' : (currentSpec.palletLayoutImage ? '✓ 도면 확정됨' : '자동 3D 도면')}
                                                                                         </div>
                                                                                     </div>
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        disabled={snapshotUploading}
-                                                                                        onClick={() => {
-                                                                                            setSim3DTab('pallet');
-                                                                                            setTimeout(() => handleCaptureCurrent3D('pallet'), 250);
-                                                                                        }}
-                                                                                        style={{
-                                                                                            padding: '3px 6px',
-                                                                                            fontSize: '10px',
-                                                                                            fontWeight: 600,
-                                                                                            borderRadius: '4px',
-                                                                                            border: '1px solid #fde68a',
-                                                                                            background: '#fffbeb',
-                                                                                            color: '#b45309',
-                                                                                            cursor: 'pointer',
-                                                                                            whiteSpace: 'nowrap'
-                                                                                        }}
-                                                                                        title="팔레트 3D 뷰로 이동하여 즉시 캡처/저장합니다."
-                                                                                    >
-                                                                                        📸 {currentSpec.palletLayoutImage ? '재캡처' : '캡처'}
-                                                                                    </button>
+                                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0 }}>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => open3DPreview('pallet')}
+                                                                                            style={{
+                                                                                                padding: '3px 6px',
+                                                                                                fontSize: '10px',
+                                                                                                fontWeight: 600,
+                                                                                                borderRadius: '4px',
+                                                                                                border: '1px solid #cbd5e1',
+                                                                                                background: '#ffffff',
+                                                                                                color: '#334155',
+                                                                                                cursor: 'pointer',
+                                                                                                whiteSpace: 'nowrap'
+                                                                                            }}
+                                                                                            title="팔레트 3D 도면을 확대 미리보기합니다."
+                                                                                        >
+                                                                                            🔍
+                                                                                        </button>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            disabled={snapshotUploading}
+                                                                                            onClick={() => {
+                                                                                                setSim3DTab('pallet');
+                                                                                                setTimeout(() => handleCaptureCurrent3D('pallet'), 250);
+                                                                                            }}
+                                                                                            style={{
+                                                                                                padding: '3px 6px',
+                                                                                                fontSize: '10px',
+                                                                                                fontWeight: 600,
+                                                                                                borderRadius: '4px',
+                                                                                                border: '1px solid #fde68a',
+                                                                                                background: '#fffbeb',
+                                                                                                color: '#b45309',
+                                                                                                cursor: 'pointer',
+                                                                                                whiteSpace: 'nowrap'
+                                                                                            }}
+                                                                                            title="팔레트 3D 뷰로 이동하여 즉시 캡처/저장합니다."
+                                                                                        >
+                                                                                            📸 {currentSpec.palletLayoutImage ? '재캡처' : '캡처'}
+                                                                                        </button>
+                                                                                    </div>
                                                                                 </div>
                                                                             </div>
                                                                         </div>
@@ -8535,6 +8743,278 @@ const ProductDrawer = ({ product, onClose, user }) => {
                             >
                                 확인 (닫기)
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 3D 도면 고화질 원본 미리보기 라이트박스 모달 */}
+            {preview3DModal.isOpen && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                    backdropFilter: 'blur(4px)',
+                    zIndex: 99999,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '20px'
+                }} onClick={() => setPreview3DModal(prev => ({ ...prev, isOpen: false }))}>
+                    <div style={{
+                        background: '#ffffff',
+                        borderRadius: '16px',
+                        width: '100%',
+                        maxWidth: '820px',
+                        maxHeight: '92vh',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        overflow: 'hidden',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        border: '1px solid #cbd5e1'
+                    }} onClick={e => e.stopPropagation()}>
+                        {/* 헤더 */}
+                        <div style={{
+                            padding: '16px 24px',
+                            borderBottom: '1px solid #e2e8f0',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            background: '#f8fafc'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#0f172a' }}>
+                                    {preview3DModal.title}
+                                </span>
+                                {preview3DModal.isConfirmed && !imageErrorMap[preview3DModal.type] ? (
+                                    <span style={{
+                                        fontSize: '12px',
+                                        fontWeight: '700',
+                                        padding: '3px 10px',
+                                        borderRadius: '12px',
+                                        background: '#dcfce7',
+                                        color: '#15803d',
+                                        border: '1px solid #86efac'
+                                    }}>
+                                        ✓ 확정 도면 (사양서 반영중)
+                                    </span>
+                                ) : (
+                                    <span style={{
+                                        fontSize: '12px',
+                                        fontWeight: '700',
+                                        padding: '3px 10px',
+                                        borderRadius: '12px',
+                                        background: '#fee2e2',
+                                        color: '#b91c1c',
+                                        border: '1px solid #fca5a5'
+                                    }}>
+                                        ⚠️ {imageErrorMap[preview3DModal.type] ? '파일 소실 (재캡처 필요)' : '3D 뷰 미저장 (자동 예시)'}
+                                    </span>
+                                )}
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setPreview3DModal(prev => ({ ...prev, isOpen: false }))}
+                                style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    fontSize: '20px',
+                                    cursor: 'pointer',
+                                    color: '#64748b',
+                                    padding: '4px 8px',
+                                    borderRadius: '6px'
+                                }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* 본문: 이미지 영역 및 사양 제원 */}
+                        <div style={{
+                            padding: '20px 24px',
+                            overflowY: 'auto',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '16px'
+                        }}>
+                            {/* 이미지 캔버스 컨테이너 */}
+                            <div style={{
+                                width: '100%',
+                                minHeight: '340px',
+                                maxHeight: '480px',
+                                background: '#f1f5f9',
+                                borderRadius: '12px',
+                                border: '1px solid #e2e8f0',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                position: 'relative',
+                                overflow: 'hidden'
+                            }}>
+                                {preview3DModal.imageUrl && !imageErrorMap[preview3DModal.type] ? (
+                                    <img
+                                        src={preview3DModal.imageUrl}
+                                        alt={preview3DModal.title}
+                                        style={{
+                                            maxWidth: '100%',
+                                            maxHeight: '460px',
+                                            objectFit: 'contain',
+                                            display: 'block',
+                                            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)'
+                                        }}
+                                        onError={() => setImageErrorMap(prev => ({ ...prev, [preview3DModal.type]: true }))}
+                                    />
+                                ) : (
+                                    <div style={{
+                                        textAlign: 'center',
+                                        padding: '40px 20px',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        gap: '12px'
+                                    }}>
+                                        <div style={{ fontSize: '48px' }}>
+                                            {imageErrorMap[preview3DModal.type] ? '⚠️' : '📐'}
+                                        </div>
+                                        <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#1e293b' }}>
+                                            {imageErrorMap[preview3DModal.type]
+                                                ? '도면 이미지 파일이 서버에서 소실되었습니다.'
+                                                : '아직 확정 저장된 3D 도면 이미지가 없습니다.'}
+                                        </div>
+                                        <div style={{ fontSize: '13px', color: '#64748b', maxWidth: '460px', lineHeight: '1.5' }}>
+                                            {imageErrorMap[preview3DModal.type]
+                                                ? '서버 재시작 또는 임시 스토리지 만료로 인해 이전 스냅샷 파일이 유실되었습니다. 아래 버튼을 눌러 3D 뷰어 각도를 확인한 후 즉시 다시 저장해 주세요.'
+                                                : '3D 뷰어에서 원하는 각도로 회전 및 줌을 조정한 뒤 [📸 도면 확정/저장] 버튼을 누르면 정식 도면으로 엑셀/PDF에 자동 반영됩니다.'}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setPreview3DModal(prev => ({ ...prev, isOpen: false }));
+                                                setSim3DTab(preview3DModal.type);
+                                                setTimeout(() => handleCaptureCurrent3D(preview3DModal.type), 300);
+                                            }}
+                                            style={{
+                                                marginTop: '8px',
+                                                padding: '8px 18px',
+                                                fontSize: '13px',
+                                                fontWeight: 'bold',
+                                                background: '#2563eb',
+                                                color: '#ffffff',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                cursor: 'pointer',
+                                                boxShadow: '0 2px 4px rgba(37, 99, 235, 0.2)'
+                                            }}
+                                        >
+                                            📸 현재 3D 뷰어로 즉시 확정/저장
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* 사양 제원 및 안내 그리드 */}
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(3, 1fr)',
+                                gap: '12px',
+                                background: '#f8fafc',
+                                padding: '14px 18px',
+                                borderRadius: '10px',
+                                border: '1px solid #e2e8f0',
+                                fontSize: '12px'
+                            }}>
+                                <div>
+                                    <div style={{ color: '#64748b', fontWeight: '600', marginBottom: '2px' }}>입수 / 적재 패턴</div>
+                                    <div style={{ color: '#0f172a', fontWeight: 'bold' }}>{preview3DModal.pattern || '-'}</div>
+                                </div>
+                                <div>
+                                    <div style={{ color: '#64748b', fontWeight: '600', marginBottom: '2px' }}>규격 제원</div>
+                                    <div style={{ color: '#0f172a', fontWeight: 'bold' }}>{preview3DModal.size || '-'}</div>
+                                </div>
+                                <div>
+                                    <div style={{ color: '#64748b', fontWeight: '600', marginBottom: '2px' }}>사양서 엑셀 반영 상태</div>
+                                    <div style={{ color: preview3DModal.isConfirmed && !imageErrorMap[preview3DModal.type] ? '#15803d' : '#b91c1c', fontWeight: 'bold' }}>
+                                        {preview3DModal.isConfirmed && !imageErrorMap[preview3DModal.type] ? '✓ 고화질 스냅샷 삽입' : '⚠️ 자동 시뮬레이션 예시 삽입'}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 푸터 */}
+                        <div style={{
+                            padding: '14px 24px',
+                            background: '#f8fafc',
+                            borderTop: '1px solid #e2e8f0',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                        }}>
+                            <div>
+                                {preview3DModal.imageUrl && !imageErrorMap[preview3DModal.type] && (
+                                    <a
+                                        href={preview3DModal.imageUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        download={`packaging_${preview3DModal.type}_3d.png`}
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '5px',
+                                            padding: '7px 14px',
+                                            fontSize: '12px',
+                                            fontWeight: '600',
+                                            background: '#ffffff',
+                                            color: '#334155',
+                                            border: '1px solid #cbd5e1',
+                                            borderRadius: '6px',
+                                            textDecoration: 'none'
+                                        }}
+                                    >
+                                        <span>📥</span>
+                                        <span>원본 이미지 다운로드</span>
+                                    </a>
+                                )}
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setPreview3DModal(prev => ({ ...prev, isOpen: false }));
+                                        setSim3DTab(preview3DModal.type);
+                                    }}
+                                    style={{
+                                        padding: '7px 14px',
+                                        fontSize: '12px',
+                                        fontWeight: '600',
+                                        borderRadius: '6px',
+                                        background: '#3b82f6',
+                                        color: '#ffffff',
+                                        border: 'none',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    🎮 3D 뷰어로 이동
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setPreview3DModal(prev => ({ ...prev, isOpen: false }))}
+                                    style={{
+                                        padding: '7px 18px',
+                                        fontSize: '12px',
+                                        fontWeight: '700',
+                                        borderRadius: '6px',
+                                        background: '#64748b',
+                                        color: '#ffffff',
+                                        border: 'none',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    닫기
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

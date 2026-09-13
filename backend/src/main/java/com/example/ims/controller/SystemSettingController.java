@@ -37,4 +37,19 @@ public class SystemSettingController {
                 .build();
         return ResponseEntity.ok(setting);
     }
+
+    @PostMapping("/{key}")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN', 'GRID_SYSTEM_LEGEND_MANAGE')")
+    public ResponseEntity<Void> saveSettingByKey(@PathVariable String key, @RequestBody Map<String, String> body) {
+        String value = body != null ? body.get("value") : "";
+        service.saveSetting(key, value != null ? value : "", "Updated via Grid Legend/Settings API");
+        return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/{key}")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN', 'GRID_SYSTEM_LEGEND_MANAGE')")
+    public ResponseEntity<Void> deleteSettingByKey(@PathVariable String key) {
+        service.deleteSetting(key);
+        return ResponseEntity.ok().build();
+    }
 }

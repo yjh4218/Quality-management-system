@@ -8,7 +8,8 @@ import { useMemo } from 'react';
 export const usePermissions = (user) => {
     
     const isAdmin = useMemo(() => 
-        user?.roles?.some(r => r.authority === 'ROLE_ADMIN'), 
+        user?.roles?.some(r => (typeof r === 'string' && (r === 'ROLE_ADMIN' || r === 'ADMIN')) || r?.authority === 'ROLE_ADMIN' || r?.roleKey === 'ROLE_ADMIN') ||
+        user?.role === 'ADMIN' || user?.role === 'ROLE_ADMIN', 
     [user]);
 
     /**
@@ -43,7 +44,7 @@ export const usePermissions = (user) => {
             if (!role.allowedPermissions) return false;
             try {
                 const perms = JSON.parse(role.allowedPermissions);
-                return perms.includes(permKey);
+                return Array.isArray(perms) && perms.includes(permKey);
             } catch (e) {
                 return false;
             }
@@ -57,6 +58,8 @@ export const usePermissions = (user) => {
         canDelete: (menuKey) => hasPermission(menuKey, 'DELETE'),
         hasPerm: hasFunctionalPermission,
         canViewHistory: hasFunctionalPermission('VIEW_CHANGE_HISTORY') || isAdmin,
+        canViewSystemLegend: hasFunctionalPermission('GRID_SYSTEM_LEGEND_VIEW') || hasFunctionalPermission('GRID_SYSTEM_LEGEND_MANAGE') || isAdmin,
+        canManageSystemLegend: hasFunctionalPermission('GRID_SYSTEM_LEGEND_MANAGE') || isAdmin,
         // Utility for UI
         getAccessProps: (menuKey, action = 'EDIT') => ({
             disabled: !hasPermission(menuKey, action),

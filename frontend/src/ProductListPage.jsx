@@ -834,6 +834,8 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
                 columns={PRODUCT_FORMATTABLE_COLUMNS}
                 rules={customRules}
                 legends={PRODUCT_LEGENDS}
+                gridId="product_list"
+                user={user}
                 onSave={(rules) => {
                     setCustomRules(rules);
                     if (gridRef.current?.api) {

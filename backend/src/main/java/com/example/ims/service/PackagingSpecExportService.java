@@ -58,6 +58,7 @@ public class PackagingSpecExportService {
     private final PackagingSpecComponentRepository componentRepository;
     private final com.example.ims.repository.PackagingMethodImageRepository methodImageRepository;
     private final com.example.ims.repository.ChannelSpecialNoteRepository specialNoteRepository;
+    private final com.example.ims.service.FileStorageService fileStorageService;
 
     /**
      * Generates a comprehensive and professional Excel export for the given product's packaging specs.
@@ -1145,34 +1146,55 @@ public class PackagingSpecExportService {
                 "인박스 입수패턴", inboxPatternText, "아웃박스 입수패턴", outboxPatternText,
                 "팔레트 적재패턴", palletPatternText, "적재 단수", tierCount + "단");
 
-        // 3D 도면 타이틀 행 (3열 / 3열 / 2열)
-        addPdfCell(table, "📥 인박스 3D 입수 도면", subHeaderFont, BG_SUBHEADER, BORDER_COLOR, 3, Element.ALIGN_CENTER, 3f);
-        addPdfCell(table, "📦 아웃박스 3D 입수 도면", subHeaderFont, BG_SUBHEADER, BORDER_COLOR, 3, Element.ALIGN_CENTER, 3f);
-        addPdfCell(table, "🏗️ 팔레트 3D 적재 도면", subHeaderFont, BG_SUBHEADER, BORDER_COLOR, 2, Element.ALIGN_CENTER, 3f);
-
-        // 3D 이미지 3개 로드 & 크롭
+        boolean isInboxSaved = false;
         byte[] inboxImgBytes = getImageBytesFromFileOrUrl(spec.getInboxLayoutImage());
-        if (inboxImgBytes == null || inboxImgBytes.length == 0) {
+        if (inboxImgBytes != null && inboxImgBytes.length > 0) {
+            isInboxSaved = true;
+        } else {
             inboxImgBytes = generateIsometricInboxLayoutImage(product, spec);
         }
         inboxImgBytes = autoCropWhitespace(inboxImgBytes, 8);
 
+        boolean isOutboxSaved = false;
         byte[] outboxImgBytes = getImageBytesFromFileOrUrl(spec.getOutboxLayoutImageFile() != null ? spec.getOutboxLayoutImageFile() : spec.getOutboxLayoutImage());
-        if (outboxImgBytes == null || outboxImgBytes.length == 0) {
+        if (outboxImgBytes != null && outboxImgBytes.length > 0) {
+            isOutboxSaved = true;
+        } else {
             outboxImgBytes = generateIsometricOutboxLayoutImage(product, spec);
         }
         outboxImgBytes = autoCropWhitespace(outboxImgBytes, 8);
 
+        boolean isPalletSaved = false;
         byte[] palletImgBytes = getImageBytesFromFileOrUrl(spec.getPalletLayoutImage());
-        if (palletImgBytes == null || palletImgBytes.length == 0) {
+        if (palletImgBytes != null && palletImgBytes.length > 0) {
+            isPalletSaved = true;
+        } else {
             palletImgBytes = generateIsometricPalletLayoutImage(product, spec);
         }
         palletImgBytes = autoCropWhitespace(palletImgBytes, 8);
+
+        // 3D 도면 타이틀 행 (3열 / 3열 / 2열)
+        String pdfInboxTitle = isInboxSaved ? "📥 인박스 3D 입수 도면 [✓ 확정 도면]" : (isInboxUsed ? "📥 인박스 3D 입수 도면 [⚠️ 3D 뷰 미저장 - 자동 예시]" : "📥 인박스 3D 입수 도면 [미사용]");
+        String pdfOutboxTitle = isOutboxSaved ? "📦 아웃박스 3D 입수 도면 [✓ 확정 도면]" : "📦 아웃박스 3D 입수 도면 [⚠️ 3D 뷰 미저장 - 자동 예시]";
+        String pdfPalletTitle = isPalletSaved ? "🏗️ 팔레트 3D 적재 도면 [✓ 확정 도면]" : "🏗️ 팔레트 3D 적재 도면 [⚠️ 3D 뷰 미저장 - 자동 예시]";
+
+        addPdfCell(table, pdfInboxTitle, subHeaderFont, BG_SUBHEADER, BORDER_COLOR, 3, Element.ALIGN_CENTER, 3f);
+        addPdfCell(table, pdfOutboxTitle, subHeaderFont, BG_SUBHEADER, BORDER_COLOR, 3, Element.ALIGN_CENTER, 3f);
+        addPdfCell(table, pdfPalletTitle, subHeaderFont, BG_SUBHEADER, BORDER_COLOR, 2, Element.ALIGN_CENTER, 3f);
 
         // 3D 도면 이미지 셀 (엑셀의 360pt 비율에 맞춰 큼직하고 시원하게 렌더링)
         addPdfImageCell(table, inboxImgBytes, 3, 260f, 150f, BORDER_COLOR);
         addPdfImageCell(table, outboxImgBytes, 3, 260f, 150f, BORDER_COLOR);
         addPdfImageCell(table, palletImgBytes, 2, 190f, 150f, BORDER_COLOR);
+
+        if (!isInboxSaved || !isOutboxSaved || !isPalletSaved) {
+            List<String> missing = new ArrayList<>();
+            if (isInboxUsed && !isInboxSaved) missing.add("인박스");
+            if (!isOutboxSaved) missing.add("아웃박스");
+            if (!isPalletSaved) missing.add("팔레트");
+            String noticeMsg = "⚠️ [3D 도면 상태 안내] " + String.join(", ", missing) + " 3D 뷰어 스냅샷이 확정 저장되지 않아 기본 시뮬레이션 예시 그래픽으로 표기되었습니다. 포장사양서 3D 뷰어에서 '도면 확정/저장'을 완료하면 실제 3D 뷰가 반영됩니다.";
+            addPdfCell(table, noticeMsg, dataFont, BG_DATA, BORDER_COLOR, 8, Element.ALIGN_LEFT, 4f);
+        }
 
         // [6. 사양서 특이사항]
         addPdfSectionHeader(table, "6. 📝 사양서 특이사항 (Remarks)", sectionFont, BG_SECTION, BORDER_COLOR);
@@ -1546,6 +1568,21 @@ public class PackagingSpecExportService {
                 return java.nio.file.Files.readAllBytes(file.toPath());
             } catch (Exception e) {
                 log.warn("Failed to read bytes from file: " + file.getAbsolutePath(), e);
+            }
+        }
+        if (fileStorageService != null) {
+            try {
+                String cleanName = fileUrl.trim();
+                if (cleanName.contains("?")) cleanName = cleanName.substring(0, cleanName.indexOf('?')).trim();
+                if (cleanName.contains("/") || cleanName.contains("\\")) {
+                    cleanName = cleanName.substring(Math.max(cleanName.lastIndexOf('/'), cleanName.lastIndexOf('\\')) + 1);
+                }
+                org.springframework.core.io.Resource res = fileStorageService.loadResourceOrRestore(cleanName);
+                if (res != null && res.exists() && res.isReadable()) {
+                    return res.getContentAsByteArray();
+                }
+            } catch (Exception e) {
+                log.debug("FileStorageService lookup failed for {}: {}", fileUrl, e.getMessage());
             }
         }
         if (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")) {
@@ -2031,37 +2068,49 @@ public class PackagingSpecExportService {
         createCell(patRow, 6, "적재 단수", labelStyle);
         createCell(patRow, 7, (tierCount + "단"), dataStyle);
 
+        boolean isInboxSaved = false;
         byte[] inboxImgBytes = getImageBytesFromFileOrUrl(spec.getInboxLayoutImage());
-        if (inboxImgBytes == null || inboxImgBytes.length == 0) {
+        if (inboxImgBytes != null && inboxImgBytes.length > 0) {
+            isInboxSaved = true;
+        } else {
             inboxImgBytes = generateIsometricInboxLayoutImage(product, spec);
         }
         inboxImgBytes = autoCropWhitespace(inboxImgBytes, 8);
 
+        boolean isOutboxSaved = false;
         byte[] outboxImgBytes = getImageBytesFromFileOrUrl(spec.getOutboxLayoutImageFile() != null ? spec.getOutboxLayoutImageFile() : spec.getOutboxLayoutImage());
-        if (outboxImgBytes == null || outboxImgBytes.length == 0) {
+        if (outboxImgBytes != null && outboxImgBytes.length > 0) {
+            isOutboxSaved = true;
+        } else {
             outboxImgBytes = generateIsometricOutboxLayoutImage(product, spec);
         }
         outboxImgBytes = autoCropWhitespace(outboxImgBytes, 8);
 
+        boolean isPalletSaved = false;
         byte[] palletImgBytes = getImageBytesFromFileOrUrl(spec.getPalletLayoutImage());
-        if (palletImgBytes == null || palletImgBytes.length == 0) {
+        if (palletImgBytes != null && palletImgBytes.length > 0) {
+            isPalletSaved = true;
+        } else {
             palletImgBytes = generateIsometricPalletLayoutImage(product, spec);
         }
         palletImgBytes = autoCropWhitespace(palletImgBytes, 8);
 
         Row layoutTitleRow = sheet0.createRow(currentRow);
         layoutTitleRow.setHeightInPoints(26);
-        createCell(layoutTitleRow, 0, "📥 인박스 3D 입수 도면", subHeaderStyle);
+        String inboxTitle = isInboxSaved ? "📥 인박스 3D 입수 도면 [✓ 확정 도면]" : (isInboxUsed ? "📥 인박스 3D 입수 도면 [⚠️ 3D 뷰 미저장 - 자동 예시]" : "📥 인박스 3D 입수 도면 [미사용]");
+        createCell(layoutTitleRow, 0, inboxTitle, subHeaderStyle);
         createCell(layoutTitleRow, 1, "", subHeaderStyle);
         createCell(layoutTitleRow, 2, "", subHeaderStyle);
         sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 0, 2));
 
-        createCell(layoutTitleRow, 3, "📦 아웃박스 3D 입수 도면", subHeaderStyle);
+        String outboxTitle = isOutboxSaved ? "📦 아웃박스 3D 입수 도면 [✓ 확정 도면]" : "📦 아웃박스 3D 입수 도면 [⚠️ 3D 뷰 미저장 - 자동 예시]";
+        createCell(layoutTitleRow, 3, outboxTitle, subHeaderStyle);
         createCell(layoutTitleRow, 4, "", subHeaderStyle);
         createCell(layoutTitleRow, 5, "", subHeaderStyle);
         sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 3, 5));
 
-        createCell(layoutTitleRow, 6, "🏗️ 팔레트 3D 적재 도면", subHeaderStyle);
+        String palletTitle = isPalletSaved ? "🏗️ 팔레트 3D 적재 도면 [✓ 확정 도면]" : "🏗️ 팔레트 3D 적재 도면 [⚠️ 3D 뷰 미저장 - 자동 예시]";
+        createCell(layoutTitleRow, 6, palletTitle, subHeaderStyle);
         createCell(layoutTitleRow, 7, "", subHeaderStyle);
         sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 6, 7));
 
@@ -2122,7 +2171,24 @@ public class PackagingSpecExportService {
             }
         }
 
-        return imgRowIdx + 1;
+        int nextRowIdx = imgRowIdx + 1;
+        if (!isInboxSaved || !isOutboxSaved || !isPalletSaved) {
+            Row noticeRow = sheet0.createRow(nextRowIdx);
+            noticeRow.setHeightInPoints(30);
+            List<String> missing = new ArrayList<>();
+            if (isInboxUsed && !isInboxSaved) missing.add("인박스");
+            if (!isOutboxSaved) missing.add("아웃박스");
+            if (!isPalletSaved) missing.add("팔레트");
+            String noticeMsg = "⚠️ [3D 도면 상태 안내] " + String.join(", ", missing) + " 3D 뷰어 스냅샷이 확정 저장되지 않아 기본 시뮬레이션 예시 그래픽으로 표기되었습니다. 포장사양서 3D 뷰어에서 '도면 확정/저장'을 완료하면 실제 3D 뷰가 반영됩니다.";
+            createCell(noticeRow, 0, noticeMsg, wrapDataStyle);
+            for (int col = 1; col <= 7; col++) {
+                createCell(noticeRow, col, "", wrapDataStyle);
+            }
+            sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(nextRowIdx, nextRowIdx, 0, 7));
+            nextRowIdx++;
+        }
+
+        return nextRowIdx;
     }
 
     private java.awt.Font getSafeFont(int style, int size) {
@@ -2224,11 +2290,11 @@ public class PackagingSpecExportService {
                     g2.drawString("인박스 없음 (Direct Packing)", 140, 205);
                 } catch (Throwable ignored) {}
             } else {
-                int badgeW = drawBadge(g2, 16, 26, "[인박스 3D]", new Color(237, 233, 254), new Color(109, 40, 217), new Color(221, 214, 254));
+                int badgeW = drawBadge(g2, 16, 26, "[⚠️ 3D 뷰 미저장 - 자동예시]", new Color(254, 243, 199), new Color(180, 83, 9), new Color(253, 230, 138));
                 try {
                     g2.setFont(getSafeFont(java.awt.Font.BOLD, 13));
                     g2.setColor(new Color(109, 40, 217));
-                    g2.drawString("단상자 입수 시뮬레이션", 16 + badgeW + 8, 26);
+                    g2.drawString("단상자 입수 시뮬레이션 (미확정)", 16 + badgeW + 8, 26);
                 } catch (Throwable ignored) {}
 
                 int inQty = spec.getInboxQty() != null && spec.getInboxQty() > 0 ? spec.getInboxQty() : 10;
@@ -2289,11 +2355,11 @@ public class PackagingSpecExportService {
             int outQty = spec.getOutboxQty() != null && spec.getOutboxQty() > 0 ? spec.getOutboxQty() : 40;
             int inboxesCount = isInboxUsed ? Math.max(1, outQty / Math.max(1, inQty)) : 1;
 
-            int badgeW = drawBadge(g2, 16, 26, "[아웃박스 3D]", new Color(219, 234, 254), new Color(29, 78, 216), new Color(191, 219, 254));
+            int badgeW = drawBadge(g2, 16, 26, "[⚠️ 3D 뷰 미저장 - 자동예시]", new Color(254, 243, 199), new Color(180, 83, 9), new Color(253, 230, 138));
             try {
                 g2.setFont(getSafeFont(java.awt.Font.BOLD, 13));
                 g2.setColor(new Color(29, 78, 216));
-                g2.drawString(isInboxUsed ? "인박스 수납 입수 시뮬레이션" : "단상자 직접 입수 시뮬레이션", 16 + badgeW + 8, 26);
+                g2.drawString(isInboxUsed ? "인박스 수납 입수 시뮬레이션 (미확정)" : "단상자 직접 입수 시뮬레이션 (미확정)", 16 + badgeW + 8, 26);
             } catch (Throwable ignored) {}
 
             String defaultPattern = isInboxUsed 
@@ -2371,11 +2437,11 @@ public class PackagingSpecExportService {
             g2.setPaint(bg);
             g2.fillRect(0, 0, width, height);
 
-            int badgeW = drawBadge(g2, 16, 26, "[팔레트 3D]", new Color(254, 243, 199), new Color(180, 83, 9), new Color(253, 230, 138));
+            int badgeW = drawBadge(g2, 16, 26, "[⚠️ 3D 뷰 미저장 - 자동예시]", new Color(254, 243, 199), new Color(180, 83, 9), new Color(253, 230, 138));
             try {
                 g2.setFont(getSafeFont(java.awt.Font.BOLD, 13));
                 g2.setColor(new Color(180, 83, 9));
-                g2.drawString("아웃박스 팔레트 적재 시뮬레이션", 16 + badgeW + 8, 26);
+                g2.drawString("아웃박스 팔레트 적재 시뮬레이션 (미확정)", 16 + badgeW + 8, 26);
             } catch (Throwable ignored) {}
 
             int stacks = spec.getPalletTierCount() != null && spec.getPalletTierCount() > 0 ? spec.getPalletTierCount() : 5;

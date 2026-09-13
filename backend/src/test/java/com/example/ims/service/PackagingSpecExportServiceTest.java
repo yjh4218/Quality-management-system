@@ -47,6 +47,9 @@ public class PackagingSpecExportServiceTest {
     @Mock
     private ChannelSpecialNoteRepository specialNoteRepository;
 
+    @Mock
+    private FileStorageService fileStorageService;
+
     @InjectMocks
     private PackagingSpecExportService exportService;
 
@@ -114,6 +117,7 @@ public class PackagingSpecExportServiceTest {
             boolean foundMarkingRow = false;
             boolean foundMethodRow = false;
             boolean foundLayout3DRow = false;
+            boolean found3DNoticeRow = false;
 
             for (int r = 0; r <= sheet0.getLastRowNum(); r++) {
                 org.apache.poi.ss.usermodel.Row row = sheet0.getRow(r);
@@ -138,6 +142,9 @@ public class PackagingSpecExportServiceTest {
                         assertNotNull(imgRow);
                         assertEquals(360.0f, imgRow.getHeightInPoints(), "3D 도면 이미지 행 높이는 360pt여야 함");
                         foundLayout3DRow = true;
+                    } else if (val.contains("3D 도면 상태 안내")) {
+                        found3DNoticeRow = true;
+                        assertTrue(val.contains("3D 뷰어 스냅샷이 확정 저장되지 않아"), "3D 미저장 안내 문구가 포함되어야 함");
                     }
                 }
             }
@@ -146,6 +153,7 @@ public class PackagingSpecExportServiceTest {
             assertTrue(foundMarkingRow, "3줄 착인기준 행이 존재해야 함");
             assertTrue(foundMethodRow, "포장방법 서술 행이 존재해야 함");
             assertTrue(foundLayout3DRow, "3D 도면 행이 존재해야 함");
+            assertTrue(found3DNoticeRow, "3D 도면 미저장 상태 안내 행이 존재해야 함");
 
             // 3. Sheet 1 (포장방법 사진) 검증
             Sheet sheet1 = wb.getSheet("포장방법 사진");

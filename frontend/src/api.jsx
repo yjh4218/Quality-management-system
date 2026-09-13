@@ -868,6 +868,10 @@ export const getClaimsPaged = (params = {}, page = 0, size = 50, config = {}) =>
     if (params.sharedWithManufacturer !== undefined && params.sharedWithManufacturer !== '') {
         queryParams.append('sharedWithManufacturer', params.sharedWithManufacturer);
     }
+    if (params.isCriticalClaim !== undefined && params.isCriticalClaim !== '') {
+        queryParams.append('isCriticalClaim', params.isCriticalClaim);
+    }
+    if (params.consumerReplyNeeded) queryParams.append('consumerReplyNeeded', params.consumerReplyNeeded);
     queryParams.append('page', page);
     queryParams.append('size', size);
     return api.get(`/api/claims/paged?${queryParams.toString()}`, config);
@@ -915,6 +919,13 @@ export const exportClaimsExcel = (params) => {
     if (params.qualityStatus) queryParams.append('qualityStatus', params.qualityStatus);
     if (params.claimNumber) queryParams.append('claimNumber', params.claimNumber);
     if (params.manufacturer) queryParams.append('manufacturer', params.manufacturer);
+    if (params.sharedWithManufacturer !== undefined && params.sharedWithManufacturer !== '') {
+        queryParams.append('sharedWithManufacturer', params.sharedWithManufacturer);
+    }
+    if (params.isCriticalClaim !== undefined && params.isCriticalClaim !== '') {
+        queryParams.append('isCriticalClaim', params.isCriticalClaim);
+    }
+    if (params.consumerReplyNeeded) queryParams.append('consumerReplyNeeded', params.consumerReplyNeeded);
     return api.get(`/api/claims/export?${queryParams.toString()}`, { responseType: 'blob' });
 };
 export const getClaimDashboardStats = (startDate, endDate, itemCode, productName, manufacturer) => {
@@ -1017,8 +1028,14 @@ export const saveManufacturerCategory = (category) => {
 export const deleteManufacturerCategory = (id) => api.delete(`/api/manufacturer-categories/${id}`);
 
 // --- System Settings ---
-export const getSystemSetting = (key) => api.get(`/api/system-settings/${key}`).then(res => res.data);
-export const saveSystemSetting = (setting) => api.post('/api/system-settings', setting).then(res => res.data);
+export const getSystemSetting = (key) => api.get(`/api/system-settings/${encodeURIComponent(key)}`);
+export const saveSystemSetting = (key, value) => {
+    if (typeof key === 'object' && key !== null) {
+        return api.post('/api/system-settings', key).then(res => res.data);
+    }
+    return api.post(`/api/system-settings/${encodeURIComponent(key)}`, { value });
+};
+export const deleteSystemSetting = (key) => api.delete(`/api/system-settings/${encodeURIComponent(key)}`);
 
 // --- Notification APIs ---
 export const getMyNotifications = () => api.get('/api/notifications', { skipLoading: true, skipToast: true }).catch(() => ({ data: [] }));

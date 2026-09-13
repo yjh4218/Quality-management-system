@@ -85,6 +85,7 @@ public class ClaimController {
             @RequestParam(required = false) String manufacturer,
             @RequestParam(required = false) String sharedWithManufacturer,
             @RequestParam(required = false) Boolean isCriticalClaim,
+            @RequestParam(required = false) String consumerReplyNeeded,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         User user = getUser(userDetails);
@@ -101,7 +102,7 @@ public class ClaimController {
         return ResponseEntity.ok(claimService.searchClaimsPaged(
             roleStr, effectiveCompany, startDate, endDate, itemCode, productName,
             lotNumber, country, qualityStatus, claimNumber, manufacturer,
-            sharedWithManufacturer, isCriticalClaim, pageable));
+            sharedWithManufacturer, isCriticalClaim, consumerReplyNeeded, pageable));
     }
 
     @GetMapping("/{id}")
@@ -268,7 +269,8 @@ public class ClaimController {
             @RequestParam(required = false) String claimNumber,
             @RequestParam(required = false) String manufacturer,
             @RequestParam(required = false) String sharedWithManufacturer,
-            @RequestParam(required = false) Boolean isCriticalClaim) throws java.io.IOException {
+            @RequestParam(required = false) Boolean isCriticalClaim,
+            @RequestParam(required = false) String consumerReplyNeeded) throws java.io.IOException {
         
         String username = userDetails.getUsername();
         log.info(">>>> [EXPORT] Claim Excel - User: {}", username);
@@ -280,7 +282,7 @@ public class ClaimController {
                 roleStr = "ROLE_" + roleStr;
             }
     
-            byte[] excelFile = claimService.exportClaims(username, roleStr, user.getCompanyName(), startDate, endDate, itemCode, productName, lotNumber, country, qualityStatus, claimNumber, manufacturer, sharedWithManufacturer, isCriticalClaim);
+            byte[] excelFile = claimService.exportClaims(username, roleStr, user.getCompanyName(), startDate, endDate, itemCode, productName, lotNumber, country, qualityStatus, claimNumber, manufacturer, sharedWithManufacturer, isCriticalClaim, consumerReplyNeeded);
             
             return ResponseEntity.ok()
                     .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=Claim_Export.xlsx")

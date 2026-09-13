@@ -158,7 +158,7 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
         'TertiaryCategory': '소분류',
         'ClaimContent': '상세 클레임 내용',
         'QualityCheckNeeded': '품질팀 확인 필요 여부',
-        'ConsumerReplyNeeded': '소비자 회신 필요 여부',
+        'ConsumerReplyNeeded': '고객 회신 필요 여부',
         'ProductRetrievalNeeded': '제품 회수 여부',
         'ExpectedRetrievalDate': '제품 회수 예상일자',
         'ClaimPhotos': '첨부 사진',
@@ -742,7 +742,7 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                             <input type="text" value={formData.productName} readOnly style={{ backgroundColor: '#f8fafc' }} />
                                         </div>
                                     </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '20px' }}>
                                         <div className="form-group" style={{ marginBottom: 0 }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                 <label style={{ margin: 0 }}>로트(LOT)</label>
@@ -764,7 +764,42 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                             <label>발생수량</label>
                                             <NumericFormattedInput name="occurrenceQty" value={formData.occurrenceQty} onChange={handleChange} disabled={!canEditCs} placeholder="수량 입력" />
                                         </div>
+                                        <div className="form-group" style={{ marginBottom: 0 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <label style={{ margin: 0 }}>고객 회신 필요</label>
+                                                {formData.consumerReplyNeeded === '필요' && (
+                                                    <span style={{ fontSize: '11px', color: '#b91c1c', fontWeight: 'bold', background: '#fee2e2', padding: '1px 6px', borderRadius: '4px' }}>
+                                                        🚨 회신 필수
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <select 
+                                                name="consumerReplyNeeded" 
+                                                value={formData.consumerReplyNeeded || '불필요'} 
+                                                onChange={handleChange} 
+                                                disabled={!canEditCs}
+                                                style={{ 
+                                                    fontWeight: formData.consumerReplyNeeded === '필요' ? 'bold' : 'normal',
+                                                    borderColor: formData.consumerReplyNeeded === '필요' ? '#ef4444' : '#cbd5e1',
+                                                    backgroundColor: formData.consumerReplyNeeded === '필요' ? '#fff5f5' : '#fff',
+                                                    color: formData.consumerReplyNeeded === '필요' ? '#b91c1c' : '#1e293b'
+                                                }}
+                                            >
+                                                <option value="불필요">불필요 (기본)</option>
+                                                <option value="필요">⚠️ 필요 (고객 회신 요구)</option>
+                                            </select>
+                                        </div>
                                     </div>
+                                    {formData.consumerReplyNeeded === '필요' && (
+                                        <div style={{ 
+                                            display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', 
+                                            marginBottom: '16px', background: '#fff1f2', border: '1px solid #fecdd3', 
+                                            borderRadius: '6px', fontSize: '12px', color: '#be123c' 
+                                        }}>
+                                            <span>⚠️</span>
+                                            <span><b>고객 회신 필요 건</b>으로 지정되었습니다. 클레임 목록에서 붉은색 배경으로 강조 표기됩니다.</span>
+                                        </div>
+                                    )}
                                     <div className="form-group">
                                         <label>상세 클레임 내용</label>
                                         <textarea name="claimContent" value={formData.claimContent} onChange={handleChange} disabled={!canEditCs} rows="4" />

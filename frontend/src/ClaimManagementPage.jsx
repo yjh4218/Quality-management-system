@@ -76,7 +76,8 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
         claimNumber: '',
         sharedWithManufacturer: '',
         manufacturer: '',
-        isCriticalClaim: ''
+        isCriticalClaim: '',
+        consumerReplyNeeded: ''
     });
 
     const { renderPresetButtons } = useDateRangePreset(
@@ -90,7 +91,7 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
         user?.roles?.some(r => ['ROLE_ADMIN', 'ROLE_QUALITY', 'ADMIN', 'QUALITY'].includes(r.authority));
 
     const loadData = React.useCallback(async (force = false, pageNum = 0) => {
-        const currentSearchKey = `${searchParams.sharedWithManufacturer}-${searchParams.qualityStatus}-${pageNum}`;
+        const currentSearchKey = `${searchParams.sharedWithManufacturer}-${searchParams.qualityStatus}-${searchParams.consumerReplyNeeded}-${searchParams.isCriticalClaim}-${pageNum}`;
         if (!force && lastSearchRef.current === currentSearchKey) return;
         
         lastSearchRef.current = currentSearchKey; // Set early to prevent race conditions
@@ -133,6 +134,7 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
             if (searchParams.lotNumber?.trim() && !matchesAllTokens(c.lotNumber, searchParams.lotNumber)) return false;
             if (searchParams.country?.trim() && !matchesAllTokens(c.country, searchParams.country)) return false;
             if (searchParams.manufacturer?.trim() && !matchesAllTokens(c.manufacturer, searchParams.manufacturer)) return false;
+            if (searchParams.consumerReplyNeeded && c.consumerReplyNeeded !== searchParams.consumerReplyNeeded) return false;
             return true;
         });
     }, [actualClaims, searchParams]);
@@ -196,6 +198,26 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
         {
             field: 'sharedWithManufacturer', headerName: '제조사 공유', width: 120, hide: isManufacturer,
             cellRenderer: params => params.value ? '✅ 공유중' : '❌ 비공개'
+        },
+        {
+            field: 'consumerReplyNeeded', headerName: '고객 회신', width: 120, sortable: true, filter: true,
+            cellRenderer: params => {
+                const isNeeded = params.value === '필요';
+                return isNeeded ? (
+                    <span style={{ 
+                        color: '#be123c', 
+                        background: '#fee2e2', 
+                        padding: '2px 8px', 
+                        borderRadius: '4px', 
+                        fontWeight: 'bold',
+                        fontSize: '12px'
+                    }}>
+                        ⚠️ 필요
+                    </span>
+                ) : (
+                    <span style={{ color: '#64748b', fontSize: '12px' }}>불필요</span>
+                );
+            }
         },
         {
             field: 'mfrStatus', headerName: '제조사 처리 상태', sortable: true, filter: true, width: 230, cellStyle: getCellStyle('mfrStatus'),
@@ -362,7 +384,7 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
                             className="outline" 
                             onClick={() => {
                                 const initD = getInitialDates();
-                                setSearchParams({ startDate: initD.start, endDate: initD.end, itemCode: '', productName: '', lotNumber: '', country: '', qualityStatus: '', claimNumber: '', sharedWithManufacturer: '', manufacturer: '', isCriticalClaim: '' });
+                                setSearchParams({ startDate: initD.start, endDate: initD.end, itemCode: '', productName: '', lotNumber: '', country: '', qualityStatus: '', claimNumber: '', sharedWithManufacturer: '', manufacturer: '', isCriticalClaim: '', consumerReplyNeeded: '' });
                             }} 
                             style={{ padding: '10px 16px', fontSize: '14px' }}
                         >
@@ -547,6 +569,33 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
                             <span style={{ fontSize: '13px', fontWeight: 'bold', color: searchParams.isCriticalClaim === 'true' ? '#c53030' : '#64748b' }}>🔥 크리티컬 클레임만</span>
                         </div>
                     </div>
+
+                    {/* 고객 회신 필요 필터 (토글 스타일) */}
+                    <div style={{ gridColumn: 'span 1' }}>
+                        <div 
+                            onClick={() => {
+                                const newVal = searchParams.consumerReplyNeeded === '필요' ? '' : '필요';
+                                setSearchParams(prev => ({ ...prev, consumerReplyNeeded: newVal }));
+                            }}
+                            style={{ 
+                                display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer',
+                                padding: '7px 16px', borderRadius: '8px', 
+                                backgroundColor: searchParams.consumerReplyNeeded === '필요' ? '#fff1f2' : '#f8fafc',
+                                border: `1px solid ${searchParams.consumerReplyNeeded === '필요' ? '#fecdd3' : '#e2e8f0'}`,
+                                transition: 'all 0.2s',
+                                height: '38px'
+                            }}
+                        >
+                            <div style={{
+                                width: '14px', height: '14px', borderRadius: '4px',
+                                backgroundColor: searchParams.consumerReplyNeeded === '필요' ? '#e11d48' : '#cbd5e1',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '10px'
+                            }}>
+                                {searchParams.consumerReplyNeeded === '필요' && '✓'}
+                            </div>
+                            <span style={{ fontSize: '13px', fontWeight: 'bold', color: searchParams.consumerReplyNeeded === '필요' ? '#be123c' : '#64748b' }}>⚠️ 고객 회신 필요만</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -617,6 +666,8 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
                 columns={CLAIM_FORMATTABLE_COLUMNS}
                 rules={customRules}
                 legends={CLAIM_LEGENDS}
+                gridId="claim_management"
+                user={user}
                 onSave={(rules) => {
                     setCustomRules(rules);
                     if (gridRef.current?.api) {

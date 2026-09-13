@@ -552,6 +552,8 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
                 columns={QUALITY_FORMATTABLE_COLUMNS}
                 rules={customRules}
                 legends={QUALITY_LEGENDS}
+                gridId="quality_management"
+                user={user}
                 onSave={handleSaveCustomRules}
             />
 
