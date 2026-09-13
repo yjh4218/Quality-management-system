@@ -1613,7 +1613,7 @@ public class SystemInitializationService {
             // =========================================================================
             // 2. 마스터 제품 2: KOLMAR-MASTER-001 ([마스터] 한국콜마 에센스) BOM & 성분 완성
             // =========================================================================
-            Long kolmarProdId = jdbcTemplate.queryForObject("SELECT id FROM products WHERE item_code = 'KOLMAR-MASTER-001' LIMIT 1", Long.class);
+            Long kolmarProdId = jdbcTemplate.query("SELECT id FROM products WHERE item_code = 'KOLMAR-MASTER-001' LIMIT 1", (rs, rowNum) -> rs.getLong(1)).stream().findFirst().orElse(null);
             if (kolmarProdId != null) {
                 // 포장사양서 ID 조회 또는 생성
                 var specIds = jdbcTemplate.queryForList("SELECT id FROM packaging_specifications WHERE product_id = ?", Long.class, kolmarProdId);
@@ -1710,7 +1710,7 @@ public class SystemInitializationService {
                 );
             }
 
-            Long set1Id = jdbcTemplate.queryForObject("SELECT id FROM products WHERE item_code = 'SET-CENTELLA-SPECIAL-01' LIMIT 1", Long.class);
+            Long set1Id = jdbcTemplate.query("SELECT id FROM products WHERE item_code = 'SET-CENTELLA-SPECIAL-01' LIMIT 1", (rs, rowNum) -> rs.getLong(1)).stream().findFirst().orElse(null);
             if (set1Id != null) {
                 // 구성품 테이블 (product_components) 동기화: PARENT-001 수량 2개
                 jdbcTemplate.update("DELETE FROM product_components WHERE product_id = ?", set1Id);
@@ -1720,7 +1720,7 @@ public class SystemInitializationService {
                     set1Id
                 );
                 // 채널 매핑 (일반)
-                Long genChanId = jdbcTemplate.queryForObject("SELECT id FROM sales_channels WHERE name = '일반(GENERAL)' LIMIT 1", Long.class);
+                Long genChanId = jdbcTemplate.query("SELECT id FROM sales_channels WHERE name = '일반(GENERAL)' LIMIT 1", (rs, rowNum) -> rs.getLong(1)).stream().findFirst().orElse(null);
                 if (genChanId != null) {
                     jdbcTemplate.update(
                         "INSERT INTO product_sales_channels (product_id, channel_id) " +
@@ -1754,7 +1754,7 @@ public class SystemInitializationService {
                 );
             }
 
-            Long set2Id = jdbcTemplate.queryForObject("SELECT id FROM products WHERE item_code = 'SET-KOLMAR-DUO-01' LIMIT 1", Long.class);
+            Long set2Id = jdbcTemplate.query("SELECT id FROM products WHERE item_code = 'SET-KOLMAR-DUO-01' LIMIT 1", (rs, rowNum) -> rs.getLong(1)).stream().findFirst().orElse(null);
             if (set2Id != null) {
                 // 구성품 테이블 (product_components) 동기화: PARENT-001(1개) + KOLMAR-MASTER-001(1개)
                 jdbcTemplate.update("DELETE FROM product_components WHERE product_id = ?", set2Id);
@@ -1769,7 +1769,7 @@ public class SystemInitializationService {
                     set2Id
                 );
                 // 채널 매핑
-                Long genChanId = jdbcTemplate.queryForObject("SELECT id FROM sales_channels WHERE name = '일반(GENERAL)' LIMIT 1", Long.class);
+                Long genChanId = jdbcTemplate.query("SELECT id FROM sales_channels WHERE name = '일반(GENERAL)' LIMIT 1", (rs, rowNum) -> rs.getLong(1)).stream().findFirst().orElse(null);
                 if (genChanId != null) {
                     jdbcTemplate.update(
                         "INSERT INTO product_sales_channels (product_id, channel_id) " +

@@ -61,9 +61,6 @@ public class QmsFullE2EComprehensiveTest {
     void setupUsersAndBasics() {
         try {
             jdbcTemplate.execute("CREATE SEQUENCE IF NOT EXISTS claim_number_seq START WITH 1 INCREMENT BY 1");
-            jdbcTemplate.execute("ALTER TABLE users ALTER COLUMN id RESTART WITH 100");
-            jdbcTemplate.execute("ALTER TABLE manufacturers ALTER COLUMN id RESTART WITH 100");
-            jdbcTemplate.execute("ALTER TABLE products ALTER COLUMN id RESTART WITH 100");
         } catch (Exception ignored) {}
 
         Optional<User> adminOpt = userRepository.findByUsername("admin");
