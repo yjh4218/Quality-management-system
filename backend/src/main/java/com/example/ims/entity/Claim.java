@@ -99,6 +99,7 @@ public class Claim {
     @CollectionTable(name = "claim_photos", joinColumns = @JoinColumn(name = "claim_id"))
     @Column(name = "photo_url", columnDefinition = "TEXT")
     @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.LONGVARCHAR)
+    @org.hibernate.annotations.BatchSize(size = 50)
     @Builder.Default
     private java.util.List<String> claimPhotos = new java.util.ArrayList<>();
     

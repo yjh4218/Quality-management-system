@@ -62,7 +62,8 @@ public class Manufacturer {
     private String phoneNumber; // 전화번호
     private String email; // 메일주소
 
-    @OneToMany(mappedBy = "manufacturer", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @OneToMany(mappedBy = "manufacturer", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @org.hibernate.annotations.BatchSize(size = 50)
     @com.fasterxml.jackson.annotation.JsonManagedReference("manufacturer-files")
     @Builder.Default
     private java.util.List<ManufacturerFile> files = new java.util.ArrayList<>();

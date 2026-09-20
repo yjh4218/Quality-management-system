@@ -96,8 +96,7 @@ public class DocumentRequestService {
     public int syncAllMasterProductRequirements() {
         List<Product> masterProducts = productRepository.findByIsMasterTrue();
         if (masterProducts == null || masterProducts.isEmpty()) {
-            // fallback: find all active products if isMaster status is unassigned
-            masterProducts = productRepository.findAll().stream().filter(Product::isActive).toList();
+            masterProducts = productRepository.findByActiveTrue();
         }
 
         int count = 0;

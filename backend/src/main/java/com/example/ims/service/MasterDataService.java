@@ -24,6 +24,7 @@ public class MasterDataService {
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     // --- Packaging Method Template (Feature 2) ---
+    @org.springframework.cache.annotation.Cacheable(value = "packagingTemplates", key = "'all'")
     @Transactional(readOnly = true)
     public List<PackagingMethodTemplate> getAllTemplates() {
         return templateRepository.findAll();
@@ -34,6 +35,7 @@ public class MasterDataService {
         return templateRepository.findByProductType(type);
     }
 
+    @org.springframework.cache.annotation.CacheEvict(value = "packagingTemplates", allEntries = true)
     @Transactional
     public PackagingMethodTemplate saveTemplate(PackagingMethodTemplate template, String username) {
         com.example.ims.entity.User user = userRepository.findByUsername(username).orElseThrow();
@@ -70,14 +72,10 @@ public class MasterDataService {
         User user = userRepository.findByUsername(username).orElseThrow();
         boolean isManufacturer = user.getRole().contains("ROLE_MANUFACTURER") || "제조사".equals(user.getDepartment());
         
-        List<MasterPackagingMaterial> all = materialRepository.findAll();
-        if (isManufacturer) {
-            String myCompany = user.getCompanyName();
-            return all.stream()
-                    .filter(m -> java.util.Objects.equals(myCompany, m.getManufacturer()))
-                    .collect(java.util.stream.Collectors.toList());
+        if (isManufacturer && user.getCompanyName() != null) {
+            return materialRepository.findByManufacturer(user.getCompanyName());
         }
-        return all;
+        return materialRepository.findAll();
     }
 
     public String getPrefixForType(String type) {
@@ -96,19 +94,13 @@ public class MasterDataService {
         String subPrefix = getPrefixForType(type);
         String fullPrefix = "MAT-" + subPrefix + "-";
         
-        List<MasterPackagingMaterial> list = materialRepository.findByBomCodeStartingWith(fullPrefix);
+        String maxCode = materialRepository.findMaxBomCodeByPrefix(fullPrefix);
         int maxSeq = 0;
-        for (MasterPackagingMaterial m : list) {
-            String code = m.getBomCode();
-            if (code != null && code.startsWith(fullPrefix)) {
-                String numPart = code.substring(fullPrefix.length()).replaceAll("\\D.*", "");
-                try {
-                    int num = Integer.parseInt(numPart);
-                    if (num > maxSeq) {
-                        maxSeq = num;
-                    }
-                } catch (NumberFormatException ignored) {}
-            }
+        if (maxCode != null && maxCode.startsWith(fullPrefix)) {
+            String numPart = maxCode.substring(fullPrefix.length()).replaceAll("\\D.*", "");
+            try {
+                maxSeq = Integer.parseInt(numPart);
+            } catch (NumberFormatException ignored) {}
         }
         return String.format("%s%04d", fullPrefix, maxSeq + 1);
     }
@@ -191,15 +183,7 @@ public class MasterDataService {
         boolean isManufacturer = user.getRole().contains("ROLE_MANUFACTURER") || "제조사".equals(user.getDepartment());
         String companyFilter = isManufacturer ? user.getCompanyName() : null;
 
-        return materialRepository.findAll().stream()
-                .filter(m -> companyFilter == null || java.util.Objects.equals(companyFilter, m.getManufacturer()))
-                .filter(m -> bomCode == null || bomCode.isEmpty() || (m.getBomCode() != null && m.getBomCode().contains(bomCode)))
-                .filter(m -> componentName == null || componentName.isEmpty() || (m.getComponentName() != null && m.getComponentName().contains(componentName)))
-                .filter(m -> type == null || type.isEmpty() || (m.getType() != null && m.getType().equals(type)))
-                .filter(m -> detailedType == null || detailedType.isEmpty() || (m.getDetailedType() != null && m.getDetailedType().equals(detailedType)))
-                .filter(m -> detailedMaterial == null || detailedMaterial.isEmpty() || (m.getDetailedMaterial() != null && m.getDetailedMaterial().contains(detailedMaterial)))
-                .filter(m -> manufacturer == null || manufacturer.isEmpty() || (m.getManufacturer() != null && m.getManufacturer().contains(manufacturer)))
-                .collect(java.util.stream.Collectors.toList());
+        return materialRepository.searchMaterials(companyFilter, bomCode, componentName, type, detailedType, detailedMaterial, manufacturer);
     }
 
     @Transactional(readOnly = true)
@@ -208,6 +192,7 @@ public class MasterDataService {
     }
 
     // --- Channel Sticker Image (Feature 8) ---
+    @org.springframework.cache.annotation.Cacheable(value = "stickers", key = "'all'")
     @Transactional(readOnly = true)
     public List<ChannelStickerImage> getAllStickers() {
         return stickerRepository.findAll();
@@ -218,6 +203,7 @@ public class MasterDataService {
         return stickerRepository.findByChannel(channel);
     }
 
+    @org.springframework.cache.annotation.CacheEvict(value = "stickers", allEntries = true)
     @Transactional
     public ChannelStickerImage saveSticker(ChannelStickerImage sticker, String username) {
         sticker.setUploadedBy(username);

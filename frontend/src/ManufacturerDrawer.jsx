@@ -109,7 +109,7 @@ const ManufacturerDrawer = ({ manufacturer, onClose, canEdit }) => {
                 await createManufacturer(formData);
                 toast.success("새 제조사가 성공적으로 등록되었습니다.");
             }
-            onClose();
+            onClose(true);
         } catch (error) {
             toast.error("저장 중 오류가 발생했습니다.");
         }

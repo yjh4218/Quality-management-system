@@ -196,10 +196,9 @@ export const useQualityManagement = (user, navigationData, onNavigated) => {
         let successCount = 0;
         
         try {
-            for (const data of updates) {
-                await updateInboundData(data.id, data);
-                successCount++;
-            }
+            // [병렬 저장 최적화] 순차 직렬 루프 대신 Promise.all 동시 전송으로 네트워크 대기시간 대폭 단축
+            await Promise.all(updates.map(data => updateInboundData(data.id, data)));
+            successCount = updates.length;
             toast.success(`${successCount}건의 수정사항이 저장되었습니다.`);
             setChangedRows(new Set());
             gridRef.current.api.deselectAll();

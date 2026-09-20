@@ -27,7 +27,7 @@ public class DataManagementController {
 
     @PostMapping("/{type}/{id}/restore")
     @PreAuthorize("@perm.can('trashBin', 'EDIT')")
-    @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
+    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public ResponseEntity<?> restoreItem(@PathVariable String type, @PathVariable Long id) {
         try {
             dataManagementService.restoreItem(type, id);
@@ -40,7 +40,7 @@ public class DataManagementController {
 
     @DeleteMapping("/{type}/{id}")
     @PreAuthorize("@perm.can('trashBin', 'DELETE')")
-    @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
+    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public ResponseEntity<?> hardDelete(@PathVariable String type, @PathVariable Long id, java.security.Principal principal) {
         try {
             dataManagementService.hardDelete(type, id, principal.getName());

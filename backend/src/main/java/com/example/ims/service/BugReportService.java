@@ -51,13 +51,13 @@ public class BugReportService {
             report.setOccurrenceCount(1);
         }
 
-        // 2. [무한루프 DB 폭주 방지] 최근 1분 내 동일 화면(screenName) + 동일 description 중복 제출 여부 확인
+        // 2. [무한루프 DB 폭주 방지] 최근 1분 내 동일 화면(screenName) + 동일 카테고리/내용 중복 제출 여부 확인 (인덱스 최적화)
         LocalDateTime oneMinuteAgo = LocalDateTime.now().minusMinutes(1);
         String screen = report.getScreenName() != null ? report.getScreenName() : "";
-        String desc = report.getDescription() != null ? report.getDescription() : "";
+        String category = report.getErrorCategory() != null ? report.getErrorCategory() : "UNKNOWN";
 
-        var existing = bugReportRepository.findFirstByScreenNameAndDescriptionAndCreatedAtAfterOrderByCreatedAtDesc(
-            screen, desc, oneMinuteAgo
+        var existing = bugReportRepository.findFirstByScreenNameAndErrorCategoryAndCreatedAtAfterOrderByCreatedAtDesc(
+            screen, category, oneMinuteAgo
         );
 
         if (existing.isPresent()) {

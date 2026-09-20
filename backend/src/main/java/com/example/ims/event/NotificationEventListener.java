@@ -16,7 +16,7 @@ public class NotificationEventListener {
     private final NotificationSettingRepository notificationSettingRepository;
     private final NotificationService notificationService;
 
-    @Async // 비동기 백그라운드 스레드에서 실행하여 성능 지연 및 트랜잭션 충돌 방지
+    @Async("auditExecutor") // 비동기 백그라운드 스레드에서 실행하여 성능 지연 및 트랜잭션 충돌 방지
     @EventListener
     public void handleNotificationEvent(NotificationEvent event) {
         log.info(">>>> [NOTIFICATION EVENT DETECTED] Type: {}, Domain: {}, Action: {}, Title: {}", 

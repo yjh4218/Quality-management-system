@@ -41,7 +41,7 @@ public class Announcement {
     @Column(name = "target_roles", columnDefinition = "TEXT")
     private String targetRoles; // 콤마 구분된 roleKey 목록 (예: "ROLE_QUALITY,ROLE_MANUFACTURER")
 
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id", insertable = false, updatable = false)
     @org.hibernate.annotations.NotFound(action = org.hibernate.annotations.NotFoundAction.IGNORE)
     private AnnouncementCategory category;

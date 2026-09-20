@@ -18,7 +18,9 @@ import org.springframework.cache.annotation.CacheEvict;
 import java.time.LocalDate;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -156,7 +158,7 @@ public class AnnouncementService {
      * 전체공지 생성
      */
     @Transactional
-    @CacheEvict(value = "dashboard", allEntries = true)
+    @CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public Announcement createAnnouncement(Announcement announcement, String modifier) {
         // 일련번호 생성 (ANC-YYYYMMDD-000)
         String newNumber = announcement.getAnnouncementNumber() != null ? announcement.getAnnouncementNumber().trim() : "";
@@ -208,7 +210,7 @@ public class AnnouncementService {
      * 전체공지 수정
      */
     @Transactional
-    @CacheEvict(value = "dashboard", allEntries = true)
+    @CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public Announcement updateAnnouncement(Long id, Announcement details, String modifier) {
         Announcement announcement = announcementRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Announcement not found with id: " + id));
@@ -269,7 +271,7 @@ public class AnnouncementService {
      * 전체공지 소프트 델리트
      */
     @Transactional
-    @CacheEvict(value = "dashboard", allEntries = true)
+    @CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public void deleteAnnouncement(Long id, String modifier) {
         Announcement announcement = announcementRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Announcement not found with id: " + id));
@@ -316,32 +318,28 @@ public class AnnouncementService {
         String targetType = announcement.getTargetType() != null ? announcement.getTargetType() : "ALL";
 
         if ("ALL".equalsIgnoreCase(targetType)) {
-            targetUsers = userRepository.findAll().stream()
-                    .filter(User::isEnabled)
-                    .filter(u -> u.getEmail() != null && !u.getEmail().trim().isEmpty())
+            targetUsers = userRepository.findByEnabledTrueAndEmailIsNotNull().stream()
+                    .filter(u -> !u.getEmail().trim().isEmpty())
                     .collect(Collectors.toList());
         } else if ("CATEGORY".equalsIgnoreCase(targetType)) {
             String targetCat = announcement.getTargetCategory();
-            targetUsers = userRepository.findAll().stream()
-                    .filter(User::isEnabled)
-                    .filter(u -> u.getRole() != null && u.getRole().contains("ROLE_MANUFACTURER"))
-                    .filter(u -> u.getEmail() != null && !u.getEmail().trim().isEmpty())
-                    .filter(u -> {
-                        if (u.getCompanyName() == null) return false;
-                        String category = manufacturerRepository.findByName(u.getCompanyName())
-                                .map(Manufacturer::getCategory)
-                                .orElse("");
-                        return category != null && category.equalsIgnoreCase(targetCat);
-                    })
-                    .collect(Collectors.toList());
+            List<String> targetCompanies = (targetCat != null && !targetCat.isEmpty())
+                    ? manufacturerRepository.findByCategory(targetCat).stream().map(Manufacturer::getName).filter(Objects::nonNull).toList()
+                    : Collections.emptyList();
+            targetUsers = targetCompanies.isEmpty() ? Collections.emptyList() :
+                    userRepository.findByEnabledTrueAndEmailIsNotNullAndCompanyNameIn(targetCompanies).stream()
+                            .filter(u -> u.getRole() != null && u.getRole().contains("ROLE_MANUFACTURER"))
+                            .filter(u -> !u.getEmail().trim().isEmpty())
+                            .collect(Collectors.toList());
         } else if ("MANUFACTURER".equalsIgnoreCase(targetType)) {
             String targetMfr = announcement.getTargetManufacturer();
             String targetDepts = announcement.getTargetDepartments();
-            targetUsers = userRepository.findAll().stream()
-                    .filter(User::isEnabled)
+            List<User> mfrUsers = (targetMfr != null && !targetMfr.isEmpty())
+                    ? userRepository.findByEnabledTrueAndEmailIsNotNullAndCompanyName(targetMfr)
+                    : Collections.emptyList();
+            targetUsers = mfrUsers.stream()
                     .filter(u -> u.getRole() != null && u.getRole().contains("ROLE_MANUFACTURER"))
-                    .filter(u -> u.getEmail() != null && !u.getEmail().trim().isEmpty())
-                    .filter(u -> targetMfr != null && targetMfr.equalsIgnoreCase(u.getCompanyName()))
+                    .filter(u -> !u.getEmail().trim().isEmpty())
                     .filter(u -> {
                         if (targetDepts == null || targetDepts.trim().isEmpty()) {
                             return true; // 부서 미지정 시 회사 소속 전체 발송
@@ -354,18 +352,13 @@ public class AnnouncementService {
                     .collect(Collectors.toList());
         } else {
             // 하위 호환성 카테고리 매칭
-            targetUsers = userRepository.findAll().stream()
-                    .filter(User::isEnabled)
-                    .filter(u -> u.getRole() != null && u.getRole().contains("ROLE_MANUFACTURER"))
-                    .filter(u -> u.getEmail() != null && !u.getEmail().trim().isEmpty())
-                    .filter(u -> {
-                        if (u.getCompanyName() == null) return false;
-                        String category = manufacturerRepository.findByName(u.getCompanyName())
-                                .map(Manufacturer::getCategory)
-                                .orElse("");
-                        return category != null && category.equalsIgnoreCase(targetType);
-                    })
-                    .collect(Collectors.toList());
+            List<String> targetCompanies = manufacturerRepository.findByCategory(targetType).stream()
+                    .map(Manufacturer::getName).filter(Objects::nonNull).toList();
+            targetUsers = targetCompanies.isEmpty() ? Collections.emptyList() :
+                    userRepository.findByEnabledTrueAndEmailIsNotNullAndCompanyNameIn(targetCompanies).stream()
+                            .filter(u -> u.getRole() != null && u.getRole().contains("ROLE_MANUFACTURER"))
+                            .filter(u -> !u.getEmail().trim().isEmpty())
+                            .collect(Collectors.toList());
         }
 
         if (targetUsers.isEmpty()) {

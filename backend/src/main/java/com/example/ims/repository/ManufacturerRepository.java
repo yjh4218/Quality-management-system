@@ -9,6 +9,12 @@ public interface ManufacturerRepository extends JpaRepository<Manufacturer, Long
 
     java.util.List<Manufacturer> findByActiveTrue();
 
+    java.util.List<Manufacturer> findByCategory(String category);
+
+    java.util.List<Manufacturer> findByActiveTrueAndDeletedFalse();
+
+    java.util.List<Manufacturer> findByActiveTrueAndDeletedFalseAndName(String name);
+
     org.springframework.data.domain.Page<Manufacturer> findByActiveTrueAndIsDeletedFalse(org.springframework.data.domain.Pageable pageable);
 
     // [휴지통] 삭제된 항목 조회

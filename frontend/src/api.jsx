@@ -422,6 +422,25 @@ api.interceptors.response.use(
     }
 );
 
+// [성능 최적화] In-Flight Request Deduplication: 동일 GET 요청 동시 발생 시 Promise 공유
+const inFlightGetRequests = new Map();
+const originalGet = api.get.bind(api);
+api.get = (url, config = {}) => {
+    if (config.skipDedup) {
+        return originalGet(url, config);
+    }
+    const key = `${url}_${JSON.stringify(config.params || {})}`;
+    if (inFlightGetRequests.has(key)) {
+        return inFlightGetRequests.get(key);
+    }
+    const promise = originalGet(url, config)
+        .finally(() => {
+            inFlightGetRequests.delete(key);
+        });
+    inFlightGetRequests.set(key, promise);
+    return promise;
+};
+
 // Dashboard
 export const getDashboard = () => 
   api.get('/api/dashboard').then(res => res.data);
@@ -447,8 +466,19 @@ export const findPassword = (data) => api.post('/api/auth/find-password', data);
 export const changePassword = (data) => api.post('/api/auth/change-password', data);
 
 // System Settings
-export const getSystemSettings = () => api.get('/api/system-settings').then(res => res.data);
-export const saveSystemSettings = (settings) => api.post('/api/system-settings', settings).then(res => res.data);
+export const getSystemSettings = async (forceRefresh = false) => {
+    const now = Date.now();
+    if (!forceRefresh && masterDataCache.systemSettings.data && (now - masterDataCache.systemSettings.timestamp < MASTER_CACHE_TTL)) {
+        return masterDataCache.systemSettings.data;
+    }
+    const data = await api.get('/api/system-settings').then(res => res.data);
+    masterDataCache.systemSettings = { data, timestamp: now };
+    return data;
+};
+export const saveSystemSettings = async (settings) => {
+    masterDataCache.systemSettings.data = null;
+    return api.post('/api/system-settings', settings).then(res => res.data);
+};
 
 // Admin APIs
 export const getUsers = (params = {}) => {
@@ -461,10 +491,27 @@ export const getUsers = (params = {}) => {
 };
 
 // Role Management APIs
-export const getRoles = () => api.get('/api/admin/roles');
-export const createRole = (data) => api.post('/api/admin/roles', data);
-export const updateRole = (id, data) => api.put(`/api/admin/roles/${id}`, data);
-export const deleteRole = (id) => api.delete(`/api/admin/roles/${id}`);
+export const getRoles = async (forceRefresh = false) => {
+    const now = Date.now();
+    if (!forceRefresh && masterDataCache.roles.data && (now - masterDataCache.roles.timestamp < MASTER_CACHE_TTL)) {
+        return masterDataCache.roles.data;
+    }
+    const res = await api.get('/api/admin/roles');
+    masterDataCache.roles = { data: res, timestamp: now };
+    return res;
+};
+export const createRole = async (data) => {
+    masterDataCache.roles.data = null;
+    return api.post('/api/admin/roles', data);
+};
+export const updateRole = async (id, data) => {
+    masterDataCache.roles.data = null;
+    return api.put(`/api/admin/roles/${id}`, data);
+};
+export const deleteRole = async (id) => {
+    masterDataCache.roles.data = null;
+    return api.delete(`/api/admin/roles/${id}`);
+};
 export const getRoleLogs = (id) => api.get(`/api/admin/roles/${id}/logs`);
 
 export const approveUser = (id) => api.post(`/api/admin/users/${id}/approve`);
@@ -537,7 +584,11 @@ const masterDataCache = {
     manufacturers: { data: null, timestamp: 0 },
     brands: { data: null, timestamp: 0 },
     materials: { data: null, timestamp: 0 },
-    channels: { data: null, timestamp: 0 }
+    channels: { data: null, timestamp: 0 },
+    activeChannels: { data: null, timestamp: 0 },
+    bomCategories: { data: null, timestamp: 0 },
+    roles: { data: null, timestamp: 0 },
+    systemSettings: { data: null, timestamp: 0 }
 };
 const MASTER_CACHE_TTL = 5 * 60 * 1000;
 
@@ -546,6 +597,10 @@ export const clearMasterDataCache = () => {
     masterDataCache.brands.data = null;
     masterDataCache.materials.data = null;
     masterDataCache.channels.data = null;
+    masterDataCache.activeChannels.data = null;
+    masterDataCache.bomCategories.data = null;
+    masterDataCache.roles.data = null;
+    masterDataCache.systemSettings.data = null;
 };
 
 // Manufacturer APIs
@@ -754,17 +809,32 @@ export const getSalesChannels = async (forceRefresh = false) => {
         return { data: [] };
     }
 };
-export const getActiveSalesChannels = () => api.get('/api/admin/master-data/sales-channels/active', { skipToast: true }).catch(() => ({ data: [] }));
+export const getActiveSalesChannels = async (forceRefresh = false) => {
+    const now = Date.now();
+    if (!forceRefresh && masterDataCache.activeChannels.data && (now - masterDataCache.activeChannels.timestamp < MASTER_CACHE_TTL)) {
+        return masterDataCache.activeChannels.data;
+    }
+    try {
+        const res = await api.get('/api/admin/master-data/sales-channels/active', { skipToast: true });
+        masterDataCache.activeChannels = { data: res, timestamp: now };
+        return res;
+    } catch {
+        return { data: [] };
+    }
+};
 export const saveSalesChannel = async (channel) => {
     masterDataCache.channels.data = null;
+    masterDataCache.activeChannels.data = null;
     return api.post('/api/admin/master-data/sales-channels', channel);
 };
 export const toggleSalesChannel = async (id) => {
     masterDataCache.channels.data = null;
+    masterDataCache.activeChannels.data = null;
     return api.post(`/api/admin/master-data/sales-channels/${id}/toggle`);
 };
 export const deleteSalesChannel = async (id) => {
     masterDataCache.channels.data = null;
+    masterDataCache.activeChannels.data = null;
     return api.delete(`/api/admin/master-data/sales-channels/${id}`);
 };
 export const getChannelSpecialNotes = (channelId) => api.get(`/api/sales-channels/${channelId}/special-notes`, { skipToast: true }).catch(() => ({ data: { notes: [] } }));
@@ -781,11 +851,28 @@ export const uploadMasterFile = async (file, prefix = 'MASTER') => {
 };
 
 // BOM Category APIs (New - Relocated to stable MasterDataController)
-export const getActiveBomCategories = () => api.get('/api/admin/master-data/bom-categories/active');
+export const getActiveBomCategories = async (forceRefresh = false) => {
+    const now = Date.now();
+    if (!forceRefresh && masterDataCache.bomCategories.data && (now - masterDataCache.bomCategories.timestamp < MASTER_CACHE_TTL)) {
+        return masterDataCache.bomCategories.data;
+    }
+    const res = await api.get('/api/admin/master-data/bom-categories/active');
+    masterDataCache.bomCategories = { data: res, timestamp: now };
+    return res;
+};
 export const getAllBomCategories = () => api.get('/api/admin/master-data/bom-categories/all');
-export const saveBomCategory = (category) => api.post('/api/admin/master-data/bom-categories', category);
-export const softDeleteBomCategory = (id) => api.delete(`/api/admin/master-data/bom-categories/${id}/soft`);
-export const hardDeleteBomCategory = (id) => api.delete(`/api/admin/master-data/bom-categories/${id}/hard`);
+export const saveBomCategory = async (category) => {
+    masterDataCache.bomCategories.data = null;
+    return api.post('/api/admin/master-data/bom-categories', category);
+};
+export const softDeleteBomCategory = async (id) => {
+    masterDataCache.bomCategories.data = null;
+    return api.delete(`/api/admin/master-data/bom-categories/${id}/soft`);
+};
+export const hardDeleteBomCategory = async (id) => {
+    masterDataCache.bomCategories.data = null;
+    return api.delete(`/api/admin/master-data/bom-categories/${id}/hard`);
+};
 
 // Global Admin & Profile APIs
 export const getAdminLogs = (params = {}) => {

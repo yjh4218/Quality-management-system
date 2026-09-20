@@ -73,15 +73,10 @@ public class ManufacturerService {
 
         boolean isManufacturer = user.getRole().contains("ROLE_MANUFACTURER") || "제조사".equals(user.getDepartment());
         
-        return manufacturerRepository.findAll().stream()
-                .filter(m -> m.isActive() && !m.isDeleted())
-                .filter(m -> {
-                    if (isManufacturer) {
-                        return m.getName().equals(user.getCompanyName());
-                    }
-                    return true;
-                })
-                .collect(java.util.stream.Collectors.toList());
+        if (isManufacturer && user.getCompanyName() != null) {
+            return manufacturerRepository.findByActiveTrueAndDeletedFalseAndName(user.getCompanyName());
+        }
+        return manufacturerRepository.findByActiveTrueAndDeletedFalse();
     }
 
     public org.springframework.data.domain.Page<Manufacturer> getAllPaged(String username, org.springframework.data.domain.Pageable pageable) {

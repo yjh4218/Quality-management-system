@@ -352,6 +352,7 @@ public class DashboardService {
         return map;
     }
 
+    @org.springframework.cache.annotation.Cacheable(value = "dashboard_stats", key = "#user.username + ':' + #user.role")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public DashboardStatsDTO getDashboardStats(User user) {
         String company = user.getCompanyName();

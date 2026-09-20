@@ -109,7 +109,7 @@ public class ProductionAuditService {
     }
 
     @Transactional
-    @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
+    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public ProductionAuditDTO createAudit(ProductionAuditDTO dto, String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
@@ -154,7 +154,7 @@ public class ProductionAuditService {
      * @return 업데이트된 ProductionAuditDTO
      */
     @Transactional
-    @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
+    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public ProductionAuditDTO updateAudit(Long id, ProductionAuditDTO dto, String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
@@ -257,7 +257,7 @@ public class ProductionAuditService {
     }
 
     @Transactional
-    @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
+    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public void deleteAudit(Long id, String username) {
         User user = userRepository.findByUsername(username).orElseThrow();
         ProductionAudit audit = repository.findById(id)
@@ -314,9 +314,7 @@ public class ProductionAuditService {
             if (audit == null) {
                 product = productRepository.findByItemCode(itemCode).orElse(null);
                 if (product == null && !itemCode.equals("null") && !itemCode.equals("undefined")) {
-                    product = productRepository.findAll().stream()
-                            .filter(p -> p.getItemCode().equalsIgnoreCase(itemCode))
-                            .findFirst().orElse(null);
+                    product = productRepository.findByItemCodeIgnoreCase(itemCode).orElse(null);
                 }
                 
                 if (product != null) {
@@ -515,7 +513,7 @@ public class ProductionAuditService {
     }
 
     @Transactional
-    @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
+    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public void toggleProductDisclosure(String itemCode, boolean isDisclosed) {
         log.info("[SERVICE] Updating Disclosure for Item: {} to {}", itemCode, isDisclosed);
         Product product = productRepository.findByItemCode(itemCode)

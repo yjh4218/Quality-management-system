@@ -8,15 +8,13 @@ import java.time.LocalDate;
 import java.util.List;
 
 public interface ClaimRepository extends JpaRepository<Claim, Long>, JpaSpecificationExecutor<Claim> {
-    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"claimPhotos"})
     List<Claim> findByManufacturer(String manufacturer);
+    List<Claim> findByManufacturerAndSharedWithManufacturerTrue(String manufacturer);
     List<Claim> findByReceiptDateAfter(LocalDate date);
     List<Claim> findByReceiptDateBetween(LocalDate startDate, LocalDate endDate);
     List<Claim> findByReceiptDateAfterOrderByReceiptDateDesc(LocalDate date);
-    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"claimPhotos"})
     List<Claim> findTop50ByReceiptDateAfterOrderByReceiptDateDesc(LocalDate date);
 
-    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"claimPhotos"})
     List<Claim> findTop50ByManufacturerAndReceiptDateAfterOrderByReceiptDateDesc(String manufacturer, LocalDate date);
     
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"claimPhotos"})
@@ -24,7 +22,6 @@ public interface ClaimRepository extends JpaRepository<Claim, Long>, JpaSpecific
     long countByReceiptDate(LocalDate date);
 
     // [신규] 제조사 품질 답변 완료 알림용
-    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"claimPhotos"})
     List<Claim> findTop50ByMfrTerminationDateAfterOrderByMfrTerminationDateDesc(LocalDate date);
 
     // [휴지통] 삭제된 항목 조회 (Native Query로 SQLRestriction 우회)
@@ -41,11 +38,9 @@ public interface ClaimRepository extends JpaRepository<Claim, Long>, JpaSpecific
     @org.springframework.data.jpa.repository.Query(value = "SELECT nextval('claim_number_seq')", nativeQuery = true)
     Long getNextClaimSequence();
 
-    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"claimPhotos"})
     @Override
     List<Claim> findAll(org.springframework.data.jpa.domain.Specification<Claim> spec);
 
-    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"claimPhotos"})
     @Override
     org.springframework.data.domain.Page<Claim> findAll(org.springframework.data.jpa.domain.Specification<Claim> spec, org.springframework.data.domain.Pageable pageable);
 

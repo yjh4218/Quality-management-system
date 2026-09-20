@@ -14,10 +14,15 @@ import java.time.LocalDateTime;
 
 public interface ProductRepository extends JpaRepository<Product, Long> {
     Optional<Product> findByItemCode(String itemCode);
+    Optional<Product> findByItemCodeIgnoreCase(String itemCode);
+    List<Product> findByItemCodeIn(java.util.Collection<String> itemCodes);
     List<Product> findByIsMasterTrue();
     boolean existsByItemCode(String itemCode);
     List<Product> findByActiveTrue();
     List<Product> findByActiveTrueAndManufacturer(String manufacturer);
+
+    @Query("SELECT p FROM Product p JOIN p.channels c WHERE c = :channel AND p.active = true")
+    List<Product> findByChannel(@Param("channel") com.example.ims.entity.SalesChannel channel);
 
     @Query("SELECT DISTINCT p.manufacturerInfo.id FROM Product p WHERE p.active = true AND p.isMaster = true AND p.manufacturerInfo IS NOT NULL")
     List<Long> findActiveManufacturerIdsWithMasterProducts();

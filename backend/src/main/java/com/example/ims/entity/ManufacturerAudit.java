@@ -71,12 +71,14 @@ public class ManufacturerAudit {
     @ElementCollection
     @CollectionTable(name = "manufacturer_audit_positive_photos", joinColumns = @JoinColumn(name = "audit_id"))
     @Column(name = "photo_url")
+    @org.hibernate.annotations.BatchSize(size = 50)
     @Builder.Default
     private List<String> positivePhotos = new ArrayList<>();
 
     @ElementCollection
     @CollectionTable(name = "manufacturer_audit_negative_photos", joinColumns = @JoinColumn(name = "audit_id"))
     @Column(name = "photo_url")
+    @org.hibernate.annotations.BatchSize(size = 50)
     @Builder.Default
     private List<String> negativePhotos = new ArrayList<>();
 

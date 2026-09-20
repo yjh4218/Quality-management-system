@@ -19,12 +19,14 @@ public class BrandController {
     private final com.example.ims.service.AuditLogService auditLogService;
 
     @GetMapping
+    @org.springframework.cache.annotation.Cacheable(value = "brands", key = "'all'")
     public List<Brand> getAll() {
         return brandRepository.findAll();
     }
 
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
+    @org.springframework.cache.annotation.CacheEvict(value = "brands", allEntries = true)
     public ResponseEntity<Brand> create(@jakarta.validation.Valid @RequestBody Brand brand, @AuthenticationPrincipal UserDetails userDetails) {
         Brand saved = brandRepository.save(brand);
         auditLogService.logEntityChange("BRAND", saved.getId(), "CREATE", userDetails.getUsername(),
@@ -35,6 +37,7 @@ public class BrandController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
+    @org.springframework.cache.annotation.CacheEvict(value = "brands", allEntries = true)
     public ResponseEntity<Brand> update(@PathVariable Long id, @jakarta.validation.Valid @RequestBody Brand brandDetails, @AuthenticationPrincipal UserDetails userDetails) {
         Brand brand = brandRepository.findById(id).orElse(null);
         if (brand == null) {
@@ -54,6 +57,7 @@ public class BrandController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
+    @org.springframework.cache.annotation.CacheEvict(value = "brands", allEntries = true)
     public ResponseEntity<Void> delete(@PathVariable Long id, @AuthenticationPrincipal UserDetails userDetails) {
         Brand brand = brandRepository.findById(id).orElse(null);
         if (brand != null) {

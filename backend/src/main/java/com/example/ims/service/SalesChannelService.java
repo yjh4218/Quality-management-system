@@ -23,7 +23,7 @@ public class SalesChannelService {
     @org.springframework.cache.annotation.Cacheable(value = "salesChannels", key = "'active'")
     @Transactional(readOnly = true)
     public List<SalesChannel> getActiveChannels() {
-        return repository.findAll().stream().filter(SalesChannel::isActive).toList();
+        return repository.findByActiveTrue();
     }
 
     @org.springframework.cache.annotation.CacheEvict(value = "salesChannels", allEntries = true)

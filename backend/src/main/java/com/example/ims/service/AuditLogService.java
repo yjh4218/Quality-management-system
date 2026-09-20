@@ -37,8 +37,8 @@ public class AuditLogService {
     // 순환 참조 방지를 위해 서비스 대신 레포지토리 직접 사용 또는 이벤트 핸들링만 수행
     // productService, claimService, wmsService는 더 이상 직접 참조하지 않음
 
-    @EventListener
-    @Transactional
+    @org.springframework.scheduling.annotation.Async("auditExecutor")
+    @org.springframework.transaction.event.TransactionalEventListener(phase = org.springframework.transaction.event.TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void handleEntityChangeEvent(EntityChangeEvent event) {
         log.debug("[AUDIT] Event received: {} on {} (ID: {})", event.getAction(), event.getEntityType(), event.getEntityId());
         logEntityChange(
@@ -57,7 +57,7 @@ public class AuditLogService {
         );
     }
 
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public void log(String entityType, Long entityId, String action, String modifier, 
             Long modifierId, String modifierUsername, String modifierName, String modifierCompany,
             String description, String oldValue, String newValue, String changeDetail) {
@@ -93,6 +93,7 @@ public class AuditLogService {
     /**
      * [추가] 간편 액션 로그 기록용 헬퍼 메서드 (SecurityContext 자동 추출 포함)
      */
+    @org.springframework.scheduling.annotation.Async("auditExecutor")
     @Transactional
     public void logAction(String modifier, String action, String description, String changeDetail) {
         String effectiveModifier = modifier;
@@ -112,6 +113,7 @@ public class AuditLogService {
         log(action, null, action, effectiveModifier, null, effectiveModifier, effectiveModifier, null, description, null, null, changeDetail);
     }
 
+    @org.springframework.scheduling.annotation.Async("auditExecutor")
     @Transactional
     public void logEntityChange(String entityType, Long entityId, String action, String modifier,
             Long modifierId, String modifierUsername, String modifierName, String modifierCompany,
@@ -142,22 +144,24 @@ public class AuditLogService {
         if (obj == null) return "-";
         if (obj instanceof String) return (String) obj;
         try {
-            // ObjectMapper 설정은 Bean 생성 시 이미 되어 있다고 가정하거나 여기서 변환만 수행
-            Map<String, Object> map = objectMapper.convertValue(obj, new TypeReference<Map<String, Object>>() {});
-            
-            // 제외할 필드 목록 (이미지, 대용량 데이터 등)
-            String[] excludeFields = {
-                "imagePath", "imagePaths", "certMsds", "certStandard", "certFunction", "certExpiry", 
-                "coaFileUrl", "coaFileUrlEng", "files", "productIngredients", 
-                "packagingCertificates", "packagingMaterial", "inboxInfo", "outboxInfo", "palletInfo",
-                "channels", "components"
-            };
-            
-            for (String field : excludeFields) {
-                map.remove(field);
+            // writeValueAsString을 사용하여 Hibernate6Module의 FORCE_LAZY_LOADING=false 동작을 유지
+            // (convertValue 사용 시 Lazy 프록시 강제 초기화 및 N+1 SELECT 유발 방지)
+            String rawJson = objectMapper.writeValueAsString(obj);
+            com.fasterxml.jackson.databind.JsonNode rootNode = objectMapper.readTree(rawJson);
+            if (rootNode.isObject()) {
+                com.fasterxml.jackson.databind.node.ObjectNode objectNode = (com.fasterxml.jackson.databind.node.ObjectNode) rootNode;
+                String[] excludeFields = {
+                    "imagePath", "imagePaths", "certMsds", "certStandard", "certFunction", "certExpiry", 
+                    "coaFileUrl", "coaFileUrlEng", "files", "productIngredients", 
+                    "packagingCertificates", "packagingMaterial", "inboxInfo", "outboxInfo", "palletInfo",
+                    "channels", "components"
+                };
+                for (String field : excludeFields) {
+                    objectNode.remove(field);
+                }
+                return objectMapper.writeValueAsString(objectNode);
             }
-
-            return objectMapper.writeValueAsString(map);
+            return rawJson;
         } catch (Exception e) {
             log.error("Serialization failed for audit log: {}", e.getMessage());
             return "{\"error\": \"Serialization failed\"}";

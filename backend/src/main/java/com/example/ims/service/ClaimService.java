@@ -38,9 +38,7 @@ public class ClaimService {
     public List<Claim> getClaims(String role, String companyName) {
         List<Claim> claims;
         if (role != null && role.contains("MANUFACTURER")) {
-            claims = claimRepository.findByManufacturer(cleanCompanyName(companyName)).stream()
-                    .filter(Claim::isSharedWithManufacturer)
-                    .collect(java.util.stream.Collectors.toList());
+            claims = claimRepository.findByManufacturerAndSharedWithManufacturerTrue(cleanCompanyName(companyName));
         } else {
             claims = claimRepository.findAll();
         }
@@ -221,7 +219,7 @@ public class ClaimService {
     }
 
     @Transactional
-    @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
+    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public Claim saveClaim(Claim claim) {
         sanitizeClaimFields(claim);
         if (claim.getReceiptDate() == null) {
@@ -275,7 +273,7 @@ public class ClaimService {
     }
 
     @Transactional
-    @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
+    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public void deleteClaim(Long id, User user) {
         Claim claim = getClaim(id, user, false);
         String oldJson = captureJson(claim);
@@ -400,7 +398,7 @@ public class ClaimService {
     }
 
     @Transactional
-    @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
+    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public Claim updateClaim(Long id, Claim updatedData, User user) {
         Claim existing = getClaim(id, user, false);
         sanitizeClaimFields(updatedData);
@@ -748,9 +746,13 @@ public class ClaimService {
                 .filter(c -> c.getReceiptDate() != null && !c.getReceiptDate().isBefore(oneMonthAgo))
                 .collect(Collectors.toList());
 
-        // 1. Top 5 Products by Brand (Using optimized product lookup)
+        // 1. Top 5 Products by Brand (Using targeted product lookup instead of findAll)
         Map<String, List<Claim>> byBrand = new HashMap<>();
-        List<Product> allActiveProducts = productRepository.findAll();
+        Set<String> itemCodes = recentClaims.stream()
+                .map(Claim::getItemCode)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        List<Product> allActiveProducts = itemCodes.isEmpty() ? Collections.emptyList() : productRepository.findByItemCodeIn(itemCodes);
         Map<String, Product> productMap = allActiveProducts.stream()
                 .filter(p -> p.getItemCode() != null)
                 .collect(Collectors.toMap(Product::getItemCode, p -> p, (p1, p2) -> p1));

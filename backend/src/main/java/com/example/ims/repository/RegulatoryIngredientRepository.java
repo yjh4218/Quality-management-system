@@ -19,6 +19,7 @@ public interface RegulatoryIngredientRepository extends JpaRepository<Regulatory
     
     long countBySourceApi(String sourceApi);
 
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = "limitDetails")
     @org.springframework.data.jpa.repository.Query("SELECT r FROM RegulatoryIngredient r WHERE LOWER(r.koreanName) IN :names OR LOWER(r.inciName) IN :names")
     List<RegulatoryIngredient> findByNames(@org.springframework.data.repository.query.Param("names") List<String> names);
 }

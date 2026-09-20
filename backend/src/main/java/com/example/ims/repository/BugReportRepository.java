@@ -17,4 +17,8 @@ public interface BugReportRepository extends JpaRepository<BugReport, Long> {
     Optional<BugReport> findFirstByScreenNameAndDescriptionAndCreatedAtAfterOrderByCreatedAtDesc(
         String screenName, String description, LocalDateTime since
     );
+
+    Optional<BugReport> findFirstByScreenNameAndErrorCategoryAndCreatedAtAfterOrderByCreatedAtDesc(
+        String screenName, String errorCategory, LocalDateTime since
+    );
 }

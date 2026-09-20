@@ -310,7 +310,7 @@ const ManufacturerAuditDashboard = ({ user, onNavigate }) => {
                 title="📋 상세 점검 내역"
                 rowData={audits}
                 columnDefs={colDefs}
-                defaultPageSize={50}
+                defaultPageSize={20}
             />
 
             {showSearchModal && (

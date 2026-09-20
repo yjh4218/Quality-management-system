@@ -12,6 +12,9 @@ public interface StoredFileRepository extends JpaRepository<StoredFile, String> 
 
     Optional<StoredFile> findByFilePath(String filePath);
 
+    @Query("SELECT s.filePath FROM StoredFile s")
+    java.util.List<String> findAllFilePaths();
+
     @Query("SELECT COALESCE(SUM(s.fileSize), 0) FROM StoredFile s")
     Long getTotalStorageSize();
 }

@@ -13,6 +13,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
         List<User> findByEnabledFalse();
         List<User> findByCompanyName(String companyName);
 
+        List<User> findByEnabledTrueAndEmailIsNotNull();
+        List<User> findByEnabledTrueAndEmailIsNotNullAndCompanyName(String companyName);
+        List<User> findByEnabledTrueAndEmailIsNotNullAndCompanyNameIn(java.util.Collection<String> companyNames);
+
         @org.springframework.data.jpa.repository.Query("SELECT u FROM User u WHERE " +
                         "(:name IS NULL OR LOWER(u.name) LIKE LOWER(CONCAT('%', :name, '%'))) AND " +
                         "(:companyName IS NULL OR LOWER(u.companyName) LIKE LOWER(CONCAT('%', :companyName, '%'))) AND " +

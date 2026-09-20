@@ -475,7 +475,7 @@ function ClaimDashboardPage({ user, onNavigate }) {
                 columnDefs={columnDefs}
                 onRowClicked={handleRowClick}
                 onRowDoubleClick={handleRowDoubleClick}
-                defaultPageSize={50}
+                defaultPageSize={20}
             />
 
             {/* 선택된 클레임 상세 Drawer */}

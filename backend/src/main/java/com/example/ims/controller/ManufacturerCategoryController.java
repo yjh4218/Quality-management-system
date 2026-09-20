@@ -18,18 +18,24 @@ public class ManufacturerCategoryController {
 
     @GetMapping
     @PreAuthorize("isAuthenticated()")
+    @org.springframework.cache.annotation.Cacheable(value = "mfrCategories", key = "'all'")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<ManufacturerCategory> getAll() {
         return repository.findByActiveTrueOrderByNameAsc();
     }
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
+    @org.springframework.cache.annotation.CacheEvict(value = "mfrCategories", allEntries = true)
+    @org.springframework.transaction.annotation.Transactional
     public ManufacturerCategory create(@jakarta.validation.Valid @RequestBody ManufacturerCategory category) {
         return repository.save(category);
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
+    @org.springframework.cache.annotation.CacheEvict(value = "mfrCategories", allEntries = true)
+    @org.springframework.transaction.annotation.Transactional
     public ManufacturerCategory update(@PathVariable Long id, @jakarta.validation.Valid @RequestBody ManufacturerCategory category) {
         ManufacturerCategory existing = repository.findById(id).orElseThrow();
         existing.setName(category.getName());
@@ -39,6 +45,8 @@ public class ManufacturerCategoryController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
+    @org.springframework.cache.annotation.CacheEvict(value = "mfrCategories", allEntries = true)
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<?> delete(@PathVariable Long id) {
         ManufacturerCategory existing = repository.findById(id).orElseThrow();
         existing.setActive(false);

@@ -10,6 +10,7 @@ const BomCategoryManagementPage = ({ user }) => {
     const canDelete = checkDelete('bomCategories');
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [formData, setFormData] = useState({
         mainType: '',
         subType: ''
@@ -34,14 +35,23 @@ const BomCategoryManagementPage = ({ user }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!formData.mainType || !formData.subType) return;
+        if (!formData.mainType || !formData.subType || isSubmitting) return;
+        setIsSubmitting(true);
         try {
-            await api.saveBomCategory(formData);
+            const res = await api.saveBomCategory(formData);
             toast.success("카테고리가 성공적으로 등록되었습니다.");
             setFormData({ mainType: '', subType: '' });
-            fetchCategories();
+            // [로컬 상태 즉각 반영] 전체 재조회 통신 생략
+            if (res.data) {
+                const newCat = res.data?.data || res.data;
+                setCategories(prev => [...prev, newCat]);
+            } else {
+                fetchCategories();
+            }
         } catch (error) {
             toast.error("저장 실패");
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -50,7 +60,8 @@ const BomCategoryManagementPage = ({ user }) => {
         try {
             await api.softDeleteBomCategory(id);
             toast.info("항목이 숨겨졌습니다.");
-            fetchCategories();
+            // [로컬 상태 즉각 반영]
+            setCategories(prev => prev.map(c => c.id === id ? { ...c, active: false } : c));
         } catch (error) {
             toast.error("처리 실패");
         }
@@ -61,7 +72,8 @@ const BomCategoryManagementPage = ({ user }) => {
         try {
             await api.hardDeleteBomCategory(id);
             toast.warn("항목이 영구 삭제되었습니다.");
-            fetchCategories();
+            // [로컬 상태 즉각 반영]
+            setCategories(prev => prev.filter(c => c.id !== id));
         } catch (error) {
             toast.error("삭제 실패 (데이터 무결성 확인 필요)");
         }
@@ -190,10 +202,10 @@ const BomCategoryManagementPage = ({ user }) => {
                         <button 
                             type="submit" 
                             className="primary" 
-                            style={{ width: '100%', marginTop: '10px', opacity: canEdit ? 1 : 0.5, cursor: canEdit ? 'pointer' : 'not-allowed' }}
-                            disabled={!canEdit}
+                            style={{ width: '100%', marginTop: '10px', opacity: (canEdit && !isSubmitting) ? 1 : 0.5, cursor: (canEdit && !isSubmitting) ? 'pointer' : 'not-allowed' }}
+                            disabled={!canEdit || isSubmitting}
                         >
-                            {canEdit ? '카테고리 저장' : '🛠️ 조회 전용 모드'}
+                            {isSubmitting ? '저장 중...' : (canEdit ? '카테고리 저장' : '🛠️ 조회 전용 모드')}
                         </button>
                     </form>
                 </div>

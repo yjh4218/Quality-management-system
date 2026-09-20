@@ -2001,13 +2001,11 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
     const fetchPackagingSpecs = async (id, loadedProduct = null) => {
         try {
-            const res = await api.getPackagingSpecs(id);
-            setPackagingSpecs(res.data || []);
-            
-            // 통합 포장사양서 로드
+            // 통합 포장사양서 단일 로드 (중복 getPackagingSpecs 제거)
             const fullRes = await api.getFullPackagingSpec(id);
             if (fullRes && fullRes.data) {
                 const { spec, revisions, components, methodImages } = fullRes.data;
+                setPackagingSpecs(spec ? [spec] : []);
                 setIsSpecLoaded(true);
                 if (spec) {
                     // Auto-fill empty spec fields using product details

@@ -147,6 +147,8 @@ public class ProductIngredientService {
 
     public List<IngredientAnalysisResult> analyzeIngredientsFromExcel(MultipartFile file) throws Exception {
         List<IngredientAnalysisResult> results = new ArrayList<>();
+        List<java.util.Map.Entry<String, Double>> parsedRows = new ArrayList<>();
+        List<String> namesToQuery = new ArrayList<>();
         
         try (InputStream is = file.getInputStream(); Workbook workbook = new XSSFWorkbook(is)) {
             Sheet sheet = workbook.getSheetAt(0);
@@ -168,8 +170,30 @@ public class ProductIngredientService {
                     percentage = percentCell.getNumericCellValue();
                 }
 
-                results.add(analyzeSingleIngredient(inciName, percentage));
+                parsedRows.add(new java.util.AbstractMap.SimpleEntry<>(inciName, percentage));
+                namesToQuery.add(inciName.toLowerCase());
             }
+        }
+        
+        // [N+1 최적화] 엑셀 내 모든 성분을 단 1회의 쿼리로 일괄 조회
+        java.util.Map<String, List<RegulatoryIngredient>> regMap = new java.util.HashMap<>();
+        if (!namesToQuery.isEmpty()) {
+            List<RegulatoryIngredient> foundList = regulatoryRepository.findByNames(namesToQuery);
+            for (RegulatoryIngredient reg : foundList) {
+                if (reg.getInciName() != null) {
+                    regMap.computeIfAbsent(reg.getInciName().toLowerCase().trim(), k -> new ArrayList<>()).add(reg);
+                }
+                if (reg.getKoreanName() != null) {
+                    regMap.computeIfAbsent(reg.getKoreanName().toLowerCase().trim(), k -> new ArrayList<>()).add(reg);
+                }
+            }
+        }
+
+        for (java.util.Map.Entry<String, Double> entry : parsedRows) {
+            String inciName = entry.getKey();
+            Double percentage = entry.getValue();
+            List<RegulatoryIngredient> regulations = regMap.getOrDefault(inciName.toLowerCase(), java.util.Collections.emptyList());
+            results.add(analyzeSingleIngredientWithRegs(inciName, percentage, regulations));
         }
         
         return results;
@@ -180,8 +204,11 @@ public class ProductIngredientService {
         if (regulations.isEmpty() && inciName != null && !inciName.isEmpty()) {
             regulations = regulatoryRepository.findByKoreanName(inciName);
         }
-        
-        if (regulations.isEmpty()) {
+        return analyzeSingleIngredientWithRegs(inciName, percentage, regulations);
+    }
+
+    private IngredientAnalysisResult analyzeSingleIngredientWithRegs(String inciName, Double percentage, List<RegulatoryIngredient> regulations) {
+        if (regulations == null || regulations.isEmpty()) {
             return IngredientAnalysisResult.builder()
                     .inciName(inciName)
                     .percentage(percentage)

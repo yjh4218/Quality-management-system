@@ -307,7 +307,7 @@ const ProductDashboardPage = ({ user, onNavigate }) => {
                 title="📋 품목 마스터 상세 내역"
                 rowData={products}
                 columnDefs={columnDefs}
-                defaultPageSize={50}
+                defaultPageSize={20}
             />
         </AnalyticsDashboardShell>
     );

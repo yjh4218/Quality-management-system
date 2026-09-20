@@ -16,6 +16,7 @@ import java.util.LinkedHashMap;
 
 @Service
 @RequiredArgsConstructor
+@org.springframework.transaction.annotation.Transactional(readOnly = true)
 public class WmsService {
 
     private final WmsInboundRepository inboundRepository;
@@ -24,6 +25,7 @@ public class WmsService {
     /**
      * Helper to auto-fill missing LOT numbers on-demand.
      */
+    @org.springframework.transaction.annotation.Transactional
     public void autoFillLotNumbers() {
         List<WmsInbound> all = inboundRepository.findAll();
         boolean updated = false;
@@ -50,7 +52,7 @@ public class WmsService {
     }
     
     @org.springframework.transaction.annotation.Transactional
-    @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
+    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public WmsInbound saveWmsInbound(WmsInbound inbound) {
         boolean isNew = inbound.getId() == null;
         if (inbound.getInboundDate() == null) {
@@ -94,7 +96,7 @@ public class WmsService {
     }
 
     @org.springframework.transaction.annotation.Transactional
-    @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
+    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public void deleteInbound(Long id) {
         WmsInbound inbound = inboundRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Inbound record not found"));

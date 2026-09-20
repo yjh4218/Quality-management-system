@@ -31,7 +31,7 @@ const PRODUCT_FORMATTABLE_COLUMNS = [
 ];
 
 const ProductListPage = ({ user, navigationData, onNavigated }) => {
-    const defaultPageSize = 100;
+    const defaultPageSize = 20;
     const { canView, canEdit: canEditProduct, hasPerm, isAdmin } = usePermissions(user);
     const gridRef = useRef(null);
     const [rowData, setRowData] = useState([]);

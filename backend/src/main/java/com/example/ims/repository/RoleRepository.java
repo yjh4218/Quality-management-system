@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
 
 public interface RoleRepository extends JpaRepository<Role, Long> {
+    @org.springframework.cache.annotation.Cacheable(value = "roles", key = "#roleKey", unless = "#result == null")
     Optional<Role> findByRoleKey(String roleKey);
     boolean existsByRoleKey(String roleKey);
 }

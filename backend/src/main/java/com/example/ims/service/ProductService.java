@@ -46,6 +46,7 @@ public class ProductService {
     private final com.example.ims.repository.ProductionAuditRepository productionAuditRepository;
     private final PackagingSpecService packagingSpecService;
     private final com.example.ims.repository.SalesChannelRepository salesChannelRepository;
+    private final SalesChannelService salesChannelService;
 
     /**
      * Helper to initialize shelf life for existing products if missing.
@@ -169,7 +170,7 @@ public class ProductService {
      * @return The saved Product entity (저장 완료된 제품 객체)
      */
     @Transactional
-    @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
+    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public Product createProduct(Product product, String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
@@ -185,22 +186,8 @@ public class ProductService {
             throw new RuntimeException("유통 채널 정보는 필수입니다. 최소 1개 이상의 채널을 선택해 주세요.");
         }
 
-        // 유통 채널 영속성 엔티티 룩업 (ID 또는 이름 기반)
-        java.util.List<com.example.ims.entity.SalesChannel> persistentChannels = new java.util.ArrayList<>();
-        for (com.example.ims.entity.SalesChannel ch : product.getChannels()) {
-            if (ch != null) {
-                com.example.ims.entity.SalesChannel matchedChannel = null;
-                if (ch.getId() != null) {
-                    matchedChannel = salesChannelRepository.findById(ch.getId()).orElse(null);
-                }
-                if (matchedChannel == null && ch.getName() != null && !ch.getName().trim().isEmpty()) {
-                    matchedChannel = salesChannelRepository.findByNameAndIsDeletedFalse(ch.getName().trim()).orElse(null);
-                }
-                if (matchedChannel != null && !persistentChannels.contains(matchedChannel)) {
-                    persistentChannels.add(matchedChannel);
-                }
-            }
-        }
+        // 유통 채널 영속성 엔티티 룩업 (캐시 우선 룩업으로 루프 내 N+1 쿼리 제거)
+        java.util.List<com.example.ims.entity.SalesChannel> persistentChannels = resolvePersistentChannels(product.getChannels());
         if (persistentChannels.isEmpty()) {
             throw new IllegalArgumentException("선택하신 유통 채널 정보가 유효하지 않습니다.");
         }
@@ -313,7 +300,7 @@ public class ProductService {
      * @return The updated Product entity (수정이 반영된 제품 객체)
      */
     @Transactional
-    @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
+    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public Product updateProduct(Long id, Product updatedProduct, String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
@@ -349,27 +336,9 @@ public class ProductService {
         String company = user.getCompanyName() != null ? user.getCompanyName() : "시스템";
         String modifierName = user.getName() + " (" + company + ")";
         
-        // 채널 정보 검증 및 _채널코드 자동 반영 (ID 룩업 실패 시 Name 룩업 Fallback 적용)
+        // 채널 정보 검증 및 _채널코드 자동 반영 (캐시 우선 룩업으로 N+1 쿼리 제거)
         if (updatedProduct.getChannels() != null && !updatedProduct.getChannels().isEmpty()) {
-            java.util.List<com.example.ims.entity.SalesChannel> persistentChannels = new java.util.ArrayList<>();
-            for (com.example.ims.entity.SalesChannel ch : updatedProduct.getChannels()) {
-                if (ch != null) {
-                    com.example.ims.entity.SalesChannel matchedChannel = null;
-                    if (ch.getId() != null) {
-                        matchedChannel = salesChannelRepository.findById(ch.getId()).orElse(null);
-                    }
-                    if (matchedChannel == null && ch.getName() != null && !ch.getName().trim().isEmpty()) {
-                        matchedChannel = salesChannelRepository.findByNameAndIsDeletedFalse(ch.getName().trim()).orElse(null);
-                    }
-                    if (matchedChannel != null && !persistentChannels.contains(matchedChannel)) {
-                        persistentChannels.add(matchedChannel);
-                        System.out.println(">>>> [SERVICE DEBUG] Matched Channel: id=" + matchedChannel.getId() + ", name=" + matchedChannel.getName());
-                    } else {
-                        System.out.println(">>>> [SERVICE DEBUG] Failed to match channel input: id=" + ch.getId() + ", name=" + ch.getName());
-                    }
-                }
-            }
-            System.out.println(">>>> [SERVICE DEBUG] Total persistentChannels matched count: " + persistentChannels.size());
+            java.util.List<com.example.ims.entity.SalesChannel> persistentChannels = resolvePersistentChannels(updatedProduct.getChannels());
             if (persistentChannels.isEmpty()) {
                 throw new IllegalArgumentException("선택하신 유통 채널 정보가 유효하지 않습니다.");
             }
@@ -525,13 +494,6 @@ public class ProductService {
         if (saved.getComponents() != null) saved.getComponents().size();
         if (saved.getPackagingCertificates() != null) saved.getPackagingCertificates().size();
         
-        // [유통채널 및 정보 변경 시 포장사양서 자동 동기화]
-        try {
-            packagingSpecService.getFullSpecByProductId(saved.getId());
-        } catch (Exception e) {
-            log.error("Failed to auto-sync packaging spec after product update", e);
-        }
-        
         // Capture safe snapshot AFTER modification
         String newJson = captureJson(saved);
 
@@ -559,7 +521,7 @@ public class ProductService {
      * @param username The user performing the action
      */
     @Transactional
-    @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
+    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public void deleteProduct(Long id, String username) {
         User user = userRepository.findByUsername(username).orElseThrow();
         String company = user.getCompanyName() != null ? user.getCompanyName() : "시스템";
@@ -599,7 +561,7 @@ public class ProductService {
      * @param username The user performing the restoration
      */
     @Transactional
-    @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
+    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public void restoreProduct(Long id, String username) {
         User user = userRepository.findByUsername(username).orElseThrow();
         String company = user.getCompanyName() != null ? user.getCompanyName() : "시스템";
@@ -637,7 +599,7 @@ public class ProductService {
      * @param username The admin user performing the hard delete
      */
     @Transactional
-    @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
+    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public void hardDeleteProduct(Long id, String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
@@ -1041,5 +1003,35 @@ public class ProductService {
                 }
             }
         }
+    }
+
+    private java.util.List<com.example.ims.entity.SalesChannel> resolvePersistentChannels(java.util.List<com.example.ims.entity.SalesChannel> inputChannels) {
+        if (inputChannels == null || inputChannels.isEmpty()) return new java.util.ArrayList<>();
+        java.util.List<com.example.ims.entity.SalesChannel> allActive = salesChannelService.getActiveChannels();
+        java.util.Map<Long, com.example.ims.entity.SalesChannel> idMap = new java.util.HashMap<>();
+        java.util.Map<String, com.example.ims.entity.SalesChannel> nameMap = new java.util.HashMap<>();
+        if (allActive != null) {
+            for (com.example.ims.entity.SalesChannel sc : allActive) {
+                if (sc.getId() != null) idMap.put(sc.getId(), sc);
+                if (sc.getName() != null && !sc.getName().trim().isEmpty()) nameMap.put(sc.getName().trim(), sc);
+            }
+        }
+
+        java.util.List<com.example.ims.entity.SalesChannel> persistentChannels = new java.util.ArrayList<>();
+        for (com.example.ims.entity.SalesChannel ch : inputChannels) {
+            if (ch == null) continue;
+            com.example.ims.entity.SalesChannel matched = null;
+            if (ch.getId() != null) matched = idMap.get(ch.getId());
+            if (matched == null && ch.getName() != null) matched = nameMap.get(ch.getName().trim());
+            // 캐시에 없을 경우 DB 단건 폴백
+            if (matched == null && ch.getId() != null) matched = salesChannelRepository.findById(ch.getId()).orElse(null);
+            if (matched == null && ch.getName() != null && !ch.getName().trim().isEmpty()) {
+                matched = salesChannelRepository.findByNameAndIsDeletedFalse(ch.getName().trim()).orElse(null);
+            }
+            if (matched != null && !persistentChannels.contains(matched)) {
+                persistentChannels.add(matched);
+            }
+        }
+        return persistentChannels;
     }
 }

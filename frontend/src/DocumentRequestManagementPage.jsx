@@ -51,7 +51,6 @@ export default function DocumentRequestManagementPage({ user, onNavigateToConfig
     useEffect(() => {
         window.__QMS_ACTIVE_PAGE__ = '📋 필수 품질서류 관리 대시보드';
         fetchRequirements();
-        fetchProducts();
     }, []);
 
     const fetchProducts = async () => {
@@ -196,6 +195,9 @@ export default function DocumentRequestManagementPage({ user, onNavigateToConfig
     };
 
     const toggleMasterExpand = (key) => {
+        if (allProducts.length === 0) {
+            fetchProducts();
+        }
         setExpandedMasters(prev => ({ ...prev, [key]: !prev[key] }));
     };
 

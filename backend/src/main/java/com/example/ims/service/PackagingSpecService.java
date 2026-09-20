@@ -31,6 +31,7 @@ public class PackagingSpecService {
     private final AuditLogService auditLogService;
     private final com.example.ims.repository.ChannelSpecialNoteRepository specialNoteRepository;
     private final com.example.ims.repository.SalesChannelRepository salesChannelRepository;
+    private final SalesChannelService salesChannelService;
 
     @Transactional(readOnly = true)
     public List<PackagingSpecification> getSpecsByProductId(Long productId) {
@@ -196,9 +197,7 @@ public class PackagingSpecService {
     public void syncRulesForChannel(SalesChannel channel) {
         log.info("Starting rule synchronization for channel: {}", channel.getName());
         
-        List<Product> products = productRepository.findAll().stream()
-                .filter(p -> p.getChannels() != null && p.getChannels().contains(channel))
-                .collect(Collectors.toList());
+        List<Product> products = productRepository.findByChannel(channel);
 
         for (Product product : products) {
             List<PackagingSpecification> specs = specRepository.findByProductId(product.getId());
@@ -325,11 +324,23 @@ public class PackagingSpecService {
         // [검증 로직] 각 채널별 포장 사양 규칙 동적 검사 (선택된 채널이 있으면 선택 채널 대상, 없으면 제품 연동 채널 전체)
         List<SalesChannel> channelsToValidate = new java.util.ArrayList<>();
         if (dto.getSelectedChannels() != null && !dto.getSelectedChannels().isEmpty()) {
+            List<SalesChannel> activeChannels = salesChannelService.getActiveChannels();
+            java.util.Map<Long, SalesChannel> idMap = new java.util.HashMap<>();
+            java.util.Map<String, SalesChannel> nameMap = new java.util.HashMap<>();
+            if (activeChannels != null) {
+                for (SalesChannel sc : activeChannels) {
+                    if (sc.getId() != null) idMap.put(sc.getId(), sc);
+                    if (sc.getName() != null && !sc.getName().trim().isEmpty()) nameMap.put(sc.getName().trim(), sc);
+                }
+            }
             for (SalesChannel ch : dto.getSelectedChannels()) {
-                if (ch.getId() != null) {
-                    salesChannelRepository.findById(ch.getId()).ifPresent(channelsToValidate::add);
-                } else if (ch.getName() != null) {
-                    salesChannelRepository.findByNameAndIsDeletedFalse(ch.getName()).ifPresent(channelsToValidate::add);
+                SalesChannel matched = null;
+                if (ch.getId() != null) matched = idMap.get(ch.getId());
+                if (matched == null && ch.getName() != null) matched = nameMap.get(ch.getName().trim());
+                if (matched == null && ch.getId() != null) matched = salesChannelRepository.findById(ch.getId()).orElse(null);
+                if (matched == null && ch.getName() != null) matched = salesChannelRepository.findByNameAndIsDeletedFalse(ch.getName()).orElse(null);
+                if (matched != null && !channelsToValidate.contains(matched)) {
+                    channelsToValidate.add(matched);
                 }
             }
         }

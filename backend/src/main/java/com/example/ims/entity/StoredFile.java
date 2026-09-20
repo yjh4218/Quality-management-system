@@ -35,6 +35,7 @@ public class StoredFile {
     @Column(name = "file_size")
     private Long fileSize;
 
+    @org.hibernate.annotations.JdbcTypeCode(java.sql.Types.VARBINARY)
     @Column(name = "file_data", nullable = false)
     private byte[] fileData;
 

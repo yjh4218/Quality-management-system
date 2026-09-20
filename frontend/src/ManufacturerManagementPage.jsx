@@ -257,9 +257,9 @@ const ManufacturerManagementPage = ({ user }) => {
             {isDrawerOpen && (
                 <ManufacturerDrawer
                     manufacturer={selectedManufacturer}
-                    onClose={() => {
+                    onClose={(saved) => {
                         setIsDrawerOpen(false);
-                        fetchManufacturers();
+                        if (saved) fetchManufacturers();
                     }}
                     canEdit={canEdit}
                 />

@@ -56,7 +56,8 @@ public class MasterPackagingMaterial {
     @Builder.Default
     private Boolean isMultiLayer = false; // 다층 구조 여부
 
-    @OneToMany(mappedBy = "masterMaterial", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @OneToMany(mappedBy = "masterMaterial", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @org.hibernate.annotations.BatchSize(size = 50)
     @Builder.Default
     private List<MasterPackagingMaterialLayer> layers = new ArrayList<>();
 

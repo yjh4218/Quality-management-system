@@ -394,7 +394,7 @@ const QualityDashboardPage = ({ user, onNavigate }) => {
                 title="📋 입고 검수 및 판정 내역"
                 rowData={inbounds}
                 columnDefs={columnDefs}
-                defaultPageSize={50}
+                defaultPageSize={20}
             />
 
             {/* 드릴다운 목록 팝업 모달 */}

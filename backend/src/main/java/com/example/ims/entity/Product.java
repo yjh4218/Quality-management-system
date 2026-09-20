@@ -176,6 +176,7 @@ public class Product {
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "product_images", joinColumns = @JoinColumn(name = "product_id"))
     @Column(name = "image_path")
+    @org.hibernate.annotations.BatchSize(size = 50)
     @Builder.Default
     private java.util.List<String> imagePaths = new java.util.ArrayList<>();
 
@@ -258,12 +259,14 @@ public class Product {
 
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id")
+    @org.hibernate.annotations.BatchSize(size = 50)
     @Builder.Default
     private java.util.List<ProductComponent> components = new java.util.ArrayList<>();
 
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "product_packaging_certificates", joinColumns = @JoinColumn(name = "product_id"))
     @Column(name = "certificate_path")
+    @org.hibernate.annotations.BatchSize(size = 50)
     @Builder.Default
     private java.util.List<String> packagingCertificates = new java.util.ArrayList<>();
 

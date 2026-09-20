@@ -17,24 +17,35 @@ public class AccessLogService {
 
     private final com.example.ims.repository.UserRepository userRepository;
 
-    @Transactional
     public void log(String username, String name, String action, String pageUrl, String pageName, HttpServletRequest request) {
-        String ipAddress = request != null ? request.getRemoteAddr() : "127.0.0.1";
-        String userAgent = request != null ? request.getHeader("User-Agent") : "System";
+        String ipAddress = "127.0.0.1";
+        String userAgent = "System";
+        try {
+            if (request != null) {
+                ipAddress = request.getRemoteAddr();
+                userAgent = request.getHeader("User-Agent");
+            }
+        } catch (Exception ignored) {}
+        saveLogAsync(username, name, action, pageUrl, pageName, ipAddress, userAgent);
+    }
 
+    @org.springframework.scheduling.annotation.Async("auditExecutor")
+    @Transactional
+    public void saveLogAsync(String username, String name, String action, String pageUrl, String pageName, String ipAddress, String userAgent) {
         AccessLog log = AccessLog.builder()
                 .username(username)
                 .name(name)
                 .action(action)
                 .pageUrl(pageUrl)
                 .pageName(pageName)
-                .ipAddress(ipAddress)
-                .userAgent(userAgent)
+                .ipAddress(ipAddress != null ? ipAddress : "127.0.0.1")
+                .userAgent(userAgent != null ? userAgent : "System")
                 .build();
 
         accessLogRepository.save(log);
     }
 
+    @org.springframework.scheduling.annotation.Async("auditExecutor")
     @Transactional
     public void recordPageView(String username, String pageKey, String pageTitle, java.time.LocalDateTime now) {
         if (username == null || username.trim().isEmpty()) {

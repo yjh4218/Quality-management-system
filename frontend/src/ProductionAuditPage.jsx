@@ -198,24 +198,42 @@ const ProductionAuditPage = ({ user, navigationData, onNavigated }) => {
         try {
             const mfrFilter = isManufacturer ? user.companyName : searchFields.manufacturerName;
             
-            // Fetch both parts with individual error handling to ensure visibility even if one fails
             let audits = [];
             let pending = [];
-            
-            try {
-                const res = await api.getProductionAudits(mfrFilter);
-                audits = res.data || [];
-            } catch (err) {
-                console.error("Failed to load production audits", err);
-                toast.error("생산감리 내역 조회 중 오류가 발생했습니다.");
-            }
-            
-            try {
-                const res = await api.getPendingProductionAudits(mfrFilter);
-                pending = res.data || [];
-            } catch (err) {
-                console.error("Failed to load pending audits", err);
-                toast.error("미진행 품목 조회 중 오류가 발생했습니다.");
+
+            // [조회 최적화] viewMode에 따른 조건부 선별 호출 및 'all' 모드 시 Promise.all 병렬 호출
+            if (viewMode === 'pending') {
+                try {
+                    const res = await api.getPendingProductionAudits(mfrFilter);
+                    pending = res.data || [];
+                } catch (err) {
+                    console.error("Failed to load pending audits", err);
+                    toast.error("미진행 품목 조회 중 오류가 발생했습니다.");
+                }
+            } else if (viewMode === 'review' || viewMode === 'completed') {
+                try {
+                    const res = await api.getProductionAudits(mfrFilter);
+                    audits = res.data || [];
+                } catch (err) {
+                    console.error("Failed to load production audits", err);
+                    toast.error("생산감리 내역 조회 중 오류가 발생했습니다.");
+                }
+            } else {
+                // viewMode === 'all'인 경우 두 API를 병렬로 동시 호출 (대기시간 50% 단축)
+                const [auditsRes, pendingRes] = await Promise.allSettled([
+                    api.getProductionAudits(mfrFilter),
+                    api.getPendingProductionAudits(mfrFilter)
+                ]);
+                if (auditsRes.status === 'fulfilled') {
+                    audits = auditsRes.value.data || [];
+                } else {
+                    console.error("Failed to load production audits", auditsRes.reason);
+                }
+                if (pendingRes.status === 'fulfilled') {
+                    pending = pendingRes.value.data || [];
+                } else {
+                    console.error("Failed to load pending audits", pendingRes.reason);
+                }
             }
             
             let finalData = [];

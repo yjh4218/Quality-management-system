@@ -22,6 +22,8 @@ public class RoleService {
     private final AuditLogService auditLogService;
     private final PermissionService permissionService;
 
+    @org.springframework.cache.annotation.Cacheable(value = "roles", key = "'all'")
+    @Transactional(readOnly = true)
     public List<Role> getAllRoles() {
         return roleRepository.findAll();
     }
@@ -30,6 +32,7 @@ public class RoleService {
         return roleRepository.findById(id);
     }
 
+    @org.springframework.cache.annotation.CacheEvict(value = "roles", allEntries = true)
     @Transactional
     public Role createRole(Role role, String modifier) {
         // Automatically prefix with ROLE_ if missing for Spring Security consistency
@@ -58,6 +61,7 @@ public class RoleService {
         return saved;
     }
 
+    @org.springframework.cache.annotation.CacheEvict(value = "roles", allEntries = true)
     @Transactional
     public Role updateRole(Long id, Role roleDetails, String modifier) {
         Role role = roleRepository.findById(id)
@@ -125,6 +129,7 @@ public class RoleService {
         return updated;
     }
 
+    @org.springframework.cache.annotation.CacheEvict(value = "roles", allEntries = true)
     @Transactional
     public void deleteRole(Long id, String modifier) {
         Role role = roleRepository.findById(id)

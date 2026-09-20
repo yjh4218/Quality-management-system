@@ -337,7 +337,7 @@ const ProductionAuditDashboardPage = ({ user, onNavigate }) => {
                 title="📋 생산감리 상세 점검 결과"
                 rowData={audits}
                 columnDefs={columnDefs}
-                defaultPageSize={50}
+                defaultPageSize={20}
             />
 
             {/* 품목 검색 팝업 모달 */}

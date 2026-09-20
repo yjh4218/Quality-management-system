@@ -32,7 +32,8 @@ public class PackagingMethodTemplate {
     private ProductType productType;
 
     @Builder.Default
-    @OneToMany(mappedBy = "template", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @OneToMany(mappedBy = "template", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @org.hibernate.annotations.BatchSize(size = 50)
     @OrderBy("stepNumber ASC")
     private java.util.List<PackagingMethodTemplateStep> steps = new java.util.ArrayList<>();
 

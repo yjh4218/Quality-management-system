@@ -47,7 +47,7 @@ public class AdminController {
 
     @PostMapping("/{id}/approve")
     @PreAuthorize("@perm.can('users', 'EDIT')")
-    @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
+    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public ResponseEntity<?> approveUser(
             @PathVariable Long id,
             @org.springframework.security.core.annotation.AuthenticationPrincipal org.springframework.security.core.userdetails.UserDetails userDetails) {
@@ -103,7 +103,7 @@ public class AdminController {
 
     @PostMapping("/{id}/toggle-status")
     @PreAuthorize("@perm.can('users', 'EDIT')")
-    @org.springframework.cache.annotation.CacheEvict(value = "dashboard", allEntries = true)
+    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public ResponseEntity<?> toggleUserStatus(@PathVariable Long id) {
         return userRepository.findById(id)
                 .map(user -> {

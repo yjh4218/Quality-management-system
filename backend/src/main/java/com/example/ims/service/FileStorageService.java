@@ -539,13 +539,17 @@ public class FileStorageService {
 
     /**
      * [영구 보존 초기 동기화] 로컬 디스크에 이미 존재하는 파일들을 비동기 백그라운드로 DB에 영구 백업합니다.
+     * 부팅 경합 방지를 위해 3초 지연 후 1회 벌크 조회 Set을 활용해 O(1)로 고속 동기화합니다.
      */
     @org.springframework.context.event.EventListener(org.springframework.boot.context.event.ApplicationReadyEvent.class)
     public void syncExistingLocalFilesToDatabase() {
         if (storedFileRepository == null) return;
         new Thread(() -> {
             try {
+                Thread.sleep(3000); // 서버 초기 기동 트랜잭션 경합 방지
                 log.info("[FILE-SYNC] Starting scan of local upload directory for DB backup sync...");
+                java.util.Set<String> existingPaths = new java.util.HashSet<>(storedFileRepository.findAllFilePaths());
+                
                 try (java.util.stream.Stream<Path> stream = Files.walk(this.fileStorageLocation)) {
                     stream.filter(Files::isRegularFile)
                             .filter(p -> !p.toString().contains("isolated"))
@@ -554,9 +558,10 @@ public class FileStorageService {
                                     Path relPath = this.fileStorageLocation.relativize(path);
                                     String relativePathStr = relPath.toString().replace('\\', '/');
                                     String normalizedPath = normalizeRelativePath(relativePathStr);
-                                    if (!storedFileRepository.existsById(normalizedPath)) {
+                                    if (!existingPaths.contains(normalizedPath)) {
                                         byte[] bytes = Files.readAllBytes(path);
                                         saveToDatabase(bytes, normalizedPath, path.getFileName().toString(), null);
+                                        existingPaths.add(normalizedPath);
                                     }
                                 } catch (Exception e) {
                                     log.debug("[FILE-SYNC-SKIP] Skipped file {}: {}", path.getFileName(), e.getMessage());
@@ -564,6 +569,8 @@ public class FileStorageService {
                             });
                 }
                 log.info("[FILE-SYNC] Completed local upload directory sync to DB. Current status: {}", getStorageStats());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             } catch (Exception e) {
                 log.warn("[FILE-SYNC-ERROR] Could not complete sync: {}", e.getMessage());
             }
