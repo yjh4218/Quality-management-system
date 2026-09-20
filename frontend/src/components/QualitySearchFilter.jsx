@@ -29,6 +29,7 @@ const QualitySearchFilter = ({
     onExcelImport,
     onDownloadTemplate,
     onRequestCoa,
+    onOpenCoaHistory,
     isInternalQuality,
     manufacturers,
     canViewInbound,
@@ -181,6 +182,16 @@ const QualitySearchFilter = ({
                                 style={{ fontSize: '14px', padding: '10px 20px', backgroundColor: '#fff', color: '#2563eb', borderColor: '#3b82f6' }}
                             >
                                 📧 성적서 요청
+                            </button>
+                        )}
+                        {isInternalQuality && (
+                            <button 
+                                className="outline" 
+                                onClick={onOpenCoaHistory}
+                                style={{ fontSize: '14px', padding: '10px 18px', backgroundColor: '#fff', color: '#4f46e5', borderColor: '#6366f1' }}
+                                title="제조사 성적서 발송 이력 및 리드타임 추적"
+                            >
+                                📜 성적서 발송 이력
                             </button>
                         )}
                         <button 

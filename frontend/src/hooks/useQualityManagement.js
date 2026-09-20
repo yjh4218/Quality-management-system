@@ -5,6 +5,7 @@ import { splitSearchTokens, matchesAllTokens } from '../utils/searchUtils';
 import api, { 
     getInboundData, 
     updateInboundData, 
+    batchUpdateInboundData,
     getInboundHistory, 
     uploadCoaFile,
     triggerWmsFetch,
@@ -27,6 +28,14 @@ export const useQualityManagement = (user, navigationData, onNavigated) => {
     const [activeTab, setActiveTab] = useState('info');
     const [isCoaPreviewOpen, setIsCoaPreviewOpen] = useState(false);
     const [coaPreviewData, setCoaPreviewData] = useState([]);
+    const [isCoaHistoryOpen, setIsCoaHistoryOpen] = useState(false);
+    const [isLabelModalOpen, setIsLabelModalOpen] = useState(false);
+    const [labelInboundId, setLabelInboundId] = useState(null);
+
+    const handleOpenLabelModal = (inboundId) => {
+        setLabelInboundId(inboundId);
+        setIsLabelModalOpen(true);
+    };
     
     const { canEdit: canEditPerm, isAdmin: isPermAdmin } = usePermissions(user);
     const canEdit = canEditPerm('inboundInspection');
@@ -196,15 +205,15 @@ export const useQualityManagement = (user, navigationData, onNavigated) => {
         let successCount = 0;
         
         try {
-            // [병렬 저장 최적화] 순차 직렬 루프 대신 Promise.all 동시 전송으로 네트워크 대기시간 대폭 단축
-            await Promise.all(updates.map(data => updateInboundData(data.id, data)));
+            // [일괄 배치 저장 최적화] 다중 개별 HTTP 요청 대신 단일 배치 API로 통합 전송
+            await batchUpdateInboundData(updates);
             successCount = updates.length;
-            toast.success(`${successCount}건의 수정사항이 저장되었습니다.`);
+            toast.success(`${successCount}건의 수정사항이 일괄 저장되었습니다.`);
             setChangedRows(new Set());
             gridRef.current.api.deselectAll();
             fetchInboundData();
         } catch (error) {
-            toast.error("일부 저장 실패: " + (error.response?.data?.message || error.message));
+            toast.error("일괄 저장 실패: " + (error.response?.data?.message || error.message));
             fetchInboundData();
         } finally {
             setIsLoading(false);
@@ -391,6 +400,12 @@ export const useQualityManagement = (user, navigationData, onNavigated) => {
         handleCoaSend,
         isCoaPreviewOpen,
         setIsCoaPreviewOpen,
-        coaPreviewData
+        coaPreviewData,
+        isCoaHistoryOpen,
+        setIsCoaHistoryOpen,
+        isLabelModalOpen,
+        setIsLabelModalOpen,
+        labelInboundId,
+        handleOpenLabelModal
     };
 };

@@ -426,7 +426,7 @@ api.interceptors.response.use(
 const inFlightGetRequests = new Map();
 const originalGet = api.get.bind(api);
 api.get = (url, config = {}) => {
-    if (config.skipDedup) {
+    if (config.skipDedup || config.responseType === 'blob') {
         return originalGet(url, config);
     }
     const key = `${url}_${JSON.stringify(config.params || {})}`;
@@ -534,6 +534,7 @@ export const getInboundData = (params = {}) => {
     return api.get(`/api/quality/inbound?${queryParams.toString()}`);
 };
 export const updateInboundData = (id, data) => api.put(`/api/quality/inbound/${id}`, data);
+export const batchUpdateInboundData = (updates) => api.put('/api/quality/inbound/batch', updates);
 export const completeInboundInspection = (id) => api.post(`/api/quality/inbound/${id}/complete`);
 export const getInboundHistory = (id) => api.get(`/api/quality/inbound/${id}/history`, { skipToast: true }).catch(() => ({ data: [] }));
 export const deleteInbound = (id) => api.delete(`/api/quality/inbound/${id}`);
@@ -578,6 +579,16 @@ export const importInboundExcel = (file) => {
 export const downloadInboundTemplate = () => api.get('/api/quality/import-template', { responseType: 'blob' });
 export const requestCoaEmails = (startDate, endDate, customEmails = {}) => api.post('/api/quality/request-coa', { startDate, endDate, customEmails });
 export const getCoaRequestPreview = (startDate, endDate) => api.get(`/api/quality/request-coa/preview?startDate=${startDate}&endDate=${endDate}`);
+export const getCoaRequestHistory = (params = {}) => {
+    const query = new URLSearchParams();
+    if (params.manufacturer) query.append('manufacturer', params.manufacturer);
+    if (params.status) query.append('status', params.status);
+    if (params.startDate) query.append('startDate', params.startDate);
+    if (params.endDate) query.append('endDate', params.endDate);
+    return api.get(`/api/quality/coa-requests/history?${query.toString()}`);
+};
+export const sendCoaReminders = (logIds) => api.post('/api/quality/coa-requests/remind', { logIds });
+export const getInboundLabelInfo = (inboundId) => api.get(`/api/quality/inbound/${inboundId}/label-info`);
 
 // [성능 최적화] 마스터 데이터 프론트엔드 인메모리 캐시 (TTL 5분)
 const masterDataCache = {

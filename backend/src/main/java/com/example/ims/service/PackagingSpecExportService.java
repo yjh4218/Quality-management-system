@@ -67,6 +67,7 @@ public class PackagingSpecExportService {
      * @return byte array containing the Excel file bytes
      * @throws Exception if an error occurs during generation
      */
+    @org.springframework.cache.annotation.Cacheable(value = "spec_excel", key = "#productId")
     public byte[] generateExcel(Long productId) throws Exception {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
@@ -80,7 +81,7 @@ public class PackagingSpecExportService {
             return Long.compare(idB, idA); // descending ID
         });
 
-        // [초고속화] 모든 이미지 URL을 사전에 병렬 비동기로 즉시 프리페치
+        // [초고속화] 모든 이미지 URL을 전용 I/O 스레드풀에서 사전에 병렬 비동기로 즉시 프리페치
         try {
             List<String> urlsToFetch = new ArrayList<>();
             if (specs != null && !specs.isEmpty()) {
@@ -94,9 +95,16 @@ public class PackagingSpecExportService {
             if (product.getImagePaths() != null) urlsToFetch.addAll(product.getImagePaths());
             if (product.getImagePath() != null) urlsToFetch.add(product.getImagePath());
 
-            urlsToFetch.parallelStream()
+            List<java.util.concurrent.CompletableFuture<Void>> futures = urlsToFetch.stream()
                 .filter(u -> u != null && !u.isBlank())
-                .forEach(this::getImageBytesFromFileOrUrl);
+                .distinct()
+                .map(url -> java.util.concurrent.CompletableFuture.runAsync(() -> getImageBytesFromFileOrUrl(url), IMAGE_IO_EXECUTOR))
+                .collect(Collectors.toList());
+
+            if (!futures.isEmpty()) {
+                java.util.concurrent.CompletableFuture.allOf(futures.toArray(new java.util.concurrent.CompletableFuture[0]))
+                    .get(5, java.util.concurrent.TimeUnit.SECONDS);
+            }
         } catch (Exception e) {
             log.warn("Image parallel prefetching warning: " + e.getMessage());
         }
@@ -892,12 +900,49 @@ public class PackagingSpecExportService {
         sheet.setMargin(PageMargin.RIGHT, 0.5);
     }
 
+    private static volatile BaseFont CACHED_BASE_FONT = null;
+    private static volatile Font CACHED_TITLE_FONT = null;
+    private static volatile Font CACHED_SECTION_FONT = null;
+    private static volatile Font CACHED_SUBHEADER_FONT = null;
+    private static volatile Font CACHED_LABEL_FONT = null;
+    private static volatile Font CACHED_DATA_FONT = null;
+    private static volatile Font CACHED_LABEL_TITLE_FONT = null;
+    private static final java.util.Map<String, byte[]> BARCODE_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static synchronized void initPdfFonts() {
+        if (CACHED_BASE_FONT != null) return;
+        BaseFont baseFont;
+        try {
+            baseFont = BaseFont.createFont("c:/windows/fonts/malgun.ttf", BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+        } catch (Exception e1) {
+            try {
+                baseFont = BaseFont.createFont("c:/windows/fonts/gulim.ttc,0", BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+            } catch (Exception e2) {
+                try {
+                    baseFont = BaseFont.createFont(BaseFont.HELVETICA, BaseFont.WINANSI, BaseFont.NOT_EMBEDDED);
+                } catch (Exception e3) {
+                    baseFont = null;
+                }
+            }
+        }
+        CACHED_BASE_FONT = baseFont;
+        BaseColor TEXT_SECTION = new BaseColor(30, 58, 138);
+        BaseColor TEXT_DARK = new BaseColor(15, 23, 42);
+        CACHED_TITLE_FONT = new Font(baseFont, 13, Font.BOLD, BaseColor.WHITE);
+        CACHED_SECTION_FONT = new Font(baseFont, 8.5f, Font.BOLD, TEXT_SECTION);
+        CACHED_SUBHEADER_FONT = new Font(baseFont, 7.5f, Font.BOLD, TEXT_DARK);
+        CACHED_LABEL_FONT = new Font(baseFont, 7f, Font.BOLD, new BaseColor(51, 65, 85));
+        CACHED_DATA_FONT = new Font(baseFont, 7f, Font.NORMAL, TEXT_DARK);
+        CACHED_LABEL_TITLE_FONT = new Font(baseFont, 12, Font.BOLD, BaseColor.WHITE);
+    }
+
     /**
      * Generates a landscape PDF export that faithfully mirrors the Excel layout and visuals.
      * @param productId Product ID
      * @return byte array containing the PDF file bytes
      * @throws Exception if an error occurs during generation
      */
+    @org.springframework.cache.annotation.Cacheable(value = "spec_pdf", key = "#productId")
     public byte[] generatePdf(Long productId) throws Exception {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
@@ -913,22 +958,52 @@ public class PackagingSpecExportService {
 
         PackagingSpecification spec = specs.isEmpty() ? PackagingSpecification.builder().product(product).build() : specs.get(0);
 
+        // [초고속화] 모든 PDF 이미지 URL을 전용 I/O 스레드풀에서 사전에 병렬 비동기로 즉시 프리페치
+        try {
+            List<String> urlsToFetch = new ArrayList<>();
+            if (spec.getInboxLayoutImage() != null) urlsToFetch.add(spec.getInboxLayoutImage());
+            if (spec.getOutboxLayoutImageFile() != null) urlsToFetch.add(spec.getOutboxLayoutImageFile());
+            if (spec.getOutboxLayoutImage() != null) urlsToFetch.add(spec.getOutboxLayoutImage());
+            if (spec.getPalletLayoutImage() != null) urlsToFetch.add(spec.getPalletLayoutImage());
+            if (spec.getMarkingLocationImage() != null) urlsToFetch.add(spec.getMarkingLocationImage());
+            if (product.getImagePaths() != null) urlsToFetch.addAll(product.getImagePaths());
+            if (product.getImagePath() != null) urlsToFetch.add(product.getImagePath());
+
+            if (spec.getId() != null) {
+                List<com.example.ims.entity.PackagingMethodImage> methodImages = methodImageRepository.findActiveBySpecId(spec.getId());
+                if (methodImages != null) {
+                    for (com.example.ims.entity.PackagingMethodImage mi : methodImages) {
+                        if (mi.getImageUrl() != null && !mi.getImageUrl().isBlank()) {
+                            urlsToFetch.add(mi.getImageUrl());
+                        }
+                    }
+                }
+            }
+
+            List<java.util.concurrent.CompletableFuture<Void>> futures = urlsToFetch.stream()
+                .filter(u -> u != null && !u.isBlank())
+                .distinct()
+                .map(url -> java.util.concurrent.CompletableFuture.runAsync(() -> getImageBytesFromFileOrUrl(url), IMAGE_IO_EXECUTOR))
+                .collect(Collectors.toList());
+
+            if (!futures.isEmpty()) {
+                java.util.concurrent.CompletableFuture.allOf(futures.toArray(new java.util.concurrent.CompletableFuture[0]))
+                    .get(4, java.util.concurrent.TimeUnit.SECONDS);
+            }
+        } catch (Exception e) {
+            log.warn("PDF Image parallel prefetching warning: " + e.getMessage());
+        }
+
         // A4 가로(Landscape) 및 18pt 여백으로 엑셀 화면의 8열 와이드 레이아웃 완벽 수용
         Document document = new Document(PageSize.A4.rotate(), 18, 18, 18, 18);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         PdfWriter.getInstance(document, out);
         document.open();
 
-        BaseFont baseFont;
-        try {
-            baseFont = BaseFont.createFont("c:/windows/fonts/malgun.ttf", BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
-        } catch (Exception e1) {
-            try {
-                baseFont = BaseFont.createFont("c:/windows/fonts/gulim.ttc,0", BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
-            } catch (Exception e2) {
-                baseFont = BaseFont.createFont(BaseFont.HELVETICA, BaseFont.WINANSI, BaseFont.NOT_EMBEDDED);
-            }
+        if (CACHED_BASE_FONT == null) {
+            initPdfFonts();
         }
+        BaseFont baseFont = CACHED_BASE_FONT;
 
         // 디자인 테마 색상 (엑셀 스타일과 일치)
         BaseColor BORDER_COLOR = new BaseColor(203, 213, 225);
@@ -940,11 +1015,11 @@ public class PackagingSpecExportService {
         BaseColor BG_DATA = BaseColor.WHITE;
         BaseColor TEXT_DARK = new BaseColor(15, 23, 42);
 
-        Font titleFont = new Font(baseFont, 13, Font.BOLD, BaseColor.WHITE);
-        Font sectionFont = new Font(baseFont, 8.5f, Font.BOLD, TEXT_SECTION);
-        Font subHeaderFont = new Font(baseFont, 7.5f, Font.BOLD, TEXT_DARK);
-        Font labelFont = new Font(baseFont, 7f, Font.BOLD, new BaseColor(51, 65, 85));
-        Font dataFont = new Font(baseFont, 7f, Font.NORMAL, TEXT_DARK);
+        Font titleFont = CACHED_TITLE_FONT != null ? CACHED_TITLE_FONT : new Font(baseFont, 13, Font.BOLD, BaseColor.WHITE);
+        Font sectionFont = CACHED_SECTION_FONT != null ? CACHED_SECTION_FONT : new Font(baseFont, 8.5f, Font.BOLD, TEXT_SECTION);
+        Font subHeaderFont = CACHED_SUBHEADER_FONT != null ? CACHED_SUBHEADER_FONT : new Font(baseFont, 7.5f, Font.BOLD, TEXT_DARK);
+        Font labelFont = CACHED_LABEL_FONT != null ? CACHED_LABEL_FONT : new Font(baseFont, 7f, Font.BOLD, new BaseColor(51, 65, 85));
+        Font dataFont = CACHED_DATA_FONT != null ? CACHED_DATA_FONT : new Font(baseFont, 7f, Font.NORMAL, TEXT_DARK);
 
         // 8열 메인 테이블 구성 (엑셀 시트 1의 8열 비율과 동일)
         PdfPTable table = new PdfPTable(8);
@@ -1258,7 +1333,8 @@ public class PackagingSpecExportService {
         inboxLabelTable.setWidths(new float[]{ 22f, 28f, 22f, 28f });
 
         float ibTitleLeading = 12f * 1.4f;
-        Phrase ibTitlePhrase = new Phrase(ibTitleLeading, "[ 인 박 스 현 품 표 / INBOX LABEL ]", new Font(baseFont, 12, Font.BOLD, BaseColor.WHITE));
+        Font ibFont = CACHED_LABEL_TITLE_FONT != null ? CACHED_LABEL_TITLE_FONT : new Font(baseFont, 12, Font.BOLD, BaseColor.WHITE);
+        Phrase ibTitlePhrase = new Phrase(ibTitleLeading, "[ 인 박 스 현 품 표 / INBOX LABEL ]", ibFont);
         PdfPCell ibTitle = new PdfPCell(ibTitlePhrase);
         ibTitle.setLeading(ibTitleLeading, 0f);
         ibTitle.setColspan(4);
@@ -1304,7 +1380,8 @@ public class PackagingSpecExportService {
         outboxLabelTable.setWidths(new float[]{ 22f, 28f, 22f, 28f });
 
         float obTitleLeading = 12f * 1.4f;
-        Phrase obTitlePhrase = new Phrase(obTitleLeading, "[ 아 웃 박 스 현 품 표 / OUTBOX LABEL ]", new Font(baseFont, 12, Font.BOLD, BaseColor.WHITE));
+        Font obFont = CACHED_LABEL_TITLE_FONT != null ? CACHED_LABEL_TITLE_FONT : new Font(baseFont, 12, Font.BOLD, BaseColor.WHITE);
+        Phrase obTitlePhrase = new Phrase(obTitleLeading, "[ 아 웃 박 스 현 품 표 / OUTBOX LABEL ]", obFont);
         PdfPCell obTitle = new PdfPCell(obTitlePhrase);
         obTitle.setLeading(obTitleLeading, 0f);
         obTitle.setColspan(4);
@@ -1360,7 +1437,8 @@ public class PackagingSpecExportService {
         palletLabelTable.setWidths(new float[]{ 22f, 28f, 22f, 28f });
 
         float pltTitleLeading = 12f * 1.4f;
-        Phrase pltTitlePhrase = new Phrase(pltTitleLeading, "[ 팔 레 트 현 품 표 / PALLET LABEL ]", new Font(baseFont, 12, Font.BOLD, BaseColor.WHITE));
+        Font pltFont = CACHED_LABEL_TITLE_FONT != null ? CACHED_LABEL_TITLE_FONT : new Font(baseFont, 12, Font.BOLD, BaseColor.WHITE);
+        Phrase pltTitlePhrase = new Phrase(pltTitleLeading, "[ 팔 레 트 현 품 표 / PALLET LABEL ]", pltFont);
         PdfPCell pltTitle = new PdfPCell(pltTitlePhrase);
         pltTitle.setLeading(pltTitleLeading, 0f);
         pltTitle.setColspan(4);
@@ -1488,7 +1566,8 @@ public class PackagingSpecExportService {
         PdfPCell cell;
         if (imgBytes != null && imgBytes.length > 0) {
             try {
-                com.itextpdf.text.Image img = com.itextpdf.text.Image.getInstance(imgBytes);
+                byte[] optimized = compressAndResizeForExcel(imgBytes);
+                com.itextpdf.text.Image img = com.itextpdf.text.Image.getInstance(optimized != null ? optimized : imgBytes);
                 img.scaleToFit(maxW, maxH);
                 img.setAlignment(Element.ALIGN_CENTER);
                 cell = new PdfPCell(img, false);
@@ -1506,6 +1585,13 @@ public class PackagingSpecExportService {
         cell.setBackgroundColor(BaseColor.WHITE);
         table.addCell(cell);
     }
+
+    private static final java.util.concurrent.ExecutorService IMAGE_IO_EXECUTOR = 
+        java.util.concurrent.Executors.newFixedThreadPool(8, r -> {
+            Thread t = new Thread(r, "pkg-spec-img-io");
+            t.setDaemon(true);
+            return t;
+        });
 
     private final java.util.Map<String, byte[]> executionImageCache = new java.util.concurrent.ConcurrentHashMap<>();
     private static volatile List<String> cachedValidRoots = null;
@@ -1537,6 +1623,77 @@ public class PackagingSpecExportService {
     }
 
     /**
+     * Resizes and compresses oversized images for Excel export.
+     * Prevents Excel file bloat (20MB -> 1.5MB) and drastically cuts workbook.write() time.
+     */
+    private byte[] compressAndResizeForExcel(byte[] originalBytes) {
+        if (originalBytes == null || originalBytes.length <= 120 * 1024) {
+            return originalBytes;
+        }
+        try {
+            BufferedImage src = ImageIO.read(new java.io.ByteArrayInputStream(originalBytes));
+            if (src == null) return originalBytes;
+
+            int originalW = src.getWidth();
+            int originalH = src.getHeight();
+            int maxDim = 1000;
+
+            if (originalW <= maxDim && originalH <= maxDim && originalBytes.length <= 250 * 1024) {
+                return originalBytes;
+            }
+
+            int targetW = originalW;
+            int targetH = originalH;
+            if (originalW > maxDim || originalH > maxDim) {
+                if (originalW >= originalH) {
+                    targetW = maxDim;
+                    targetH = Math.max(1, (int) ((double) originalH * maxDim / originalW));
+                } else {
+                    targetH = maxDim;
+                    targetW = Math.max(1, (int) ((double) originalW * maxDim / originalH));
+                }
+            }
+
+            boolean hasAlpha = src.getColorModel() != null && src.getColorModel().hasAlpha();
+            BufferedImage scaled = new BufferedImage(targetW, targetH, hasAlpha ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB);
+            Graphics2D g2d = scaled.createGraphics();
+            if (!hasAlpha) {
+                g2d.setColor(Color.WHITE);
+                g2d.fillRect(0, 0, targetW, targetH);
+            }
+            g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            g2d.drawImage(src, 0, 0, targetW, targetH, null);
+            g2d.dispose();
+
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            if (hasAlpha) {
+                ImageIO.write(scaled, "png", baos);
+            } else {
+                java.util.Iterator<javax.imageio.ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpg");
+                if (writers.hasNext()) {
+                    javax.imageio.ImageWriter writer = writers.next();
+                    javax.imageio.ImageWriteParam param = writer.getDefaultWriteParam();
+                    param.setCompressionMode(javax.imageio.ImageWriteParam.MODE_EXPLICIT);
+                    param.setCompressionQuality(0.85f);
+                    try (javax.imageio.stream.ImageOutputStream ios = ImageIO.createImageOutputStream(baos)) {
+                        writer.setOutput(ios);
+                        writer.write(null, new javax.imageio.IIOImage(scaled, null, null), param);
+                    }
+                    writer.dispose();
+                } else {
+                    ImageIO.write(scaled, "jpg", baos);
+                }
+            }
+            byte[] compressed = baos.toByteArray();
+            return (compressed.length > 0 && compressed.length < originalBytes.length) ? compressed : originalBytes;
+        } catch (Exception e) {
+            log.debug("Image compression skipped or failed: {}", e.getMessage());
+            return originalBytes;
+        }
+    }
+
+    /**
      * Helper to read image bytes directly from local disk path, remote URL, or Base64 Data URL.
      */
     private byte[] getImageBytesFromFileOrUrl(String fileUrl) {
@@ -1547,9 +1704,11 @@ public class PackagingSpecExportService {
         }
         byte[] result = fetchImageBytesDirect(key);
         if (result != null && result.length > 0) {
-            executionImageCache.put(key, result);
+            byte[] optimized = compressAndResizeForExcel(result);
+            executionImageCache.put(key, optimized);
+            return optimized;
         }
-        return result;
+        return null;
     }
 
     private byte[] fetchImageBytesDirect(String fileUrl) {
@@ -1589,8 +1748,8 @@ public class PackagingSpecExportService {
             try {
                 java.net.URL url = new java.net.URL(fileUrl);
                 java.net.URLConnection conn = url.openConnection();
-                conn.setConnectTimeout(2500);
-                conn.setReadTimeout(3500);
+                conn.setConnectTimeout(1000);
+                conn.setReadTimeout(2000);
                 try (java.io.InputStream in = conn.getInputStream();
                      ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
                     byte[] buf = new byte[8192];
@@ -1824,6 +1983,10 @@ public class PackagingSpecExportService {
         if (barcodeText == null || barcodeText.isBlank() || "BARCODE-NOT-SET".equals(barcodeText)) {
             barcodeText = "NO BARCODE";
         }
+        String cacheKey = barcodeText + "_" + width + "_" + height;
+        byte[] cached = BARCODE_CACHE.get(cacheKey);
+        if (cached != null) return cached;
+
         try {
             BufferedImage barcodeImg = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
             Graphics2D g2d = barcodeImg.createGraphics();
@@ -1887,7 +2050,9 @@ public class PackagingSpecExportService {
 
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             ImageIO.write(barcodeImg, "png", baos);
-            return baos.toByteArray();
+            byte[] generated = baos.toByteArray();
+            BARCODE_CACHE.put(cacheKey, generated);
+            return generated;
         } catch (Exception e) {
             log.error("Failed to generate barcode image for " + barcodeText, e);
             return null;

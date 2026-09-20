@@ -121,6 +121,18 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 지원하지 않는 HTTP 메서드 호출 시 예외 처리 (405 Method Not Allowed).
+     */
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<Map<String, String>> handleMethodNotSupportedException(org.springframework.web.HttpRequestMethodNotSupportedException ex) {
+        log.warn("HTTP method not supported: {} (Supported: {})", ex.getMethod(), ex.getSupportedHttpMethods());
+        Map<String, String> response = new HashMap<>();
+        response.put("error", "MethodNotAllowed");
+        response.put("message", "지원하지 않는 HTTP 메서드 요청입니다: " + ex.getMethod());
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(response);
+    }
+
+    /**
      * 비즈니스 로직 충돌 및 정밀 상태 전이 실패 시 예외 처리 (409 Conflict).
      */
     @ExceptionHandler(IllegalStateException.class)

@@ -48,6 +48,7 @@ const ManufacturerAuditPage = lazyRetry(() => import('./ManufacturerAuditPage.js
 const ManufacturerAuditDashboard = lazyRetry(() => import('./ManufacturerAuditDashboard.jsx'));
 const IngredientCompliancePage = lazyRetry(() => import('./IngredientCompliancePage.jsx'));
 const DocumentRequestManagementPage = lazyRetry(() => import('./DocumentRequestManagementPage.jsx'));
+const SystemBenchmarkPage = lazyRetry(() => import('./SystemBenchmarkPage.jsx'));
 
 import BomCategoryManagementPage from './BomCategoryManagementPage.jsx';
 import PackagingTemplatePage from './PackagingTemplatePage.jsx';
@@ -112,7 +113,8 @@ const PAGE_INFO = {
     announcements: { title: '📢 전체공지' },
     manufacturerGuide: { title: '🤝 제조사 협업 가이드' },
     documentRequests: { title: '📋 필수 품질서류 관리' },
-    documentTypeConfig: { title: '⚙️ 추가서류 설정' }
+    documentTypeConfig: { title: '⚙️ 추가서류 설정' },
+    systemBenchmark: { title: '⚡ 시스템 속도 측정 센터' }
 };
 
 class ErrorBoundary extends React.Component {
@@ -799,7 +801,7 @@ const App = () => {
         // 1. 사이드바 그룹 자동 열기
         let targetSection = null;
         if (['dashboard', 'announcements', 'notifications'].includes(pageKey)) targetSection = 'monitoring';
-        else if (['users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin', 'accessLogs', 'bugReports', 'mailTemplates', 'notificationSettings'].includes(pageKey)) targetSection = 'system';
+        else if (['users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin', 'accessLogs', 'bugReports', 'mailTemplates', 'notificationSettings', 'systemBenchmark'].includes(pageKey)) targetSection = 'system';
         else if (['products', 'brands', 'ingredientCompliance', 'bomMaster', 'bomCategories', 'salesChannels'].includes(pageKey)) targetSection = 'products';
         else if (['manufacturers', 'manufacturerCategories'].includes(pageKey)) targetSection = 'partner';
         else if (['manufacturerAudits', 'manufacturerAuditDashboard', 'manufacturerAuditItems'].includes(pageKey)) targetSection = 'audit';
@@ -1030,10 +1032,13 @@ const App = () => {
         });
     };
 
-    const canAccess = (menuKey) => hasPermission(menuKey, 'VIEW');
+    const canAccess = (menuKey) => {
+        if (menuKey === 'systemBenchmark') return isAdmin || isAQualityTeam || hasPermission('logs') || hasPermission('systemBenchmark');
+        return hasPermission(menuKey, 'VIEW');
+    };
 
     const hasMonitoringAccess = canAccess('dashboard') || canAccess('announcements') || canAccess('notifications');
-    const hasSystemAccess = canAccess('users') || canAccess('logs') || canAccess('roles') || canAccess('guideManagement') || canAccess('dashboardMgmt') || canAccess('trashBin') || canAccess('accessLogs') || canAccess('bugReports') || canAccess('mailTemplates') || canAccess('notificationSettings');
+    const hasSystemAccess = canAccess('users') || canAccess('logs') || canAccess('roles') || canAccess('guideManagement') || canAccess('dashboardMgmt') || canAccess('trashBin') || canAccess('accessLogs') || canAccess('bugReports') || canAccess('mailTemplates') || canAccess('notificationSettings') || canAccess('systemBenchmark');
     const hasProductsAccess = canAccess('products') || canAccess('brands') || canAccess('ingredientCompliance') || canAccess('bomMaster') || canAccess('bomCategories') || canAccess('salesChannels') || canAccess('productDashboard');
     const hasPartnerAccess = canAccess('manufacturers') || canAccess('manufacturerCategories') || canAccess('manufacturerGuide');
     const hasAuditAccess = canAccess('manufacturerAudits') || canAccess('manufacturerAuditDashboard') || canAccess('manufacturerAuditItems');
@@ -1047,7 +1052,7 @@ const App = () => {
         const activePage = tabs.find(t => t.id === activeTabId)?.page;
         switch(section) {
             case 'monitoring': return ['dashboard', 'announcements', 'notifications'].includes(activePage);
-            case 'system': return ['users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin', 'accessLogs', 'bugReports', 'mailTemplates', 'notificationSettings'].includes(activePage);
+            case 'system': return ['users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin', 'accessLogs', 'bugReports', 'mailTemplates', 'notificationSettings', 'systemBenchmark'].includes(activePage);
             case 'products': return ['products', 'brands', 'ingredientCompliance', 'bomMaster', 'bomCategories', 'salesChannels', 'productDashboard'].includes(activePage);
             case 'partner': return ['manufacturers', 'manufacturerCategories', 'manufacturerGuide'].includes(activePage);
             case 'audit': return ['manufacturerAudits', 'manufacturerAuditDashboard', 'manufacturerAuditItems'].includes(activePage);
@@ -1199,11 +1204,12 @@ const App = () => {
                                     </>
                                 )}
 
-                                {(canAccess('logs') || canAccess('bugReports')) && (
+                                {(canAccess('logs') || canAccess('bugReports') || canAccess('systemBenchmark')) && (
                                     <>
                                         <div className="sidebar-sub-header">운영 모니터링</div>
                                         {canAccess('logs') && renderSidebarItem('logs', '📜 시스템 변경 이력')}
                                         {canAccess('bugReports') && renderSidebarItem('bugReports', '🐞 버그 리포트 관리')}
+                                        {canAccess('systemBenchmark') && renderSidebarItem('systemBenchmark', '⚡ 시스템 속도 측정 센터')}
                                     </>
                                 )}
 
@@ -1657,6 +1663,7 @@ const App = () => {
                                 {canAccess('accessLogs') && tab.page === 'accessLogs' && <AccessLogPage user={user} />}
                                 {canAccess('bugReports') && tab.page === 'bugReports' && <BugReportPage user={user} />}
                                 {canAccess('notificationSettings') && tab.page === 'notificationSettings' && <NotificationSettingsPage user={user} />}
+                                {canAccess('systemBenchmark') && tab.page === 'systemBenchmark' && <SystemBenchmarkPage user={user} />}
                             </div>
                         </div>
                     ))}

@@ -55,6 +55,7 @@ public class AuditTemplate {
 
     @OneToMany(mappedBy = "template", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("displayOrder ASC")
+    @org.hibernate.annotations.BatchSize(size = 50)
     @Builder.Default
     @com.fasterxml.jackson.annotation.JsonManagedReference("template-groups")
     private List<AuditTemplateGroup> groups = new ArrayList<>();

@@ -8,10 +8,11 @@ import java.util.Optional;
 
 public interface AuditTemplateRepository extends JpaRepository<AuditTemplate, Long> {
     
-    // [안정화] 네이티브 쿼리로 is_active + is_deleted 필터링 (Hibernate 필터 우회)
-    @Query(value = "SELECT * FROM audit_templates WHERE (is_active = true OR is_active IS NULL) AND (is_deleted = false OR is_deleted IS NULL) ORDER BY classification_name ASC", nativeQuery = true)
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"groups"})
+    @Query("SELECT DISTINCT t FROM AuditTemplate t WHERE (t.active = true) AND (t.deleted = false OR t.deleted IS NULL) ORDER BY t.classificationName ASC")
     List<AuditTemplate> findAllActiveTemplates();
     
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"groups"})
     Optional<AuditTemplate> findById(Long id);
     
     Optional<AuditTemplate> findByClassificationName(String name);

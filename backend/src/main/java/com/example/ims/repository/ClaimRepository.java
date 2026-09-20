@@ -12,6 +12,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long>, JpaSpecific
     List<Claim> findByManufacturerAndSharedWithManufacturerTrue(String manufacturer);
     List<Claim> findByReceiptDateAfter(LocalDate date);
     List<Claim> findByReceiptDateBetween(LocalDate startDate, LocalDate endDate);
+    List<Claim> findByReceiptDateBetweenAndItemCode(LocalDate startDate, LocalDate endDate, String itemCode);
     List<Claim> findByReceiptDateAfterOrderByReceiptDateDesc(LocalDate date);
     List<Claim> findTop50ByReceiptDateAfterOrderByReceiptDateDesc(LocalDate date);
 

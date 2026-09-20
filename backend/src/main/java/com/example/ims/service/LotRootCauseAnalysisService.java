@@ -37,25 +37,35 @@ public class LotRootCauseAnalysisService {
         return analyzeLotPpm(itemCode, null, null, startDate, endDate, false);
     }
 
+    @org.springframework.cache.annotation.Cacheable(value = "lot_ppm_analysis", key = "{#itemCode, #productName, #lotNumber, #startDate, #endDate, #groupByMaster}")
     public List<LotPpmAnalysisDto> analyzeLotPpm(String itemCode, String productName, String lotNumber, LocalDate startDate, LocalDate endDate, boolean groupByMaster) {
         try {
             LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : LocalDateTime.now().minusMonths(6);
             LocalDateTime endDateTime = endDate != null ? endDate.atTime(23, 59, 59) : LocalDateTime.now();
 
-        // 1. 기간 내 WmsInbound (입고 정보) 조회 - DB 조건 쿼리 활용
-        List<WmsInbound> inbounds = wmsInboundRepository.findByInboundDateBetween(startDateTime, endDateTime).stream()
+        // 1. 기간 내 WmsInbound (입고 정보) 조회 - 품목코드가 지정된 경우 DB 조건 쿼리로 대역폭 최적화
+        String cleanItemCode = (itemCode != null && !itemCode.trim().isEmpty()) ? itemCode.trim() : null;
+        List<WmsInbound> rawInbounds = (cleanItemCode != null)
+                ? wmsInboundRepository.findByInboundDateBetweenAndItemCode(startDateTime, endDateTime, cleanItemCode)
+                : wmsInboundRepository.findByInboundDateBetween(startDateTime, endDateTime);
+
+        List<WmsInbound> inbounds = rawInbounds.stream()
                 .filter(i -> !i.isDeleted())
-                .filter(i -> itemCode == null || itemCode.trim().isEmpty() || itemCode.trim().equalsIgnoreCase(i.getItemCode()))
+                .filter(i -> cleanItemCode == null || cleanItemCode.equalsIgnoreCase(i.getItemCode()))
                 .filter(i -> productName == null || productName.trim().isEmpty() || (i.getProductName() != null && i.getProductName().toLowerCase().contains(productName.trim().toLowerCase())))
                 .filter(i -> lotNumber == null || lotNumber.trim().isEmpty() || (i.getLotNumber() != null && i.getLotNumber().toLowerCase().contains(lotNumber.trim().toLowerCase())))
                 .collect(Collectors.toList());
 
-        // 2. 기간 내 Claim (클레임 정보) 조회 - DB 조건 쿼리 활용
+        // 2. 기간 내 Claim (클레임 정보) 조회 - 품목코드가 지정된 경우 DB 조건 쿼리로 대역폭 최적화
         LocalDate claimStartDate = startDate != null ? startDate : LocalDate.now().minusMonths(6);
         LocalDate claimEndDate = endDate != null ? endDate : LocalDate.now();
-        List<Claim> claims = claimRepository.findByReceiptDateBetween(claimStartDate, claimEndDate).stream()
+        List<Claim> rawClaims = (cleanItemCode != null)
+                ? claimRepository.findByReceiptDateBetweenAndItemCode(claimStartDate, claimEndDate, cleanItemCode)
+                : claimRepository.findByReceiptDateBetween(claimStartDate, claimEndDate);
+
+        List<Claim> claims = rawClaims.stream()
                 .filter(c -> !c.isDeleted())
-                .filter(c -> itemCode == null || itemCode.trim().isEmpty() || itemCode.trim().equalsIgnoreCase(c.getItemCode()))
+                .filter(c -> cleanItemCode == null || cleanItemCode.equalsIgnoreCase(c.getItemCode()))
                 .filter(c -> productName == null || productName.trim().isEmpty() || (c.getProductName() != null && c.getProductName().toLowerCase().contains(productName.trim().toLowerCase())))
                 .filter(c -> lotNumber == null || lotNumber.trim().isEmpty() || (c.getLotNumber() != null && c.getLotNumber().toLowerCase().contains(lotNumber.trim().toLowerCase())))
                 .collect(Collectors.toList());

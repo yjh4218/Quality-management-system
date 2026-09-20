@@ -192,6 +192,7 @@ public class Product {
     private String ingredients; // 전성분 요약 캐시 (List View용 역정규화 필드)
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @org.hibernate.annotations.BatchSize(size = 50)
     @Builder.Default
     private java.util.List<ProductIngredient> productIngredients = new java.util.ArrayList<>();
 
@@ -230,6 +231,7 @@ public class Product {
      */
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(name = "product_sales_channels", joinColumns = @JoinColumn(name = "product_id"), inverseJoinColumns = @JoinColumn(name = "channel_id"))
+    @org.hibernate.annotations.BatchSize(size = 50)
     @Builder.Default
     private java.util.List<SalesChannel> channels = new java.util.ArrayList<>();
 

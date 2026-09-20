@@ -209,6 +209,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
     const viewer3DRef = useRef(null);
     const [snapshotUploading, setSnapshotUploading] = useState(false);
     const [confirmDialogState, setConfirmDialogState] = useState(null); // { icon, title, message, asIs, toBe, onConfirm }
+    const [isDownloadingSpec, setIsDownloadingSpec] = useState(false);
 
     useEffect(() => {
         if (product) {
@@ -592,6 +593,40 @@ const ProductDrawer = ({ product, onClose, user }) => {
     const packagingMethodSaveRef = useRef(null);
     const packagingMethodReloadRef = useRef(null);
     const packagingMethodInheritRef = useRef(null);
+
+    // [스마트 변경 감지 - Dirty Checking]
+    // 폼/사양서 로드 시점 스냅샷 보관 후, 수정 항목이 있을 때만 저장 유도 팝업 표출
+    const initialSnapshotRef = useRef(null);
+
+    const takeSnapshot = (prod = formData, spec = currentSpec, revs = specRevisions, comps = specComponents, mImgs = packagingMethodImages) => {
+        try {
+            initialSnapshotRef.current = JSON.stringify({
+                formData: prod,
+                currentSpec: spec,
+                specRevisions: revs,
+                specComponents: comps,
+                packagingMethodImages: mImgs
+            });
+        } catch (e) {
+            console.warn('[QMS] Failed to serialize form snapshot:', e);
+        }
+    };
+
+    const hasUnsavedChanges = () => {
+        if (!initialSnapshotRef.current) return false;
+        try {
+            const currentStr = JSON.stringify({
+                formData,
+                currentSpec,
+                specRevisions,
+                specComponents,
+                packagingMethodImages
+            });
+            return currentStr !== initialSnapshotRef.current;
+        } catch (e) {
+            return false;
+        }
+    };
 
     const getFullFileUrl = (url) => {
         if (!url) return '';
@@ -1988,6 +2023,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
         });
         setHistory([]);
         setIsSpecLoaded(false);
+        initialSnapshotRef.current = null;
     };
 
     const fetchHistory = async (id) => {
@@ -2140,6 +2176,9 @@ const ProductDrawer = ({ product, onClose, user }) => {
                 if (targetSpecId && packagingMethodReloadRef.current) {
                     packagingMethodReloadRef.current(targetSpecId);
                 }
+                setTimeout(() => {
+                    takeSnapshot();
+                }, 150);
             }
         } catch (error) {
             console.error("포장사양서 상세 로드 실패 (신규 사양서 준비): ", error);
@@ -2559,6 +2598,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                 }
             }
             clearDraft();
+            takeSnapshot();
             return true;
         } catch (error) {
             console.error("Batch save error:", error);
@@ -2591,11 +2631,16 @@ const ProductDrawer = ({ product, onClose, user }) => {
     const handleDownloadSpecExcel = async () => {
         if (!product || !product.id) return;
 
-        // 1. 사용자 확인 알림창 (Confirm Dialog)
-        const confirmSave = window.confirm(
-            "현재 작성 및 수정한 내용으로 저장 후 엑셀을 다운로드합니다.\n저장해도 될까요?"
-        );
-        if (!confirmSave) return;
+        // 1. 스마트 변경 감지 (Dirty Checking)
+        // 변경사항이 없으면 확인창 없이 즉시 고속 다운로드, 변경사항이 있는 경우에만 저장 여부 확인창 팝업
+        const isModified = hasUnsavedChanges();
+        let wantSave = false;
+
+        if (isModified) {
+            wantSave = window.confirm(
+                "현재 작성 및 수정한 항목이 있습니다. 수정항목을 저장 후 다운로드 하시겠습니까?\n\n[확인] : 수정항목 저장 후 최신 사양서 다운로드\n[취소] : 저장 생략하고 기존 저장본으로 즉시 다운로드"
+            );
+        }
 
         // 2. 유효성 엄격 검증 (Strict Validation)
         const hasInbox = currentSpec.inboxUseYn === 'O';
@@ -2628,17 +2673,33 @@ const ProductDrawer = ({ product, onClose, user }) => {
             return; // 누락 항목 존재 시 엑셀 다운로드 완전 차단!
         }
 
-        // 3. 수정된 내용 먼저 자동 저장 실행
-        const toastId = toast.loading("💾 작성 및 수정 내용을 저장 중입니다...");
-        try {
-            const isSaved = await executeSaveAll(true);
-            if (!isSaved) {
-                toast.update(toastId, { render: "저장에 실패하여 엑셀 다운로드가 취소되었습니다.", type: "error", isLoading: false, autoClose: 3000 });
+        // 3. 사용자가 저장을 원한 경우에만 선행 자동 저장 실행
+        if (isDownloadingSpec) {
+            toast.info("이미 다운로드 작업이 진행 중입니다. 잠시만 기다려주세요.");
+            return;
+        }
+        setIsDownloadingSpec(true);
+        let toastId = null;
+        if (wantSave) {
+            toastId = toast.loading("💾 작성 및 수정 내용을 저장 중입니다...");
+            try {
+                const isSaved = await executeSaveAll(true);
+                if (!isSaved) {
+                    toast.update(toastId, { render: "저장에 실패하여 엑셀 다운로드가 취소되었습니다.", type: "error", isLoading: false, autoClose: 3000 });
+                    setIsDownloadingSpec(false);
+                    return;
+                }
+                toast.update(toastId, { render: "📑 포장사양서 엑셀을 생성 중입니다...", type: "info", isLoading: true });
+            } catch (err) {
+                toast.update(toastId, { render: "저장 중 오류가 발생했습니다.", type: "error", isLoading: false, autoClose: 3000 });
+                setIsDownloadingSpec(false);
                 return;
             }
+        } else {
+            toastId = toast.loading("⚡ 포장사양서 엑셀을 고속 다운로드 중입니다...");
+        }
 
-            // 4. 저장 완료 후 엑셀 다운로드
-            toast.update(toastId, { render: "📑 포장사양서 엑셀을 생성 중입니다...", type: "info", isLoading: true });
+        try {
             const response = await downloadPackagingSpecExcel(product.id);
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
@@ -2647,21 +2708,28 @@ const ProductDrawer = ({ product, onClose, user }) => {
             document.body.appendChild(link);
             link.click();
             link.remove();
-            toast.update(toastId, { render: "💾 저장 완료 후 📑 포장사양서 엑셀 다운로드가 완료되었습니다!", type: "success", isLoading: false, autoClose: 3000 });
+            toast.update(toastId, { render: wantSave ? "💾 저장 완료 후 📑 포장사양서 엑셀 다운로드가 완료되었습니다!" : "⚡ 포장사양서 엑셀 다운로드가 완료되었습니다!", type: "success", isLoading: false, autoClose: 3000 });
         } catch (error) {
             toast.update(toastId, { render: "엑셀 다운로드에 실패했습니다.", type: "error", isLoading: false, autoClose: 3000 });
             console.error(error);
+        } finally {
+            setIsDownloadingSpec(false);
         }
     };
 
     const handleDownloadSpecPdf = async () => {
         if (!product || !product.id) return;
 
-        // 1. 사용자 확인 알림창 (Confirm Dialog)
-        const confirmSave = window.confirm(
-            "현재 작성 및 수정한 내용으로 저장 후 PDF를 다운로드합니다.\n저장해도 될까요?"
-        );
-        if (!confirmSave) return;
+        // 1. 스마트 변경 감지 (Dirty Checking)
+        // 변경사항이 없으면 확인창 없이 즉시 고속 다운로드, 변경사항이 있는 경우에만 저장 여부 확인창 팝업
+        const isModified = hasUnsavedChanges();
+        let wantSave = false;
+
+        if (isModified) {
+            wantSave = window.confirm(
+                "현재 작성 및 수정한 항목이 있습니다. 수정항목을 저장 후 다운로드 하시겠습니까?\n\n[확인] : 수정항목 저장 후 최신 사양서 다운로드\n[취소] : 저장 생략하고 기존 저장본으로 즉시 다운로드"
+            );
+        }
 
         // 2. 유효성 엄격 검증 (Strict Validation)
         const hasInbox = currentSpec.inboxUseYn === 'O';
@@ -2694,17 +2762,33 @@ const ProductDrawer = ({ product, onClose, user }) => {
             return; // 누락 항목 존재 시 PDF 다운로드 완전 차단!
         }
 
-        // 3. 수정된 내용 먼저 자동 저장 실행
-        const toastId = toast.loading("💾 작성 및 수정 내용을 저장 중입니다...");
-        try {
-            const isSaved = await executeSaveAll(true);
-            if (!isSaved) {
-                toast.update(toastId, { render: "저장에 실패하여 PDF 다운로드가 취소되었습니다.", type: "error", isLoading: false, autoClose: 3000 });
+        // 3. 사용자가 저장을 원한 경우에만 선행 자동 저장 실행
+        if (isDownloadingSpec) {
+            toast.info("이미 다운로드 작업이 진행 중입니다. 잠시만 기다려주세요.");
+            return;
+        }
+        setIsDownloadingSpec(true);
+        let toastId = null;
+        if (wantSave) {
+            toastId = toast.loading("💾 작성 및 수정 내용을 저장 중입니다...");
+            try {
+                const isSaved = await executeSaveAll(true);
+                if (!isSaved) {
+                    toast.update(toastId, { render: "저장에 실패하여 PDF 다운로드가 취소되었습니다.", type: "error", isLoading: false, autoClose: 3000 });
+                    setIsDownloadingSpec(false);
+                    return;
+                }
+                toast.update(toastId, { render: "📄 포장사양서 PDF를 생성 중입니다...", type: "info", isLoading: true });
+            } catch (err) {
+                toast.update(toastId, { render: "저장 중 오류가 발생했습니다.", type: "error", isLoading: false, autoClose: 3000 });
+                setIsDownloadingSpec(false);
                 return;
             }
+        } else {
+            toastId = toast.loading("⚡ 포장사양서 PDF를 고속 다운로드 중입니다...");
+        }
 
-            // 4. 저장 완료 후 PDF 다운로드
-            toast.update(toastId, { render: "📄 포장사양서 PDF를 생성 중입니다...", type: "info", isLoading: true });
+        try {
             const response = await downloadPackagingSpecPdf(product.id);
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
@@ -2713,10 +2797,12 @@ const ProductDrawer = ({ product, onClose, user }) => {
             document.body.appendChild(link);
             link.click();
             link.remove();
-            toast.update(toastId, { render: "💾 저장 완료 후 📄 포장사양서 PDF 다운로드가 완료되었습니다!", type: "success", isLoading: false, autoClose: 3000 });
+            toast.update(toastId, { render: wantSave ? "💾 저장 완료 후 📄 포장사양서 PDF 다운로드가 완료되었습니다!" : "⚡ 포장사양서 PDF 다운로드가 완료되었습니다!", type: "success", isLoading: false, autoClose: 3000 });
         } catch (error) {
             toast.update(toastId, { render: "PDF 다운로드에 실패했습니다.", type: "error", isLoading: false, autoClose: 3000 });
             console.error(error);
+        } finally {
+            setIsDownloadingSpec(false);
         }
     };
 

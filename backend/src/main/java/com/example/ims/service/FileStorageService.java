@@ -271,7 +271,7 @@ public class FileStorageService {
 
             byte[] fileBytes = file.getBytes();
             saveToLocal(fileBytes, fileName);
-            saveToDatabase(fileBytes, fileName, originalFileName, file.getContentType());
+            saveToDatabaseAsync(fileBytes, fileName, originalFileName, file.getContentType());
 
             if ("s3".equalsIgnoreCase(storageType) && s3Client != null) {
                 uploadToS3(fileBytes, fileName, file.getContentType());
@@ -280,6 +280,20 @@ public class FileStorageService {
         } catch (IOException ex) {
             throw new RuntimeException("Could not store file " + originalFileName + ". Please try again!", ex);
         }
+    }
+
+    private static final java.util.concurrent.ExecutorService DB_FILE_BACKUP_EXECUTOR = 
+        java.util.concurrent.Executors.newFixedThreadPool(4, r -> {
+            Thread t = new Thread(r, "file-db-backup");
+            t.setDaemon(true);
+            return t;
+        });
+
+    private void saveToDatabaseAsync(byte[] data, String relativePath, String originalFileName, String contentType) {
+        if (storedFileRepository == null || data == null || data.length == 0) return;
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            saveToDatabase(data, relativePath, originalFileName, contentType);
+        }, DB_FILE_BACKUP_EXECUTOR);
     }
 
     public String normalizeRelativePath(String path) {
@@ -335,7 +349,7 @@ public class FileStorageService {
         try {
             String normalizedPath = normalizeRelativePath(relativePath);
             saveToLocal(bytes, normalizedPath);
-            saveToDatabase(bytes, normalizedPath, originalName != null ? originalName : Paths.get(normalizedPath).getFileName().toString(), contentType);
+            saveToDatabaseAsync(bytes, normalizedPath, originalName != null ? originalName : Paths.get(normalizedPath).getFileName().toString(), contentType);
             if ("s3".equalsIgnoreCase(storageType) && s3Client != null) {
                 uploadToS3(bytes, normalizedPath, contentType);
             }

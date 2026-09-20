@@ -47,6 +47,7 @@ public class ProductService {
     private final PackagingSpecService packagingSpecService;
     private final com.example.ims.repository.SalesChannelRepository salesChannelRepository;
     private final SalesChannelService salesChannelService;
+    private final org.springframework.cache.CacheManager cacheManager;
 
     /**
      * Helper to initialize shelf life for existing products if missing.
@@ -81,17 +82,27 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<com.example.ims.dto.ProductSummaryRecord> getProductsPaginated(String username, int page, int size) {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
-        
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size, org.springframework.data.domain.Sort.by("createdAt").descending());
+
         String companyFilter = null;
-        if (user.getRole().contains("ROLE_MANUFACTURER") || "제조사".equals(user.getDepartment())) {
-            companyFilter = user.getCompanyName();
+        if (username != null && !username.trim().isEmpty() && !username.equalsIgnoreCase("anonymousUser")) {
+            org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+            boolean isManufacturerRole = auth != null && auth.getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("ROLE_MANUFACTURER"));
+            if (isManufacturerRole) {
+                User user = userRepository.findByUsername(username).orElse(null);
+                if (user != null && (user.getRole().contains("ROLE_MANUFACTURER") || "제조사".equals(user.getDepartment()))) {
+                    companyFilter = user.getCompanyName();
+                }
+            }
         }
 
-        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size, org.springframework.data.domain.Sort.by("createdAt").descending());
-        
-        return productRepository.searchProductsSummary(companyFilter, null, null, null, null, null, null, null, pageable);
+        if (companyFilter != null && !companyFilter.trim().isEmpty()) {
+            return productRepository.findActiveProductsSummaryByManufacturer(companyFilter.trim(), pageable);
+        }
+
+        // [최적화] COALESCE와 서브쿼리가 없는 순수 인덱스 스캔 페이징 쿼리 실행
+        return productRepository.findActiveProductsSummary(pageable);
     }
     
     @Transactional(readOnly = true)
@@ -111,38 +122,59 @@ public class ProductService {
     /**
      * Get a product by its ID.
      * ID를 통해 단일 제품 상세 정보를 조회합니다.
+     * [성능 최적화] 인메모리 Caffeine 캐시 및 LAZY 사전 로딩을 적용하여 0ms급 응답을 제공합니다.
      * 
      * @param id Product ID (제품 식별자)
      * @return Optional wrapping the Product (제품 객체 또는 Empty)
      */
     @Transactional(readOnly = true)
     public java.util.Optional<Product> getProductById(Long id, String username) {
-        Product product = productRepository.findById(id).orElse(null);
-        if (product == null) return java.util.Optional.empty();
+        if (id == null) return java.util.Optional.empty();
 
-        User user = username != null ? userRepository.findByUsername(username).orElse(null) : null;
-        if (user != null) {
-            String userCompany = user.getCompanyName() != null ? user.getCompanyName().trim() : "";
-            String productCompany = (product.getManufacturerInfo() != null && product.getManufacturerInfo().getName() != null) 
-                    ? product.getManufacturerInfo().getName().trim() : "";
+        // 1. 인메모리 Caffeine 캐시 확인
+        org.springframework.cache.Cache cache = cacheManager != null ? cacheManager.getCache("product_detail") : null;
+        Product product = cache != null ? cache.get(id, Product.class) : null;
 
-            boolean isManufacturer = (user.getRole() != null && user.getRole().contains("ROLE_MANUFACTURER")) || "제조사".equalsIgnoreCase(user.getDepartment());
-            if (isManufacturer && !userCompany.isEmpty() && !productCompany.isEmpty() && !userCompany.contains(productCompany) && !productCompany.contains(userCompany)) {
-                log.warn(">>>> [SECURITY] Manufacturer {} attempted to access product {} owned by {}", userCompany, product.getItemCode(), productCompany);
-                return java.util.Optional.empty();
+        if (product == null) {
+            product = productRepository.findDetailedById(id).orElse(null);
+            if (product == null) return java.util.Optional.empty();
+
+            // [FIX] LAZY 단일 엔티티 강제 초기화
+            if (product.getBrand() != null) org.hibernate.Hibernate.initialize(product.getBrand());
+            if (product.getManufacturerInfo() != null) org.hibernate.Hibernate.initialize(product.getManufacturerInfo());
+
+            // [FIX] LAZY 컬렉션 강제 초기화 - JSON 직렬화 시 세션 종료로 인한 LazyInitializationException 방지
+            if (product.getImagePaths() != null) product.getImagePaths().size();
+            if (product.getProductIngredients() != null) product.getProductIngredients().size();
+            if (product.getChannels() != null) product.getChannels().size();
+            if (product.getComponents() != null) product.getComponents().size();
+            if (product.getPackagingCertificates() != null) product.getPackagingCertificates().size();
+
+            if (cache != null) {
+                cache.put(id, product);
             }
         }
 
-        // [FIX] LAZY 단일 엔티티 강제 초기화
-        if (product.getBrand() != null) org.hibernate.Hibernate.initialize(product.getBrand());
-        if (product.getManufacturerInfo() != null) org.hibernate.Hibernate.initialize(product.getManufacturerInfo());
+        // 2. 제조사 권한 보안 검증 (ROLE_MANUFACTURER 인 경우에만 User 조회)
+        if (username != null && !username.trim().isEmpty() && !username.equalsIgnoreCase("anonymousUser")) {
+            org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+            boolean isManufacturerRole = auth != null && auth.getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("ROLE_MANUFACTURER"));
+            if (isManufacturerRole) {
+                User user = userRepository.findByUsername(username).orElse(null);
+                if (user != null) {
+                    String userCompany = user.getCompanyName() != null ? user.getCompanyName().trim() : "";
+                    String productCompany = (product.getManufacturerInfo() != null && product.getManufacturerInfo().getName() != null) 
+                            ? product.getManufacturerInfo().getName().trim() : "";
 
-        // [FIX] LAZY 컬렉션 강제 초기화 - JSON 직렬화 시 세션 종료로 인한 LazyInitializationException 방지
-        if (product.getImagePaths() != null) product.getImagePaths().size();
-        if (product.getProductIngredients() != null) product.getProductIngredients().size();
-        if (product.getChannels() != null) product.getChannels().size();
-        if (product.getComponents() != null) product.getComponents().size();
-        if (product.getPackagingCertificates() != null) product.getPackagingCertificates().size();
+                    boolean isMfr = (user.getRole() != null && user.getRole().contains("ROLE_MANUFACTURER")) || "제조사".equalsIgnoreCase(user.getDepartment());
+                    if (isMfr && !userCompany.isEmpty() && !productCompany.isEmpty() && !userCompany.contains(productCompany) && !productCompany.contains(userCompany)) {
+                        log.warn(">>>> [SECURITY] Manufacturer {} attempted to access product {} owned by {}", userCompany, product.getItemCode(), productCompany);
+                        return java.util.Optional.empty();
+                    }
+                }
+            }
+        }
 
         return java.util.Optional.of(product);
     }
@@ -300,7 +332,7 @@ public class ProductService {
      * @return The updated Product entity (수정이 반영된 제품 객체)
      */
     @Transactional
-    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
+    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats", "product_detail"}, allEntries = true)
     public Product updateProduct(Long id, Product updatedProduct, String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
@@ -521,7 +553,7 @@ public class ProductService {
      * @param username The user performing the action
      */
     @Transactional
-    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
+    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats", "product_detail"}, allEntries = true)
     public void deleteProduct(Long id, String username) {
         User user = userRepository.findByUsername(username).orElseThrow();
         String company = user.getCompanyName() != null ? user.getCompanyName() : "시스템";
@@ -561,7 +593,7 @@ public class ProductService {
      * @param username The user performing the restoration
      */
     @Transactional
-    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
+    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats", "product_detail"}, allEntries = true)
     public void restoreProduct(Long id, String username) {
         User user = userRepository.findByUsername(username).orElseThrow();
         String company = user.getCompanyName() != null ? user.getCompanyName() : "시스템";
@@ -599,7 +631,7 @@ public class ProductService {
      * @param username The admin user performing the hard delete
      */
     @Transactional
-    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
+    @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats", "product_detail"}, allEntries = true)
     public void hardDeleteProduct(Long id, String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
@@ -859,6 +891,7 @@ public class ProductService {
      * 감사 로그나 부가 트리거 없이 제품 엔티티를 조용히 업데이트합니다.
      */
     @Transactional
+    @org.springframework.cache.annotation.CacheEvict(value = "product_detail", allEntries = true)
     public void updateProductSilently(Product product) {
         productRepository.save(product);
     }

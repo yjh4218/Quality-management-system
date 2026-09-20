@@ -53,8 +53,35 @@ public class PerformanceLoggingFilter implements Filter {
 
         long startNano = System.nanoTime();
 
+        jakarta.servlet.http.HttpServletResponseWrapper responseWrapper = new jakarta.servlet.http.HttpServletResponseWrapper(httpResponse) {
+            private void injectHeader() {
+                if (!isCommitted()) {
+                    long durationMs = (System.nanoTime() - startNano) / 1_000_000L;
+                    setHeader("X-Response-Time-Millis", String.valueOf(durationMs));
+                }
+            }
+
+            @Override
+            public ServletOutputStream getOutputStream() throws IOException {
+                injectHeader();
+                return super.getOutputStream();
+            }
+
+            @Override
+            public java.io.PrintWriter getWriter() throws IOException {
+                injectHeader();
+                return super.getWriter();
+            }
+
+            @Override
+            public void flushBuffer() throws IOException {
+                injectHeader();
+                super.flushBuffer();
+            }
+        };
+
         try {
-            chain.doFilter(request, response);
+            chain.doFilter(request, responseWrapper);
         } finally {
             long durationNs = System.nanoTime() - startNano;
             long durationMs = durationNs / 1_000_000L;

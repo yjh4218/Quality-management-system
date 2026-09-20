@@ -120,32 +120,38 @@ public class DocumentRequestService {
         if (customType.getScope() == DocumentScope.PRODUCT) {
             // isMaster = true 인 모든 제품을 구함
             List<Product> masterProducts = productRepository.findByIsMasterTrue();
+            List<DocumentRequirement> toSave = new ArrayList<>();
             for (Product prod : masterProducts) {
                 Optional<DocumentRequirement> existing = requirementRepository
                         .findByProductIdAndCustomDocumentTypeId(prod.getId(), customType.getId());
                 if (existing.isEmpty()) {
-                    DocumentRequirement req = DocumentRequirement.builder()
+                    toSave.add(DocumentRequirement.builder()
                             .productId(prod.getId())
                             .customDocumentTypeId(customType.getId())
                             .status(DocumentStatus.PENDING)
-                            .build();
-                    requirementRepository.save(req);
+                            .build());
                 }
+            }
+            if (!toSave.isEmpty()) {
+                requirementRepository.saveAll(toSave);
             }
         } else if (customType.getScope() == DocumentScope.MANUFACTURER) {
             // 마스터 품목이 1개 이상 연결되어 있는 활성 제조사만 조회
             List<Long> activeManufacturerIds = productRepository.findActiveManufacturerIdsWithMasterProducts();
+            List<DocumentRequirement> toSave = new ArrayList<>();
             for (Long mId : activeManufacturerIds) {
                 Optional<DocumentRequirement> existing = requirementRepository
                         .findByManufacturerIdAndCustomDocumentTypeId(mId, customType.getId());
                 if (existing.isEmpty()) {
-                    DocumentRequirement req = DocumentRequirement.builder()
+                    toSave.add(DocumentRequirement.builder()
                             .manufacturerId(mId)
                             .customDocumentTypeId(customType.getId())
                             .status(DocumentStatus.PENDING)
-                            .build();
-                    requirementRepository.save(req);
+                            .build());
                 }
+            }
+            if (!toSave.isEmpty()) {
+                requirementRepository.saveAll(toSave);
             }
         }
     }

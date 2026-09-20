@@ -25,6 +25,38 @@ public class CacheConfig {
                 .maximumSize(1000)
                 .expireAfterWrite(10, TimeUnit.MINUTES)
                 .recordStats());
+
+        // 대용량 바이너리 문서(PDF/Excel) 전용 격리 캐시 풀 (메모리 과부하 방지: 최대 50건, 30분)
+        cacheManager.registerCustomCache("spec_pdf", Caffeine.newBuilder()
+                .initialCapacity(10)
+                .maximumSize(50)
+                .expireAfterWrite(30, TimeUnit.MINUTES)
+                .recordStats()
+                .build());
+
+        cacheManager.registerCustomCache("spec_excel", Caffeine.newBuilder()
+                .initialCapacity(10)
+                .maximumSize(50)
+                .expireAfterWrite(30, TimeUnit.MINUTES)
+                .recordStats()
+                .build());
+
+        // 제조사 평가 템플릿 마스터 캐시 (최대 20건, 1시간)
+        cacheManager.registerCustomCache("audit_templates", Caffeine.newBuilder()
+                .initialCapacity(5)
+                .maximumSize(20)
+                .expireAfterWrite(1, TimeUnit.HOURS)
+                .recordStats()
+                .build());
+
+        // 제품 단건 상세 조회 전용 캐시 풀 (최대 500건, 10분)
+        cacheManager.registerCustomCache("product_detail", Caffeine.newBuilder()
+                .initialCapacity(50)
+                .maximumSize(500)
+                .expireAfterWrite(10, TimeUnit.MINUTES)
+                .recordStats()
+                .build());
+
         return cacheManager;
     }
 }

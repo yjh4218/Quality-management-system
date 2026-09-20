@@ -191,9 +191,12 @@ public class ProductionAuditService {
             productRepository.save(p);
 
             if (!wasDisclosed && audit.isDisclosed() && p.getManufacturerInfo() != null && p.getManufacturerInfo().getName() != null) {
-                com.example.ims.entity.Manufacturer mfr = manufacturerRepository.findByName(p.getManufacturerInfo().getName()).orElse(null);
-                if (mfr != null && mfr.getEmail() != null && !mfr.getEmail().isEmpty()) {
-                    emailService.sendProductionAuditNotificationEmail(mfr.getEmail(), p);
+                com.example.ims.entity.Manufacturer mfr = p.getManufacturerInfo();
+                String mfrEmail = (mfr.getEmail() != null && !mfr.getEmail().isEmpty())
+                        ? mfr.getEmail()
+                        : manufacturerRepository.findByName(mfr.getName()).map(com.example.ims.entity.Manufacturer::getEmail).orElse(null);
+                if (mfrEmail != null && !mfrEmail.isEmpty()) {
+                    emailService.sendProductionAuditNotificationEmail(mfrEmail, p);
                 } else {
                     log.warn("Cannot send audit notification email: Manufacturer email not found for {}", p.getManufacturerInfo().getName());
                 }

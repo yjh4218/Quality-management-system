@@ -301,12 +301,19 @@ public class PackagingSpecService {
     }
 
     @Transactional
+    @org.springframework.cache.annotation.Caching(evict = {
+        @org.springframework.cache.annotation.CacheEvict(value = "spec_excel", allEntries = true),
+        @org.springframework.cache.annotation.CacheEvict(value = "spec_pdf", allEntries = true)
+    })
     public PackagingSpecFullDto saveFullSpec(PackagingSpecFullDto dto, String username) {
         PackagingSpecification spec = dto.getSpec();
+        Product managedProduct = null;
         if (spec.getProduct() != null && spec.getProduct().getId() != null) {
-            Product prod = productRepository.findById(spec.getProduct().getId())
-                    .orElseThrow(() -> new RuntimeException("Product not found"));
-            spec.setProduct(prod);
+            managedProduct = productRepository.findById(spec.getProduct().getId())
+                    .orElseThrow(() -> new RuntimeException("상품 정보를 찾을 수 없습니다. (ID: " + spec.getProduct().getId() + ")"));
+            spec.setProduct(managedProduct);
+        } else {
+            throw new RuntimeException("사양서 저장을 위한 상품 ID가 전달되지 않았습니다.");
         }
 
         // [자동 동기화] palletTypeStr 입력값을 기반으로 ENUM palletType 자동 매핑
@@ -337,8 +344,6 @@ public class PackagingSpecService {
                 SalesChannel matched = null;
                 if (ch.getId() != null) matched = idMap.get(ch.getId());
                 if (matched == null && ch.getName() != null) matched = nameMap.get(ch.getName().trim());
-                if (matched == null && ch.getId() != null) matched = salesChannelRepository.findById(ch.getId()).orElse(null);
-                if (matched == null && ch.getName() != null) matched = salesChannelRepository.findByNameAndIsDeletedFalse(ch.getName()).orElse(null);
                 if (matched != null && !channelsToValidate.contains(matched)) {
                     channelsToValidate.add(matched);
                 }
@@ -367,45 +372,49 @@ public class PackagingSpecService {
                     }
                     
                     if (!isMatch && spec.getPalletTypeStr() != null) {
-                        String userPalStr = spec.getPalletTypeStr();
-                        if (reqPalette.contains("아주") && (userPalStr.contains("아주") || userPalStr.contains("AJU"))) {
-                            isMatch = true;
-                        } else if ((reqPalette.contains("일회용") || reqPalette.contains("검은색")) && (userPalStr.contains("일회용") || userPalStr.contains("검은색"))) {
-                            isMatch = true;
-                        } else if (reqPalette.contains("목재") && userPalStr.contains("목재")) {
-                            isMatch = true;
-                        }
+                        String userP = spec.getPalletTypeStr();
+                        if (reqPalette.contains("아주") && (userP.contains("아주") || userP.contains("AJU"))) isMatch = true;
+                        else if ((reqPalette.contains("일회용") || reqPalette.contains("검은색")) && (userP.contains("일회용") || userP.contains("DISPOSABLE") || userP.contains("검은색"))) isMatch = true;
+                        else if (reqPalette.contains("목재") && (userP.contains("목재") || userP.contains("WOOD"))) isMatch = true;
                     }
-
-                    // 불일치 시 채널 규격으로 자동 보정
+                    
                     if (!isMatch) {
-                        spec.setPalletTypeStr(reqPalette);
-                        if (reqPalette.contains("아주")) spec.setPalletType(PaletteType.AJU);
-                        else if (reqPalette.contains("일회용") || reqPalette.contains("검은색")) spec.setPalletType(PaletteType.DISPOSABLE_EXPORT);
-                        else if (reqPalette.contains("목재")) spec.setPalletType(PaletteType.WOODEN_FUMIGATED);
+                        log.warn("Pallet type mismatch with channel requirement. Channel requires: {}, Selected: {}", reqPalette, selectedPalette);
                     }
                 }
-
-                // 2. 적재 높이 검사
-                if (spec.getOnePalletHeight() != null && channel.getMaxStackHeightMm() != null) {
-                    if (spec.getOnePalletHeight() > channel.getMaxStackHeightMm()) {
-                        spec.setOnePalletHeight(channel.getMaxStackHeightMm().doubleValue());
+                
+                // 2. 적재 높이 제한 준수 검사
+                if (channel.getMaxStackHeightMm() != null && channel.getMaxStackHeightMm() > 0) {
+                    int maxHeight = channel.getMaxStackHeightMm();
+                    Integer effHeight = null;
+                    if (spec.getOnePalletHeight() != null && spec.getOnePalletHeight() > 0) {
+                        effHeight = spec.getOnePalletHeight().intValue();
+                    } else if (spec.getPalletHeightLimit() != null && !spec.getPalletHeightLimit().trim().isEmpty()) {
+                        try {
+                            String numOnly = spec.getPalletHeightLimit().replaceAll("[^0-9]", "");
+                            if (!numOnly.isEmpty()) effHeight = Integer.parseInt(numOnly);
+                        } catch (Exception ignored) {}
+                    }
+                    
+                    if (effHeight != null && effHeight > maxHeight) {
+                        log.warn("Pallet stack height exceeds channel limit! Limit: {}mm, Configured: {}mm", maxHeight, effHeight);
                     }
                 }
-
-                // 3. 물류 스티커 필수 여부 검사 및 자동 반영
-                if (Boolean.TRUE.equals(channel.getChannelStickerRequired())) {
-                    spec.setApplyChannelSticker(true);
+                
+                // 3. 인박스/아웃박스 현품표 필수 기재/착인 기준 검사
+                if (channel.getInboxLabelMarkingRule() != null && !channel.getInboxLabelMarkingRule().trim().isEmpty()) {
+                    if (spec.getInboxLabelMarkingRule() == null || spec.getInboxLabelMarkingRule().trim().isEmpty()) {
+                        spec.setInboxLabelMarkingRule(channel.getInboxLabelMarkingRule());
+                    }
                 }
-
-                // 4. 사용기한 규격 형식 검사 및 자동 반영
-                if ("표기금지".equals(channel.getExpDateFormat())) {
-                    spec.setLotAndExpiryFormat("표기금지");
-                } else if (channel.getExpDateFormat() != null && !channel.getExpDateFormat().trim().isEmpty() && !"(미정)".equals(channel.getExpDateFormat())) {
-                    String reqFormat = channel.getExpDateFormat();
-                    String userFormat = spec.getLotAndExpiryFormat();
-                    if (userFormat == null || !userFormat.contains(reqFormat)) {
-                        spec.setLotAndExpiryFormat(reqFormat);
+                if (channel.getOutboxLabelMarkingRule() != null && !channel.getOutboxLabelMarkingRule().trim().isEmpty()) {
+                    if (spec.getOutboxLabelMarkingRule() == null || spec.getOutboxLabelMarkingRule().trim().isEmpty()) {
+                        spec.setOutboxLabelMarkingRule(channel.getOutboxLabelMarkingRule());
+                    }
+                }
+                if (channel.getPalletLabelMarkingRule() != null && !channel.getPalletLabelMarkingRule().trim().isEmpty()) {
+                    if (spec.getPalletLabelMarkingRule() == null || spec.getPalletLabelMarkingRule().trim().isEmpty()) {
+                        spec.setPalletLabelMarkingRule(channel.getPalletLabelMarkingRule());
                     }
                 }
             }
@@ -413,18 +422,9 @@ public class PackagingSpecService {
 
         spec.setLastModifiedBy(username);
         
-        // 500 에러 예방: Product 엔티티가 detached/transient 상태일 수 있으므로 DB에서 완전한 영속 객체로 조회
-        if (spec.getProduct() != null && spec.getProduct().getId() != null) {
-            Product managedProduct = productRepository.findById(spec.getProduct().getId())
-                    .orElseThrow(() -> new RuntimeException("상품 정보를 찾을 수 없습니다. (ID: " + spec.getProduct().getId() + ")"));
-            spec.setProduct(managedProduct);
-
-            // 마스터 바코드 자동 동기화 (SSOT 보장)
-            if ((spec.getBarcode() == null || spec.getBarcode().isBlank()) && managedProduct.getProductBarcode() != null) {
-                spec.setBarcode(managedProduct.getProductBarcode());
-            }
-        } else {
-            throw new RuntimeException("사양서 저장을 위한 상품 ID가 전달되지 않았습니다.");
+        // 마스터 바코드 자동 동기화 (SSOT 보장)
+        if ((spec.getBarcode() == null || spec.getBarcode().isBlank()) && managedProduct.getProductBarcode() != null) {
+            spec.setBarcode(managedProduct.getProductBarcode());
         }
 
         // 수치 및 필드 타입 안전 보정 (1 팔레트 중량 자동 산출: 아웃박스 중량 × 팔레트 적재 박스 수)

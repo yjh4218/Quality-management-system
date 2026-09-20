@@ -23,7 +23,8 @@ const QualityDetailDrawer = ({
     handleSave,
     getFullUrl,
     getCleanFileName,
-    isLoading
+    isLoading,
+    onOpenLabelModal
 }) => {
     const { canViewHistory } = usePermissions(user);
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -234,9 +235,33 @@ const QualityDetailDrawer = ({
                             </div>
                         </div>
                     </div>
-                    <button onClick={onClose} className="secondary close-button">
-                        <span className="icon">×</span> 닫기
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {onOpenLabelModal && (
+                            <button 
+                                onClick={() => onOpenLabelModal(selectedInbound.id)}
+                                className="outline"
+                                style={{
+                                    fontSize: '13px',
+                                    padding: '6px 14px',
+                                    backgroundColor: '#fff',
+                                    color: '#4f46e5',
+                                    borderColor: '#6366f1',
+                                    borderRadius: '8px',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '5px'
+                                }}
+                            >
+                                <span>🏷️</span>
+                                <span>관리품 라벨 출력</span>
+                            </button>
+                        )}
+                        <button onClick={onClose} className="secondary close-button">
+                            <span className="icon">×</span> 닫기
+                        </button>
+                    </div>
                 </div>
 
                 <div className="drawer-tabs-wrapper">
@@ -367,7 +392,14 @@ const QualityDetailDrawer = ({
                                             disabled={!canEditWms} 
                                         />
                                     </div>
-                                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                                    <div className="form-group" style={{ marginBottom: 0 }}>
+                                        <label>제조일자</label>
+                                        <input 
+                                            type="date" 
+                                            value={selectedInbound.mfgDate || ''} 
+                                            onChange={handleChange('mfgDate')} 
+                                            disabled={!canEditWms} 
+                                        />
                                     </div>
                                 </div>
                             </div>

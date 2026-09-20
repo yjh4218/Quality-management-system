@@ -22,6 +22,8 @@ public class SystemStartupRunner implements CommandLineRunner {
     private final JdbcTemplate jdbcTemplate;
     private final com.example.ims.service.SystemInitializationService initializationService;
     private final com.example.ims.service.RegulatoryCrawlerService regulatoryCrawlerService;
+    @org.springframework.context.annotation.Lazy
+    private final com.example.ims.service.ProductService productService;
 
     @org.springframework.beans.factory.annotation.Value("${ADMIN_INITIAL_PASSWORD:}")
     private String adminInitialPassword;
@@ -53,6 +55,18 @@ public class SystemStartupRunner implements CommandLineRunner {
                 log.info(">>>> [SYSTEM STARTUP] Starting Regulatory Data Seeding...");
                 regulatoryCrawlerService.init();
                 
+                // [성능 최적화] 콜드 스타트 제거를 위한 핵심 제품 쿼리 JPA 캐시 웜업(Warm-up)
+                try {
+                    log.info(">>>> [SYSTEM STARTUP] Warming up high-priority Product JPA query cache...");
+                    var paged = productService.getProductsPaginated("admin", 0, 50);
+                    if (paged != null && !paged.getContent().isEmpty()) {
+                        productService.getProductById(paged.getContent().get(0).id(), "admin");
+                    }
+                    log.info(">>>> [SYSTEM STARTUP] [SUCCESS] Product JPA query cache warm-up completed.");
+                } catch (Exception warmUpEx) {
+                    log.warn(">>>> [SYSTEM STARTUP] Product warm-up skipped: {}", warmUpEx.getMessage());
+                }
+
                 log.info(">>>> [SYSTEM STARTUP] [SUCCESS] Background initialization complete.");
             } catch (Exception e) {
                 log.error(">>>> [SYSTEM STARTUP] [CRITICAL] Background Flow error: {}", e.getMessage(), e);

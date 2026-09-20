@@ -19,6 +19,7 @@ public interface WmsInboundRepository extends JpaRepository<WmsInbound, Long>, J
 
     List<WmsInbound> findByQualityDecisionDate(String qualityDecisionDate);
     List<WmsInbound> findByInboundDateBetween(LocalDateTime start, LocalDateTime end);
+    List<WmsInbound> findByInboundDateBetweenAndItemCode(LocalDateTime start, LocalDateTime end, String itemCode);
     java.util.Optional<WmsInbound> findByGrnNumber(String grnNumber);
     long countByInboundDateBetween(LocalDateTime start, LocalDateTime end);
 

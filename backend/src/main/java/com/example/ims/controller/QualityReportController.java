@@ -134,6 +134,23 @@ public class QualityReportController {
         return ResponseEntity.ok(qualityReportService.updateInbound(id, updatedData, user, isAdmin));
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'MANUFACTURER', 'RESPONSIBLE_SALES')")
+    @PutMapping("/inbound/batch")
+    public ResponseEntity<List<WmsInbound>> updateInboundBatch(@RequestBody List<WmsInbound> updates,
+                                                               @AuthenticationPrincipal UserDetails userDetails) {
+        User user = userRepository.findByUsername(userDetails.getUsername())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        boolean isACompanyQuality = "더파운더즈".equals(user.getCompanyName()) && "Quality".equals(user.getDepartment());
+        boolean isQualityRole = user.getRole().contains("QUALITY") || user.getRole().contains("QUALITY_TEAM");
+        boolean isResponsibleSales = user.getRole().contains("RESPONSIBLE_SALES");
+        boolean isAdmin = user.getRole().contains("ADMIN");
+        
+        if (!isAdmin && !isACompanyQuality && !isQualityRole && !isResponsibleSales && !user.getRole().contains("MANUFACTURER")) {
+            throw new RuntimeException("수정 권한이 없습니다.");
+        }
+        return ResponseEntity.ok(qualityReportService.updateInboundBatch(updates, user, isAdmin));
+    }
+
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES')")
     @DeleteMapping("/inbound/{id}")
     public ResponseEntity<Void> deleteInbound(@PathVariable Long id, @AuthenticationPrincipal UserDetails userDetails) {
@@ -242,6 +259,40 @@ public class QualityReportController {
         java.time.LocalDate end = java.time.LocalDate.parse(endDate);
         List<java.util.Map<String, Object>> response = qualityReportService.getCoaRequestPreview(start, end);
         return ResponseEntity.ok(response);
+    }
+
+    @lombok.Data
+    public static class CoaRemindRequestDto {
+        private List<Long> logIds;
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
+    @GetMapping("/coa-requests/history")
+    public ResponseEntity<java.util.Map<String, Object>> getCoaRequestHistory(
+            @RequestParam(required = false) String manufacturer,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+        java.time.LocalDate start = (startDate != null && !startDate.isBlank()) ? java.time.LocalDate.parse(startDate) : null;
+        java.time.LocalDate end = (endDate != null && !endDate.isBlank()) ? java.time.LocalDate.parse(endDate) : null;
+        java.util.Map<String, Object> history = qualityReportService.getCoaRequestHistory(manufacturer, status, start, end);
+        return ResponseEntity.ok(history);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
+    @PostMapping("/coa-requests/remind")
+    public ResponseEntity<java.util.Map<String, Object>> sendCoaReminders(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestBody CoaRemindRequestDto dto) {
+        String username = userDetails != null ? userDetails.getUsername() : "시스템";
+        java.util.Map<String, Object> result = qualityReportService.sendCoaReminderEmails(dto.getLogIds(), username);
+        return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/inbound/{id}/label-info")
+    public ResponseEntity<java.util.Map<String, Object>> getInboundLabelInfo(@PathVariable Long id) {
+        java.util.Map<String, Object> labelInfo = qualityReportService.getInboundLabelInfo(id);
+        return ResponseEntity.ok(labelInfo);
     }
 
     private void checkQualityAuthority(UserDetails userDetails) {

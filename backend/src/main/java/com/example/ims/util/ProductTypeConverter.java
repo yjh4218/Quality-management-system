@@ -26,12 +26,6 @@ public class ProductTypeConverter implements AttributeConverter<ProductType, Str
         if (dbData == null || dbData.trim().isEmpty()) {
             return ProductType.ETC;
         }
-
-        try {
-            return ProductType.valueOf(dbData);
-        } catch (IllegalArgumentException e) {
-            log.warn(">>>> [LEGACY DATA FOUND] Invalid ProductType in DB: '{}'. Mapping to ETC.", dbData);
-            return ProductType.ETC;
-        }
+        return ProductType.fromString(dbData);
     }
 }

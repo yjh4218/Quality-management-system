@@ -27,6 +27,7 @@ public class ManufacturerAuditService {
     private final ManufacturerAuditHistoryRepository historyRepository;
     private final AuditLogService auditLogService;
 
+    @org.springframework.cache.annotation.Cacheable(value = "audit_templates", key = "'all'")
     @Transactional(readOnly = true)
     public List<AuditTemplate> getAllTemplates() {
         // [안정화] 네이티브 쿼리로 NULL-safe 필터링 수행
@@ -54,6 +55,7 @@ public class ManufacturerAuditService {
         return template;
     }
 
+    @org.springframework.cache.annotation.CacheEvict(value = "audit_templates", allEntries = true)
     @Transactional
     public AuditTemplate saveTemplate(AuditTemplate template) {
         // Ensure bidirectional relationship for JPA cascading
@@ -315,6 +317,8 @@ public class ManufacturerAuditService {
         auditRepository.save(audit);
     }
     
+    @org.springframework.cache.annotation.CacheEvict(value = "audit_templates", allEntries = true)
+    @Transactional
     public void deleteTemplate(Long id) {
         templateRepository.findById(id).ifPresent(t -> {
             t.setDeleted(true);

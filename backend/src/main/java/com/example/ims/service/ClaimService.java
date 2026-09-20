@@ -369,6 +369,8 @@ public class ClaimService {
         return claimHistoryRepository.findByClaimIdOrderByModifiedAtDesc(claimId, org.springframework.data.domain.PageRequest.of(0, 100));
     }
 
+    private static final ThreadLocal<List<ClaimHistory>> CLAIM_HISTORY_BATCH = new ThreadLocal<>();
+
     private void compareAndSave(Long claimId, User user, String field, String oldVal, String newVal) {
         // [보정] null과 ""를 동일하게 취급하여 불필요한 이력 방지 및 데이터 누락 방지 통합
         String nOld = (oldVal == null || oldVal.trim().isEmpty()) ? "" : oldVal.trim();
@@ -377,7 +379,7 @@ public class ClaimService {
         if (!nOld.equals(nNew)) {
             String company = user.getCompanyName() != null ? user.getCompanyName() : "시스템";
             String modifierName = user.getName() + " (" + company + ")";
-            claimHistoryRepository.save(ClaimHistory.builder()
+            ClaimHistory history = ClaimHistory.builder()
                     .claimId(claimId)
                     .modifier(modifierName)
                     .modifierId(user.getId())
@@ -387,7 +389,14 @@ public class ClaimService {
                     .fieldName(field)
                     .oldValue(nOld)
                     .newValue(nNew)
-                    .build());
+                    .build();
+
+            List<ClaimHistory> batch = CLAIM_HISTORY_BATCH.get();
+            if (batch != null) {
+                batch.add(history);
+            } else {
+                claimHistoryRepository.save(history);
+            }
         }
     }
 
@@ -400,6 +409,15 @@ public class ClaimService {
     @Transactional
     @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public Claim updateClaim(Long id, Claim updatedData, User user) {
+        CLAIM_HISTORY_BATCH.set(new ArrayList<>());
+        try {
+            return doUpdateClaim(id, updatedData, user);
+        } finally {
+            CLAIM_HISTORY_BATCH.remove();
+        }
+    }
+
+    private Claim doUpdateClaim(Long id, Claim updatedData, User user) {
         Claim existing = getClaim(id, user, false);
         sanitizeClaimFields(updatedData);
         
@@ -718,10 +736,17 @@ public class ClaimService {
                 .newEntity(saved)
                 .build());
 
+        // [일괄 저장] 버퍼링된 변경 이력 일괄 영속화 (Single Batch Save)
+        List<ClaimHistory> batch = CLAIM_HISTORY_BATCH.get();
+        if (batch != null && !batch.isEmpty()) {
+            claimHistoryRepository.saveAll(batch);
+        }
+
         return saved;
     }
 
     @Transactional(readOnly = true)
+    @org.springframework.cache.annotation.Cacheable(value = "dashboard_stats", key = "{#role, #companyName, #startDate, #endDate, #itemCode, #productName, #manufacturer}")
     public ClaimDashboardDto getDashboardStats(String role, String companyName, String startDate, String endDate,
             String itemCode, String productName, String manufacturer) {
         // Calculate the maximum required period for all KPI cards (at least 1 year ago)

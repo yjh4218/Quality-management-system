@@ -31,6 +31,7 @@ public class QualityReportService {
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
     private final com.example.ims.repository.ManufacturerRepository manufacturerRepository;
     private final com.example.ims.service.EmailService emailService;
+    private final com.example.ims.repository.CoaRequestLogRepository coaRequestLogRepository;
 
     @Transactional
     public QualityReport submitReport(QualityReport report) {
@@ -108,6 +109,34 @@ public class QualityReportService {
      */
     @Transactional
     public WmsInbound updateInbound(Long id, WmsInbound updatedData, User modifierUser, boolean isAdmin) {
+        INBOUND_HISTORY_BATCH.set(new java.util.ArrayList<>());
+        try {
+            return doUpdateInbound(id, updatedData, modifierUser, isAdmin);
+        } finally {
+            INBOUND_HISTORY_BATCH.remove();
+        }
+    }
+
+    @Transactional
+    public List<WmsInbound> updateInboundBatch(List<WmsInbound> updates, User modifierUser, boolean isAdmin) {
+        if (updates == null || updates.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+        INBOUND_HISTORY_BATCH.set(new java.util.ArrayList<>());
+        try {
+            List<WmsInbound> results = new java.util.ArrayList<>(updates.size());
+            for (WmsInbound updatedData : updates) {
+                if (updatedData.getId() != null) {
+                    results.add(doUpdateInbound(updatedData.getId(), updatedData, modifierUser, isAdmin));
+                }
+            }
+            return results;
+        } finally {
+            INBOUND_HISTORY_BATCH.remove();
+        }
+    }
+
+    private WmsInbound doUpdateInbound(Long id, WmsInbound updatedData, User modifierUser, boolean isAdmin) {
         String modifier = modifierUser.getName() + " (" + (modifierUser.getCompanyName() != null ? modifierUser.getCompanyName() : "시스템") + ")";
         WmsInbound original = inboundRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("해당 입고 정보를 찾을 수 없습니다."));
@@ -136,6 +165,7 @@ public class QualityReportService {
             compareAndSave(id, modifierUser, "overallStatus", original.getOverallStatus(), updatedData.getOverallStatus());
             compareAndSave(id, modifierUser, "lotNumber", original.getLotNumber(), updatedData.getLotNumber());
             compareAndSave(id, modifierUser, "expirationDate", original.getExpirationDate(), updatedData.getExpirationDate());
+            compareAndSave(id, modifierUser, "mfgDate", original.getMfgDate(), updatedData.getMfgDate());
             compareAndSave(id, modifierUser, "specificGravity", original.getSpecificGravity(), updatedData.getSpecificGravity());
             compareAndSave(id, modifierUser, "remark", original.getRemark(), updatedData.getRemark());
             compareAndSave(id, modifierUser, "coaFileUrl", original.getCoaFileUrl(), updatedData.getCoaFileUrl());
@@ -161,6 +191,7 @@ public class QualityReportService {
             
             original.setLotNumber(updatedData.getLotNumber());
             original.setExpirationDate(updatedData.getExpirationDate());
+            if (updatedData.getMfgDate() != null) original.setMfgDate(updatedData.getMfgDate());
             original.setSpecificGravity(updatedData.getSpecificGravity());
             original.setRemark(updatedData.getRemark());
             original.setCoaFileUrl(updatedData.getCoaFileUrl());
@@ -185,6 +216,25 @@ public class QualityReportService {
             updateOverallStatus(original);
 
             WmsInbound saved = inboundRepository.save(original);
+
+            // 성적서 파일 등록 감지 시 미회신 성적서 요청 로그 회신완료(FULFILLED) 및 리드타임 자동 계산
+            if (saved.getCoaFileUrl() != null && !saved.getCoaFileUrl().isBlank()) {
+                try {
+                    List<com.example.ims.entity.CoaRequestLog> pendingLogs = coaRequestLogRepository.findByInboundIdAndStatusNot(id, "FULFILLED");
+                    java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                    for (com.example.ims.entity.CoaRequestLog plog : pendingLogs) {
+                        plog.setStatus("FULFILLED");
+                        plog.setFulfilledAt(now);
+                        if (plog.getRequestedAt() != null) {
+                            double hours = java.time.Duration.between(plog.getRequestedAt(), now).toMinutes() / 60.0;
+                            plog.setLeadTimeHours(Math.round(hours * 10.0) / 10.0);
+                        }
+                        coaRequestLogRepository.save(plog);
+                    }
+                } catch (Exception ex) {
+                    log.warn("Failed to update CoaRequestLog fulfillment for inbound {}: {}", id, ex.getMessage());
+                }
+            }
             
             // 글로벌 감사 로그 추가 (상세 정보 포함)
             eventPublisher.publishEvent(com.example.ims.event.EntityChangeEvent.builder()
@@ -201,12 +251,21 @@ public class QualityReportService {
                     .newEntity(saved)
                     .build());
 
+            // [일괄 저장] 버퍼링된 변경 이력 일괄 영속화 (Single Batch Save)
+            java.util.List<WmsInboundHistory> batch = INBOUND_HISTORY_BATCH.get();
+            if (batch != null && !batch.isEmpty()) {
+                historyRepository.saveAll(batch);
+                batch.clear();
+            }
+
             return saved;
         } catch (Exception e) {
             log.error("Failed to update quality report for inbound ID {}: {}", id, e.getMessage(), e);
             throw new RuntimeException("수정 중 오류 발생: " + e.getMessage(), e);
         }
     }
+
+    private static final ThreadLocal<java.util.List<WmsInboundHistory>> INBOUND_HISTORY_BATCH = new ThreadLocal<>();
 
     private void compareAndSave(Long inboundId, User user, String field, Object oldVal, Object newVal) {
         String sOld = (oldVal == null || oldVal.toString().trim().isEmpty()) ? "" : oldVal.toString().trim();
@@ -227,7 +286,13 @@ public class QualityReportService {
                     .newValue(sNew)
                     .changeLog(null) // 개별 필드 기반으로 표시하므로 null 처리
                     .build();
-            historyRepository.save(history);
+
+            java.util.List<WmsInboundHistory> batch = INBOUND_HISTORY_BATCH.get();
+            if (batch != null) {
+                batch.add(history);
+            } else {
+                historyRepository.save(history);
+            }
         }
     }
 
@@ -693,6 +758,29 @@ public class QualityReportService {
             try {
                 emailService.sendCustomEmail(targetEmail, "[QMS] 시험성적서(COA) 등록 요청의 건 (" + startDate.toString() + " ~ " + endDate.toString() + ")", html.toString());
                 success++;
+
+                // [이력 추적] 발송 성공 시 건별 요청 로그 적재
+                java.time.LocalDateTime reqTime = java.time.LocalDateTime.now();
+                for (WmsInbound item : items) {
+                    try {
+                        com.example.ims.entity.CoaRequestLog reqLog = com.example.ims.entity.CoaRequestLog.builder()
+                                .inboundId(item.getId())
+                                .grnNumber(item.getGrnNumber())
+                                .itemCode(item.getItemCode())
+                                .productName(item.getProductName())
+                                .lotNumber(item.getLotNumber())
+                                .manufacturer(mfrName)
+                                .recipientEmail(targetEmail)
+                                .requestedAt(reqTime)
+                                .requestedBy("품질관리팀")
+                                .status("REQUESTED")
+                                .reminderCount(0)
+                                .build();
+                        coaRequestLogRepository.save(reqLog);
+                    } catch (Exception ex) {
+                        log.warn("Failed to save CoaRequestLog for item {}: {}", item.getItemCode(), ex.getMessage());
+                    }
+                }
             } catch (Exception e) {
                 failure++;
             }
@@ -768,5 +856,182 @@ public class QualityReportService {
             result.add(mfrPreview);
         }
         return result;
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Object> getCoaRequestHistory(String manufacturer, String status, java.time.LocalDate startDate, java.time.LocalDate endDate) {
+        java.time.LocalDateTime start = startDate != null ? startDate.atStartOfDay() : null;
+        java.time.LocalDateTime end = endDate != null ? endDate.atTime(23, 59, 59) : null;
+        
+        List<com.example.ims.entity.CoaRequestLog> logs = coaRequestLogRepository.searchHistory(
+                (manufacturer != null && !manufacturer.isBlank()) ? manufacturer : null,
+                (status != null && !status.isBlank()) ? status : null,
+                start, end
+        );
+
+        long total = logs.size();
+        long fulfilled = logs.stream().filter(l -> "FULFILLED".equalsIgnoreCase(l.getStatus())).count();
+        long reminded = logs.stream().filter(l -> "REMINDED".equalsIgnoreCase(l.getStatus())).count();
+        long requested = logs.stream().filter(l -> "REQUESTED".equalsIgnoreCase(l.getStatus())).count();
+        long pending = requested + reminded;
+
+        double fulfillmentRate = total > 0 ? (double) fulfilled / total * 100.0 : 0.0;
+        
+        double avgLeadTime = logs.stream()
+                .filter(l -> l.getLeadTimeHours() != null && l.getLeadTimeHours() > 0)
+                .mapToDouble(com.example.ims.entity.CoaRequestLog::getLeadTimeHours)
+                .average()
+                .orElse(0.0);
+
+        java.util.Map<String, Object> summary = new java.util.HashMap<>();
+        summary.put("totalRequested", total);
+        summary.put("fulfilledCount", fulfilled);
+        summary.put("pendingCount", pending);
+        summary.put("remindedCount", reminded);
+        summary.put("fulfillmentRate", Math.round(fulfillmentRate * 10.0) / 10.0);
+        summary.put("avgLeadTimeHours", Math.round(avgLeadTime * 10.0) / 10.0);
+
+        java.util.Map<String, Object> res = new java.util.HashMap<>();
+        res.put("summary", summary);
+        res.put("logs", logs);
+        return res;
+    }
+
+    @Transactional
+    public java.util.Map<String, Object> sendCoaReminderEmails(List<Long> logIds, String senderUsername) {
+        if (logIds == null || logIds.isEmpty()) {
+            return java.util.Map.of("successCount", 0, "failureCount", 0);
+        }
+
+        List<com.example.ims.entity.CoaRequestLog> targetLogs = coaRequestLogRepository.findAllById(logIds);
+        List<com.example.ims.entity.CoaRequestLog> pendingLogs = targetLogs.stream()
+                .filter(l -> !"FULFILLED".equalsIgnoreCase(l.getStatus()))
+                .collect(java.util.stream.Collectors.toList());
+
+        if (pendingLogs.isEmpty()) {
+            return java.util.Map.of("successCount", 0, "failureCount", 0, "message", "리마인드 대상(미회신) 건이 없습니다.");
+        }
+
+        java.util.Map<String, List<com.example.ims.entity.CoaRequestLog>> grouped = pendingLogs.stream()
+                .collect(java.util.stream.Collectors.groupingBy(l -> (l.getManufacturer() != null ? l.getManufacturer() : "기타") + "___" + (l.getRecipientEmail() != null ? l.getRecipientEmail() : "")));
+
+        int success = 0;
+        int failure = 0;
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+
+        for (java.util.Map.Entry<String, List<com.example.ims.entity.CoaRequestLog>> entry : grouped.entrySet()) {
+            String[] parts = entry.getKey().split("___");
+            String mfrName = parts[0];
+            String email = parts.length > 1 ? parts[1] : null;
+            List<com.example.ims.entity.CoaRequestLog> items = entry.getValue();
+
+            if (email == null || email.isBlank()) {
+                failure += items.size();
+                continue;
+            }
+
+            StringBuilder html = new StringBuilder();
+            html.append("<html><body style=\"font-family: 'Malgun Gothic', sans-serif; line-height: 1.6; color: #333;\">");
+            html.append("<div style=\"max-width: 700px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;\">");
+            html.append("<h2 style=\"color: #b91c1c; border-bottom: 2px solid #f87171; padding-bottom: 10px;\">[재요청] 시험성적서(COA) 등록 리마인드 안내</h2>");
+            html.append("<p>안녕하세요, <b>").append(mfrName).append("</b> 품질관리 담당자님.</p>");
+            html.append("<p>기존에 요청드렸던 아래 입고 제품들의 <b>시험성적서(COA)가 아직 미등록 상태</b>입니다.</p>");
+            html.append("<p style=\"color: #b91c1c; font-weight: bold;\">원활한 입고 검사 및 출하 승인을 위하여 조속히 QMS 시스템에 성적서 PDF를 등록해 주시기 바랍니다.</p>");
+            
+            html.append("<table style=\"width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px;\">");
+            html.append("<thead><tr style=\"background-color: #fef2f2; border-bottom: 2px solid #fca5a5;\">");
+            html.append("<th style=\"padding: 10px; border: 1px solid #cbd5e1; text-align: left;\">입고번호</th>");
+            html.append("<th style=\"padding: 10px; border: 1px solid #cbd5e1; text-align: left;\">품목코드</th>");
+            html.append("<th style=\"padding: 10px; border: 1px solid #cbd5e1; text-align: left;\">제품명</th>");
+            html.append("<th style=\"padding: 10px; border: 1px solid #cbd5e1; text-align: left;\">LOT 번호</th>");
+            html.append("<th style=\"padding: 10px; border: 1px solid #cbd5e1; text-align: center;\">최초 요청일시</th>");
+            html.append("<th style=\"padding: 10px; border: 1px solid #cbd5e1; text-align: center;\">리마인드 회차</th>");
+            html.append("</tr></thead><tbody>");
+
+            for (com.example.ims.entity.CoaRequestLog it : items) {
+                html.append("<tr>");
+                html.append("<td style=\"padding: 8px; border: 1px solid #cbd5e1;\">").append(it.getGrnNumber() != null ? it.getGrnNumber() : "-").append("</td>");
+                html.append("<td style=\"padding: 8px; border: 1px solid #cbd5e1;\">").append(it.getItemCode()).append("</td>");
+                html.append("<td style=\"padding: 8px; border: 1px solid #cbd5e1;\">").append(it.getProductName()).append("</td>");
+                html.append("<td style=\"padding: 8px; border: 1px solid #cbd5e1;\">").append(it.getLotNumber() != null ? it.getLotNumber() : "-").append("</td>");
+                html.append("<td style=\"padding: 8px; border: 1px solid #cbd5e1; text-align: center;\">").append(it.getRequestedAt() != null ? it.getRequestedAt().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")) : "-").append("</td>");
+                html.append("<td style=\"padding: 8px; border: 1px solid #cbd5e1; text-align: center; font-weight: bold; color: #dc2626;\">").append((it.getReminderCount() != null ? it.getReminderCount() : 0) + 1).append("차</td>");
+                html.append("</tr>");
+            }
+            html.append("</tbody></table>");
+            html.append("<p>※ 본 메일은 QMS 품질관리 시스템에서 전송된 리마인드 공문입니다.</p>");
+            html.append("</div></body></html>");
+
+            try {
+                emailService.sendCustomEmail(email, "[QMS 리마인드] 시험성적서(COA) 등록 재요청 안내 (" + mfrName + ")", html.toString());
+                for (com.example.ims.entity.CoaRequestLog it : items) {
+                    it.setStatus("REMINDED");
+                    it.setReminderCount((it.getReminderCount() != null ? it.getReminderCount() : 0) + 1);
+                    it.setLastRemindedAt(now);
+                    coaRequestLogRepository.save(it);
+                }
+                success += items.size();
+            } catch (Exception ex) {
+                log.error("Failed to send COA reminder email to {}: {}", email, ex.getMessage());
+                failure += items.size();
+            }
+        }
+
+        java.util.Map<String, Object> res = new java.util.HashMap<>();
+        res.put("successCount", success);
+        res.put("failureCount", failure);
+        return res;
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Object> getInboundLabelInfo(Long inboundId) {
+        WmsInbound inbound = inboundRepository.findById(inboundId)
+                .orElseThrow(() -> new RuntimeException("해당 입고 정보를 찾을 수 없습니다: " + inboundId));
+
+        String itemCode = inbound.getItemCode();
+        String prodName = inbound.getProductName() != null ? inbound.getProductName() : "";
+        
+        // 버전 정보 자동 파싱 (예: "제품명 V2", "스킨 [V6]", "세럼 (V1)" 등)
+        String versionInfo = "V1";
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile("(?i)(V\\d+|VER\\.?\\d+|\\[V\\d+\\]|\\(V\\d+\\))");
+        java.util.regex.Matcher m = p.matcher(prodName);
+        if (m.find()) {
+            versionInfo = m.group(1).replace("[", "").replace("]", "").replace("(", "").replace(")", "").toUpperCase();
+        }
+
+        // 채널 목록 가져오기
+        List<String> channelList = new java.util.ArrayList<>();
+        if (itemCode != null && !itemCode.isBlank()) {
+            productRepository.findByItemCode(itemCode).ifPresent(prod -> {
+                if (prod.getChannels() != null && !prod.getChannels().isEmpty()) {
+                    for (com.example.ims.entity.SalesChannel sc : prod.getChannels()) {
+                        if (sc != null && sc.getName() != null && !sc.getName().isBlank()) {
+                            String trimmed = sc.getName().trim();
+                            if (!channelList.contains(trimmed)) {
+                                channelList.add(trimmed);
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        if (channelList.isEmpty()) {
+            channelList.addAll(List.of("올리브영", "다이소", "자사몰", "면세점", "수출(글로벌)", "기타"));
+        }
+
+        java.util.Map<String, Object> labelData = new java.util.HashMap<>();
+        labelData.put("inboundId", inbound.getId());
+        labelData.put("grnNumber", inbound.getGrnNumber());
+        labelData.put("itemCode", itemCode);
+        labelData.put("productName", prodName);
+        labelData.put("versionInfo", versionInfo);
+        labelData.put("lotNumber", inbound.getLotNumber() != null ? inbound.getLotNumber() : "");
+        labelData.put("mfgDate", inbound.getMfgDate() != null ? inbound.getMfgDate() : (inbound.getInboundDate() != null ? inbound.getInboundDate().toLocalDate().toString() : ""));
+        labelData.put("expirationDate", inbound.getExpirationDate() != null ? inbound.getExpirationDate() : "");
+        labelData.put("manufacturer", inbound.getManufacturer() != null ? inbound.getManufacturer() : "");
+        labelData.put("channels", channelList);
+        labelData.put("defaultChannel", channelList.get(0));
+
+        return labelData;
     }
 }

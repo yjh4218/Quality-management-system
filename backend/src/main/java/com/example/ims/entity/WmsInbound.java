@@ -63,6 +63,7 @@ public class WmsInbound {
     // 품질 검사 데이터
     private String lotNumber;
     private String expirationDate;
+    private String mfgDate; // 제조일자
     private Double specificGravity; // 비중값
     @Column(columnDefinition = "TEXT", nullable = true)
     private String coaFileUrl; // 검사성적서 PDF (국문)

@@ -4,6 +4,8 @@ import { Backdrop, CircularProgress } from '@mui/material';
 import QualitySearchFilter from './components/QualitySearchFilter';
 import QualityDetailDrawer from './components/QualityDetailDrawer';
 import CoaRequestPreviewModal from './components/CoaRequestPreviewModal';
+import CoaRequestHistoryModal from './components/CoaRequestHistoryModal';
+import ControlSampleLabelModal from './components/ControlSampleLabelModal';
 import GridConditionalFormattingModal from './components/common/GridConditionalFormattingModal';
 import api, {
     getInboundData,
@@ -113,7 +115,13 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
         isCoaPreviewOpen,
         setIsCoaPreviewOpen,
         coaPreviewData,
-        isLoading
+        isLoading,
+        isCoaHistoryOpen,
+        setIsCoaHistoryOpen,
+        isLabelModalOpen,
+        setIsLabelModalOpen,
+        labelInboundId,
+        handleOpenLabelModal
     } = useQualityManagement(user, navigationData, onNavigated);
 
     // Register global refresh function for child components (like Drawer) to use
@@ -351,8 +359,41 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
                 }
             ]
         },
-        { field: "remark", headerName: "비고", flex: 1, minWidth: 150, editable: params => (isInternalQuality || isManufacturer || isAdmin) && params.data.overallStatus !== 'STEP5_FINAL_COMPLETE', cellStyle: params => params.data.overallStatus === 'STEP5_FINAL_COMPLETE' ? { backgroundColor: '#f0f0f0', color: '#666' } : null }
-    ], [isInternalQuality, isManufacturer, isAdmin, customRules]);
+        { field: "remark", headerName: "비고", flex: 1, minWidth: 150, editable: params => (isInternalQuality || isManufacturer || isAdmin) && params.data.overallStatus !== 'STEP5_FINAL_COMPLETE', cellStyle: params => params.data.overallStatus === 'STEP5_FINAL_COMPLETE' ? { backgroundColor: '#f0f0f0', color: '#666' } : null },
+        {
+            headerName: "라벨 출력",
+            width: 110,
+            pinned: 'right',
+            cellRenderer: params => (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenLabelModal(params.data.id);
+                        }}
+                        className="small-btn primary"
+                        style={{
+                            padding: '4px 10px',
+                            fontSize: '11px',
+                            fontWeight: 'bold',
+                            backgroundColor: '#4f46e5',
+                            color: 'white',
+                            borderRadius: '6px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                        }}
+                        title="관리품(보관 검체) 보관 라벨 인쇄"
+                    >
+                        <span>🏷️</span>
+                        <span>라벨</span>
+                    </button>
+                </div>
+            )
+        }
+    ], [isInternalQuality, isManufacturer, isAdmin, customRules, handleOpenLabelModal]);
 
     const updateDetailField = async (field, value) => {
         if (!selectedInbound) return;
@@ -466,6 +507,7 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
                 setSearchParams={setSearchParams}
                 onSearch={fetchInboundData}
                 onRequestCoa={handleRequestCoa}
+                onOpenCoaHistory={() => setIsCoaHistoryOpen(true)}
                 onReset={() => {
                     const initD = getInitialDates();
                     setSearchParams({ startDate: initD.start, endDate: initD.end, itemCode: '', productName: '', lotNumber: '', manufacturer: '', excludeStatus: 'STEP5_FINAL_COMPLETE', grnNumber: '' });
@@ -520,6 +562,7 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
                 isManufacturer={isManufacturer}
                 overallStatusMap={overallStatusMap}
                 handleFileUpload={handleFileUpload}
+                onOpenLabelModal={handleOpenLabelModal}
                 handleSave={async () => {
                     try {
                         const res = await updateInboundData(selectedInbound.id, selectedInbound);
@@ -543,6 +586,15 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
                 onSend={handleCoaSend}
                 startDate={searchParams.startDate}
                 endDate={searchParams.endDate}
+            />
+            <CoaRequestHistoryModal
+                isOpen={isCoaHistoryOpen}
+                onClose={() => setIsCoaHistoryOpen(false)}
+            />
+            <ControlSampleLabelModal
+                isOpen={isLabelModalOpen}
+                onClose={() => setIsLabelModalOpen(false)}
+                inboundId={labelInboundId}
             />
 
             {/* 조건부 서식 설정 모달 (관리자 전용) */}
