@@ -155,9 +155,9 @@ public class SecurityConfig {
         configuration.setAllowedOriginPatterns(originsList);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
-        configuration.setExposedHeaders(List.of("Set-Cookie", "Authorization", "XSRF-TOKEN", "X-XSRF-TOKEN"));
+        configuration.setExposedHeaders(List.of("Set-Cookie", "Authorization", "XSRF-TOKEN", "X-XSRF-TOKEN", "X-Response-Time-Millis", "x-response-time-millis"));
         configuration.setAllowCredentials(true);
-        configuration.setMaxAge(3600L);
+        configuration.setMaxAge(86400L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
