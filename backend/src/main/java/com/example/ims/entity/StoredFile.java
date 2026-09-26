@@ -36,7 +36,7 @@ public class StoredFile {
     private Long fileSize;
 
     @org.hibernate.annotations.JdbcTypeCode(java.sql.Types.VARBINARY)
-    @Column(name = "file_data", nullable = false, length = 104857600)
+    @Column(name = "file_data", nullable = false, columnDefinition = "BYTEA")
     private byte[] fileData;
 
     @CreationTimestamp

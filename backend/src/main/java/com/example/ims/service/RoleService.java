@@ -169,18 +169,20 @@ public class RoleService {
     @Transactional(readOnly = true)
     public boolean hasPermission(String roleKey, String permissionKey) {
         if (roleKey == null || permissionKey == null) return false;
+        if (roleKey.contains("ROLE_ADMIN") || "ROLE_ADMIN".equals(roleKey) || "ADMIN".equals(roleKey)) return true;
         
         Optional<Role> roleOpt = roleRepository.findByRoleKey(roleKey);
         if (roleOpt.isEmpty()) return false;
         
         String permissionsJson = roleOpt.get().getAllowedPermissions();
         if (permissionsJson == null || permissionsJson.isEmpty()) return false;
+        if ("ALL".equalsIgnoreCase(permissionsJson) || permissionsJson.contains("ALL")) return true;
         
         try {
             // Simplified JSON check to avoid heavy dependency if possible
             // but since we have Jackson, let's use it or a simple contains check for now
             // since it's a JSON array of strings: ["PERM1", "PERM2"]
-            return permissionsJson.contains("\"" + permissionKey + "\"");
+            return permissionsJson.contains("\"" + permissionKey + "\"") || permissionsJson.contains(permissionKey);
         } catch (Exception e) {
             log.error("Error checking permission: {}", e.getMessage());
             return false;

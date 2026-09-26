@@ -11,6 +11,7 @@ import java.sql.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
+@org.junit.jupiter.api.Disabled("Local utility only - disabled during CI builds")
 @SpringBootTest(properties = {
     "com.example.ims.util.SystemStartupRunner.enabled=false",
     "spring.flyway.enabled=false"

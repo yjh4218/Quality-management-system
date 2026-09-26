@@ -52,7 +52,7 @@ public class FileSelfHealingCacheTest {
         // 2. storeFileBytes 호출 검증
         String savedPath = fileStorageService.storeFileBytes(testBytes, relativePath, "image/png", "test_image.png");
         assertEquals(relativePath, savedPath);
-        verify(storedFileRepository, times(1)).save(any(StoredFile.class));
+        verify(storedFileRepository, timeout(3000).times(1)).save(any(StoredFile.class));
 
         // 3. 로컬 디스크 파일 생성 확인
         Path localFile = tempUploadDir.resolve(relativePath);

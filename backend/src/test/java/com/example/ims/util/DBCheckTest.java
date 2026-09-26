@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+@org.junit.jupiter.api.Disabled("Local diagnostic utility only - disabled during CI builds")
 @SpringBootTest(properties = "com.example.ims.util.SystemStartupRunner.enabled=false")
 public class DBCheckTest {
 

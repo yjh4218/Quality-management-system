@@ -56,6 +56,7 @@ public class QmsFullE2EComprehensiveTest {
     @Autowired private MailTemplateRepository mailTemplateRepository;
     @Autowired private BugReportRepository bugReportRepository;
     @Autowired private JdbcTemplate jdbcTemplate;
+    @Autowired private jakarta.persistence.EntityManager entityManager;
 
     @BeforeEach
     void setupUsersAndBasics() {
@@ -64,8 +65,15 @@ public class QmsFullE2EComprehensiveTest {
         } catch (Exception ignored) {}
 
         try {
-            Long maxId = jdbcTemplate.queryForObject("SELECT COALESCE(MAX(id), 0) FROM users", Long.class);
-            jdbcTemplate.execute("ALTER TABLE users ALTER COLUMN id RESTART WITH " + ((maxId != null ? maxId : 0) + 100));
+            List<String> tables = jdbcTemplate.queryForList(
+                    "SELECT table_name FROM information_schema.columns WHERE column_name = 'ID' AND table_schema = 'PUBLIC'",
+                    String.class);
+            for (String table : tables) {
+                try {
+                    Long maxId = jdbcTemplate.queryForObject("SELECT COALESCE(MAX(id), 0) FROM " + table, Long.class);
+                    jdbcTemplate.execute("ALTER TABLE " + table + " ALTER COLUMN id RESTART WITH " + ((maxId != null ? maxId : 0) + 100));
+                } catch (Exception ignored) {}
+            }
         } catch (Exception ignored) {}
 
         Optional<User> adminOpt = userRepository.findByUsername("admin");
@@ -81,6 +89,7 @@ public class QmsFullE2EComprehensiveTest {
         } else {
             User admin = adminOpt.get();
             admin.setRole("ROLE_ADMIN");
+            admin.setPassword(passwordEncoder.encode("admin1234!"));
             userRepository.save(admin);
         }
 
@@ -95,18 +104,26 @@ public class QmsFullE2EComprehensiveTest {
                     .enabled(true)
                     .build());
         }
-        if (brandRepository.findByName("아누아").isEmpty()) {
-            brandRepository.save(Brand.builder().name("아누아").type("기본").build());
-        }
+
+        try {
+            Integer brandCount = jdbcTemplate.queryForObject(
+                    "SELECT count(*) FROM brands WHERE name = '아누아'", Integer.class);
+            if (brandCount == null || brandCount == 0) {
+                jdbcTemplate.update("INSERT INTO brands (name, type) VALUES ('아누아', '기본')");
+            }
+        } catch (Exception ignored) {}
+
         try {
             Integer scCount = jdbcTemplate.queryForObject(
                     "SELECT count(*) FROM sales_channels WHERE name = '올리브영(OY)'", Integer.class);
             if (scCount == null || scCount == 0) {
-                salesChannelRepository.save(SalesChannel.builder().name("올리브영(OY)").channelCode("OY").active(true).build());
+                jdbcTemplate.update("INSERT INTO sales_channels (name, channel_code, active, is_deleted) VALUES ('올리브영(OY)', 'OY', true, false)");
             } else {
                 jdbcTemplate.execute("UPDATE sales_channels SET is_deleted = false, active = true WHERE name = '올리브영(OY)'");
             }
         } catch (Exception ignored) {}
+
+        entityManager.clear();
     }
 
     @Test
@@ -172,8 +189,10 @@ public class QmsFullE2EComprehensiveTest {
     @DisplayName("도메인 3: 신규 단품 및 기획세트 품목 생성 & 유통채널 접미사 자동 동기화 & 규제 대조 검증")
     @WithMockUser(username = "admin", roles = {"ADMIN", "QUALITY_TEAM", "RESPONSIBLE_SALES"})
     void test03_ProductCreationSingleAndSet() throws Exception {
-        Brand anua = brandRepository.findByName("아누아").orElseThrow();
-        SalesChannel oy = salesChannelRepository.findByName("올리브영(OY)").orElseThrow();
+        Brand anua = brandRepository.findByName("아누아")
+                .orElseGet(() -> brandRepository.save(Brand.builder().name("아누아").type("기본").build()));
+        SalesChannel oy = salesChannelRepository.findByName("올리브영(OY)")
+                .orElseGet(() -> salesChannelRepository.save(SalesChannel.builder().name("올리브영(OY)").channelCode("OY").active(true).build()));
         Manufacturer mfr = manufacturerRepository.findByName("한국콜마_E2E")
                 .orElseGet(() -> manufacturerRepository.save(Manufacturer.builder().name("한국콜마_E2E").active(true).build()));
 

@@ -16,7 +16,8 @@ import static org.assertj.core.api.Assertions.assertThat;
         "spring.flyway.enabled=true",
         "spring.flyway.clean-disabled=false",
         "spring.datasource.url=jdbc:h2:mem:flyway_test_db;DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
-        "spring.jpa.hibernate.ddl-auto=validate"
+        "spring.jpa.hibernate.ddl-auto=validate",
+        "com.example.ims.util.SystemStartupRunner.enabled=false"
 })
 public class FlywayMigrationValidationTest {
 

@@ -10,6 +10,7 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Stream;
 
+@org.junit.jupiter.api.Disabled("Local utility only - disabled during CI builds")
 public class GenerateStoredFilesSqlDump {
 
     private static final String UPLOADS_DIR = "uploads";
