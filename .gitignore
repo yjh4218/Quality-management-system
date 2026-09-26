@@ -60,3 +60,6 @@ backend/src/main/resources/application-secret.properties
 *.pptx
 screenshots/
 
+# Database Dumps
+backend/supabase_restore_*.sql
+

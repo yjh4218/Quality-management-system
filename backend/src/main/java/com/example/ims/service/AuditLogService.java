@@ -33,6 +33,7 @@ public class AuditLogService {
     private final ProductionAuditRepository productionAuditRepository;
     private final ObjectMapper objectMapper;
     private final AccessLogService accessLogService;
+    private final NotificationService notificationService;
     
     // 순환 참조 방지를 위해 서비스 대신 레포지토리 직접 사용 또는 이벤트 핸들링만 수행
     // productService, claimService, wmsService는 더 이상 직접 참조하지 않음
@@ -55,6 +56,37 @@ public class AuditLogService {
                 event.getNewEntity(),
                 event.getChangeDetail()
         );
+
+        // [SWR 실시간 동기화] DB 커밋 완료 후 연결된 모든 클라이언트에게 도메인 캐시 무효화 브로드캐스트
+        try {
+            String domain = resolveApiDomain(event.getEntityType());
+            if (domain != null && notificationService != null) {
+                notificationService.broadcastDataUpdate(domain);
+            }
+        } catch (Exception e) {
+            log.warn("[SSE] Failed to broadcast data-updated event: {}", e.getMessage());
+        }
+    }
+
+    private String resolveApiDomain(String entityType) {
+        if (entityType == null) return null;
+        switch (entityType.toUpperCase()) {
+            case "PRODUCT": return "/api/products";
+            case "CLAIM": return "/api/claims";
+            case "WMSINBOUND":
+            case "INBOUND":
+            case "QUALITYREPORT": return "/api/quality/inbound";
+            case "PRODUCTIONAUDIT": return "/api/production-audits";
+            case "MANUFACTURERAUDIT": return "/api/manufacturer-audits";
+            case "ROLE": return "/api/admin/roles";
+            case "MATERIAL":
+            case "MASTERDATA": return "/api/admin/master-data/materials";
+            case "BOMCATEGORY": return "/api/admin/master-data/bom-categories";
+            case "ANNOUNCEMENT": return "/api/announcements";
+            case "SALESCHANNEL": return "/api/admin/master-data/sales-channels";
+            case "SYSTEMSETTING": return "/api/system-settings";
+            default: return "/api/" + entityType.toLowerCase();
+        }
     }
 
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)

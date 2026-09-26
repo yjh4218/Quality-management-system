@@ -188,7 +188,7 @@ const SystemBenchmarkPage = () => {
             } else {
                 const separator = url.includes('?') ? '&' : '?';
                 const finalUrl = bypassCache ? `${url}${separator}_t=${Date.now()}` : url;
-                response = await api.get(finalUrl, { skipLoading: true, skipToast: true });
+                response = await api.get(finalUrl, { skipLoading: true, skipToast: true, skipCache: bypassCache });
             }
             const t1 = performance.now();
             const totalDuration = Math.round(t1 - t0);

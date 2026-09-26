@@ -2,6 +2,39 @@ import React from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { compressImageToWebP } from './utils/imageCompressor';
+import { swrCache } from './utils/swrCache';
+
+export { swrCache };
+
+/**
+ * CUD 작업 시 캐시를 무효화할 도메인 prefix 추출
+ */
+export const extractDomainPrefix = (url) => {
+    if (!url) return '';
+    const clean = url.split('?')[0];
+    const parts = clean.split('/').filter(Boolean);
+    if (parts.length >= 2) {
+        if (clean.startsWith('/api/admin/master-data/')) {
+            return `/api/admin/master-data/${parts[3] || ''}`;
+        }
+        if (clean.startsWith('/api/admin/roles')) return '/api/admin/roles';
+        if (clean.startsWith('/api/quality/inbound')) return '/api/quality/inbound';
+        if (clean.startsWith('/api/packaging-specs')) return '/api/packaging-specs';
+        if (clean.startsWith('/api/production-audits')) return '/api/production-audits';
+        if (clean.startsWith('/api/system-settings')) return '/api/system-settings';
+        if (clean.startsWith('/api/manufacturers')) return '/api/manufacturers';
+        if (clean.startsWith('/api/brands')) return '/api/brands';
+        if (clean.startsWith('/api/claims')) return '/api/claims';
+        if (clean.startsWith('/api/products')) return '/api/products';
+        if (clean.startsWith('/api/audit-templates')) return '/api/audit-templates';
+        if (clean.startsWith('/api/manufacturer-audits')) return '/api/manufacturer-audits';
+        if (clean.startsWith('/api/announcements')) return '/api/announcements';
+        if (clean.startsWith('/api/mail-templates')) return '/api/mail-templates';
+        if (clean.startsWith('/api/guides')) return '/api/guides';
+        return `/${parts[0]}/${parts[1]}`;
+    }
+    return clean;
+};
 
 // [고도화 1] 환경 변수(.env) 기반 주소 관리
 export const getBaseURL = () => {
@@ -239,6 +272,18 @@ api.interceptors.response.use(
         // [성능 모니터링] 정상 응답 레이턴시 분해 로깅
         logPerformanceMetrics(response.config, response, false);
 
+        // [SWR CUD 자동 캐시 무효화] POST, PUT, DELETE, PATCH 성공 시 연관 도메인 캐시 자동 파기
+        const method = (response.config?.method || 'GET').toUpperCase();
+        const originalMethod = response.config?.url?.includes('_method=')
+            ? response.config.url.split('_method=')[1].split('&')[0].toUpperCase()
+            : method;
+        if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(originalMethod) && response.config?.url) {
+            const domainPrefix = extractDomainPrefix(response.config.url);
+            if (domainPrefix && !domainPrefix.includes('/auth') && !domainPrefix.includes('/bug-reports') && !domainPrefix.includes('/logs')) {
+                swrCache.invalidateByPrefix(domainPrefix);
+            }
+        }
+
         // [아키텍처] ApiResponse 표준 규격 대응
         // 서버에서 { success: true, data: { ... } } 형태로 응답이 오면 내부 data만 추출하여 반환합니다.
         // 이를 통해 프론트엔드 코드 전반에서 response.data를 기존처럼 투명하게 사용할 수 있습니다.
@@ -422,21 +467,87 @@ api.interceptors.response.use(
     }
 );
 
-// [성능 최적화] In-Flight Request Deduplication: 동일 GET 요청 동시 발생 시 Promise 공유
+// [성능 최적화] SWR(Stale-While-Revalidate) 캐시 + In-Flight Request Deduplication
 const inFlightGetRequests = new Map();
 const originalGet = api.get.bind(api);
-api.get = (url, config = {}) => {
-    if (config.skipDedup || config.responseType === 'blob') {
-        return originalGet(url, config);
+
+const MASTER_PREFIXES = [
+    '/api/manufacturers',
+    '/api/brands',
+    '/api/admin/master-data',
+    '/api/admin/roles',
+    '/api/system-settings',
+    '/api/audit-templates',
+    '/api/guides',
+    '/api/mail-templates',
+    '/api/announcements/categories',
+    '/api/mail-categories'
+];
+
+const getTtlForUrl = (url) => {
+    for (const prefix of MASTER_PREFIXES) {
+        if (url.startsWith(prefix)) return 5 * 60 * 1000; // 기준정보: 5분
     }
+    return 30 * 1000; // 동적 업무 데이터: 30초
+};
+
+api.get = (url, config = {}) => {
+    const isBlob = config.responseType === 'blob';
+    const skipCache = config.skipCache || 
+                      isBlob || 
+                      url.startsWith('/api/auth/') || 
+                      url.includes('/logs') || 
+                      url.includes('/bug-reports') ||
+                      url.includes('/stream') ||
+                      url.includes('/notifications/stream');
+
     const key = `${url}_${JSON.stringify(config.params || {})}`;
+
+    // 1. SWR 캐시 확인
+    if (!skipCache) {
+        const cached = swrCache.get(key);
+        if (cached) {
+            // Stale 데이터인 경우 백그라운드 재검증 (Revalidate)
+            if (swrCache.isStale(cached) && !cached.isRevalidating) {
+                swrCache.setRevalidating(key, true);
+                const ttl = getTtlForUrl(url);
+                originalGet(url, { ...config, skipLoading: true, skipToast: true })
+                    .then((freshRes) => {
+                        swrCache.set(key, freshRes, ttl);
+                    })
+                    .catch((err) => {
+                        console.debug('[SWR] Background revalidation failed:', err);
+                    })
+                    .finally(() => {
+                        swrCache.setRevalidating(key, false);
+                    });
+            }
+            // 캐시 데이터 0ms 즉시 반환
+            return Promise.resolve(cached.data);
+        }
+    }
+
+    // 2. 캐시 미스 시: In-Flight Request Deduplication 적용하여 단일 네트워크 호출
+    if (config.skipDedup || isBlob) {
+        return originalGet(url, config).then((res) => {
+            if (!skipCache) swrCache.set(key, res, getTtlForUrl(url));
+            return res;
+        });
+    }
+
     if (inFlightGetRequests.has(key)) {
         return inFlightGetRequests.get(key);
     }
+
     const promise = originalGet(url, config)
+        .then((res) => {
+            if (!skipCache) swrCache.set(key, res, getTtlForUrl(url));
+            return res;
+        })
         .finally(() => {
             inFlightGetRequests.delete(key);
         });
+
     inFlightGetRequests.set(key, promise);
     return promise;
 };
@@ -466,19 +577,10 @@ export const findPassword = (data) => api.post('/api/auth/find-password', data);
 export const changePassword = (data) => api.post('/api/auth/change-password', data);
 
 // System Settings
-export const getSystemSettings = async (forceRefresh = false) => {
-    const now = Date.now();
-    if (!forceRefresh && masterDataCache.systemSettings.data && (now - masterDataCache.systemSettings.timestamp < MASTER_CACHE_TTL)) {
-        return masterDataCache.systemSettings.data;
-    }
-    const data = await api.get('/api/system-settings').then(res => res.data);
-    masterDataCache.systemSettings = { data, timestamp: now };
-    return data;
-};
-export const saveSystemSettings = async (settings) => {
-    masterDataCache.systemSettings.data = null;
-    return api.post('/api/system-settings', settings).then(res => res.data);
-};
+export const getSystemSettings = (forceRefresh = false) => 
+    api.get('/api/system-settings', { skipCache: forceRefresh }).then(res => res.data);
+export const saveSystemSettings = (settings) => 
+    api.post('/api/system-settings', settings).then(res => res.data);
 
 // Admin APIs
 export const getUsers = (params = {}) => {
@@ -491,27 +593,11 @@ export const getUsers = (params = {}) => {
 };
 
 // Role Management APIs
-export const getRoles = async (forceRefresh = false) => {
-    const now = Date.now();
-    if (!forceRefresh && masterDataCache.roles.data && (now - masterDataCache.roles.timestamp < MASTER_CACHE_TTL)) {
-        return masterDataCache.roles.data;
-    }
-    const res = await api.get('/api/admin/roles');
-    masterDataCache.roles = { data: res, timestamp: now };
-    return res;
-};
-export const createRole = async (data) => {
-    masterDataCache.roles.data = null;
-    return api.post('/api/admin/roles', data);
-};
-export const updateRole = async (id, data) => {
-    masterDataCache.roles.data = null;
-    return api.put(`/api/admin/roles/${id}`, data);
-};
-export const deleteRole = async (id) => {
-    masterDataCache.roles.data = null;
-    return api.delete(`/api/admin/roles/${id}`);
-};
+export const getRoles = (forceRefresh = false) => 
+    api.get('/api/admin/roles', { skipCache: forceRefresh });
+export const createRole = (data) => api.post('/api/admin/roles', data);
+export const updateRole = (id, data) => api.put(`/api/admin/roles/${id}`, data);
+export const deleteRole = (id) => api.delete(`/api/admin/roles/${id}`);
 export const getRoleLogs = (id) => api.get(`/api/admin/roles/${id}/logs`);
 
 export const approveUser = (id) => api.post(`/api/admin/users/${id}/approve`);
@@ -591,84 +677,28 @@ export const sendCoaReminders = (logIds) => api.post('/api/quality/coa-requests/
 export const getInboundLabelInfo = (inboundId) => api.get(`/api/quality/inbound/${inboundId}/label-info`);
 
 // [성능 최적화] 마스터 데이터 프론트엔드 인메모리 캐시 (TTL 5분)
-const masterDataCache = {
-    manufacturers: { data: null, timestamp: 0 },
-    brands: { data: null, timestamp: 0 },
-    materials: { data: null, timestamp: 0 },
-    channels: { data: null, timestamp: 0 },
-    activeChannels: { data: null, timestamp: 0 },
-    bomCategories: { data: null, timestamp: 0 },
-    roles: { data: null, timestamp: 0 },
-    systemSettings: { data: null, timestamp: 0 }
-};
-const MASTER_CACHE_TTL = 5 * 60 * 1000;
-
+// [성능 최적화] 마스터 데이터 캐시 호환 래퍼
 export const clearMasterDataCache = () => {
-    masterDataCache.manufacturers.data = null;
-    masterDataCache.brands.data = null;
-    masterDataCache.materials.data = null;
-    masterDataCache.channels.data = null;
-    masterDataCache.activeChannels.data = null;
-    masterDataCache.bomCategories.data = null;
-    masterDataCache.roles.data = null;
-    masterDataCache.systemSettings.data = null;
+    swrCache.invalidateAll();
 };
 
 // Manufacturer APIs
-export const getManufacturers = async (forceRefresh = false) => {
-    const now = Date.now();
-    if (!forceRefresh && masterDataCache.manufacturers.data && (now - masterDataCache.manufacturers.timestamp < MASTER_CACHE_TTL)) {
-        return masterDataCache.manufacturers.data;
-    }
-    const res = await api.get('/api/manufacturers');
-    masterDataCache.manufacturers = { data: res, timestamp: now };
-    return res;
-};
-export const createManufacturer = async (m) => {
-    masterDataCache.manufacturers.data = null;
-    return api.post('/api/manufacturers', m);
-};
-export const updateManufacturer = async (id, m) => {
-    masterDataCache.manufacturers.data = null;
-    return api.put(`/api/manufacturers/${id}`, m);
-};
-export const deleteManufacturer = async (id) => {
-    masterDataCache.manufacturers.data = null;
-    return api.delete(`/api/manufacturers/${id}`);
-};
-export const restoreManufacturer = async (id) => {
-    masterDataCache.manufacturers.data = null;
-    return api.post(`/api/manufacturers/${id}/restore`);
-};
-export const hardDeleteManufacturer = async (id) => {
-    masterDataCache.manufacturers.data = null;
-    return api.delete(`/api/manufacturers/${id}/hard`);
-};
+export const getManufacturers = (forceRefresh = false) => 
+    api.get('/api/manufacturers', { skipCache: forceRefresh });
+export const createManufacturer = (m) => api.post('/api/manufacturers', m);
+export const updateManufacturer = (id, m) => api.put(`/api/manufacturers/${id}`, m);
+export const deleteManufacturer = (id) => api.delete(`/api/manufacturers/${id}`);
+export const restoreManufacturer = (id) => api.post(`/api/manufacturers/${id}/restore`);
+export const hardDeleteManufacturer = (id) => api.delete(`/api/manufacturers/${id}/hard`);
 export const getCompanyDepartmentsAndEmails = (companyName) => api.get('/api/manufacturers/departments', { params: { companyName } });
 export const getManufacturerScorecard = (id) => api.get(`/api/manufacturers/${id}/scorecard`);
 
 // Brand APIs
-export const getBrands = async (forceRefresh = false) => {
-    const now = Date.now();
-    if (!forceRefresh && masterDataCache.brands.data && (now - masterDataCache.brands.timestamp < MASTER_CACHE_TTL)) {
-        return masterDataCache.brands.data;
-    }
-    const res = await api.get('/api/brands');
-    masterDataCache.brands = { data: res, timestamp: now };
-    return res;
-};
-export const createBrand = async (brand) => {
-    masterDataCache.brands.data = null;
-    return api.post('/api/brands', brand);
-};
-export const updateBrand = async (id, brand) => {
-    masterDataCache.brands.data = null;
-    return api.put(`/api/brands/${id}`, brand);
-};
-export const deleteBrand = async (id) => {
-    masterDataCache.brands.data = null;
-    return api.delete(`/api/brands/${id}`);
-};
+export const getBrands = (forceRefresh = false) => 
+    api.get('/api/brands', { skipCache: forceRefresh });
+export const createBrand = (brand) => api.post('/api/brands', brand);
+export const updateBrand = (id, brand) => api.put(`/api/brands/${id}`, brand);
+export const deleteBrand = (id) => api.delete(`/api/brands/${id}`);
 
 // Product APIs
 export const getProducts = () => api.get('/api/products');
@@ -775,19 +805,8 @@ export const exportAuditsExcel = (params) => {
 // Master Data APIs (Feature 2, 11)
 export const getMasterTemplates = () => api.get('/api/admin/master-data/templates', { skipToast: true }).catch(() => ({ data: [] }));
 export const saveMasterTemplate = (template) => api.post('/api/admin/master-data/templates', template);
-export const getMasterMaterials = async (forceRefresh = false) => {
-    const now = Date.now();
-    if (!forceRefresh && masterDataCache.materials.data && (now - masterDataCache.materials.timestamp < MASTER_CACHE_TTL)) {
-        return masterDataCache.materials.data;
-    }
-    try {
-        const res = await api.get('/api/admin/master-data/materials', { skipToast: true });
-        masterDataCache.materials = { data: res, timestamp: now };
-        return res;
-    } catch {
-        return { data: [] };
-    }
-};
+export const getMasterMaterials = (forceRefresh = false) => 
+    api.get('/api/admin/master-data/materials', { skipCache: forceRefresh, skipToast: true }).catch(() => ({ data: [] }));
 export const getMasterMaterialsSearch = (params = {}) => {
     const queryParams = new URLSearchParams();
     if (params.bomCode) queryParams.append('bomCode', params.bomCode);
@@ -797,57 +816,20 @@ export const getMasterMaterialsSearch = (params = {}) => {
     if (params.manufacturer) queryParams.append('manufacturer', params.manufacturer);
     return api.get(`/api/admin/master-data/materials/search?${queryParams.toString()}`, { skipToast: true }).catch(() => ({ data: [] }));
 };
-export const saveMasterMaterial = async (material) => {
-    masterDataCache.materials.data = null;
-    return api.post('/api/admin/master-data/materials', material);
-};
+export const saveMasterMaterial = (material) => api.post('/api/admin/master-data/materials', material);
 export const checkBomCodeExists = (bomCode) => api.get(`/api/admin/master-data/materials/check-bom-code?bomCode=${bomCode}`);
 export const generateBomCode = (type) => api.get(`/api/admin/master-data/materials/generate-code${type ? `?type=${encodeURIComponent(type)}` : ''}`);
 export const getMasterStickers = () => api.get('/api/admin/master-data/stickers', { skipToast: true }).catch(() => ({ data: [] }));
 export const saveMasterSticker = (sticker) => api.post('/api/admin/master-data/stickers', sticker);
 
 // --- Sales Channels (Distribution Channel Management) ---
-export const getSalesChannels = async (forceRefresh = false) => {
-    const now = Date.now();
-    if (!forceRefresh && masterDataCache.channels.data && (now - masterDataCache.channels.timestamp < MASTER_CACHE_TTL)) {
-        return masterDataCache.channels.data;
-    }
-    try {
-        const res = await api.get('/api/admin/master-data/sales-channels', { skipToast: true });
-        masterDataCache.channels = { data: res, timestamp: now };
-        return res;
-    } catch {
-        return { data: [] };
-    }
-};
-export const getActiveSalesChannels = async (forceRefresh = false) => {
-    const now = Date.now();
-    if (!forceRefresh && masterDataCache.activeChannels.data && (now - masterDataCache.activeChannels.timestamp < MASTER_CACHE_TTL)) {
-        return masterDataCache.activeChannels.data;
-    }
-    try {
-        const res = await api.get('/api/admin/master-data/sales-channels/active', { skipToast: true });
-        masterDataCache.activeChannels = { data: res, timestamp: now };
-        return res;
-    } catch {
-        return { data: [] };
-    }
-};
-export const saveSalesChannel = async (channel) => {
-    masterDataCache.channels.data = null;
-    masterDataCache.activeChannels.data = null;
-    return api.post('/api/admin/master-data/sales-channels', channel);
-};
-export const toggleSalesChannel = async (id) => {
-    masterDataCache.channels.data = null;
-    masterDataCache.activeChannels.data = null;
-    return api.post(`/api/admin/master-data/sales-channels/${id}/toggle`);
-};
-export const deleteSalesChannel = async (id) => {
-    masterDataCache.channels.data = null;
-    masterDataCache.activeChannels.data = null;
-    return api.delete(`/api/admin/master-data/sales-channels/${id}`);
-};
+export const getSalesChannels = (forceRefresh = false) => 
+    api.get('/api/admin/master-data/sales-channels', { skipCache: forceRefresh, skipToast: true }).catch(() => ({ data: [] }));
+export const getActiveSalesChannels = (forceRefresh = false) => 
+    api.get('/api/admin/master-data/sales-channels/active', { skipCache: forceRefresh, skipToast: true }).catch(() => ({ data: [] }));
+export const saveSalesChannel = (channel) => api.post('/api/admin/master-data/sales-channels', channel);
+export const toggleSalesChannel = (id) => api.post(`/api/admin/master-data/sales-channels/${id}/toggle`);
+export const deleteSalesChannel = (id) => api.delete(`/api/admin/master-data/sales-channels/${id}`);
 export const getChannelSpecialNotes = (channelId) => api.get(`/api/sales-channels/${channelId}/special-notes`, { skipToast: true }).catch(() => ({ data: { notes: [] } }));
 
 // Master Data Upload (Common)
@@ -862,28 +844,12 @@ export const uploadMasterFile = async (file, prefix = 'MASTER') => {
 };
 
 // BOM Category APIs (New - Relocated to stable MasterDataController)
-export const getActiveBomCategories = async (forceRefresh = false) => {
-    const now = Date.now();
-    if (!forceRefresh && masterDataCache.bomCategories.data && (now - masterDataCache.bomCategories.timestamp < MASTER_CACHE_TTL)) {
-        return masterDataCache.bomCategories.data;
-    }
-    const res = await api.get('/api/admin/master-data/bom-categories/active');
-    masterDataCache.bomCategories = { data: res, timestamp: now };
-    return res;
-};
+export const getActiveBomCategories = (forceRefresh = false) => 
+    api.get('/api/admin/master-data/bom-categories/active', { skipCache: forceRefresh });
 export const getAllBomCategories = () => api.get('/api/admin/master-data/bom-categories/all');
-export const saveBomCategory = async (category) => {
-    masterDataCache.bomCategories.data = null;
-    return api.post('/api/admin/master-data/bom-categories', category);
-};
-export const softDeleteBomCategory = async (id) => {
-    masterDataCache.bomCategories.data = null;
-    return api.delete(`/api/admin/master-data/bom-categories/${id}/soft`);
-};
-export const hardDeleteBomCategory = async (id) => {
-    masterDataCache.bomCategories.data = null;
-    return api.delete(`/api/admin/master-data/bom-categories/${id}/hard`);
-};
+export const saveBomCategory = (category) => api.post('/api/admin/master-data/bom-categories', category);
+export const softDeleteBomCategory = (id) => api.delete(`/api/admin/master-data/bom-categories/${id}/soft`);
+export const hardDeleteBomCategory = (id) => api.delete(`/api/admin/master-data/bom-categories/${id}/hard`);
 
 // Global Admin & Profile APIs
 export const getAdminLogs = (params = {}) => {

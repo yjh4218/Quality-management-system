@@ -165,6 +165,28 @@ public class NotificationService {
     }
 
     /**
+     * 다중 사용자 실시간 데이터 동기화용 SSE 브로드캐스트.
+     * CUD 작업 발생 시 연결된 모든 클라이언트에게 변경된 도메인 정보를 전파하여 캐시를 즉시 무효화하도록 유도합니다.
+     */
+    public void broadcastDataUpdate(String domain) {
+        if (domain == null || domain.isBlank()) return;
+        java.util.Map<String, Object> payload = java.util.Map.of(
+            "domain", domain,
+            "timestamp", System.currentTimeMillis()
+        );
+        for (UserSseConnection conn : sseConnections) {
+            try {
+                conn.getEmitter().send(SseEmitter.event()
+                    .name("data-updated")
+                    .data(payload));
+            } catch (Exception e) {
+                sseConnections.remove(conn);
+            }
+        }
+        log.debug("[SSE] Broadcasted data-updated event for domain: {} to {} clients", domain, sseConnections.size());
+    }
+
+    /**
      * 특정 사용자 대상 알림 조회 (Paging/Limit 적용)
      */
     @Transactional(readOnly = true)

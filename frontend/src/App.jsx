@@ -5,6 +5,7 @@ import UserManagementPage from './UserManagementPage';
 import ManufacturerManagementPage from './ManufacturerManagementPage';
 import BrandManagementPage from './BrandManagementPage';
 import LogManagementPage from './LogManagementPage';
+import { swrCache } from './utils/swrCache';
 
 // [청크 로드 실패 자동 재시도 및 배포 캐시 무효화 유틸리티]
 function lazyRetry(componentImport) {
@@ -657,6 +658,19 @@ const App = () => {
                 }
             });
 
+            // [SWR 실시간 동기화] 타 사용자에 의한 CUD 발생 시 해당 도메인 캐시 자동 무효화
+            eventSource.addEventListener('data-updated', (event) => {
+                try {
+                    const payload = JSON.parse(event.data);
+                    if (payload && payload.domain) {
+                        console.debug("[SSE] Real-time data-updated event received for domain:", payload.domain);
+                        swrCache.invalidateByPrefix(payload.domain);
+                    }
+                } catch (e) {
+                    console.error("[SSE] Failed to parse data-updated event", e);
+                }
+            });
+
             eventSource.onerror = (err) => {
                 console.debug("[SSE] EventSource reconnecting in 5s...", err);
                 eventSource.close();
@@ -684,6 +698,12 @@ const App = () => {
         };
         document.addEventListener('mousedown', handleOutsideClick);
 
+        // [SWR 포커스 재검증] 브라우저 복귀 시 상태 최신화
+        const handleWindowFocus = () => {
+            fetchUnreadCount();
+        };
+        window.addEventListener('focus', handleWindowFocus);
+
         return () => {
             isClosing = true;
             if (eventSource) {
@@ -694,6 +714,7 @@ const App = () => {
             }
             clearInterval(interval);
             document.removeEventListener('mousedown', handleOutsideClick);
+            window.removeEventListener('focus', handleWindowFocus);
         };
     }, [isLoggedIn]);
 
