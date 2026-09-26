@@ -35,8 +35,8 @@ public class StoredFile {
     @Column(name = "file_size")
     private Long fileSize;
 
-    @Lob
-    @Column(name = "file_data", nullable = false, columnDefinition = "bytea")
+    @org.hibernate.annotations.JdbcTypeCode(java.sql.Types.VARBINARY)
+    @Column(name = "file_data", nullable = false, length = 104857600)
     private byte[] fileData;
 
     @CreationTimestamp
