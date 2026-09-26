@@ -495,7 +495,7 @@ api.get = (url, config = {}) => {
     const isBlob = config.responseType === 'blob';
     const skipCache = config.skipCache || 
                       isBlob || 
-                      url.startsWith('/api/auth/') || 
+                      (url.startsWith('/api/auth/') && !url.startsWith('/api/auth/me')) || 
                       url.includes('/logs') || 
                       url.includes('/bug-reports') ||
                       url.includes('/stream') ||
@@ -560,7 +560,10 @@ export const getDashboardStats = () =>
   api.get('/api/dashboard/stats').then(res => res.data);
 
 // Auth
-export const logout = () => api.post('/api/auth/logout');
+export const logout = () => {
+    swrCache.invalidateByPrefix('/api/auth/me');
+    return api.post('/api/auth/logout');
+};
 export const login = (username, password) => {
     const params = new URLSearchParams();
     params.append('username', username);

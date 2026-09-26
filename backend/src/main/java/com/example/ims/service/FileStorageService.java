@@ -16,6 +16,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -459,6 +461,12 @@ public class FileStorageService {
                     if (storedOpt.isEmpty() && normalizedPath.contains("/")) {
                         String fileNameOnly = Paths.get(normalizedPath).getFileName().toString();
                         storedOpt = storedFileRepository.findById(fileNameOnly);
+                    }
+                    if (storedOpt.isEmpty() && normalizedPath.contains("%")) {
+                        try {
+                            String fullyDecoded = URLDecoder.decode(normalizedPath, StandardCharsets.UTF_8);
+                            storedOpt = storedFileRepository.findById(fullyDecoded);
+                        } catch (Exception ignored) {}
                     }
 
                     if (storedOpt.isPresent()) {

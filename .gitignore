@@ -62,4 +62,5 @@ screenshots/
 
 # Database Dumps
 backend/supabase_restore_*.sql
+backend/supabase_stored_files_*.sql
 

@@ -51,6 +51,13 @@ public class FileServingController {
             relativePath = decodedUri.substring("uploads/".length());
         }
 
+        // 역방향 프록시(Cloudflare/HuggingFace) 또는 브라우저 이중 인코딩 대비 보정
+        if (relativePath.contains("%")) {
+            try {
+                relativePath = URLDecoder.decode(relativePath, StandardCharsets.UTF_8);
+            } catch (Exception ignored) {}
+        }
+
         // 보안: Path Traversal 차단
         if (relativePath.contains("..")) {
             log.warn("[SECURITY] Path traversal blocked: {}", relativePath);

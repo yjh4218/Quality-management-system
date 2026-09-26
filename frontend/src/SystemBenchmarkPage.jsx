@@ -2,8 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import api from './api';
 import { toast } from 'react-toastify';
 
-// 12대 핵심 시스템 API 테스트 대상
+// 18대 핵심 시스템 API 테스트 대상 (조회 GET, 등록 POST, 수정 PUT, 삭제 DELETE)
 const BENCHMARK_TARGETS = [
+    // --- 1. 핵심 조회 (GET) ---
     {
         id: 'auth_me',
         domain: '인증/세션',
@@ -11,7 +12,7 @@ const BENCHMARK_TARGETS = [
         method: 'GET',
         url: '/api/auth/me',
         type: 'READ',
-        description: '인증 토큰 검증 및 권한(Role) 확인'
+        description: '인증 토큰 검증 및 권한(Role) 확인 (SWR 캐시)'
     },
     {
         id: 'dashboard_stats',
@@ -121,21 +122,127 @@ const BENCHMARK_TARGETS = [
         type: 'READ',
         description: '@BatchSize(50) 및 @Cacheable 응답'
     },
+
+    // --- 2. 감사 로그 쓰기 (POST) ---
     {
         id: 'access_log_write',
-        domain: '쓰기/로깅',
-        name: '화면 이동 감사 로그 저장 (WRITE)',
+        domain: '감사로그',
+        name: '화면 이동 감사 로그 저장 (POST)',
         method: 'POST',
         url: '/api/logs/access/page-move',
         payload: { pageName: '시스템 속도 측정 센터', pageUrl: 'systemBenchmark' },
         type: 'WRITE',
         description: '단건 쓰기(INSERT) 트랜잭션 응답 속도'
+    },
+
+    // --- 3. 공지사항 샌드박스 CUD 라이프사이클 ---
+    {
+        id: 'announcement_post',
+        domain: '공지사항',
+        name: '공지사항 신규 등록 (POST)',
+        method: 'POST',
+        url: '/api/announcements',
+        payload: () => ({
+            title: `[BENCHMARK] 속도 측정용 공지_${Date.now()}`,
+            content: '성능 벤치마크 테스트 자동 생성 레코드입니다.',
+            targetType: 'ALL'
+        }),
+        type: 'WRITE',
+        description: '신규 게시물 등록 DB 트랜잭션 속도',
+        onResponse: (res, ctx, cleanupQueue) => {
+            if (res.data?.id) {
+                ctx.announcementId = res.data.id;
+                cleanupQueue.push({ type: 'announcement', id: res.data.id });
+            }
+        }
+    },
+    {
+        id: 'announcement_put',
+        domain: '공지사항',
+        name: '공지사항 정보 수정 (PUT)',
+        method: 'PUT',
+        dynamicUrl: (ctx) => `/api/announcements/${ctx.announcementId || 0}`,
+        payload: () => ({
+            title: `[BENCHMARK] 속도 측정용 공지 (수정됨)_${Date.now()}`,
+            content: '수정 트랜잭션 성능 측정 완료.',
+            targetType: 'ALL'
+        }),
+        type: 'WRITE',
+        description: '기존 데이터 변경 Dirty Checking 속도'
+    },
+    {
+        id: 'announcement_delete',
+        domain: '공지사항',
+        name: '공지사항 소프트 삭제 (DELETE)',
+        method: 'DELETE',
+        dynamicUrl: (ctx) => `/api/announcements/${ctx.announcementId || 0}`,
+        type: 'WRITE',
+        description: 'Soft Delete 및 감사 이력 갱신 트랜잭션',
+        onResponse: (res, ctx, cleanupQueue) => {
+            const idx = cleanupQueue.findIndex(q => q.type === 'announcement' && q.id === ctx.announcementId);
+            if (idx !== -1) cleanupQueue.splice(idx, 1);
+        }
+    },
+
+    // --- 4. 제조사 마스터 샌드박스 CUD 라이프사이클 (Hard Delete 포함) ---
+    {
+        id: 'manufacturer_post',
+        domain: '제조사 마스터',
+        name: '제조사 신규 등록 (POST)',
+        method: 'POST',
+        url: '/api/manufacturers',
+        payload: () => ({
+            name: `[BENCHMARK] 제조사_${Date.now()}`,
+            category: 'OEM',
+            description: '속도 측정용 임시 제조사 마스터 데이터'
+        }),
+        type: 'WRITE',
+        description: '마스터 엔티티 생성 트랜잭션 속도',
+        onResponse: (res, ctx, cleanupQueue) => {
+            if (res.data?.id) {
+                ctx.manufacturerId = res.data.id;
+                cleanupQueue.push({ type: 'manufacturer', id: res.data.id });
+            }
+        }
+    },
+    {
+        id: 'manufacturer_put',
+        domain: '제조사 마스터',
+        name: '제조사 정보 수정 (PUT)',
+        method: 'PUT',
+        dynamicUrl: (ctx) => `/api/manufacturers/${ctx.manufacturerId || 0}`,
+        payload: () => ({
+            name: `[BENCHMARK] 제조사_수정됨_${Date.now()}`,
+            category: 'OEM',
+            description: '수정 트랜잭션 성능 측정 완료.'
+        }),
+        type: 'WRITE',
+        description: '마스터 데이터 갱신 및 캐시 인밸리데이션'
+    },
+    {
+        id: 'manufacturer_delete_hard',
+        domain: '제조사 마스터',
+        name: '제조사 영구 삭제 클린업 (DELETE)',
+        method: 'DELETE',
+        dynamicUrl: (ctx) => `/api/manufacturers/${ctx.manufacturerId || 0}/hard`,
+        type: 'WRITE',
+        description: '물리 삭제(Hard Delete)를 통한 DB 잔류 0% 보장',
+        onResponse: (res, ctx, cleanupQueue) => {
+            const idx = cleanupQueue.findIndex(q => q.type === 'manufacturer' && q.id === ctx.manufacturerId);
+            if (idx !== -1) cleanupQueue.splice(idx, 1);
+        }
     }
 ];
 
-const diagnoseBottleneck = (duration, sizeKb, serverMs, type) => {
+const diagnoseBottleneck = (duration, sizeKb, serverMs, type, method) => {
     if (duration <= 50) {
         return '⚡ 인메모리 캐시 & 인덱스 최적 (0ms급)';
+    }
+    if (method === 'POST' || method === 'PUT' || method === 'DELETE') {
+        if (serverMs !== null && serverMs > 200) {
+            return `⚠️ DB 쓰기 트랜잭션/락 대기 지연 (서버: ${serverMs}ms)`;
+        }
+        return `✍️ DB CUD 트랜잭션 정상 반영 (RTT: ${duration}ms, 서버: ${serverMs || '-'}ms)`;
     }
     if (sizeKb > 250 && duration > 120) {
         return `📦 페이로드 비대 (${sizeKb}KB - 필드/페이징 축소 권장)`;
@@ -143,13 +250,27 @@ const diagnoseBottleneck = (duration, sizeKb, serverMs, type) => {
     if (serverMs !== null && serverMs > 150) {
         return `⚠️ 백엔드 DB 쿼리/N+1 지연 의심 (서버 처리: ${serverMs}ms)`;
     }
+    if (serverMs !== null && duration - serverMs > 150) {
+        return `🌐 해외 리전 물리적 네트워크 RTT 지연 (순수 네트워크: ${duration - serverMs}ms)`;
+    }
     if (duration > 200) {
         return '🔴 지연 발생 (DB 인덱스 및 네트워크 병목 점검 필요)';
     }
-    if (type === 'WRITE') {
-        return '💾 트랜잭션 정상 커밋 완료';
-    }
     return '✅ 양호한 정상 응답 속도';
+};
+
+const emergencyCleanup = async (queue) => {
+    for (const item of queue) {
+        try {
+            if (item.type === 'announcement' && item.id) {
+                await api.delete(`/api/announcements/${item.id}`, { skipLoading: true, skipToast: true });
+            } else if (item.type === 'manufacturer' && item.id) {
+                await api.delete(`/api/manufacturers/${item.id}/hard`, { skipLoading: true, skipToast: true });
+            }
+        } catch (e) {
+            console.debug('[Benchmark] Emergency cleanup item skipped or already cleaned:', item);
+        }
+    }
 };
 
 const SystemBenchmarkPage = () => {
@@ -165,6 +286,7 @@ const SystemBenchmarkPage = () => {
     const [progress, setProgress] = useState(0);
     const [currentTestingId, setCurrentTestingId] = useState(null);
     const [filterGrade, setFilterGrade] = useState('ALL'); // ALL, OPTIMAL, GOOD, SLOW
+    const [filterMethod, setFilterMethod] = useState('ALL'); // ALL, GET, POST, PUT, DELETE
     const [searchTerm, setSearchTerm] = useState('');
     const [bypassCache, setBypassCache] = useState(false);
 
@@ -174,8 +296,8 @@ const SystemBenchmarkPage = () => {
         return map;
     }, [prevResults]);
 
-    const runSingleTest = async (target) => {
-        const url = target.dynamicUrl ? await target.dynamicUrl() : target.url;
+    const runSingleTest = async (target, context = {}, cleanupQueue = []) => {
+        const url = target.dynamicUrl ? await target.dynamicUrl(context) : target.url;
         const t0 = performance.now();
         let status = 0;
         let sizeKb = 0;
@@ -183,16 +305,27 @@ const SystemBenchmarkPage = () => {
 
         try {
             let response;
+            const payload = typeof target.payload === 'function' ? target.payload(context) : target.payload;
+
             if (target.method === 'POST') {
-                response = await api.post(url, target.payload || {}, { skipLoading: true, skipToast: true });
+                response = await api.post(url, payload || {}, { skipLoading: true, skipToast: true });
+            } else if (target.method === 'PUT') {
+                response = await api.put(url, payload || {}, { skipLoading: true, skipToast: true });
+            } else if (target.method === 'DELETE') {
+                response = await api.delete(url, { skipLoading: true, skipToast: true });
             } else {
                 const separator = url.includes('?') ? '&' : '?';
                 const finalUrl = bypassCache ? `${url}${separator}_t=${Date.now()}` : url;
                 response = await api.get(finalUrl, { skipLoading: true, skipToast: true, skipCache: bypassCache });
             }
+
             const t1 = performance.now();
             const totalDuration = Math.round(t1 - t0);
             status = response.status;
+
+            if (target.onResponse) {
+                target.onResponse(response, context, cleanupQueue);
+            }
 
             try {
                 const str = JSON.stringify(response.data || '');
@@ -220,7 +353,7 @@ const SystemBenchmarkPage = () => {
                 status,
                 success: true,
                 grade: durationVal <= 50 ? 'OPTIMAL' : durationVal <= 200 ? 'GOOD' : 'SLOW',
-                diagnosis: diagnoseBottleneck(durationVal, numSize, serverMs, target.type),
+                diagnosis: diagnoseBottleneck(durationVal, numSize, serverMs, target.type, target.method),
                 testedAt: new Date().toLocaleTimeString()
             };
         } catch (err) {
@@ -243,7 +376,7 @@ const SystemBenchmarkPage = () => {
         }
     };
 
-    const runFullBenchmark = async () => {
+    const runBenchmarkMode = async (mode = 'ALL') => {
         if (isRunning) return;
         setIsRunning(true);
         setProgress(0);
@@ -253,29 +386,52 @@ const SystemBenchmarkPage = () => {
             sessionStorage.setItem('qms_benchmark_history', JSON.stringify(results));
         }
 
-        const newResults = [];
-        for (let i = 0; i < BENCHMARK_TARGETS.length; i++) {
-            const target = BENCHMARK_TARGETS[i];
-            setCurrentTestingId(target.id);
-            const res = await runSingleTest(target);
-            newResults.push(res);
-            setResults([...newResults]);
-            setProgress(Math.round(((i + 1) / BENCHMARK_TARGETS.length) * 100));
-        }
+        const targetsToRun = mode === 'GET' 
+            ? BENCHMARK_TARGETS.filter(t => t.method === 'GET')
+            : mode === 'CUD' 
+                ? BENCHMARK_TARGETS.filter(t => t.method !== 'GET')
+                : BENCHMARK_TARGETS;
 
-        setCurrentTestingId(null);
-        setIsRunning(false);
-        toast.success(`⚡ 12개 전 핵심 API 속도 측정이 완료되었습니다!`);
+        const context = {};
+        const cleanupQueue = [];
+        const newResultsMap = new Map(results.map(r => [r.id, r]));
+
+        try {
+            for (let i = 0; i < targetsToRun.length; i++) {
+                const target = targetsToRun[i];
+                setCurrentTestingId(target.id);
+                const res = await runSingleTest(target, context, cleanupQueue);
+                newResultsMap.set(target.id, res);
+                setResults(Array.from(newResultsMap.values()));
+                setProgress(Math.round(((i + 1) / targetsToRun.length) * 100));
+            }
+        } finally {
+            if (cleanupQueue.length > 0) {
+                await emergencyCleanup(cleanupQueue);
+            }
+            setCurrentTestingId(null);
+            setIsRunning(false);
+            const modeName = mode === 'GET' ? '조회(GET)' : mode === 'CUD' ? '등록/수정/삭제(CUD)' : '전체';
+            toast.success(`⚡ [${modeName}] ${targetsToRun.length}개 API 속도 측정이 완료되었습니다!`);
+        }
     };
 
     const retestItem = async (targetId) => {
         const target = BENCHMARK_TARGETS.find(t => t.id === targetId);
         if (!target) return;
         setCurrentTestingId(targetId);
-        const res = await runSingleTest(target);
-        setResults(prev => prev.map(item => item.id === targetId ? res : item));
-        setCurrentTestingId(null);
-        toast.info(`[${target.name}] 재측정 완료: ${res.duration}ms`);
+        const context = {};
+        const cleanupQueue = [];
+        try {
+            const res = await runSingleTest(target, context, cleanupQueue);
+            setResults(prev => prev.map(item => item.id === targetId ? res : item));
+            toast.info(`[${target.name}] 재측정 완료: ${res.duration}ms`);
+        } finally {
+            if (cleanupQueue.length > 0) {
+                await emergencyCleanup(cleanupQueue);
+            }
+            setCurrentTestingId(null);
+        }
     };
 
     // 통계 계산
@@ -307,13 +463,14 @@ const SystemBenchmarkPage = () => {
     const filteredList = useMemo(() => {
         return results.filter(item => {
             const matchGrade = filterGrade === 'ALL' || item.grade === filterGrade;
+            const matchMethod = filterMethod === 'ALL' || item.method === filterMethod;
             const matchSearch = !searchTerm ||
                 item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 item.domain.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 item.url.toLowerCase().includes(searchTerm.toLowerCase());
-            return matchGrade && matchSearch;
+            return matchGrade && matchMethod && matchSearch;
         });
-    }, [results, filterGrade, searchTerm]);
+    }, [results, filterGrade, filterMethod, searchTerm]);
 
     const copyMarkdownTable = () => {
         if (results.length === 0) {
@@ -377,12 +534,12 @@ const SystemBenchmarkPage = () => {
                             </span>
                         </div>
                         <p style={{ margin: 0, color: '#94a3b8', fontSize: '14px', lineHeight: 1.5 }}>
-                            시스템 전 화면의 실제 조회(Read) 및 저장(Write) 왕복 응답시간(RTT)과 데이터 크기를 정밀 측정하여
+                            시스템 전 화면의 실제 조회(GET) 및 등록(POST)·수정(PUT)·삭제(DELETE) 왕복 응답시간(RTT)과 서버 시간을 정밀 측정하여
                             성능 개선 효과를 검증하고 병목 후보를 자동 진단합니다.
                         </p>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                         <label style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -406,13 +563,55 @@ const SystemBenchmarkPage = () => {
                         </label>
 
                         <button
-                            onClick={runFullBenchmark}
+                            onClick={() => runBenchmarkMode('GET')}
+                            disabled={isRunning}
+                            style={{
+                                backgroundColor: isRunning ? '#64748b' : '#0284c7',
+                                color: '#fff',
+                                border: 'none',
+                                padding: '10px 16px',
+                                borderRadius: '8px',
+                                fontWeight: 700,
+                                fontSize: '13px',
+                                cursor: isRunning ? 'not-allowed' : 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            🔍 조회(GET) 측정
+                        </button>
+
+                        <button
+                            onClick={() => runBenchmarkMode('CUD')}
+                            disabled={isRunning}
+                            style={{
+                                backgroundColor: isRunning ? '#64748b' : '#059669',
+                                color: '#fff',
+                                border: 'none',
+                                padding: '10px 16px',
+                                borderRadius: '8px',
+                                fontWeight: 700,
+                                fontSize: '13px',
+                                cursor: isRunning ? 'not-allowed' : 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            ✍️ CUD(등록/수정/삭제) 측정
+                        </button>
+
+                        <button
+                            onClick={() => runBenchmarkMode('ALL')}
                             disabled={isRunning}
                             style={{
                                 backgroundColor: isRunning ? '#64748b' : '#2563eb',
                                 color: '#fff',
                                 border: 'none',
-                                padding: '10px 22px',
+                                padding: '10px 20px',
                                 borderRadius: '8px',
                                 fontWeight: 700,
                                 fontSize: '14px',
@@ -574,10 +773,11 @@ const SystemBenchmarkPage = () => {
                 flexWrap: 'wrap',
                 gap: '12px'
             }}>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {/* 등급 필터 */}
                     <div style={{ display: 'flex', backgroundColor: '#f1f5f9', borderRadius: '8px', padding: '3px' }}>
                         {[
-                            { key: 'ALL', label: '전체' },
+                            { key: 'ALL', label: '전체 등급' },
                             { key: 'OPTIMAL', label: '🟢 최적 (<50ms)' },
                             { key: 'GOOD', label: '🟡 양호 (50~200ms)' },
                             { key: 'SLOW', label: '🔴 병목 주의 (>200ms)' }
@@ -602,6 +802,35 @@ const SystemBenchmarkPage = () => {
                         ))}
                     </div>
 
+                    {/* 메서드 필터 */}
+                    <div style={{ display: 'flex', backgroundColor: '#f1f5f9', borderRadius: '8px', padding: '3px' }}>
+                        {[
+                            { key: 'ALL', label: '전체 메서드' },
+                            { key: 'GET', label: 'GET (조회)' },
+                            { key: 'POST', label: 'POST (등록)' },
+                            { key: 'PUT', label: 'PUT (수정)' },
+                            { key: 'DELETE', label: 'DELETE (삭제)' }
+                        ].map(m => (
+                            <button
+                                key={m.key}
+                                onClick={() => setFilterMethod(m.key)}
+                                style={{
+                                    border: 'none',
+                                    padding: '6px 10px',
+                                    borderRadius: '6px',
+                                    fontSize: '12px',
+                                    fontWeight: filterMethod === m.key ? 700 : 500,
+                                    backgroundColor: filterMethod === m.key ? '#fff' : 'transparent',
+                                    color: filterMethod === m.key ? '#1e293b' : '#64748b',
+                                    cursor: 'pointer',
+                                    boxShadow: filterMethod === m.key ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                                }}
+                            >
+                                {m.label}
+                            </button>
+                        ))}
+                    </div>
+
                     <input
                         type="text"
                         placeholder="🔍 API명 / 도메인 / URL 검색..."
@@ -612,7 +841,7 @@ const SystemBenchmarkPage = () => {
                             borderRadius: '6px',
                             border: '1px solid #cbd5e1',
                             fontSize: '12px',
-                            minWidth: '220px',
+                            minWidth: '200px',
                             outline: 'none'
                         }}
                     />
@@ -690,7 +919,7 @@ const SystemBenchmarkPage = () => {
                                                 상단의 [전체 속도 측정 시작] 버튼을 클릭하여 측정을 시작하세요.
                                             </div>
                                             <div style={{ fontSize: '12px', marginTop: '4px' }}>
-                                                12개 핵심 도메인 API의 실제 네트워크 및 서버 성능이 실시간 진단됩니다.
+                                                18개 핵심 도메인 API의 실제 네트워크(RTT), 서버 처리시간, CUD 트랜잭션 성능이 실시간 진단됩니다.
                                             </div>
                                         </div>
                                     ) : (
@@ -736,7 +965,11 @@ const SystemBenchmarkPage = () => {
                                             <span style={{
                                                 fontWeight: 700,
                                                 fontSize: '11px',
-                                                color: item.method === 'GET' ? '#0284c7' : '#16a34a'
+                                                padding: '2px 8px',
+                                                borderRadius: '6px',
+                                                backgroundColor: item.method === 'GET' ? '#e0f2fe' : item.method === 'POST' ? '#dcfce7' : item.method === 'PUT' ? '#fef3c7' : '#ffe4e6',
+                                                color: item.method === 'GET' ? '#0369a1' : item.method === 'POST' ? '#15803d' : item.method === 'PUT' ? '#b45309' : '#be123c',
+                                                border: `1px solid ${item.method === 'GET' ? '#bae6fd' : item.method === 'POST' ? '#bbf7d0' : item.method === 'PUT' ? '#fde68a' : '#fecdd3'}`
                                             }}>
                                                 {item.method}
                                             </span>
