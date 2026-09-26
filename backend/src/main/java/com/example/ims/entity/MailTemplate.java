@@ -49,6 +49,25 @@ public class MailTemplate {
     @Column(nullable = false)
     private Boolean deleted = false;
 
+    @Builder.Default
+    @Column(name = "max_history_count")
+    private Integer maxHistoryCount = 20;
+
+    @Builder.Default
+    @Column(name = "auto_reminder_enabled")
+    private Boolean autoReminderEnabled = false;
+
+    @Builder.Default
+    @Column(name = "reminder_interval_days")
+    private Integer reminderIntervalDays = 3;
+
+    @Builder.Default
+    @Column(name = "max_reminder_count")
+    private Integer maxReminderCount = 2;
+
+    @Column(name = "reminder_template_code")
+    private String reminderTemplateCode;
+
     @CreationTimestamp
     @Column(updatable = false)
     private LocalDateTime createdAt;

@@ -55,6 +55,8 @@ public class QmsFullE2EComprehensiveTest {
     @Autowired private NotificationRepository notificationRepository;
     @Autowired private MailTemplateRepository mailTemplateRepository;
     @Autowired private BugReportRepository bugReportRepository;
+    @Autowired private MailDispatchHistoryRepository mailDispatchHistoryRepository;
+    @Autowired private MailDispatchHistoryService mailDispatchHistoryService;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private jakarta.persistence.EntityManager entityManager;
 
@@ -431,5 +433,74 @@ public class QmsFullE2EComprehensiveTest {
         System.out.println("======================================================================");
 
         assertThat(status).isEqualTo(200);
+    }
+
+    @Test
+    @Order(10)
+    @DisplayName("도메인 10: 메일 발송·회신 이력 추적 & 리드타임 산출 & 통계 KPI 및 자동 리마인드 검증")
+    @WithMockUser(username = "admin", roles = {"ADMIN", "QUALITY_TEAM"})
+    void test10_MailDispatchHistoryAndLeadTimeStats() throws Exception {
+        // 1. 메일 양식 등록 (이력 보관 수량 20개, 자동 리마인드 3일 간격, 최대 3회)
+        MailTemplate template = MailTemplate.builder()
+                .templateCode("E2E_CLAIM_NOTIFY")
+                .templateName("E2E 클레임 제조사 통보 양식")
+                .category("CLAIM")
+                .subject("[E2E] 클레임 발생 통보")
+                .body("클레임 내용 확인 부탁드립니다.")
+                .maxHistoryCount(20)
+                .autoReminderEnabled(true)
+                .reminderIntervalDays(3)
+                .maxReminderCount(3)
+                .active(true)
+                .build();
+        MailTemplate savedTmpl = mailTemplateRepository.save(template);
+        assertThat(savedTmpl.getMaxHistoryCount()).isEqualTo(20);
+        assertThat(savedTmpl.getAutoReminderEnabled()).isTrue();
+
+        // 2. 발송 이력 적재 (최초 발송)
+        MailDispatchHistory history = mailDispatchHistoryService.recordDispatch(
+                "CLAIM",
+                999L,
+                "CLM-20260927-999",
+                "E2E_CLAIM_NOTIFY",
+                "E2E 클레임 제조사 통보 양식",
+                "한국콜마",
+                "mfr@kolmar.co.kr",
+                "[E2E] 클레임 발생 통보",
+                "클레임 내용 확인 부탁드립니다.",
+                "admin",
+                "MANUAL",
+                0
+        );
+        assertThat(history.getId()).isNotNull();
+        assertThat(history.getStatus()).isEqualTo("PENDING");
+        assertThat(history.getDispatchType()).isEqualTo("MANUAL");
+        assertThat(history.getReminderCount()).isEqualTo(0);
+
+        // 3. 회신 완료 처리 및 리드타임 자동 산출 검증
+        // 2시간 전 발송 가정
+        history.setSentAt(LocalDateTime.now().minusHours(2));
+        mailDispatchHistoryRepository.save(history);
+
+        mailDispatchHistoryService.recordReply("CLAIM", 999L, LocalDateTime.now(), "한국콜마 대책서 제출");
+        
+        MailDispatchHistory repliedHistory = mailDispatchHistoryRepository.findById(history.getId()).orElseThrow();
+        assertThat(repliedHistory.getStatus()).isEqualTo("REPLIED");
+        assertThat(repliedHistory.getRepliedAt()).isNotNull();
+        assertThat(repliedHistory.getLeadTimeHours()).isGreaterThanOrEqualTo(2.0);
+
+        // 4. Controller API 조회 검증 (도메인별 이력 목록 및 제조사별 리드타임 통계)
+        mockMvc.perform(get("/api/mail-histories/domain/CLAIM/999"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].templateCode").value("E2E_CLAIM_NOTIFY"))
+                .andExpect(jsonPath("$[0].status").value("REPLIED"));
+
+        mockMvc.perform(get("/api/mail-histories/analytics/manufacturer-lead-time"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+
+        System.out.println("======================================================================");
+        System.out.println(" 📧 [E2E 검증 완료] 메일 발송·회신 이력 추적 및 리드타임 통계 정상 작동 확인!");
+        System.out.println("======================================================================");
     }
 }

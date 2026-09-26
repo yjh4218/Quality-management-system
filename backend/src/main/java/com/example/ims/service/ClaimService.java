@@ -33,6 +33,7 @@ public class ClaimService {
     private final EmailService emailService;
     private final com.example.ims.repository.ManufacturerRepository manufacturerRepository;
     private final MailTemplateService mailTemplateService;
+    private final MailDispatchHistoryService mailDispatchHistoryService;
 
     @Transactional(readOnly = true)
     public List<Claim> getClaims(String role, String companyName) {
@@ -706,8 +707,10 @@ public class ClaimService {
 
         Claim saved = claimRepository.save(existing);
 
-        // 제조사가 대책서/원인분석을 새로 기입하거나 수정하여 저장했을 때 설정된 수신 권한 역할군에게 알림 발송
+        // 제조사가 대책서/원인분석을 새로 기입하거나 수정하여 저장했을 때 설정된 수신 권한 역할군에게 알림 발송 및 회신 이력 갱신
         if (mfrFieldsChanged && mfrSubmitted) {
+            mailDispatchHistoryService.recordReply("CLAIM", saved.getId(), java.time.LocalDateTime.now(), "제조사 원인분석 및 대책서 제출 완료");
+
             eventPublisher.publishEvent(com.example.ims.event.NotificationEvent.builder()
                 .eventType("MFR_SUBMIT_CAPA")
                 .sourceDomain("CLAIM")
@@ -1022,6 +1025,22 @@ public class ClaimService {
 
         String targetEmailList = String.join(", ", targetEmails);
 
+        // 메일 발송 이력 저장
+        mailDispatchHistoryService.recordDispatch(
+                "CLAIM",
+                claim.getId(),
+                claim.getClaimNumber(),
+                template.getTemplateCode(),
+                template.getTemplateName(),
+                claim.getManufacturer(),
+                targetEmailList,
+                emailService.processClaimTemplate(template.getSubject(), claim),
+                emailService.processClaimTemplate(template.getBody(), claim),
+                modifier != null ? modifier.getName() : "SYSTEM",
+                "MANUAL",
+                0
+        );
+
         // Audit Log
         eventPublisher.publishEvent(com.example.ims.event.EntityChangeEvent.builder()
                 .entityType("CLAIM")
@@ -1072,7 +1091,21 @@ public class ClaimService {
         }
         claimRepository.save(claim);
 
-
+        // 메일 발송 이력 저장
+        mailDispatchHistoryService.recordDispatch(
+                "CLAIM",
+                claim.getId(),
+                claim.getClaimNumber(),
+                "CUSTOM_CLAIM_MAIL",
+                "직접 작성 메일",
+                claim.getManufacturer(),
+                toEmail,
+                subject,
+                body,
+                modifier != null ? modifier.getName() : "SYSTEM",
+                "MANUAL",
+                0
+        );
 
         // Audit Log
         eventPublisher.publishEvent(com.example.ims.event.EntityChangeEvent.builder()

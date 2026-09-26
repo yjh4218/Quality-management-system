@@ -46,6 +46,7 @@ public class ProductionAuditService {
     private final com.example.ims.repository.ManufacturerRepository manufacturerRepository;
     private final MailTemplateService mailTemplateService;
     private final NotificationService notificationService;
+    private final MailDispatchHistoryService mailDispatchHistoryService;
 
     @Transactional(readOnly = true)
     public List<ProductionAuditDTO> getAllAudits(String username, String manufacturerName) {
@@ -123,6 +124,9 @@ public class ProductionAuditService {
             p.setPhotoAuditDisclosed(dto.isDisclosed());
             productRepository.save(p);
         });
+
+        // 생산감리 메일 회신 완료 기록 및 리드타임 산출
+        mailDispatchHistoryService.recordReply("PRODUCTION_AUDIT", savedAudit.getId(), java.time.LocalDateTime.now(), "생산감리 사진 및 결과 등록 완료");
 
         String modifierName = user.getName() + " (" + (user.getCompanyName() != null ? user.getCompanyName() : "시스템") + ")";
         eventPublisher.publishEvent(EntityChangeEvent.builder()
@@ -450,6 +454,22 @@ public class ProductionAuditService {
         Long modifierId = modifier != null ? modifier.getId() : null;
         String modifierUsername = modifier != null ? modifier.getUsername() : null;
         String modifierCompany = modifier != null ? modifier.getCompanyName() : null;
+
+        // 메일 발송 이력 저장
+        mailDispatchHistoryService.recordDispatch(
+                "PRODUCTION_AUDIT",
+                auditId > 0 ? auditId : (audit != null ? audit.getId() : 0L),
+                audit != null ? audit.getItemCode() : (itemCode != null ? itemCode : String.valueOf(auditId)),
+                "PRODUCTION_AUDIT_REQUEST",
+                "생산감리 사진 등록 요청",
+                audit != null ? audit.getManufacturerName() : "",
+                toEmail,
+                subject,
+                body,
+                modifierName,
+                "MANUAL",
+                0
+        );
 
         eventPublisher.publishEvent(EntityChangeEvent.builder()
                 .entityType("PRODUCTION_AUDIT")

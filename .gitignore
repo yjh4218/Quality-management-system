@@ -16,7 +16,8 @@ error_list_*.txt
 *.diff
 temp/
 tmp/
-*.tmp
+backend/mock_emails/
+mock_emails/
 backend/h2_migration_data.json
 backend/DbTest.java
 backend/DbTest.class

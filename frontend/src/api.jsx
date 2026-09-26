@@ -11,7 +11,14 @@ export { swrCache };
  */
 export const extractDomainPrefix = (url) => {
     if (!url) return '';
-    const clean = url.split('?')[0];
+    let clean = url.split('?')[0];
+    if (clean.startsWith('http://') || clean.startsWith('https://')) {
+        try {
+            clean = new URL(clean).pathname;
+        } catch (e) {
+            // ignore
+        }
+    }
     const parts = clean.split('/').filter(Boolean);
     if (parts.length >= 2) {
         if (clean.startsWith('/api/admin/master-data/')) {
@@ -30,6 +37,7 @@ export const extractDomainPrefix = (url) => {
         if (clean.startsWith('/api/manufacturer-audits')) return '/api/manufacturer-audits';
         if (clean.startsWith('/api/announcements')) return '/api/announcements';
         if (clean.startsWith('/api/mail-templates')) return '/api/mail-templates';
+        if (clean.startsWith('/api/mail-histories')) return '/api/mail-histories';
         if (clean.startsWith('/api/guides')) return '/api/guides';
         return `/${parts[0]}/${parts[1]}`;
     }
@@ -584,6 +592,8 @@ export const getSystemSettings = (forceRefresh = false) =>
     api.get('/api/system-settings', { skipCache: forceRefresh }).then(res => res.data);
 export const saveSystemSettings = (settings) => 
     api.post('/api/system-settings', settings).then(res => res.data);
+export const testSendEmail = (targetEmail) => 
+    api.post('/api/system-settings/test-email', { targetEmail });
 
 // Admin APIs
 export const getUsers = (params = {}) => {
@@ -1051,10 +1061,17 @@ export const saveManufacturerAudit = (data) => {
 export const deleteManufacturerAudit = (id) => api.delete(`/api/manufacturer-audits/${id}`);
 
 // --- Mail Template APIs ---
-export const getMailTemplates = () => api.get('/api/mail-templates');
+export const getMailTemplates = (forceRefresh = false) => api.get('/api/mail-templates', { skipCache: forceRefresh });
 export const createMailTemplate = (data) => api.post('/api/mail-templates', data);
 export const updateMailTemplate = (id, data) => api.put(`/api/mail-templates/${id}`, data);
 export const deleteMailTemplate = (id) => api.delete(`/api/mail-templates/${id}`);
+
+// --- Mail Dispatch History & Lead Time Analytics APIs ---
+export const getMailHistoriesByDomain = (domain, sourceId, forceRefresh = false) => api.get(`/api/mail-histories/domain/${domain}/${sourceId}`, { skipCache: forceRefresh });
+export const getAllMailHistories = (forceRefresh = false) => api.get('/api/mail-histories/all', { skipCache: forceRefresh });
+export const getManufacturerLeadTimeStats = (forceRefresh = false) => api.get('/api/mail-histories/analytics/manufacturer-lead-time', { skipCache: forceRefresh });
+export const markMailHistoryReplied = (id, remarks) => api.post(`/api/mail-histories/${id}/mark-replied`, { remarks });
+export const sendMailHistoryReminder = (id) => api.post(`/api/mail-histories/${id}/send-reminder`);
 
 // --- Announcement APIs ---
 export const getAnnouncements = () => api.get('/api/announcements');

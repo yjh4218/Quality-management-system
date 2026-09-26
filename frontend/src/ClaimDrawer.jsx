@@ -92,6 +92,13 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
     const [emailActionType, setEmailActionType] = useState('SHARE'); // 'SHARE' or 'RE_REQUEST'
     const isSavingRef = React.useRef(false);
 
+    // 메일 발송 및 회신 이력 상태
+    const [mailHistories, setMailHistories] = useState([]);
+    const [mailHistoryLoading, setMailHistoryLoading] = useState(false);
+    const [previewMailModal, setPreviewMailModal] = useState({ open: false, title: '', body: '', sentAt: '', recipient: '' });
+    const [remindingId, setRemindingId] = useState(null);
+    const [markingId, setMarkingId] = useState(null);
+
     // LOT 역추적 상태
     const [isLotTraceOpen, setIsLotTraceOpen] = useState(false);
     const [lotTraceLoading, setLotTraceLoading] = useState(false);
@@ -118,6 +125,57 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
         }
     };
 
+    const loadMailHistories = async (forceRefresh = false) => {
+        if (!claim?.id) return;
+        setMailHistoryLoading(true);
+        try {
+            const res = await api.getMailHistoriesByDomain('CLAIM', claim.id, forceRefresh);
+            setMailHistories(res.data || []);
+        } catch (err) {
+            console.error("클레임 메일 발송 이력 로드 실패:", err);
+        } finally {
+            setMailHistoryLoading(false);
+        }
+    };
+
+    const handleMarkReplied = async (historyId) => {
+        if (!window.confirm("제조사로부터 회신을 수령하셨습니까?\n동일 클레임 건의 모든 발송 이력을 회신 완료로 변경하고 리드타임을 기록합니다.")) return;
+        setMarkingId(historyId);
+        try {
+            await api.markMailHistoryReplied(historyId);
+            toast.success("회신 완료로 기록되었습니다.");
+            loadMailHistories(true);
+        } catch (err) {
+            toast.error(err.response?.data?.message || "회신 상태 변경 실패");
+        } finally {
+            setMarkingId(null);
+        }
+    };
+
+    const handleSendReminder = async (historyId) => {
+        if (!window.confirm("제조사 담당자에게 리마인드 메일을 즉시 재발송하시겠습니까?")) return;
+        setRemindingId(historyId);
+        try {
+            await api.sendMailHistoryReminder(historyId);
+            toast.success("리마인드 메일이 성공적으로 재발송되었습니다.");
+            loadMailHistories(true);
+        } catch (err) {
+            const msg = err.response?.data?.message || "리마인드 메일 발송 실패";
+            toast.error(msg);
+        } finally {
+            setRemindingId(null);
+        }
+    };
+
+    const formatLeadTime = (hours) => {
+        if (hours === null || hours === undefined) return '-';
+        if (hours < 1) return `${Math.round(hours * 60)}분`;
+        if (hours < 24) return `${hours.toFixed(1)}시간`;
+        const days = Math.floor(hours / 24);
+        const remHours = Math.round(hours % 24);
+        return `${days}일 ${remHours}시간`;
+    };
+
     useEffect(() => {
         if (!isManufacturer) {
             api.getActiveMailTemplates('CLAIM')
@@ -128,6 +186,15 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                .catch(err => console.error("Failed to load templates", err));
         }
     }, [isManufacturer]);
+
+    // 초기 마운트 시 메일 발송 이력 카운트 선조회
+    useEffect(() => {
+        if (claim?.id && !isManufacturer) {
+            api.getMailHistoriesByDomain('CLAIM', claim.id)
+                .then(res => setMailHistories(res.data || []))
+                .catch(() => {});
+        }
+    }, [claim?.id, isManufacturer]);
 
     const loadHistory = async () => {
         if (!claim) return;
@@ -142,6 +209,8 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
     useEffect(() => {
         if (activeTab === 'history') {
             loadHistory();
+        } else if (activeTab === 'mailHistory') {
+            loadMailHistories();
         }
     }, [activeTab, claim]);
 
@@ -693,13 +762,31 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                             상세 정보
                         </button>
                         {!isManufacturer && (
-                            <button 
-                                type="button" 
-                                className={`drawer-tab-btn ${activeTab === 'history' ? 'active' : ''}`}
-                                onClick={() => setActiveTab('history')} 
-                            >
-                                변경 이력
-                            </button>
+                            <>
+                                <button 
+                                    type="button" 
+                                    className={`drawer-tab-btn ${activeTab === 'mailHistory' ? 'active' : ''}`}
+                                    onClick={() => setActiveTab('mailHistory')} 
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                                >
+                                    <span>📧 메일 발송·회신 이력</span>
+                                    {mailHistories.length > 0 && (
+                                        <span style={{ 
+                                            background: '#3b82f6', color: '#fff', fontSize: '11px', 
+                                            fontWeight: 'bold', padding: '1px 6px', borderRadius: '10px' 
+                                        }}>
+                                            {mailHistories.length}
+                                        </span>
+                                    )}
+                                </button>
+                                <button 
+                                    type="button" 
+                                    className={`drawer-tab-btn ${activeTab === 'history' ? 'active' : ''}`}
+                                    onClick={() => setActiveTab('history')} 
+                                >
+                                    변경 이력
+                                </button>
+                            </>
                         )}
                     </div>
                 </div>
@@ -1237,6 +1324,156 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                 )}
                             </div>
                         )}
+
+                        {activeTab === 'mailHistory' && (
+                            <div className="tab-pane">
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                                    <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b' }}>
+                                        📬 클레임 메일 발송 및 제조사 회신 이력 
+                                        <span style={{ fontSize: '12px', fontWeight: 'normal', color: '#64748b', marginLeft: '8px' }}>
+                                            (양식 마스터 설정에 따라 최근 이력 자동 보관)
+                                        </span>
+                                    </div>
+                                    <button 
+                                        type="button" 
+                                        onClick={loadMailHistories} 
+                                        className="secondary" 
+                                        style={{ padding: '6px 12px', fontSize: '12px' }}
+                                        disabled={mailHistoryLoading}
+                                    >
+                                        🔄 새로고침
+                                    </button>
+                                </div>
+
+                                {mailHistoryLoading ? (
+                                    <div style={{ textAlign: 'center', padding: '50px' }}>
+                                        <div className="spinner-ring" style={{ margin: '0 auto 12px auto' }}></div>
+                                        <div style={{ color: '#64748b', fontSize: '13px' }}>메일 발송 이력을 조회하고 있습니다...</div>
+                                    </div>
+                                ) : mailHistories.length === 0 ? (
+                                    <div style={{ textAlign: 'center', padding: '50px', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
+                                        <p style={{ fontSize: '24px', margin: '0 0 10px 0' }}>📭</p>
+                                        <p style={{ fontSize: '15px', fontWeight: 'bold', color: '#475569', margin: '0 0 6px 0' }}>발송된 메일 이력이 없습니다.</p>
+                                        <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>상세 정보 탭에서 [제조사 공개] 체크 후 메일을 발송하시면 회신 추적 및 리마인드가 활성화됩니다.</p>
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                        {mailHistories.map((item, idx) => {
+                                            const isReplied = item.replyStatus === 'REPLIED';
+                                            const isOverdue = item.replyStatus === 'OVERDUE';
+
+                                            return (
+                                                <div 
+                                                    key={item.id || idx} 
+                                                    className="card" 
+                                                    style={{ 
+                                                        margin: 0,
+                                                        borderLeft: isReplied ? '4px solid #10b981' : isOverdue ? '4px solid #ef4444' : '4px solid #f59e0b',
+                                                        boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+                                                    }}
+                                                >
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px', marginBottom: '10px' }}>
+                                                        <div>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                                                <span style={{ 
+                                                                    background: item.dispatchType === 'REMINDER' ? '#fffbeb' : '#eff6ff', 
+                                                                    color: item.dispatchType === 'REMINDER' ? '#b45309' : '#1d4ed8', 
+                                                                    border: item.dispatchType === 'REMINDER' ? '1px solid #fde68a' : '1px solid #bfdbfe',
+                                                                    fontSize: '11px', fontWeight: 'bold', padding: '2px 8px', borderRadius: '12px' 
+                                                                }}>
+                                                                    {item.dispatchType === 'REMINDER' ? `🔔 리마인드 (${item.reminderCount}회차)` : '📤 최초 발송'}
+                                                                </span>
+                                                                <strong style={{ fontSize: '15px', color: '#1e293b' }}>
+                                                                    {item.templateName || item.subject}
+                                                                </strong>
+                                                            </div>
+                                                            <div style={{ fontSize: '12px', color: '#64748b' }}>
+                                                                발송일시: <strong>{item.sentAt ? item.sentAt.substring(0, 19).replace('T', ' ') : '-'}</strong> | 발송자: <strong>{item.senderName || item.senderEmail || '시스템'}</strong>
+                                                            </div>
+                                                        </div>
+
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <span style={{ 
+                                                                display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                                                fontSize: '12px', fontWeight: 'bold', padding: '4px 10px', borderRadius: '20px',
+                                                                background: isReplied ? '#dcfce7' : isOverdue ? '#fee2e2' : '#fef3c7',
+                                                                color: isReplied ? '#15803d' : isOverdue ? '#b91c1c' : '#b45309',
+                                                                border: isReplied ? '1px solid #bbf7d0' : isOverdue ? '1px solid #fecaca' : '1px solid #fde68a'
+                                                            }}>
+                                                                {isReplied ? `✅ 회신 완료 (${formatLeadTime(item.leadTimeHours)})` :
+                                                                 isOverdue ? '🚨 회신 지연' : '⏳ 회신 대기'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: '8px', fontSize: '12px', color: '#334155', marginBottom: '12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
+                                                        <div><strong>수신처:</strong> {item.recipientEmail}</div>
+                                                        {item.ccEmail && <div><strong>참조:</strong> {item.ccEmail}</div>}
+                                                        <div><strong>제목:</strong> {item.subject}</div>
+                                                        {isReplied && (
+                                                            <div style={{ color: '#15803d' }}>
+                                                                <strong>회신일시:</strong> {item.repliedAt ? item.repliedAt.substring(0, 19).replace('T', ' ') : '-'}
+                                                            </div>
+                                                        )}
+                                                        {item.remindTargetDate && !isReplied && (
+                                                            <div style={{ color: '#d97706' }}>
+                                                                <strong>다음 자동 리마인드 예정:</strong> {item.remindTargetDate.substring(0, 10)}
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px' }}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setPreviewMailModal({
+                                                                open: true,
+                                                                title: item.subject,
+                                                                body: item.contentSnapshot,
+                                                                sentAt: item.sentAt,
+                                                                recipient: item.recipientEmail
+                                                            })}
+                                                            className="secondary"
+                                                            style={{ fontSize: '12px', padding: '4px 10px' }}
+                                                        >
+                                                            👁️ 메일 원문 보기
+                                                        </button>
+                                                        
+                                                        {(isAdmin || isQuality) && !isReplied && (
+                                                            <>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleMarkReplied(item.id)}
+                                                                    disabled={markingId === item.id}
+                                                                    style={{ 
+                                                                        fontSize: '12px', padding: '4px 10px', 
+                                                                        background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', 
+                                                                        borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' 
+                                                                    }}
+                                                                >
+                                                                    {markingId === item.id ? '기록 중...' : '↩️ 수동 회신 확인'}
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleSendReminder(item.id)}
+                                                                    disabled={remindingId === item.id}
+                                                                    style={{ 
+                                                                        fontSize: '12px', padding: '4px 10px', 
+                                                                        background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a', 
+                                                                        borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' 
+                                                                    }}
+                                                                >
+                                                                    {remindingId === item.id ? '발송 중...' : '🔔 즉시 리마인드 재발송'}
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </form>
                 </div>
 
@@ -1528,6 +1765,35 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                         </div>
                         <div style={{ padding: '12px 20px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end' }}>
                             <button type="button" onClick={() => setIsLotTraceOpen(false)} className="primary" style={{ padding: '8px 20px', fontSize: '13px' }}>
+                                닫기
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 메일 발송 원문 스냅샷 모달 */}
+            {previewMailModal.open && (
+                <div className="modal-overlay" style={{ zIndex: 6000 }} onClick={() => setPreviewMailModal({ open: false, title: '', body: '', sentAt: '', recipient: '' })}>
+                    <div className="modal-content" style={{ maxWidth: '750px', maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+                        <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+                            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#1e293b' }}>
+                                📧 메일 발송 스냅샷 원문
+                            </h3>
+                            <button type="button" onClick={() => setPreviewMailModal({ open: false, title: '', body: '', sentAt: '', recipient: '' })} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}>×</button>
+                        </div>
+                        <div style={{ padding: '12px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '13px', color: '#475569' }}>
+                            <div><strong>제목:</strong> {previewMailModal.title}</div>
+                            <div><strong>수신처:</strong> {previewMailModal.recipient} | <strong>발송일시:</strong> {previewMailModal.sentAt ? previewMailModal.sentAt.substring(0, 19).replace('T', ' ') : '-'}</div>
+                        </div>
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '20px', background: '#ffffff' }}>
+                            <div 
+                                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewMailModal.body || '') }} 
+                                style={{ lineHeight: 1.6, fontSize: '14px', color: '#334155' }}
+                            />
+                        </div>
+                        <div style={{ padding: '12px 20px', borderTop: '1px solid #e2e8f0', textAlign: 'right' }}>
+                            <button type="button" className="secondary" onClick={() => setPreviewMailModal({ open: false, title: '', body: '', sentAt: '', recipient: '' })}>
                                 닫기
                             </button>
                         </div>

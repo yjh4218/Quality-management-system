@@ -43,6 +43,8 @@ diff.txt
 fix*.js
 backend/data/
 backend/uploads/
+backend/mock_emails/
+mock_emails/
 node_modules/
 frontend/node_modules/
 

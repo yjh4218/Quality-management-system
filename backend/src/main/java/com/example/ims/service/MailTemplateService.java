@@ -111,6 +111,19 @@ public class MailTemplateService {
             existing.setBody(template.getBody());
             existing.setCategory(template.getCategory());
             existing.setActive(template.getActive());
+            if (template.getMaxHistoryCount() != null) {
+                existing.setMaxHistoryCount(template.getMaxHistoryCount());
+            }
+            if (template.getAutoReminderEnabled() != null) {
+                existing.setAutoReminderEnabled(template.getAutoReminderEnabled());
+            }
+            if (template.getReminderIntervalDays() != null) {
+                existing.setReminderIntervalDays(template.getReminderIntervalDays());
+            }
+            if (template.getMaxReminderCount() != null) {
+                existing.setMaxReminderCount(template.getMaxReminderCount());
+            }
+            existing.setReminderTemplateCode(template.getReminderTemplateCode());
             // templateCode is usually immutable but we can allow update if needed.
             return mailTemplateRepository.save(existing);
         }

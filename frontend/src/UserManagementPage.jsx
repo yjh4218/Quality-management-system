@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AgGridReact } from 'ag-grid-react'; // React Grid Logic
-import { getUsers, getRoles, approveUser, toggleUserStatus, updateUserRole, unlockUser, resetUserPassword, getSystemSettings, saveSystemSettings } from './api';
+import { getUsers, getRoles, approveUser, toggleUserStatus, updateUserRole, unlockUser, resetUserPassword, getSystemSettings, saveSystemSettings, testSendEmail } from './api';
 import { usePermissions } from './usePermissions';
 import { matchesAllTokens, matchesMultiFieldTokens } from './utils/searchUtils';
 
@@ -19,10 +19,14 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
     const [activeTab, setActiveTab] = useState('users'); // 'users' or 'settings'
     const [settings, setSettings] = useState({
         SMTP_HOST: '',
-        SMTP_PORT: '587',
+        SMTP_PORT: '465',
         SMTP_USERNAME: '',
-        SMTP_PASSWORD: ''
+        SMTP_PASSWORD: '',
+        SMTP_FROM_ADDRESS: ''
     });
+
+    const [testEmailAddress, setTestEmailAddress] = useState(currentUser?.email || '');
+    const [isTestingEmail, setIsTestingEmail] = useState(false);
 
     const [confirmModal, setConfirmModal] = useState({ isOpen: false, message: '', onConfirm: null });
     const [alertModal, setAlertModal] = useState({ isOpen: false, message: '' });
@@ -34,6 +38,33 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
     const showAlert = React.useCallback((message) => {
         setAlertModal({ isOpen: true, message });
     }, []);
+
+    const fetchSettings = React.useCallback(async (force = true) => {
+        try {
+            const data = await getSystemSettings(force);
+            if (data) {
+                setSettings(prev => ({
+                    ...prev,
+                    ...data,
+                    SMTP_HOST: data.SMTP_HOST || '',
+                    SMTP_PORT: data.SMTP_PORT || '465',
+                    SMTP_USERNAME: data.SMTP_USERNAME || '',
+                    SMTP_PASSWORD: data.SMTP_PASSWORD || '',
+                    SMTP_FROM_ADDRESS: data.SMTP_FROM_ADDRESS || ''
+                }));
+            }
+        } catch (error) {
+            showAlert("설정을 불러오는데 실패했습니다.");
+        }
+    }, [showAlert]);
+
+    // [중요 FIX] 탭이 'settings'로 전환될 때마다 서버의 기존 저장 정보를 반드시 즉시 로드
+    useEffect(() => {
+        if (activeTab === 'settings') {
+            fetchSettings(true);
+        }
+    }, [activeTab, fetchSettings]);
+
     // Fetch users & roles on mount
     const lastNavData = useRef(undefined);
     useEffect(() => {
@@ -46,28 +77,53 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
         }
         fetchUsers();
         fetchRoles();
-        if (activeTab === 'settings') {
-            fetchSettings();
-        }
-    }, [navigationData, activeTab]);
-
-    const fetchSettings = async () => {
-        try {
-            const data = await getSystemSettings();
-            setSettings(prev => ({ ...prev, ...data }));
-        } catch (error) {
-            showAlert("설정을 불러오는데 실패했습니다.");
-        }
-    };
+    }, [navigationData]);
 
     const handleSaveSettings = async () => {
         try {
             await saveSystemSettings(settings);
-            showAlert("설정이 성공적으로 저장되었습니다.");
-            fetchSettings();
+            showAlert("메일 설정이 성공적으로 저장되었습니다.");
+            await fetchSettings(true);
         } catch (error) {
             showAlert("설정 저장에 실패했습니다.");
         }
+    };
+
+    const handleTestEmail = async () => {
+        if (!testEmailAddress || !testEmailAddress.includes('@')) {
+            showAlert("유효한 수신 테스트 이메일 주소를 입력해 주세요.");
+            return;
+        }
+        setIsTestingEmail(true);
+        try {
+            const res = await testSendEmail(testEmailAddress.trim());
+            showAlert(res.data?.message || "테스트 메일이 성공적으로 발송되었습니다. 수신함을 확인해 주세요!");
+        } catch (error) {
+            const msg = error.response?.data?.message || error.message || "발송 실패";
+            showAlert("테스트 메일 발송 실패: " + msg);
+        } finally {
+            setIsTestingEmail(false);
+        }
+    };
+
+    const fillResendDefaults = () => {
+        setSettings(prev => ({
+            ...prev,
+            SMTP_HOST: 'smtp.resend.com',
+            SMTP_PORT: '465',
+            SMTP_USERNAME: 'resend',
+            SMTP_FROM_ADDRESS: prev.SMTP_FROM_ADDRESS || 'onboarding@resend.dev'
+        }));
+        showAlert("Resend 기본 연동 정보(호스트: smtp.resend.com, 포트: 465, 계정: resend)가 자동 입력되었습니다.\n[이메일 비밀번호] 칸에 Resend 대시보드에서 발급받으신 API Key(re_...)를 입력하고 저장해 주세요!");
+    };
+
+    const fillGmailDefaults = () => {
+        setSettings(prev => ({
+            ...prev,
+            SMTP_HOST: 'smtp.gmail.com',
+            SMTP_PORT: '587'
+        }));
+        showAlert("Gmail 기본 정보(호스트: smtp.gmail.com, 포트: 587)가 입력되었습니다.\n계정과 앱 비밀번호를 입력하고 저장해 주세요.");
     };
 
     const fetchRoles = async () => {
@@ -485,61 +541,149 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
                 </div>)}
 
             {activeTab === 'settings' && (
-                <div className="card" style={{ padding: '30px', maxWidth: '800px', margin: '0 auto', border: '1px solid #eef2f6', borderRadius: '12px' }}>
-                    <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#fffaf0', borderLeft: '4px solid #f6e05e', borderRadius: '4px' }}>
-                        <h4 style={{ margin: '0 0 10px 0', color: '#b7791f' }}>⚠️ 메일 발송 계정 설정 안내</h4>
-                        <p style={{ margin: 0, fontSize: '13px', color: '#718096' }}>
-                            신규 사용자 가입 시 자동 발송되는 알림 이메일의 발송자 정보를 입력합니다.<br />
-                            Gmail을 추천하며, Gmail 계정 사용 시 <strong>[보안] ➔ [2단계 인증] ➔ [앱 비밀번호]</strong>를 생성하여 비밀번호 칸에 입력하셔야 합니다.
+                <div className="card" style={{ padding: '30px', maxWidth: '850px', margin: '0 auto', border: '1px solid #e2e8f0', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
+                    <div style={{ marginBottom: '24px', padding: '18px 20px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                            <h4 style={{ margin: 0, color: '#166534', fontSize: '15px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                📬 실제 메일 발송 서버 연동 설정 (Resend / SMTP)
+                            </h4>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                    type="button"
+                                    onClick={fillResendDefaults}
+                                    style={{ padding: '5px 12px', fontSize: '12px', fontWeight: 'bold', backgroundColor: '#15803d', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                                    title="Resend 기본 호스트, 포트, 계정을 원클릭으로 채웁니다."
+                                >
+                                    ⚡ Resend 기본값 자동 채우기
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={fillGmailDefaults}
+                                    className="outline"
+                                    style={{ padding: '5px 12px', fontSize: '12px', fontWeight: 'bold', backgroundColor: '#fff', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer' }}
+                                    title="Gmail 기본 설정을 채웁니다."
+                                >
+                                    📮 Gmail 기본값
+                                </button>
+                            </div>
+                        </div>
+                        <p style={{ margin: 0, fontSize: '13px', color: '#334155', lineHeight: '1.6' }}>
+                            신규 사용자 가입 승인, 제조사 클레임 통보, 대책 회신 리마인드 등 시스템 전반의 실제 이메일 발송에 사용됩니다.<br />
+                            <strong>💡 Resend 사용 가이드:</strong> Resend 계정 가입 후 발급받은 API Key(<code>re_...</code>)를 비밀번호 칸에 입력하고, 발신자 주소는 인증된 도메인(기본 테스트용: <code>onboarding@resend.dev</code>)으로 설정하시면 무료로 실제 메일이 정상 도착합니다.
                         </p>
                     </div>
 
-                    <div style={{ display: 'grid', gap: '20px' }}>
-                        <div className="form-group" style={{ marginBottom: 0 }}>
-                            <label style={{ fontWeight: '700' }}>SMTP 서버 주소 (Host)</label>
-                            <input
-                                type="text"
-                                value={settings.SMTP_HOST || ''}
-                                onChange={e => setSettings({ ...settings, SMTP_HOST: e.target.value })}
-                                placeholder="예: smtp.gmail.com"
-                            />
+                    <div style={{ display: 'grid', gap: '18px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' }}>
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                                <label style={{ fontWeight: '700', fontSize: '13px', color: '#1e293b' }}>SMTP 서버 주소 (Host)</label>
+                                <input
+                                    type="text"
+                                    value={settings.SMTP_HOST || ''}
+                                    onChange={e => setSettings({ ...settings, SMTP_HOST: e.target.value })}
+                                    placeholder="예: smtp.resend.com"
+                                    style={{ width: '100%', padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px' }}
+                                />
+                            </div>
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                                <label style={{ fontWeight: '700', fontSize: '13px', color: '#1e293b' }}>SMTP 포트 (Port)</label>
+                                <input
+                                    type="text"
+                                    value={settings.SMTP_PORT || ''}
+                                    onChange={e => setSettings({ ...settings, SMTP_PORT: e.target.value })}
+                                    placeholder="465 (SSL) 또는 587 (TLS)"
+                                    style={{ width: '100%', padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px' }}
+                                />
+                            </div>
                         </div>
-                        <div className="form-group" style={{ marginBottom: 0 }}>
-                            <label style={{ fontWeight: '700' }}>SMTP 서버 포트 (Port)</label>
-                            <input
-                                type="text"
-                                value={settings.SMTP_PORT || ''}
-                                onChange={e => setSettings({ ...settings, SMTP_PORT: e.target.value })}
-                                placeholder="예: 587"
-                            />
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                                <label style={{ fontWeight: '700', fontSize: '13px', color: '#1e293b' }}>이메일 계정 (Username)</label>
+                                <input
+                                    type="text"
+                                    value={settings.SMTP_USERNAME || ''}
+                                    onChange={e => setSettings({ ...settings, SMTP_USERNAME: e.target.value })}
+                                    placeholder="Resend 사용 시 'resend' 입력"
+                                    style={{ width: '100%', padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px' }}
+                                />
+                                <small style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                                    * Resend SMTP의 계정 아이디는 고정값 <code>resend</code> 입니다.
+                                </small>
+                            </div>
+
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                                <label style={{ fontWeight: '700', fontSize: '13px', color: '#1e293b' }}>발신자 이메일 주소 (From Address)</label>
+                                <input
+                                    type="email"
+                                    value={settings.SMTP_FROM_ADDRESS || ''}
+                                    onChange={e => setSettings({ ...settings, SMTP_FROM_ADDRESS: e.target.value })}
+                                    placeholder="예: onboarding@resend.dev 또는 회사 도메인"
+                                    style={{ width: '100%', padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px' }}
+                                />
+                                <small style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                                    * 메일 수신자에게 표시될 발신자 주소 (미입력 시 계정 주소 자동 사용)
+                                </small>
+                            </div>
                         </div>
+
                         <div className="form-group" style={{ marginBottom: 0 }}>
-                            <label style={{ fontWeight: '700' }}>이메일 계정 (Username)</label>
-                            <input
-                                type="text"
-                                value={settings.SMTP_USERNAME || ''}
-                                onChange={e => setSettings({ ...settings, SMTP_USERNAME: e.target.value })}
-                                placeholder="예: admin@example.com"
-                            />
-                        </div>
-                        <div className="form-group" style={{ marginBottom: 0 }}>
-                            <label style={{ fontWeight: '700' }}>이메일 비밀번호 (App Password)</label>
+                            <label style={{ fontWeight: '700', fontSize: '13px', color: '#1e293b', display: 'flex', justifyContent: 'space-between' }}>
+                                <span>이메일 비밀번호 / Resend API Key</span>
+                                {settings.SMTP_PASSWORD === '********' && (
+                                    <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: 'bold' }}>
+                                        🔒 기존 비밀번호 암호화 저장됨
+                                    </span>
+                                )}
+                            </label>
                             <input
                                 type="password"
                                 value={settings.SMTP_PASSWORD || ''}
                                 onChange={e => setSettings({ ...settings, SMTP_PASSWORD: e.target.value })}
-                                placeholder="기존 값이 유지됩니다. 변경하려면 입력하세요."
+                                placeholder={settings.SMTP_PASSWORD === '********' ? '기존 비밀번호가 안전하게 유지 중입니다 (변경 시에만 새 값 입력)' : 'Resend API Key(re_...) 또는 앱 비밀번호 입력'}
+                                style={{ width: '100%', padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px', backgroundColor: settings.SMTP_PASSWORD === '********' ? '#f8fafc' : '#fff' }}
                             />
-                            <small style={{ color: '#a0aec0', display: 'block', marginTop: '5px' }}>
-                                ※ 일반 비밀번호가 아닌 '앱 비밀번호'를 입력하세요. 입력한 내용은 안전하게 암호화되어 저장됩니다.
+                            <small style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                                ※ Resend 사용 시 <code>re_...</code> 형태의 API Key를 입력하세요. 서버에 안전하게 AES 암호화되어 보관됩니다.
                             </small>
                         </div>
                     </div>
 
-                    <div style={{ marginTop: '30px', textAlign: 'right' }}>
-                        <button className="primary" onClick={handleSaveSettings} style={{ padding: '12px 30px', fontSize: '15px' }}>
-                            💾 설정 저장
+                    <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                        <button 
+                            className="primary" 
+                            onClick={handleSaveSettings} 
+                            style={{ padding: '12px 28px', fontSize: '14px', fontWeight: 'bold', borderRadius: '8px' }}
+                        >
+                            💾 메일 설정 저장하기
                         </button>
+                    </div>
+
+                    {/* 실시간 메일 수신 테스트 섹션 */}
+                    <div style={{ marginTop: '30px', paddingTop: '24px', borderTop: '1px dashed #cbd5e1' }}>
+                        <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', fontWeight: 'bold', color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            🧪 실시간 메일 수신 테스트 (도착 확인)
+                        </h4>
+                        <p style={{ margin: '0 0 14px 0', fontSize: '12px', color: '#64748b' }}>
+                            위 설정을 저장하신 후, 실제 본인 이메일로 테스트 메일이 도착하는지 지금 즉시 확인해볼 수 있습니다.
+                        </p>
+                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                            <input 
+                                type="email"
+                                value={testEmailAddress}
+                                onChange={e => setTestEmailAddress(e.target.value)}
+                                placeholder="테스트 수신 이메일 주소 입력"
+                                style={{ flex: 1, padding: '10px 12px', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px' }}
+                            />
+                            <button
+                                type="button"
+                                onClick={handleTestEmail}
+                                disabled={isTestingEmail}
+                                style={{ padding: '10px 20px', backgroundColor: '#0284c7', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '13px', cursor: isTestingEmail ? 'not-allowed' : 'pointer', minWidth: '130px' }}
+                            >
+                                {isTestingEmail ? '발송 중...' : '✉️ 테스트 발송'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

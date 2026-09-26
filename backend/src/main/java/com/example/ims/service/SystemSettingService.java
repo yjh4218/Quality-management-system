@@ -26,6 +26,7 @@ public class SystemSettingService {
     public static final String SMTP_PORT = "SMTP_PORT";
     public static final String SMTP_USERNAME = "SMTP_USERNAME";
     public static final String SMTP_PASSWORD = "SMTP_PASSWORD"; // Sensitive
+    public static final String SMTP_FROM_ADDRESS = "SMTP_FROM_ADDRESS";
 
     public String getSettingValue(String key) {
         return systemSettingRepository.findById(key)

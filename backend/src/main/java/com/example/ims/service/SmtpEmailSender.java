@@ -33,7 +33,10 @@ public class SmtpEmailSender implements EmailSender {
     @Override
     public void send(String to, String subject, String body) throws Exception {
         JavaMailSenderImpl mailSender = getMailSender();
-        String fromEmail = systemSettingService.getSettingValue(SystemSettingService.SMTP_USERNAME);
+        String fromEmail = systemSettingService.getSettingValue(SystemSettingService.SMTP_FROM_ADDRESS);
+        if (fromEmail == null || fromEmail.trim().isEmpty()) {
+            fromEmail = systemSettingService.getSettingValue(SystemSettingService.SMTP_USERNAME);
+        }
 
         MimeMessage message = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
@@ -73,6 +76,9 @@ public class SmtpEmailSender implements EmailSender {
         props.put("mail.transport.protocol", "smtp");
         props.put("mail.smtp.auth", "true");
         props.put("mail.debug", "false");
+        props.put("mail.smtp.connectiontimeout", "5000");
+        props.put("mail.smtp.timeout", "8000");
+        props.put("mail.smtp.writetimeout", "5000");
 
         if (mailSender.getPort() == 465) {
             props.put("mail.smtp.ssl.enable", "true");
@@ -81,6 +87,7 @@ public class SmtpEmailSender implements EmailSender {
             props.put("mail.smtp.socketFactory.fallback", "false");
         } else {
             props.put("mail.smtp.starttls.enable", "true");
+            props.put("mail.smtp.starttls.required", "true");
         }
 
         return mailSender;

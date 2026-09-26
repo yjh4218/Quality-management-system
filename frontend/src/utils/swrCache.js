@@ -76,7 +76,8 @@ class SwrCache {
         if (!prefix) return;
         let count = 0;
         for (const key of Array.from(this.cache.keys())) {
-            if (key === prefix || key.startsWith(prefix + '?') || key.startsWith(prefix + '/')) {
+            const rest = key.slice(prefix.length);
+            if (key.startsWith(prefix) && (rest === '' || rest.startsWith('?') || rest.startsWith('/') || rest.startsWith('_'))) {
                 this.cache.delete(key);
                 count++;
             }

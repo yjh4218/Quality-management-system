@@ -81,6 +81,28 @@ public class DBCheckTest {
         System.out.println("==================================================");
     }
 
+    @Test
+    public void checkMailHistories() {
+        System.out.println("==================================================");
+        System.out.println(">>>> [MAIL DISPATCH HISTORIES CHECK & REPAIR]");
+        try {
+            // ID=4가 이미 REPLIED이므로, 동일 CLM-20260627-901의 ID 1, 2, 3도 일괄 REPLIED 정렬
+            int updated = jdbcTemplate.update(
+                "UPDATE mail_dispatch_histories SET status = 'REPLIED', replied_at = CURRENT_TIMESTAMP, lead_time_hours = 0.0, reply_remarks = '동일 클레임 건 일괄 회신 정렬' WHERE source_number = 'CLM-20260627-901' AND status = 'PENDING'"
+            );
+            System.out.println(">>>> Aligned pending records: " + updated);
+
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList("SELECT id, domain, source_id, source_number, recipient_email, status, replied_at, lead_time_hours, reply_remarks, is_deleted FROM mail_dispatch_histories ORDER BY id DESC LIMIT 10");
+            System.out.println(">>>> Total rows found: " + rows.size());
+            for (Map<String, Object> r : rows) {
+                System.out.println("   Row: " + r);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        System.out.println("==================================================");
+    }
+
     @Autowired
     private com.example.ims.service.SystemInitializationService initializationService;
 
@@ -232,22 +254,15 @@ public class DBCheckTest {
     @Test
     public void printSmtpSettings() {
         System.out.println("==================================================");
-        System.out.println(">>>> [SMTP SETTINGS AUDIT]");
+        System.out.println(">>>> [SYSTEM SETTINGS AUDIT]");
         try {
-            String host = systemSettingService.getSettingValue("SMTP_HOST");
-            String port = systemSettingService.getSettingValue("SMTP_PORT");
-            String username = systemSettingService.getSettingValue("SMTP_USERNAME");
-            String decryptedPassword = systemSettingService.getSmtpPassword();
-            String rawPasswordInDb = jdbcTemplate.queryForObject("SELECT setting_value FROM system_settings WHERE setting_key = 'SMTP_PASSWORD'", String.class);
-
-            System.out.println("SMTP_HOST: " + host);
-            System.out.println("SMTP_PORT: " + port);
-            System.out.println("SMTP_USERNAME: " + username);
-            System.out.println("SMTP_PASSWORD (Decrypted): " + decryptedPassword);
-            System.out.println("SMTP_PASSWORD (Raw encrypted in DB): " + rawPasswordInDb);
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList("SELECT * FROM system_settings");
+            System.out.println("Total system_settings rows: " + rows.size());
+            for (Map<String, Object> row : rows) {
+                System.out.println("  " + row.get("SETTING_KEY") + " = " + row.get("SETTING_VALUE") + " (" + row.get("DESCRIPTION") + ")");
+            }
         } catch (Exception e) {
-            System.err.println(">>>> Failed to query system_settings!");
-            e.printStackTrace();
+            System.err.println(">>>> Failed to query system_settings: " + e.getMessage());
         }
         System.out.println("==================================================");
     }
