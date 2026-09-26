@@ -757,8 +757,8 @@ const MailTemplatePage = ({ user }) => {
             {activeTab === 'templates' ? (
                 <>
                     {/* 검색 필터 카드 */}
-                    <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
+                    <div className="card qms-filter-card">
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '15px', alignItems: 'flex-end' }}>
                             <div>
                                 <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>📝 메일 양식명</label>
                                 <input
@@ -767,7 +767,7 @@ const MailTemplatePage = ({ user }) => {
                                     value={searchFields.templateName}
                                     onChange={(e) => setSearchFields({ ...searchFields, templateName: e.target.value })}
                                     onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                                    style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '13px', backgroundColor: '#fcfcfc' }}
+                                    style={{ width: '100%', padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', backgroundColor: '#fcfcfc' }}
                                 />
                             </div>
                             <div>
@@ -778,7 +778,7 @@ const MailTemplatePage = ({ user }) => {
                                     value={searchFields.body}
                                     onChange={(e) => setSearchFields({ ...searchFields, body: e.target.value })}
                                     onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                                    style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '13px', backgroundColor: '#fcfcfc' }}
+                                    style={{ width: '100%', padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', backgroundColor: '#fcfcfc' }}
                                 />
                             </div>
                         </div>
@@ -792,7 +792,6 @@ const MailTemplatePage = ({ user }) => {
                             defaultColDef={{ resizable: true, sortable: true, filter: true }}
                             pagination={true}
                             paginationPageSize={20}
-                            rowHeight={54}
                             overlayLoadingTemplate={loading ? '<span class="ag-overlay-loading-center">데이터를 불러오는 중입니다...</span>' : undefined}
                         />
                     </div>
@@ -805,7 +804,6 @@ const MailTemplatePage = ({ user }) => {
                         defaultColDef={{ resizable: true, sortable: true, filter: true }}
                         pagination={true}
                         paginationPageSize={20}
-                        rowHeight={54}
                     />
                 </div>
             ) : (
@@ -955,7 +953,6 @@ const MailTemplatePage = ({ user }) => {
                             defaultColDef={{ resizable: true, sortable: true, filter: true }}
                             pagination={true}
                             paginationPageSize={20}
-                            rowHeight={52}
                             overlayLoadingTemplate={loading ? '<span class="ag-overlay-loading-center">이력을 불러오는 중입니다...</span>' : undefined}
                         />
                     </div>

@@ -560,8 +560,8 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
             </div>
 
             {/* 검색 필터 그리드 */}
-            <div className="card" style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '20px', alignItems: 'flex-end' }}>
+            <div className="card qms-filter-card">
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '15px', alignItems: 'flex-end' }}>
                     {/* 1. 등록 기간 (날짜 + ⚡빠른선택) */}
                     <div style={{ gridColumn: 'span 2', minWidth: '420px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
@@ -758,7 +758,6 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
 
             <div className="ag-theme-alpine" style={{ flex: 1, width: '100%', minHeight: 0 }}>
                 <AgGridReact theme="legacy"
-                    rowHeight={54}
                     ref={gridRef}
                     rowData={filteredRowData}
                     columnDefs={colDefs}

@@ -338,6 +338,43 @@ const App = () => {
     });
     const [tabContextMenu, setTabContextMenu] = useState({ visible: false, x: 0, y: 0, tabId: null });
 
+    // [전역 Data-Density 시스템: 해상도 자동 감지 + 수동 토글]
+    const [density, setDensity] = useState(() => {
+        try {
+            const saved = localStorage.getItem('qms_global_density');
+            if (saved) return saved;
+            return window.innerWidth <= 1440 ? 'compact' : 'comfortable';
+        } catch {
+            return window.innerWidth <= 1440 ? 'compact' : 'comfortable';
+        }
+    });
+
+    useEffect(() => {
+        document.documentElement.setAttribute('data-density', density);
+        const handleResize = () => {
+            const isManual = localStorage.getItem('qms_global_density_manual') === 'true';
+            if (!isManual) {
+                const autoDensity = window.innerWidth <= 1440 ? 'compact' : 'comfortable';
+                setDensity(autoDensity);
+                document.documentElement.setAttribute('data-density', autoDensity);
+            }
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [density]);
+
+    const handleToggleDensity = () => {
+        const next = density === 'compact' ? 'comfortable' : 'compact';
+        setDensity(next);
+        try {
+            localStorage.setItem('qms_global_density', next);
+            localStorage.setItem('qms_global_density_manual', 'true');
+        } catch (e) {
+            console.error(e);
+        }
+        document.documentElement.setAttribute('data-density', next);
+    };
+
     // Favorites Toggle
     const handleToggleFavorite = (pageKey) => {
         setFavorites(prev => {
@@ -1431,7 +1468,15 @@ const App = () => {
             {/* Main Content Area */}
             <main className="main-content">
                 <div className="tab-header-container">
-                    <div className="tab-bar" ref={tabBarRef}>
+                    <div 
+                        className="tab-bar" 
+                        ref={tabBarRef}
+                        onWheel={(e) => {
+                            if (tabBarRef.current && e.deltaY !== 0) {
+                                tabBarRef.current.scrollLeft += e.deltaY;
+                            }
+                        }}
+                    >
                         {tabs.map(tab => (
                             <div 
                                 key={tab.id} 
@@ -1448,8 +1493,30 @@ const App = () => {
                         ))}
                     </div>
 
-                    {/* 상단 생산성 도구 모음: 퀵 서치, 단축키, 알림 */}
+                    {/* 상단 생산성 도구 모음: 퀵 서치, 밀도 조절 토글, 단축키, 알림 */}
                     <div className="tab-header-tools" style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingRight: '12px' }}>
+                        {/* 📐 전역 밀도(Compact / Comfortable) 토글 버튼 */}
+                        <button
+                            type="button"
+                            onClick={handleToggleDensity}
+                            title={`화면 표시 밀도 전환 (현재: ${density === 'compact' ? '컴팩트 모드' : '기본 모드'})`}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                padding: '4px 8px',
+                                background: density === 'compact' ? '#eff6ff' : '#f8fafc',
+                                border: `1px solid ${density === 'compact' ? '#93c5fd' : '#e2e8f0'}`,
+                                borderRadius: '6px',
+                                color: density === 'compact' ? '#1d4ed8' : '#475569',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                transition: 'all 0.15s'
+                            }}
+                        >
+                            <span>{density === 'compact' ? '📐 컴팩트' : '📏 기본'}</span>
+                        </button>
                         {/* 🔍 전역 커맨드 검색 버튼 */}
                         <button
                             type="button"

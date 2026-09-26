@@ -127,7 +127,7 @@ public class DocumentRequestScheduler {
         );
 
         int sentCount = 0;
-        int skippedEmptyEmailCount = 0;
+        int skippedCount = 0;
         int failedCount = 0;
 
         for (DocumentRequirement req : requirements) {
@@ -137,22 +137,28 @@ public class DocumentRequestScheduler {
 
             String recipientEmail = getRecipientEmail(req);
             if (recipientEmail != null && !recipientEmail.trim().isEmpty()) {
+                String cleanEmail = recipientEmail.trim();
+                if (cleanEmail.endsWith("@example.com") || cleanEmail.endsWith("@test.com") || cleanEmail.contains("example.com")) {
+                    skippedCount++;
+                    log.debug("[SCHEDULE] Recipient is dummy email, skipping request: {}, ReqId={}", cleanEmail, req.getId());
+                    continue;
+                }
                 try {
-                    requestService.sendEmailRequest(req, recipientEmail);
+                    requestService.sendEmailRequest(req, cleanEmail);
                     sentCount++;
-                    log.debug("[SCHEDULE] Document request email sent successfully to: {}, ReqId={}", recipientEmail, req.getId());
+                    log.debug("[SCHEDULE] Document request email sent successfully to: {}, ReqId={}", cleanEmail, req.getId());
                 } catch (Exception e) {
                     failedCount++;
-                    log.error("[SCHEDULE] Failed to send document request email to: {}, ReqId={}: {}", recipientEmail, req.getId(), e.getMessage());
+                    log.error("[SCHEDULE] Failed to send document request email to: {}, ReqId={}: {}", cleanEmail, req.getId(), e.getMessage());
                 }
             } else {
-                skippedEmptyEmailCount++;
+                skippedCount++;
                 log.debug("[SCHEDULE] Recipient email is empty for requirement ID: {}", req.getId());
             }
         }
 
-        log.info("[SCHEDULE] Document request processing summary: Total targets={}, Sent={}, Skipped (No email)={}, Failed={}",
-                requirements.size(), sentCount, skippedEmptyEmailCount, failedCount);
+        log.info("[SCHEDULE] Document request processing summary: Total targets={}, Sent={}, Skipped (Dummy/No email)={}, Failed={}",
+                requirements.size(), sentCount, skippedCount, failedCount);
     }
 
     /**

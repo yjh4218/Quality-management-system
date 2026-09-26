@@ -3945,15 +3945,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                         {/* Channel Selection Checkboxes */}
                         <div style={{ marginBottom: '20px' }}>
                             <label style={{ fontSize: '13px', fontWeight: '600', color: '#555', marginBottom: '8px', display: 'block' }}>📢 유통 채널 (단일 선택)</label>
-                            <div style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(4, 1fr)',
-                                gap: '8px',
-                                padding: '12px',
-                                background: '#f8f9fa',
-                                borderRadius: '6px',
-                                border: '1px solid #dee2e6'
-                            }}>
+                            <div className="channel-radio-grid">
                                 {salesChannels.map(channel => {
                                     const isSelected = (formData.channels || []).some(c => c.id === channel.id);
                                     return (

@@ -26,12 +26,46 @@ html {
   --success-color: #16a34a;
   --warning-color: #d97706;
 
-  /* Typography Scales */
+  /* Typography Scales (가독성 하한선 12px 준수) */
   --text-xs: 12px;
   --text-sm: 13px;
   --text-base: 14px;
   --text-lg: 16px;
   --text-xl: 20px;
+
+  /* ========================================================
+     QMS Design Density Tokens (Comfortable vs Compact)
+     ======================================================== */
+  --qms-input-height: 38px;
+  --qms-input-padding: 8px 12px;
+  --qms-input-font-size: 13px;
+  --qms-btn-padding: 8px 18px;
+  --qms-card-padding: 16px 20px;
+  --qms-tab-height: 44px;
+  --qms-tab-item-height: 34px;
+  --qms-tab-font-size: 12.5px;
+  
+  /* Standard Spacing Tokens */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+}
+
+/* Compact 모드: 저해상도 모니터 자동 감지 (≤1440px) 또는 [data-density="compact"] 활성화 시 */
+[data-density="compact"],
+@media (max-width: 1440px) {
+  :root {
+    --qms-input-height: 32px;
+    --qms-input-padding: 4px 8px;
+    --qms-input-font-size: 12px;
+    --qms-btn-padding: 5px 12px;
+    --qms-card-padding: 10px 14px;
+    --qms-tab-height: 36px;
+    --qms-tab-item-height: 28px;
+    --qms-tab-font-size: 11.5px;
+  }
 }
 
 * {
@@ -656,9 +690,10 @@ body:has(.modal-overlay) {
 }
 
 .drawer {
-  width: 1600px; /* Adjusted to keep same visual scaling on zoom removal */
-  max-width: 98vw;
-  height: 94vh;
+  width: 90vw;
+  max-width: 1560px;
+  height: 95vh;
+  max-height: 95vh;
   background-color: white;
   padding: 0;
   box-sizing: border-box;
@@ -790,9 +825,18 @@ body:has(.modal-overlay) {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
-  padding: 30px 40px;
+  padding: 24px 32px;
   background-color: #f8fafc;
   /* Light gray background for the scrollable area */
+}
+
+[data-density="compact"] .drawer-body,
+[data-density="compact"] .modal-body,
+@media (max-width: 1440px) {
+  .drawer-body,
+  .modal-body {
+    padding: 14px 20px;
+  }
 }
 
 /* Specific body for search popups to maintain white background if better */
@@ -802,7 +846,7 @@ body:has(.modal-overlay) {
 
 .drawer-footer,
 .modal-footer {
-  padding: 16px 40px;
+  padding: 14px 32px;
   background-color: #ffffff;
   border-top: 1px solid #edf2f7;
   display: flex;
@@ -811,7 +855,19 @@ body:has(.modal-overlay) {
   font-size: 12px;
   color: #a0aec0;
   flex-shrink: 0;
-  z-index: 10;
+  position: sticky;
+  bottom: 0;
+  z-index: 100;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.03);
+}
+
+[data-density="compact"] .drawer-footer,
+[data-density="compact"] .modal-footer,
+@media (max-width: 1440px) {
+  .drawer-footer,
+  .modal-footer {
+    padding: 8px 18px;
+  }
 }
 
 .drawer-footer .footer-actions,
@@ -860,10 +916,10 @@ body:has(.modal-overlay) {
   /* Padding moved to inner sections */
   border-radius: 16px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  max-width: 90%;
+  max-width: 95vw;
   width: auto;
   min-width: 500px;
-  max-height: 90vh;
+  max-height: 95vh;
   overflow: hidden;
   /* Important for flex child overflow */
   position: relative;
@@ -912,13 +968,28 @@ body:has(.modal-overlay) {
   }
 }
 
-/* AG Grid Global Overrides for Data Spacing */
+/* AG Grid Global Overrides for Data Spacing (Data-Density System) */
 .ag-theme-alpine,
 .ag-theme-quartz {
-  --ag-row-height: 54px !important;  /* Adjusted from 36px (50% spacing added) */
-  --ag-header-height: 48px !important;
-  --ag-cell-horizontal-padding: 16px;
-  --ag-font-size: 13.5px;
+  --ag-row-height: 48px !important;  /* 고해상도 기본: 48px 여유 있는 행 */
+  --ag-header-height: 44px !important;
+  --ag-cell-horizontal-padding: 14px;
+  --ag-font-size: 13px;
+  transition: all 0.2s ease;
+}
+
+/* Compact 모드: 저해상도 모니터 자동 감지 (≤1440px) 또는 [data-density="compact"] 시 전 테이블 일괄 축소 */
+[data-density="compact"] .ag-theme-alpine,
+[data-density="compact"] .ag-theme-quartz,
+@media (max-width: 1440px) {
+  .ag-theme-alpine,
+  .ag-theme-quartz {
+    --ag-row-height: 38px !important;  /* 저해상도/컴팩트: 38px 고밀도 행 */
+    --ag-header-height: 38px !important;
+    --ag-cell-horizontal-padding: 8px !important;
+    --ag-font-size: 12px !important;   /* 가독성 하한선 12px 준수 */
+    --ag-grid-size: 4px !important;
+  }
 }
 
 /* ag-theme-quartz Visual Polish */
@@ -1177,7 +1248,15 @@ body {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
   position: relative;
   z-index: 1000;
-  height: 52px;
+  height: var(--qms-tab-height, 44px);
+  transition: height 0.2s ease;
+}
+
+[data-density="compact"] .tab-header-container,
+@media (max-width: 1440px) {
+  .tab-header-container {
+    height: 36px;
+  }
 }
 
 /* 탭 바 */
@@ -1197,7 +1276,7 @@ body {
 }
 
 .tab-bar::-webkit-scrollbar {
-  height: 4px;
+  height: 3px;
 }
 
 .tab-bar::-webkit-scrollbar-track {
@@ -1217,24 +1296,35 @@ body {
 .tab-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
+  gap: 6px;
+  padding: 6px 12px;
   background: #edf0f2;
   border: 1px solid var(--border-color);
   border-bottom: none;
   border-radius: 6px 6px 0 0;
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--qms-tab-font-size, 12.5px);
   font-weight: 500;
   color: #4b5563;
   white-space: nowrap;
-  min-width: 120px;
+  min-width: 90px;
   max-width: 220px;
   flex-shrink: 0;
   user-select: none;
-  transition: all 0.2s;
-  height: 36px;
+  transition: all 0.15s ease;
+  height: var(--qms-tab-item-height, 34px);
   align-self: flex-end;
+}
+
+[data-density="compact"] .tab-item,
+@media (max-width: 1440px) {
+  .tab-item {
+    padding: 3px 8px;
+    height: 28px;
+    font-size: 11.5px;
+    min-width: 75px;
+    max-width: 180px;
+  }
 }
 
 .tab-item:hover {
@@ -1247,9 +1337,16 @@ body {
   color: var(--primary-color);
   border-top: 2px solid var(--primary-color);
   font-weight: 600;
-  height: 37px;
+  height: 35px;
   margin-bottom: -1px;
   z-index: 2;
+}
+
+[data-density="compact"] .tab-item.active,
+@media (max-width: 1440px) {
+  .tab-item.active {
+    height: 29px;
+  }
 }
 
 .tab-close {
@@ -2960,5 +3057,130 @@ body {
 .help-popup-footer-note {
   font-size: 11.5px;
   color: #94a3b8;
+}
+
+/* ========================================================
+   [QMS 전역 Data-Density & 공통 반응형 컴포넌트 시스템]
+   ======================================================== */
+
+/* 1. 유통 채널 라디오 그룹 반응형 리플로우 */
+.channel-radio-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+  transition: all 0.2s ease;
+}
+
+[data-density="compact"] .channel-radio-grid,
+@media (max-width: 1440px) {
+  .channel-radio-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    padding: 8px;
+  }
+}
+
+@media (max-width: 1280px) {
+  .channel-radio-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* 2. QMS 표준 상태 Pill 뱃지 */
+.qms-pill-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.qms-pill-badge--success {
+  background-color: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+.qms-pill-badge--warning {
+  background-color: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+.qms-pill-badge--danger {
+  background-color: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+.qms-pill-badge--neutral {
+  background-color: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+.qms-pill-badge--primary {
+  background-color: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+/* 3. 공통 필터 카드 & 인풋 컴팩트 반응형 오버라이드 */
+.qms-filter-card {
+  margin-bottom: 16px;
+  padding: 16px 20px;
+  background: white;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  transition: all 0.2s ease;
+}
+
+[data-density="compact"] .qms-filter-card,
+@media (max-width: 1440px) {
+  .qms-filter-card {
+    padding: 10px 14px;
+    margin-bottom: 10px;
+  }
+}
+
+/* 4. 전역 폼 인풋 & 버튼 컴팩트 모드 스케일링 */
+[data-density="compact"] input:not([type="checkbox"]):not([type="radio"]),
+[data-density="compact"] select,
+@media (max-width: 1440px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select {
+    height: 32px !important;
+    padding: 4px 8px !important;
+    font-size: 12px !important;
+  }
+  
+  .card {
+    padding: 12px 16px !important;
+    margin-bottom: 10px !important;
+  }
+
+  .card h3 {
+    font-size: 13px !important;
+    margin-bottom: 6px !important;
+  }
+
+  button.primary,
+  button.secondary,
+  button.outline {
+    padding: 6px 14px !important;
+    font-size: 12px !important;
+  }
+}
+
+/* 5. 텍스트 말줄임 및 Tooltip 유틸리티 */
+.qms-cell-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
