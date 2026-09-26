@@ -63,6 +63,11 @@ public class QmsFullE2EComprehensiveTest {
             jdbcTemplate.execute("CREATE SEQUENCE IF NOT EXISTS claim_number_seq START WITH 1 INCREMENT BY 1");
         } catch (Exception ignored) {}
 
+        try {
+            Long maxId = jdbcTemplate.queryForObject("SELECT COALESCE(MAX(id), 0) FROM users", Long.class);
+            jdbcTemplate.execute("ALTER TABLE users ALTER COLUMN id RESTART WITH " + ((maxId != null ? maxId : 0) + 100));
+        } catch (Exception ignored) {}
+
         Optional<User> adminOpt = userRepository.findByUsername("admin");
         if (adminOpt.isEmpty()) {
             userRepository.save(User.builder()
