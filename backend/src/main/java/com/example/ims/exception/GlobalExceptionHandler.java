@@ -239,7 +239,7 @@ public class GlobalExceptionHandler {
      * 비즈니스 유효성 검사 메시지(채널 규격 오류 등)는 마스킹 없이 400 Bad Request로 반환합니다.
      */
     @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<Map<String, String>> handleRuntimeException(RuntimeException ex, WebRequest request) {
+    public ResponseEntity<?> handleRuntimeException(RuntimeException ex, WebRequest request) {
         String message = ex.getMessage();
         
         // 명확한 비즈니스 안내 메시지가 있는 경우는 마스킹 우회 (400 Bad Request로 반환)
