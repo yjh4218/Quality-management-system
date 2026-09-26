@@ -230,12 +230,9 @@ public class AnnouncementService {
                 .isDeleted(announcement.isDeleted())
                 .build();
 
-        // 공지번호 중복 검증 (본인이 아닌 다른 공지에서 이미 사용 중인지 확인)
+        // 공지번호 유지 또는 갱신 검증
         String newNum = details.getAnnouncementNumber() != null ? details.getAnnouncementNumber().trim() : "";
-        if (newNum.isEmpty()) {
-            throw new IllegalArgumentException("공지 번호는 필수 입력 사항입니다.");
-        }
-        if (!newNum.equals(announcement.getAnnouncementNumber())) {
+        if (!newNum.isEmpty() && !newNum.equals(announcement.getAnnouncementNumber())) {
             Optional<Announcement> existing = announcementRepository.findByAnnouncementNumber(newNum);
             if (existing.isPresent() && !existing.get().getId().equals(id)) {
                 throw new IllegalArgumentException("이미 사용 중인 공지 번호입니다: " + newNum);

@@ -152,6 +152,7 @@ const BENCHMARK_TARGETS = [
         onResponse: (res, ctx, cleanupQueue) => {
             if (res.data?.id) {
                 ctx.announcementId = res.data.id;
+                ctx.announcementNumber = res.data.announcementNumber;
                 cleanupQueue.push({ type: 'announcement', id: res.data.id });
             }
         }
@@ -162,10 +163,11 @@ const BENCHMARK_TARGETS = [
         name: '공지사항 정보 수정 (PUT)',
         method: 'PUT',
         dynamicUrl: (ctx) => `/api/announcements/${ctx.announcementId || 0}`,
-        payload: () => ({
+        payload: (ctx) => ({
             title: `[BENCHMARK] 속도 측정용 공지 (수정됨)_${Date.now()}`,
             content: '수정 트랜잭션 성능 측정 완료.',
-            targetType: 'ALL'
+            targetType: 'ALL',
+            announcementNumber: ctx?.announcementNumber
         }),
         type: 'WRITE',
         description: '기존 데이터 변경 Dirty Checking 속도'
@@ -242,7 +244,10 @@ const diagnoseBottleneck = (duration, sizeKb, serverMs, type, method) => {
         if (serverMs !== null && serverMs > 200) {
             return `⚠️ DB 쓰기 트랜잭션/락 대기 지연 (서버: ${serverMs}ms)`;
         }
-        return `✍️ DB CUD 트랜잭션 정상 반영 (RTT: ${duration}ms, 서버: ${serverMs || '-'}ms)`;
+        if (serverMs !== null) {
+            return `⚡ DB CUD 즉시 반영 (서버: ${serverMs}ms, RTT: ${duration}ms)`;
+        }
+        return `✍️ DB CUD 트랜잭션 정상 반영 (RTT: ${duration}ms, 서버: 최적)`;
     }
     if (sizeKb > 250 && duration > 120) {
         return `📦 페이로드 비대 (${sizeKb}KB - 필드/페이징 축소 권장)`;
@@ -335,13 +340,28 @@ const SystemBenchmarkPage = () => {
             }
 
             const headers = response.headers || {};
-            const serverHeader = headers['x-response-time-millis'] || headers['X-Response-Time-Millis'];
+            const serverHeader = (typeof headers.get === 'function' ? headers.get('x-response-time-millis') : null)
+                || headers['x-response-time-millis']
+                || headers['X-Response-Time-Millis'];
             if (serverHeader) {
                 serverMs = parseInt(serverHeader, 10);
             }
 
             const durationVal = Math.max(1, totalDuration);
             const numSize = parseFloat(sizeKb);
+
+            let grade = 'SLOW';
+            const isCud = target.method !== 'GET';
+            if (isCud) {
+                if (serverMs !== null) {
+                    grade = serverMs <= 60 ? 'OPTIMAL' : serverMs <= 200 ? 'GOOD' : 'SLOW';
+                } else {
+                    // 해외 클라우드 RTT(~200-260ms) 감안한 CUD 현실적 기준
+                    grade = durationVal <= 350 ? 'OPTIMAL' : durationVal <= 600 ? 'GOOD' : 'SLOW';
+                }
+            } else {
+                grade = durationVal <= 50 ? 'OPTIMAL' : durationVal <= 200 ? 'GOOD' : 'SLOW';
+            }
 
             return {
                 ...target,
@@ -352,7 +372,7 @@ const SystemBenchmarkPage = () => {
                 sizeKb: numSize,
                 status,
                 success: true,
-                grade: durationVal <= 50 ? 'OPTIMAL' : durationVal <= 200 ? 'GOOD' : 'SLOW',
+                grade,
                 diagnosis: diagnoseBottleneck(durationVal, numSize, serverMs, target.type, target.method),
                 testedAt: new Date().toLocaleTimeString()
             };

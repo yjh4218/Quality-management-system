@@ -32,9 +32,18 @@ public class AccessLogService {
     @org.springframework.scheduling.annotation.Async("auditExecutor")
     @Transactional
     public void saveLogAsync(String username, String name, String action, String pageUrl, String pageName, String ipAddress, String userAgent) {
+        String resolvedName = name;
+        if (resolvedName == null || resolvedName.equals(username)) {
+            try {
+                resolvedName = userRepository.findByUsername(username)
+                        .map(u -> u.getName())
+                        .orElse(username);
+            } catch (Exception ignored) {}
+        }
+
         AccessLog log = AccessLog.builder()
                 .username(username)
-                .name(name)
+                .name(resolvedName)
                 .action(action)
                 .pageUrl(pageUrl)
                 .pageName(pageName)

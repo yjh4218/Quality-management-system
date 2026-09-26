@@ -36,12 +36,7 @@ public class AccessLogController {
             String pageKey = payload.get("pageKey");
             String pageTitle = payload.get("pageTitle");
             
-            // Fetch name from user entity for better logging
-            String name = userRepository.findByUsername(username)
-                    .map(u -> u.getName())
-                    .orElse(username);
-
-            accessLogService.log(username, name, "PAGE_MOVE", pageKey, pageTitle, request);
+            accessLogService.log(username, username, "PAGE_MOVE", pageKey, pageTitle, request);
         }
         return ResponseEntity.ok().build();
     }

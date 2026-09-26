@@ -10,6 +10,9 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -23,6 +26,12 @@ import java.util.UUID;
 @Slf4j
 public class GlobalExceptionHandler {
 
+    private boolean isEventStream(HttpServletRequest request) {
+        if (request == null) return false;
+        String accept = request.getHeader("Accept");
+        return accept != null && accept.contains("text/event-stream");
+    }
+
     /**
      * SSE Emitter 등 비동기 요청 타임아웃 발생 시 대응 (서블릿 무시 처리).
      */
@@ -33,14 +42,16 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 클라이언트 연결 강제 종료(Broken pipe, Connection reset by peer) 예외 처리.
+     * 클라이언트 연결 강제 종료(Broken pipe, Connection reset by peer, Response not usable) 예외 처리.
      * SSE 스트림 중 브라우저 탭 닫기/새로고침 시 발생하며, 응답 헤더가 이미 커밋되었거나 text/event-stream 상태이므로 204 No Content로 종료합니다.
      */
     @ExceptionHandler(java.io.IOException.class)
-    public ResponseEntity<Void> handleIOException(java.io.IOException ex) {
+    public ResponseEntity<Void> handleIOException(java.io.IOException ex, HttpServletRequest request, HttpServletResponse response) {
         String msg = ex.getMessage();
-        if (msg != null && (msg.contains("Broken pipe") || msg.contains("Connection reset") || msg.contains("connection was aborted") || msg.contains("SocketException"))) {
-            log.debug("Client disconnected abruptly ({}): {}", ex.getClass().getSimpleName(), msg);
+        if ((msg != null && (msg.contains("Broken pipe") || msg.contains("Connection reset") || msg.contains("connection was aborted") || msg.contains("SocketException") || msg.contains("Response not usable") || msg.contains("response errors")))
+                || (response != null && response.isCommitted())
+                || isEventStream(request)) {
+            log.debug("Client disconnected abruptly or stream closed ({}): {}", ex.getClass().getSimpleName(), msg);
             return ResponseEntity.noContent().build();
         }
         log.warn("IOException encountered: {}", msg);
@@ -134,13 +145,21 @@ public class GlobalExceptionHandler {
 
     /**
      * 비즈니스 로직 충돌 및 정밀 상태 전이 실패 시 예외 처리 (409 Conflict).
+     * SSE/비동기 스트림 중단 예외(Cannot start async 등)인 경우 204 No Content로 조용히 종료합니다.
      */
     @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<Map<String, String>> handleIllegalStateException(IllegalStateException ex) {
-        Map<String, String> response = new HashMap<>();
-        response.put("error", "InvalidState");
-        response.put("message", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    public ResponseEntity<?> handleIllegalStateException(IllegalStateException ex, HttpServletRequest request, HttpServletResponse response) {
+        String msg = ex.getMessage();
+        if ((msg != null && (msg.contains("Cannot start async") || msg.contains("Async request already completed")))
+                || (response != null && response.isCommitted())
+                || isEventStream(request)) {
+            log.debug("IllegalStateException on async/stream: {}", msg);
+            return ResponseEntity.noContent().build();
+        }
+        Map<String, String> res = new HashMap<>();
+        res.put("error", "InvalidState");
+        res.put("message", msg != null ? msg : "잘못된 상태입니다.");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(res);
     }
 
     /**
@@ -249,9 +268,11 @@ public class GlobalExceptionHandler {
      * [보안] 스택트레이스를 사용자에게 노출하지 않고 UUID 기반의 Correlation-ID를 발급하여 로그 추적성을 확보합니다.
      */
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, String>> handleGlobalException(Exception ex, WebRequest request) {
+    public ResponseEntity<?> handleGlobalException(Exception ex, WebRequest request) {
         String msg = ex.getMessage();
-        if (msg != null && (msg.contains("Broken pipe") || msg.contains("Connection reset") || msg.contains("connection was aborted"))) {
+        String acceptHeader = request.getHeader("Accept");
+        if ((msg != null && (msg.contains("Broken pipe") || msg.contains("Connection reset") || msg.contains("connection was aborted") || msg.contains("Response not usable")))
+                || (acceptHeader != null && acceptHeader.contains("text/event-stream"))) {
             log.debug("Client disconnected abruptly in global handler: {}", msg);
             return ResponseEntity.noContent().build();
         }

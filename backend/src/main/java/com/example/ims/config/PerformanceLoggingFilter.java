@@ -57,7 +57,9 @@ public class PerformanceLoggingFilter implements Filter {
             private void injectHeader() {
                 if (!isCommitted()) {
                     long durationMs = (System.nanoTime() - startNano) / 1_000_000L;
-                    setHeader("X-Response-Time-Millis", String.valueOf(durationMs));
+                    String durationStr = String.valueOf(durationMs);
+                    setHeader("X-Response-Time-Millis", durationStr);
+                    setHeader("x-response-time-millis", durationStr);
                 }
             }
 
@@ -85,10 +87,12 @@ public class PerformanceLoggingFilter implements Filter {
         } finally {
             long durationNs = System.nanoTime() - startNano;
             long durationMs = durationNs / 1_000_000L;
+            String durationStr = String.valueOf(durationMs);
 
             // 1. 프론트엔드 RTT 분해 측정을 위한 응답 헤더 주입 (커밋되지 않은 경우)
             if (!httpResponse.isCommitted()) {
-                httpResponse.setHeader("X-Response-Time-Millis", String.valueOf(durationMs));
+                httpResponse.setHeader("X-Response-Time-Millis", durationStr);
+                httpResponse.setHeader("x-response-time-millis", durationStr);
             }
 
             // 2. 민감정보 마스킹된 URI 쿼리스트링 생성
