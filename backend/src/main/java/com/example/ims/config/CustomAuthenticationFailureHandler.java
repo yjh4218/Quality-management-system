@@ -49,6 +49,11 @@ public class CustomAuthenticationFailureHandler extends SimpleUrlAuthenticationF
 
         userRepository.findByUsername(username).ifPresent(user -> {
             if (user.isEnabled() && !user.isLocked()) {
+                // [보안/가용성] 마스터 관리자('admin') 계정은 시스템 락아웃(Lock-out) 방지를 위해 계정 잠금 대상에서 제외 (IP 블록으로 무차별 공격 방어)
+                if ("admin".equals(user.getUsername())) {
+                    log.warn("[SECURITY] Admin account failed login attempt, keeping unlocked to prevent system lockout.");
+                    return;
+                }
                 user.setFailedAttempts(user.getFailedAttempts() + 1);
                 if (user.getFailedAttempts() >= 5) {
                     user.setLocked(true);
