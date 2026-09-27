@@ -468,6 +468,7 @@ const App = () => {
     const [bellAnimated, setBellAnimated] = useState(false);
     const popoverRef = React.useRef(null);
     const isNotifOpenRef = React.useRef(isNotifOpen);
+    const isLoggingOutRef = React.useRef(false);
     useEffect(() => {
         isNotifOpenRef.current = isNotifOpen;
     }, [isNotifOpen]);
@@ -960,15 +961,21 @@ const App = () => {
     };
 
     const handleLogout = async () => {
+        if (isLoggingOutRef.current) return;
+        isLoggingOutRef.current = true;
         try {
             await logout();
         } catch (err) {
             console.error("Logout failed", err);
+        } finally {
+            handleLogoutState();
+            setTabs([{ id: 'dashboard', page: 'dashboard', title: '📊 시스템 대시보드', data: null }]);
+            setActiveTabId('dashboard');
+            setIsMobileMenuOpen(false);
+            setTimeout(() => {
+                isLoggingOutRef.current = false;
+            }, 1000);
         }
-        handleLogoutState();
-        setTabs([{ id: 'dashboard', page: 'dashboard', title: '📊 시스템 대시보드', data: null }]);
-        setActiveTabId('dashboard');
-        setIsMobileMenuOpen(false);
     };
 
     // [보안] 30분 동안 활동이 없으면 자동 로그아웃 (Idle Timer)

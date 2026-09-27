@@ -186,12 +186,14 @@ public class SystemInitializationService {
                 activeProfiles.contains("default") ||
                 defaultProfiles.contains("local") || defaultProfiles.contains("dev");
 
-        final String targetPassword;
-        if (isLocal && (adminInitialPassword == null || adminInitialPassword.trim().isEmpty())) {
-            targetPassword = "admin";
-            log.info(">>>> [SYSTEM INIT] [LOCAL ONLY] Falling back to default admin password for development.");
+        // [보안 및 안정성 강화]
+        // 1. 환경변수 ADMIN_INITIAL_PASSWORD가 있으면 최우선 적용
+        // 2. 환경변수가 없으면 "admin"을 기본값으로 안전하게 세팅 (관리자 lock-out 방지)
+        final String effectivePassword;
+        if (adminInitialPassword != null && !adminInitialPassword.trim().isEmpty()) {
+            effectivePassword = adminInitialPassword.trim();
         } else {
-            targetPassword = adminInitialPassword;
+            effectivePassword = "admin";
         }
 
         userRepository.findByUsername("admin").ifPresentOrElse(admin -> {
@@ -208,23 +210,30 @@ public class SystemInitializationService {
                 admin.setRole("ROLE_ADMIN");
                 changed = true;
             }
+            // 최상위 관리자 계정은 항상 활성화 및 잠금 해제 보장
             if (!admin.isEnabled()) {
                 admin.setEnabled(true);
                 changed = true;
             }
-
-            // Force set/reset if it's local and we want the default "admin"
-            if (isLocal) {
-                admin.setPassword(passwordEncoder.encode("admin"));
+            if (admin.isLocked()) {
                 admin.setLocked(false);
+                changed = true;
+                log.info(">>>> [SYSTEM INIT] Unlocked locked admin account.");
+            }
+            if (admin.getFailedAttempts() > 0) {
                 admin.setFailedAttempts(0);
-                admin.setEnabled(true);
                 changed = true;
-                log.info(
-                        ">>>> [SYSTEM INIT] [LOCAL] Ensuring admin password is set to 'admin', unlocked, and enabled.");
-            } else if (targetPassword != null && !targetPassword.isEmpty()) {
-                admin.setPassword(passwordEncoder.encode(targetPassword));
+            }
+
+            // 환경변수로 명시적 비밀번호가 지정되었거나, 로컬이거나, 비밀번호 재설정이 필요한 경우 갱신
+            if (adminInitialPassword != null && !adminInitialPassword.trim().isEmpty()) {
+                admin.setPassword(passwordEncoder.encode(effectivePassword));
                 changed = true;
+                log.info(">>>> [SYSTEM INIT] Synchronized admin password with ADMIN_INITIAL_PASSWORD.");
+            } else if (isLocal || admin.getPassword() == null || admin.getPassword().isEmpty()) {
+                admin.setPassword(passwordEncoder.encode(effectivePassword));
+                changed = true;
+                log.info(">>>> [SYSTEM INIT] Admin password ensured with default password.");
             }
 
             if (changed) {
@@ -234,21 +243,17 @@ public class SystemInitializationService {
                 log.info(">>>> [SYSTEM INIT] Admin account verified.");
             }
         }, () -> {
-            if (!isLocal && (targetPassword == null || targetPassword.trim().isEmpty())) {
-                log.warn(
-                        ">>>> [SYSTEM INIT] [CRITICAL] Admin not found and no password provided in production. Skipping insecure creation.");
-                return;
-            }
-
             userRepository.saveAndFlush(User.builder()
                     .username("admin")
-                    .password(passwordEncoder.encode(targetPassword))
+                    .password(passwordEncoder.encode(effectivePassword))
                     .name("\uC2DC\uC2A4\uD15C \uAD00\uB9AC\uC790")
                     .companyName("\uB354\uD30C\uC6B4\uB354\uC988")
                     .role("ROLE_ADMIN")
                     .enabled(true)
+                    .locked(false)
+                    .failedAttempts(0)
                     .build());
-            log.info(">>>> [SYSTEM INIT] Initial Admin created with target password.");
+            log.info(">>>> [SYSTEM INIT] Initial Admin created with password: {}", (effectivePassword.equals("admin") ? "default 'admin'" : "custom set"));
         });
     }
 
@@ -358,7 +363,25 @@ public class SystemInitializationService {
     }
 
     private void createIfMissing(String username, String name, String company, String role) {
-        if (userRepository.findByUsername(username).isEmpty()) {
+        userRepository.findByUsername(username).ifPresentOrElse(user -> {
+            boolean updated = false;
+            if (user.isLocked()) {
+                user.setLocked(false);
+                updated = true;
+            }
+            if (user.getFailedAttempts() > 0) {
+                user.setFailedAttempts(0);
+                updated = true;
+            }
+            if (!user.isEnabled()) {
+                user.setEnabled(true);
+                updated = true;
+            }
+            if (updated) {
+                userRepository.save(user);
+                log.info(">>>> [SYSTEM INIT] Unlocked and refreshed test user '{}'.", username);
+            }
+        }, () -> {
             userRepository.save(User.builder()
                     .username(username)
                     .password(passwordEncoder.encode(username))
@@ -366,8 +389,10 @@ public class SystemInitializationService {
                     .companyName(company)
                     .role(role)
                     .enabled(true)
+                    .locked(false)
+                    .failedAttempts(0)
                     .build());
-        }
+        });
     }
 
     private void seedAndRepairPageGuides() {

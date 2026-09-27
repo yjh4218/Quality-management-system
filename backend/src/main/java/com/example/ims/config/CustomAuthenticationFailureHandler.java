@@ -58,22 +58,29 @@ public class CustomAuthenticationFailureHandler extends SimpleUrlAuthenticationF
         });
 
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        response.setContentType("text/plain;charset=UTF-8");
+        response.setContentType("application/json;charset=UTF-8");
+
+        String origin = request.getHeader("Origin");
+        if (origin != null && !origin.isEmpty()) {
+            response.setHeader("Access-Control-Allow-Origin", origin);
+            response.setHeader("Access-Control-Allow-Credentials", "true");
+        }
         
         String errorMessage = "아이디 또는 비밀번호가 일치하지 않습니다.";
         if (exception instanceof org.springframework.security.authentication.DisabledException) {
             errorMessage = "비활성화 된 계정으로 관리자에게 문의해주시기 바랍니다.";
         } else if (exception instanceof org.springframework.security.authentication.LockedException) {
             errorMessage = "비밀번호 5회 오류로 인해 계정이 잠겼습니다. 관리자에게 문의해 주시기 바랍니다.";
-        } else if (exception.getMessage().contains("User is disabled")) {
+        } else if (exception.getMessage() != null && exception.getMessage().contains("User is disabled")) {
             errorMessage = "비활성화 된 계정으로 관리자에게 문의해주시기 바랍니다.";
-        } else if (exception.getMessage().contains("User account is locked")) {
+        } else if (exception.getMessage() != null && exception.getMessage().contains("User account is locked")) {
             errorMessage = "비밀번호 5회 오류로 인해 계정이 잠겼습니다. 관리자에게 문의해 주시기 바랍니다.";
         }
 
-        log.debug("로그인 실패 - 계정: {}, IP: {}, 예외: {}, 메시지: {}", username, clientIp, exception.getClass().getSimpleName(), errorMessage);
+        log.info("로그인 실패 - 계정: {}, IP: {}, 예외: {}, 메시지: {}", username, clientIp, exception.getClass().getSimpleName(), errorMessage);
         
-        response.getWriter().write(errorMessage);
+        String jsonBody = String.format("{\"error\":\"Unauthorized\",\"message\":\"%s\",\"success\":false}", errorMessage);
+        response.getWriter().write(jsonBody);
         response.getWriter().flush();
     }
 
