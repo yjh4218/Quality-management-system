@@ -20,6 +20,7 @@ import com.example.ims.repository.DashboardLayoutRepository;
 import com.example.ims.repository.RoleRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.ims.config.RoleConstants;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -83,7 +84,7 @@ public class DashboardService {
         }
 
         // 2. Role-specific Logic
-        if ("ROLE_ADMIN".equals(role)) {
+        if (RoleConstants.ADMIN.equals(role)) {
             builder.newProducts(productRepository.findTop50ByCreatedAtAfterOrderByCreatedAtDesc(oneMonthAgo)
                     .stream().map(this::mapProductToItem).collect(Collectors.toList()));
 
@@ -125,14 +126,14 @@ public class DashboardService {
                     productRepository.findTop50ByCreatedAtAfterAndDimensionsStatus(oneMonthAgo, "확정")
                             .stream().map(this::mapProductToItem).collect(Collectors.toList()));
 
-        } else if ("ROLE_MANUFACTURER".equals(role)) {
+        } else if (RoleConstants.MANUFACTURER.equals(role)) {
             builder.qualityInbounds(wmsInboundRepository
                     .findTop50ByManufacturerAndInboundDateAfterOrderByInboundDateDesc(company, oneMonthAgo)
                     .stream().map(this::mapWmsInboundToItem).collect(Collectors.toList()));
         }
 
         // 3. Production Audit Dashboard Logic
-        if ("ROLE_ADMIN".equals(role) || isQualityDept(role)) {
+        if (RoleConstants.ADMIN.equals(role) || isQualityDept(role)) {
             // Managers: Review = SUBMITTED, Progress = PENDING (no audit yet)
             builder.needsAuditReview(
                     productionAuditRepository.findTop50ByStatusAndIsDeletedFalseOrderByUploadDateDesc("SUBMITTED")
@@ -215,7 +216,7 @@ public class DashboardService {
      * @return 기본 위젯 키 리스트
      */
     private List<String> getDefaultWidgetsForRole(String role) {
-        if ("ROLE_ADMIN".equals(role)) {
+        if (RoleConstants.ADMIN.equals(role)) {
             return List.of(
                     "WIDGET_ANNOUNCEMENTS",
                     "WIDGET_QUALITY_STATS", "WIDGET_CLAIM_TREND", "WIDGET_AUDIT_GRADE",
@@ -247,7 +248,7 @@ public class DashboardService {
         try {
             return roleService.hasPermission(role, "DASHBOARD_QUALITY_VIEW");
         } catch (Exception e) {
-            return "ROLE_QUALITY".equals(role) || "ROLE_ADMIN".equals(role);
+            return RoleConstants.QUALITY.equals(role) || RoleConstants.ADMIN.equals(role);
         }
     }
 
@@ -257,7 +258,7 @@ public class DashboardService {
         try {
             return roleService.hasPermission(role, "DASHBOARD_SALES_VIEW");
         } catch (Exception e) {
-            return "ROLE_SALES".equals(role) || "ROLE_ADMIN".equals(role);
+            return RoleConstants.SALES.equals(role) || RoleConstants.ADMIN.equals(role);
         }
     }
 

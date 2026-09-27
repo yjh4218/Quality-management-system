@@ -16,6 +16,7 @@ import ManufacturerSearchModal from './ManufacturerSearchModal';
 import { usePermissions } from './usePermissions';
 import GridColorLegendPopover from './components/common/GridColorLegendPopover';
 import GridConditionalFormattingModal from './components/common/GridConditionalFormattingModal';
+import CommonFilePreviewModal from './components/common/CommonFilePreviewModal';
 
 const MFR_AUDIT_LEGENDS = [
     {
@@ -876,14 +877,11 @@ const ManufacturerAuditPage = ({ user }) => {
             )}
 
             {showSearchModal && <ManufacturerSearchModal onClose={() => setShowSearchModal(false)} onSelect={handleSelectManufacturer} />}
-            {previewImage && (
-                <div onClick={() => setPreviewImage(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, cursor: 'pointer' }}>
-                    <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }}>
-                        <img src={previewImage} alt="미리보기" style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: '8px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }} />
-                        <button onClick={() => setPreviewImage(null)} style={{ position: 'absolute', top: '-15px', right: '-15px', background: 'white', color: '#333', border: 'none', borderRadius: '50%', width: '36px', height: '36px', fontSize: '20px', cursor: 'pointer', boxShadow: '0 2px 10px rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>&times;</button>
-                    </div>
-                </div>
-            )}
+            <CommonFilePreviewModal
+                isOpen={Boolean(previewImage)}
+                file={{ url: previewImage, title: '제조사 심사 사진 미리보기', type: 'IMAGE' }}
+                onClose={() => setPreviewImage(null)}
+            />
 
             {/* 조건부 서식 설정 모달 (관리자 전용) */}
             <GridConditionalFormattingModal

@@ -648,7 +648,7 @@ public class QualityReportService {
             sample.createCell(1).setCellValue("ITEM-CODE-001");
             sample.createCell(2).setCellValue("샘플 제품명");
             sample.createCell(3).setCellValue(100);
-            sample.createCell(4).setCellValue("한국콜마");
+            sample.createCell(4).setCellValue("샘플 제조사");
             sample.createCell(5).setCellValue("LOT-SAMPLE-01");
             sample.createCell(6).setCellValue("샘플 비고입니다.");
 

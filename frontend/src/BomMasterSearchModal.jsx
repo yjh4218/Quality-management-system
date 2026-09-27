@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import * as api from './api';
 import { toast } from 'react-toastify';
 import { matchesAllTokens, matchesMultiFieldTokens } from './utils/searchUtils';
+import CommonFilePreviewModal from './components/common/CommonFilePreviewModal';
 
 const BOM_DEFAULT_TYPES = ['용기', '캡·펌프', '단상자·라벨', '인박스·아웃박스', '부속품'];
 
@@ -420,78 +421,13 @@ const BomMasterSearchModal = ({ onClose, onSelect }) => {
                 </div>
             </div>
 
-            {/* Photo Preview Lightbox Modal */}
-            {previewPhoto && (
-                <div 
-                    style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                        zIndex: 99999,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: '20px'
-                    }}
-                    onClick={() => setPreviewPhoto(null)}
-                >
-                    <div 
-                        style={{
-                            maxWidth: '90vw',
-                            maxHeight: '85vh',
-                            background: '#fff',
-                            borderRadius: '12px',
-                            overflow: 'hidden',
-                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
-                            display: 'flex',
-                            flexDirection: 'column'
-                        }}
-                        onClick={e => e.stopPropagation()}
-                    >
-                        <div style={{
-                            padding: '12px 18px',
-                            background: '#0f172a',
-                            color: '#fff',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center'
-                        }}>
-                            <span style={{ fontWeight: 600, fontSize: '15px' }}>
-                                📸 {previewPhoto.title || '패키지 사진 미리보기'}
-                            </span>
-                            <button 
-                                onClick={() => setPreviewPhoto(null)}
-                                style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    color: '#fff',
-                                    fontSize: '20px',
-                                    cursor: 'pointer',
-                                    padding: '0 4px'
-                                }}
-                            >
-                                ✕
-                            </button>
-                        </div>
-                        <div style={{ padding: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#f1f5f9' }}>
-                            <img 
-                                src={previewPhoto.url} 
-                                alt={previewPhoto.title} 
-                                style={{
-                                    maxWidth: '80vw',
-                                    maxHeight: '70vh',
-                                    objectFit: 'contain',
-                                    borderRadius: '6px'
-                                }} 
-                            />
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* Standardized File/Photo Preview Modal */}
+            <CommonFilePreviewModal
+                isOpen={!!previewPhoto}
+                file={previewPhoto}
+                title={previewPhoto?.title || '패키지 사진 미리보기'}
+                onClose={() => setPreviewPhoto(null)}
+            />
         </div>
     );
 };

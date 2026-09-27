@@ -10,6 +10,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import com.example.ims.config.RoleConstants;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -39,14 +40,14 @@ public class PermissionService {
 
         // Admin checks using Authorities exact match
         boolean isAdmin = auth.getAuthorities().stream()
-                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()) || "ADMIN".equals(a.getAuthority()));
+                .anyMatch(a -> RoleConstants.ADMIN.equals(a.getAuthority()) || RoleConstants.ADMIN_NAME.equals(a.getAuthority()));
         if (isAdmin) return true;
 
         User user = userRepository.findByUsername(username).orElse(null);
         if (user == null || user.getRole() == null) return false;
 
         // Second check for User.role string
-        if (user.getRole().equals("ADMIN") || user.getRole().equals("ROLE_ADMIN")) return true;
+        if (user.getRole().equals(RoleConstants.ADMIN_NAME) || user.getRole().equals(RoleConstants.ADMIN)) return true;
 
         String[] roleKeys = user.getRole().split(",");
         for (String key : roleKeys) {

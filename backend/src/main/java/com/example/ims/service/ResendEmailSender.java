@@ -26,7 +26,7 @@ public class ResendEmailSender implements EmailSender {
     @Value("${resend.api.url:https://api.resend.com/emails}")
     private String resendApiUrl;
 
-    @Value("${resend.from.address:}")
+    @Value("${resend.from.address:${app.mail.from:onboarding@resend.dev}}")
     private String envFromAddress;
 
     @Value("${resend.from.name:QMS System}")
@@ -101,7 +101,7 @@ public class ResendEmailSender implements EmailSender {
         if (envFromAddress != null && !envFromAddress.trim().isEmpty()) {
             return cleanValue(envFromAddress);
         }
-        return "onboarding@resend.dev";
+        return envFromAddress != null ? cleanValue(envFromAddress) : "onboarding@resend.dev";
     }
 
     private String cleanValue(String val) {

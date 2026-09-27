@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createManufacturer, updateManufacturer, uploadFile, getManufacturerCategories, getFileUrl } from './api';
 import SaveConfirmModal from './components/SaveConfirmModal';
 import { toast } from 'react-toastify';
+import CommonFilePreviewModal from './components/common/CommonFilePreviewModal';
 
 /**
  * 제조사 정보 편집/등록 드로어
@@ -22,6 +23,7 @@ const ManufacturerDrawer = ({ manufacturer, onClose, canEdit }) => {
         files: [] 
     });
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+    const [previewModalFile, setPreviewModalFile] = useState(null);
 
     const categories = [
         { key: 'BIZ_REG', label: '사업자 등록증 (최대 10MB)' },
@@ -239,7 +241,7 @@ const ManufacturerDrawer = ({ manufacturer, onClose, canEdit }) => {
                                                                     src={getFileUrl(f.filePath)} 
                                                                     alt={f.fileName} 
                                                                     style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }}
-                                                                    onClick={() => window.open(getFileUrl(f.filePath), '_blank')}
+                                                                    onClick={() => setPreviewModalFile({ url: getFileUrl(f.filePath), title: f.fileName, type: 'IMAGE' })}
                                                                 />
                                                                 {canEdit && (
                                                                     <button 
@@ -257,7 +259,18 @@ const ManufacturerDrawer = ({ manufacturer, onClose, canEdit }) => {
                                                         ) : (
                                                             <>
                                                                 <span style={{ fontSize: '18px' }}>📄</span>
-                                                                <a href={getFileUrl(f.filePath)} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', color: '#2b6cb0', fontWeight: '700', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                <a 
+                                                                    href={getFileUrl(f.filePath)} 
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        setPreviewModalFile({
+                                                                            url: getFileUrl(f.filePath),
+                                                                            title: f.fileName,
+                                                                            type: f.filePath.toLowerCase().endsWith('.pdf') ? 'PDF' : 'FILE'
+                                                                        });
+                                                                    }}
+                                                                    style={{ textDecoration: 'none', color: '#2b6cb0', fontWeight: '700', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}
+                                                                >
                                                                     {f.fileName}
                                                                 </a>
                                                                 {canEdit && (
@@ -316,6 +329,13 @@ const ManufacturerDrawer = ({ manufacturer, onClose, canEdit }) => {
                 isOpen={isConfirmOpen}
                 onClose={() => setIsConfirmOpen(false)}
                 onConfirm={handleConfirmSave}
+            />
+
+            <CommonFilePreviewModal
+                isOpen={!!previewModalFile}
+                file={previewModalFile}
+                title={previewModalFile?.title || '제조사 첨부파일 미리보기'}
+                onClose={() => setPreviewModalFile(null)}
             />
         </div>
     );

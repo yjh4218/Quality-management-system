@@ -11,11 +11,15 @@ public final class RoleConstants {
     }
 
     public static final String ADMIN = "ROLE_ADMIN";
+    public static final String ADMIN_NAME = "ADMIN";
+    public static final String RESPONSIBLE_SALES = "ROLE_RESPONSIBLE_SALES";
+    public static final String QUALITY = "ROLE_QUALITY";
     public static final String QUALITY_TEAM = "ROLE_QUALITY_TEAM";
+    public static final String SALES = "ROLE_SALES";
     public static final String MANUFACTURER = "ROLE_MANUFACTURER";
     public static final String USER = "ROLE_USER";
 
-    public static final String[] ALL_ROLES = {ADMIN, QUALITY_TEAM, MANUFACTURER, USER};
+    public static final String[] ALL_ROLES = {ADMIN, RESPONSIBLE_SALES, QUALITY, QUALITY_TEAM, SALES, MANUFACTURER, USER};
 
     /**
      * Helper to check if a role is valid.

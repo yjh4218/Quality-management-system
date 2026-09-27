@@ -48,6 +48,9 @@ public class ProductionAuditService {
     private final NotificationService notificationService;
     private final MailDispatchHistoryService mailDispatchHistoryService;
 
+    @org.springframework.beans.factory.annotation.Value("${app.frontend.url:http://localhost:5173}")
+    private String frontendUrl;
+
     @Transactional(readOnly = true)
     public List<ProductionAuditDTO> getAllAudits(String username, String manufacturerName) {
         User user = userRepository.findByUsername(username)
@@ -377,7 +380,7 @@ public class ProductionAuditService {
                     "    </div>\n" +
                     "    <p>QMS 시스템에 접속하여 해당 제품에 대한 용기, 단상자, 적재 사진을 업로드해 주시기 바랍니다.</p>\n" +
                     "    <div style=\"text-align: center; margin: 30px 0;\">\n" +
-                    "      <a href=\"http://localhost:5173/production-audit?itemCode=" + audit.getItemCode() + "\" style=\"display: inline-block; padding: 12px 24px; color: #ffffff; background-color: #003366; text-decoration: none; border-radius: 6px; font-weight: bold;\">📸 생산감리 사진 등록하러 가기</a>\n" +
+                    "      <a href=\"" + frontendUrl + "/production-audit?itemCode=" + audit.getItemCode() + "\" style=\"display: inline-block; padding: 12px 24px; color: #ffffff; background-color: #003366; text-decoration: none; border-radius: 6px; font-weight: bold;\">📸 생산감리 사진 등록하러 가기</a>\n" +
                     "    </div>\n" +
                     "    <hr style=\"border: none; border-top: 1px solid #cbd5e1; margin: 20px 0;\" />\n" +
                     "    <p style=\"font-size: 12px; color: #94a3b8; text-align: center;\">본 메일은 QMS 시스템에서 자동으로 발송된 메일입니다.</p>\n" +

@@ -63,9 +63,14 @@ public class RegulatoryCrawlerService {
     // Sync status flag
     private final java.util.concurrent.atomic.AtomicBoolean isSyncing = new java.util.concurrent.atomic.AtomicBoolean(false);
 
-    private static final String SERVICE_KEY = "3f76de32c189ceca588b1e5482c91ce247e0e07b56778bd48a90aca9039a6932";
-    private static final String REGL_API_URL = "https://apis.data.go.kr/1471000/CsmtcsReglMaterialInfoService/getCsmtcsReglMaterialInfoService";
-    private static final String INGD_API_URL = "https://apis.data.go.kr/1471000/CsmtcsIngdCpntInfoService01/getCsmtcsIngdCpntInfoService01";
+    @org.springframework.beans.factory.annotation.Value("${korea.data.service-key:3f76de32c189ceca588b1e5482c91ce247e0e07b56778bd48a90aca9039a6932}")
+    private String serviceKey;
+
+    @org.springframework.beans.factory.annotation.Value("${korea.data.regl-api-url:https://apis.data.go.kr/1471000/CsmtcsReglMaterialInfoService/getCsmtcsReglMaterialInfoService}")
+    private String reglApiUrl;
+
+    @org.springframework.beans.factory.annotation.Value("${korea.data.ingd-api-url:https://apis.data.go.kr/1471000/CsmtcsIngdCpntInfoService01/getCsmtcsIngdCpntInfoService01}")
+    private String ingdApiUrl;
 
     public void init() {
         long count = repository.count();
@@ -220,7 +225,7 @@ public class RegulatoryCrawlerService {
             while ((pageNo - 1) * numOfRows < totalCount) {
                 try {
                     String urlString = String.format("%s?serviceKey=%s&type=json&pageNo=%d&numOfRows=%d", 
-                            REGL_API_URL, SERVICE_KEY, pageNo, numOfRows);
+                            reglApiUrl, serviceKey, pageNo, numOfRows);
                     
                     String response = callApiWithRetry(urlString, 3);
 
@@ -474,7 +479,7 @@ public class RegulatoryCrawlerService {
             while ((pageNo - 1) * numOfRows < totalCount) {
                 try {
                     String urlString = String.format("%s?serviceKey=%s&type=json&pageNo=%d&numOfRows=%d", 
-                            INGD_API_URL, SERVICE_KEY, pageNo, numOfRows);
+                            ingdApiUrl, serviceKey, pageNo, numOfRows);
                     
                     String response = callApiWithRetry(urlString, 3);
 

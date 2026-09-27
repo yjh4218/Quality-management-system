@@ -888,7 +888,7 @@ export const getAccessLogs = () => api.get('/api/logs/access').then(res => res.d
 export const submitBugReport = (report = {}) => {
     const reporterInfo = getFormattedReporterInfo();
     const screenName = report?.screenName || report?.pageName || window.__QMS_ACTIVE_PAGE__ || window.location.pathname || '시스템 공통';
-    const url = report?.url || report?.pageUrl || window.location.href || 'http://localhost:5173/';
+    const url = report?.url || report?.pageUrl || (typeof window !== 'undefined' ? (window.location.href || window.location.origin + '/') : '/');
     const description = report?.description || report?.errorMessage || '오류가 발생했습니다.';
     const serverError = report?.serverError || (report?.errorMessage ? `[에러메시지] ${report.errorMessage}` : null);
     const steps = report?.steps || report?.stackTrace || '시스템 전역에서 예외 상황이 감지되었습니다.';
@@ -1091,7 +1091,36 @@ export const saveAnnouncementCategory = (data) => {
 export const deleteAnnouncementCategory = (id) => api.delete(`/api/announcements/categories/${id}`);
 
 // --- Announcement Email ---
-export const sendAnnouncementEmail = (id) => api.post(`/api/announcements/${id}/send-email`);
+export const sendAnnouncementEmail = (id, data) => api.post(`/api/announcements/${id}/send-email`, data);
+export const getAnnouncementRecipients = (id) => api.get(`/api/announcements/${id}/recipients`).then(res => res.data);
+export const previewAnnouncementRecipients = (data) => api.post('/api/announcements/preview-recipients', data).then(res => res.data);
+// [성능 및 깜빡임 방지] 수신자 검색 인메모리 캐시 (0ms 즉시 응답 & 전역 스피너 비활성화)
+const recipientSearchCache = new Map();
+
+export const searchUserRecipients = async (keyword) => {
+    const trimmed = (keyword || '').trim().toLowerCase();
+    if (!trimmed) return [];
+    
+    const cached = recipientSearchCache.get(trimmed);
+    if (cached && (Date.now() - cached.timestamp < 300000)) { // 5분 캐시
+        return cached.data;
+    }
+    
+    try {
+        const res = await api.get('/api/announcements/search-recipients', {
+            params: { keyword: trimmed },
+            skipLoading: true, // 전역 스피너/화면 깜빡임 원천 차단
+            skipToast: true
+        });
+        const data = res.data || [];
+        recipientSearchCache.set(trimmed, { data, timestamp: Date.now() });
+        return data;
+    } catch (err) {
+        return [];
+    }
+};
+
+export const searchAnnouncementRecipients = searchUserRecipients;
 
 export const getMailCategories = () => api.get('/api/mail-categories');
 export const createMailCategory = (data) => api.post('/api/mail-categories', data);

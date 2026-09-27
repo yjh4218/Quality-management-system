@@ -9,6 +9,7 @@ import { usePermissions } from './usePermissions';
 import NumericFormattedInput from './components/common/NumericFormattedInput';
 import useFormDraft from './hooks/useFormDraft';
 import DraftRestoreBanner from './components/common/DraftRestoreBanner';
+import CommonFilePreviewModal from './components/common/CommonFilePreviewModal';
 
 const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNavigateToEdit }) => {
     const [formData, setFormData] = useState({
@@ -92,10 +93,22 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
     const [emailActionType, setEmailActionType] = useState('SHARE'); // 'SHARE' or 'RE_REQUEST'
     const isSavingRef = React.useRef(false);
 
+    // 수신자 자동완성 검색 및 태그 관리 상태 (구글 메일 스타일)
+    const [recipientSearchKeyword, setRecipientSearchKeyword] = useState('');
+    const [recipientSearchResults, setRecipientSearchResults] = useState([]);
+    const [isSearchingRecipients, setIsSearchingRecipients] = useState(false);
+    const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
+    const searchDropdownRef = React.useRef(null);
+    const recipientInputRef = React.useRef(null);
+    const [isRecipientInputFocused, setIsRecipientInputFocused] = useState(false);
+    const [activeSearchIndex, setActiveSearchIndex] = useState(0);
+    const [recipientList, setRecipientList] = useState([]);
+
     // 메일 발송 및 회신 이력 상태
     const [mailHistories, setMailHistories] = useState([]);
     const [mailHistoryLoading, setMailHistoryLoading] = useState(false);
     const [previewMailModal, setPreviewMailModal] = useState({ open: false, title: '', body: '', sentAt: '', recipient: '' });
+    const [previewModalFile, setPreviewModalFile] = useState(null);
     const [remindingId, setRemindingId] = useState(null);
     const [markingId, setMarkingId] = useState(null);
 
@@ -445,6 +458,31 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
 
             const uniqueEmails = [...new Set(defaultEmails.filter(Boolean))];
 
+            // If uniqueEmails is empty and toEmail exists, use it
+            if (uniqueEmails.length === 0 && toEmail) {
+                toEmail.split(',').map(e => e.trim()).filter(Boolean).forEach(e => {
+                    if (!uniqueEmails.includes(e)) uniqueEmails.push(e);
+                });
+            }
+
+            const initialRecipients = [];
+            uniqueEmails.forEach(email => {
+                const deptName = Object.keys(loadedDeptEmails).find(k => (loadedDeptEmails[k] || []).map(e => e.trim()).includes(email)) || '';
+                initialRecipients.push({
+                    id: `init-${email}`,
+                    name: email.split('@')[0],
+                    companyName: companyName || '',
+                    department: deptName,
+                    email: email,
+                    isCustom: false
+                });
+            });
+
+            setRecipientList(initialRecipients);
+            setRecipientSearchKeyword('');
+            setRecipientSearchResults([]);
+            setIsSearchDropdownOpen(false);
+
             setSelectedDepts(defaultDepts);
             setEmailForm({
                 toEmail: uniqueEmails.join(', '),
@@ -460,6 +498,122 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
         }
     };
 
+    // 수신자 자동완성 외부 클릭 감지
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (searchDropdownRef.current && !searchDropdownRef.current.contains(event.target)) {
+                setIsSearchDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // 수신자 검색 디바운스 (150ms로 기민하게 반응)
+    useEffect(() => {
+        if (!recipientSearchKeyword || recipientSearchKeyword.trim().length < 1) {
+            setRecipientSearchResults([]);
+            setIsSearchingRecipients(false);
+            setIsSearchDropdownOpen(false);
+            setActiveSearchIndex(0);
+            return;
+        }
+
+        const timer = setTimeout(async () => {
+            setIsSearchingRecipients(true);
+            try {
+                const results = await api.searchUserRecipients(recipientSearchKeyword.trim());
+                setRecipientSearchResults(Array.isArray(results) ? results : []);
+                setActiveSearchIndex(0);
+                setIsSearchDropdownOpen(true);
+            } catch (err) {
+                console.error("수신자 검색 실패:", err);
+                setRecipientSearchResults([]);
+            } finally {
+                setIsSearchingRecipients(false);
+            }
+        }, 150);
+
+        return () => clearTimeout(timer);
+    }, [recipientSearchKeyword]);
+
+    const handleAddRecipientUser = (targetUser) => {
+        if (!targetUser || !targetUser.email) {
+            toast.warning("유효한 이메일 주소가 없는 사용자입니다.");
+            return;
+        }
+        const trimmedEmail = targetUser.email.trim();
+        const alreadyExists = recipientList.some(
+            r => r.email && r.email.trim().toLowerCase() === trimmedEmail.toLowerCase()
+        );
+        if (alreadyExists) {
+            toast.warning(`[${targetUser.name || targetUser.username}] 님은 이미 수신 목록에 포함되어 있습니다.`);
+            return;
+        }
+
+        const newRec = {
+            id: targetUser.id || `custom-${Date.now()}`,
+            username: targetUser.username,
+            name: targetUser.name || targetUser.username,
+            email: trimmedEmail,
+            companyName: targetUser.companyName || '-',
+            department: targetUser.department || '-',
+            position: targetUser.position || '',
+            role: targetUser.role || '',
+            isCustom: true
+        };
+
+        const updated = [...recipientList, newRec];
+        setRecipientList(updated);
+        setEmailForm(prev => ({ ...prev, toEmail: updated.map(r => r.email).join(', ') }));
+        setRecipientSearchKeyword('');
+        setIsSearchDropdownOpen(false);
+        setActiveSearchIndex(0);
+        recipientInputRef.current?.focus();
+    };
+
+    const handleAddDirectEmail = () => {
+        const trimmed = recipientSearchKeyword.trim();
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(trimmed)) {
+            toast.warning("올바른 이메일 형식(예: user@example.com)을 입력해 주세요.");
+            return;
+        }
+        const alreadyExists = recipientList.some(
+            r => r.email && r.email.trim().toLowerCase() === trimmed.toLowerCase()
+        );
+        if (alreadyExists) {
+            toast.warning("이미 수신 목록에 포함된 이메일 주소입니다.");
+            return;
+        }
+
+        const newRec = {
+            id: `direct-${Date.now()}`,
+            username: trimmed.split('@')[0],
+            name: trimmed.split('@')[0],
+            email: trimmed,
+            companyName: '외부',
+            department: '-',
+            position: '',
+            role: '',
+            isCustom: true
+        };
+
+        const updated = [...recipientList, newRec];
+        setRecipientList(updated);
+        setEmailForm(prev => ({ ...prev, toEmail: updated.map(r => r.email).join(', ') }));
+        setRecipientSearchKeyword('');
+        setIsSearchDropdownOpen(false);
+        setActiveSearchIndex(0);
+        recipientInputRef.current?.focus();
+    };
+
+    const handleRemoveRecipient = (emailToRemove) => {
+        const updated = recipientList.filter(r => r.email !== emailToRemove);
+        setRecipientList(updated);
+        setEmailForm(prev => ({ ...prev, toEmail: updated.map(r => r.email).join(', ') }));
+    };
+
     const handleDeptToggle = (deptName) => {
         const isChecked = selectedDepts.includes(deptName);
         const newDepts = isChecked 
@@ -468,20 +622,40 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
             
         setSelectedDepts(newDepts);
 
-        // Rebuild toEmail to ONLY include emails of checked departments
-        const currentEmails = [];
+        // Gather all emails from checked departments
+        const deptEmailsList = [];
         newDepts.forEach(d => {
             if (deptEmails[d]) {
                 deptEmails[d].forEach(email => {
                     const trimmed = email.trim();
-                    if (trimmed && !currentEmails.includes(trimmed)) {
-                        currentEmails.push(trimmed);
+                    if (trimmed && !deptEmailsList.includes(trimmed)) {
+                        deptEmailsList.push(trimmed);
                     }
                 });
             }
         });
-        
-        setEmailForm(prev => ({ ...prev, toEmail: currentEmails.join(', ') }));
+
+        // Retain custom searched recipients
+        const customRecipients = recipientList.filter(r => r.isCustom);
+        const newRecipientList = [...customRecipients];
+
+        // Add department recipients
+        const companyName = claim?.manufacturer || formData?.manufacturer || '';
+        deptEmailsList.forEach(email => {
+            if (!newRecipientList.some(r => r.email.toLowerCase() === email.toLowerCase())) {
+                newRecipientList.push({
+                    id: `dept-${email}`,
+                    name: email.split('@')[0],
+                    companyName: companyName,
+                    department: Object.keys(deptEmails).find(k => (deptEmails[k] || []).includes(email)) || '',
+                    email: email,
+                    isCustom: false
+                });
+            }
+        });
+
+        setRecipientList(newRecipientList);
+        setEmailForm(prev => ({ ...prev, toEmail: newRecipientList.map(r => r.email).join(', ') }));
     };
 
     const handleSendEmail = async () => {
@@ -637,7 +811,7 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
     <p>QMS 시스템에 접속하여 보완된 원인 분석 및 재발방지 대책을 다시 수립하여 제출해 주시기 바랍니다.</p>
     
     <div style="text-align: center; margin: 30px 0;">
-      <a href="http://localhost:5173/?claimId=${claim.id}&amp;fromEmail=true" style="display: inline-block; padding: 12px 24px; color: #ffffff; background-color: #4f46e5; text-decoration: none; border-radius: 6px; font-weight: bold; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);">🔍 클레임 상세 내용 확인하기</a>
+      <a href="${window.location.origin}/?claimId=${claim.id}&amp;fromEmail=true" style="display: inline-block; padding: 12px 24px; color: #ffffff; background-color: #4f46e5; text-decoration: none; border-radius: 6px; font-weight: bold; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);">🔍 클레임 상세 내용 확인하기</a>
     </div>
     
     <p style="margin-bottom: 0;">감사합니다.</p>
@@ -646,6 +820,24 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
   </div>
 </body>
 </html>`;
+
+            const initialRecipients = [];
+            uniqueEmails.forEach(email => {
+                const deptName = Object.keys(loadedDeptEmails).find(k => (loadedDeptEmails[k] || []).map(e => e.trim()).includes(email)) || '';
+                initialRecipients.push({
+                    id: `init-${email}`,
+                    name: email.split('@')[0],
+                    companyName: companyName || '',
+                    department: deptName,
+                    email: email,
+                    isCustom: false
+                });
+            });
+
+            setRecipientList(initialRecipients);
+            setRecipientSearchKeyword('');
+            setRecipientSearchResults([]);
+            setIsSearchDropdownOpen(false);
 
             setSelectedDepts(defaultDepts);
             setEmailForm({
@@ -895,7 +1087,7 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                                         src={getFileUrl(photo)} 
                                                         alt="Claim" 
                                                         style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px', border: '1px solid #e2e8f0', cursor: 'pointer' }} 
-                                                        onClick={() => window.open(getFileUrl(photo), '_blank')}
+                                                        onClick={() => setPreviewModalFile({ url: getFileUrl(photo), title: `클레임 사진 #${idx + 1}` })}
                                                     />
                                                     {canEditCs && (
                                                         <button 
@@ -1161,9 +1353,15 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                                                 <span style={{ fontSize: '24px' }}>📄</span>
                                                                 <a 
                                                                     href={getFileUrl(formData.manufacturerResponsePdf)} 
-                                                                    target="_blank" 
-                                                                    rel="noopener noreferrer"
-                                                                    style={{ color: '#3182ce', fontWeight: 'bold', textDecoration: 'underline', fontSize: '13px' }}
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        setPreviewModalFile({
+                                                                            url: getFileUrl(formData.manufacturerResponsePdf),
+                                                                            title: '제조사 회신 보고서',
+                                                                            type: 'PDF'
+                                                                        });
+                                                                    }}
+                                                                    style={{ color: '#3182ce', fontWeight: 'bold', textDecoration: 'underline', fontSize: '13px', cursor: 'pointer' }}
                                                                 >
                                                                     {decodeURIComponent(formData.manufacturerResponsePdf.split('/').pop()).replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/, '') || '대체_보고서.pdf'}
                                                                 </a>
@@ -1174,7 +1372,11 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                                                     src={getFileUrl(formData.manufacturerResponsePdf)} 
                                                                     alt="대체 보고서" 
                                                                     style={{ maxWidth: '120px', maxHeight: '120px', objectFit: 'contain', borderRadius: '6px', border: '1px solid #cbd5e0', cursor: 'pointer' }}
-                                                                    onClick={() => window.open(getFileUrl(formData.manufacturerResponsePdf), '_blank')}
+                                                                    onClick={() => setPreviewModalFile({
+                                                                        url: getFileUrl(formData.manufacturerResponsePdf),
+                                                                        title: '제조사 회신 보고서',
+                                                                        type: 'IMAGE'
+                                                                    })}
                                                                 />
                                                                 <span style={{ fontSize: '11px', color: '#718096' }}>* 이미지 클릭 시 원본 보기</span>
                                                             </div>
@@ -1543,18 +1745,291 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                         </div>
                         
                         <div className="modal-body" style={{ padding: '25px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
-                            <div className="form-group">
-                                <label style={{ fontWeight: '700', fontSize: '14px', color: '#4a5568', marginBottom: '8px', display: 'block' }}>수신자 이메일</label>
-                                <input 
-                                    type="email" 
-                                    value={emailForm.toEmail} 
-                                    onChange={(e) => setEmailForm({ ...emailForm, toEmail: e.target.value })}
-                                    placeholder="이메일 주소를 쉼표로 구분하여 여러 개 입력할 수 있습니다" 
-                                    style={{ width: '100%', height: '45px', borderRadius: '8px', border: '1px solid #cbd5e0', padding: '0 15px', fontSize: '14px' }} 
-                                />
-                                {!emailForm.toEmail && (
+                            {/* Google Mail (Gmail) 스타일 받는사람 수신자 입력바 */}
+                            <div style={{ position: 'relative' }} ref={searchDropdownRef}>
+                                <div
+                                    onClick={() => recipientInputRef.current?.focus()}
+                                    style={{
+                                        display: 'flex',
+                                        flexWrap: 'wrap',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '6px 12px',
+                                        minHeight: '46px',
+                                        backgroundColor: '#ffffff',
+                                        border: isRecipientInputFocused ? '2px solid #1a73e8' : '1px solid #dadce0',
+                                        borderRadius: '8px',
+                                        boxShadow: isRecipientInputFocused ? '0 1px 3px rgba(26,115,232,0.2)' : 'none',
+                                        cursor: 'text',
+                                        boxSizing: 'border-box',
+                                        transition: 'border-color 0.15s, box-shadow 0.15s'
+                                    }}
+                                >
+                                    <span style={{
+                                        fontSize: '14px',
+                                        fontWeight: '500',
+                                        color: '#5f6368',
+                                        marginRight: '6px',
+                                        userSelect: 'none',
+                                        flexShrink: 0
+                                    }}>
+                                        받는사람
+                                    </span>
+
+                                    {/* Google Mail 스타일 선택된 수신자 칩들 */}
+                                    {recipientList.map((rec) => (
+                                        <div
+                                            key={rec.email}
+                                            style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                background: '#f1f3f4',
+                                                border: '1px solid #dadce0',
+                                                borderRadius: '16px',
+                                                padding: '2px 8px 2px 10px',
+                                                fontSize: '13px',
+                                                color: '#202124',
+                                                fontWeight: '500',
+                                                maxWidth: '320px'
+                                            }}
+                                        >
+                                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {rec.companyName && rec.companyName !== '-' && rec.companyName !== '기타' ? `[${rec.companyName}] ` : ''}
+                                                {rec.name || rec.email.split('@')[0]}
+                                                {rec.position ? ` ${rec.position}` : ''}
+                                                {rec.department && rec.department !== '-' ? ` (${rec.department})` : ''}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleRemoveRecipient(rec.email);
+                                                }}
+                                                style={{
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    color: '#5f6368',
+                                                    cursor: 'pointer',
+                                                    padding: 0,
+                                                    width: '16px',
+                                                    height: '16px',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    borderRadius: '50%',
+                                                    fontSize: '13px',
+                                                    lineHeight: 1
+                                                }}
+                                                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#dadce0'; }}
+                                                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                                                title="수신자 제외"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                    ))}
+
+                                    {/* Google Mail 인라인 검색/입력창 */}
+                                    <input
+                                        ref={recipientInputRef}
+                                        type="text"
+                                        value={recipientSearchKeyword}
+                                        onFocus={() => {
+                                            setIsRecipientInputFocused(true);
+                                            if (recipientSearchKeyword.trim().length > 0) {
+                                                setIsSearchDropdownOpen(true);
+                                            }
+                                        }}
+                                        onBlur={() => setIsRecipientInputFocused(false)}
+                                        onChange={(e) => {
+                                            setRecipientSearchKeyword(e.target.value);
+                                            if (e.target.value.trim().length > 0) {
+                                                setIsSearchDropdownOpen(true);
+                                            }
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Backspace' && !recipientSearchKeyword && recipientList.length > 0) {
+                                                handleRemoveRecipient(recipientList[recipientList.length - 1].email);
+                                            } else if (e.key === 'ArrowDown') {
+                                                e.preventDefault();
+                                                if (recipientSearchResults.length > 0) {
+                                                    setActiveSearchIndex(prev => (prev + 1) % recipientSearchResults.length);
+                                                }
+                                            } else if (e.key === 'ArrowUp') {
+                                                e.preventDefault();
+                                                if (recipientSearchResults.length > 0) {
+                                                    setActiveSearchIndex(prev => (prev - 1 + recipientSearchResults.length) % recipientSearchResults.length);
+                                                }
+                                            } else if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                if (isSearchDropdownOpen && recipientSearchResults.length > 0) {
+                                                    const target = recipientSearchResults[activeSearchIndex] || recipientSearchResults[0];
+                                                    handleAddRecipientUser(target);
+                                                } else if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientSearchKeyword.trim())) {
+                                                    handleAddDirectEmail();
+                                                }
+                                            } else if (e.key === 'Escape') {
+                                                setIsSearchDropdownOpen(false);
+                                            }
+                                        }}
+                                        placeholder={recipientList.length === 0 ? "이름, 회사명(제조사), 부서 또는 이메일을 입력하세요..." : ""}
+                                        style={{
+                                            flex: 1,
+                                            minWidth: '160px',
+                                            border: 'none',
+                                            outline: 'none',
+                                            fontSize: '13.5px',
+                                            color: '#202124',
+                                            padding: '4px 0',
+                                            backgroundColor: 'transparent'
+                                        }}
+                                    />
+
+                                    {/* 우측 수신자 카운트 배지 */}
+                                    <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <span style={{ fontSize: '12px', color: '#1a73e8', fontWeight: '600' }}>
+                                            총 {recipientList.length}명
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Google Mail 스타일 자동완성 드롭다운 (입력바 바로 아래 플로팅) */}
+                                {isSearchDropdownOpen && recipientSearchKeyword.trim().length > 0 && (
+                                    <div
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        style={{
+                                            position: 'absolute',
+                                        top: 'calc(100% + 4px)',
+                                        left: 0,
+                                        width: '100%',
+                                        maxWidth: '560px',
+                                        backgroundColor: '#ffffff',
+                                        borderRadius: '8px',
+                                        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.08)',
+                                        maxHeight: '280px',
+                                        overflowY: 'auto',
+                                        zIndex: 9999
+                                    }}>
+                                        {isSearchingRecipients ? (
+                                            <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '10px', color: '#5f6368', fontSize: '13px' }}>
+                                                <span>검색 중...</span>
+                                            </div>
+                                        ) : recipientSearchResults.length === 0 ? (
+                                            <div style={{ padding: '16px', color: '#5f6368', fontSize: '13px' }}>
+                                                <div>일치하는 사용자가 없습니다.</div>
+                                                {/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientSearchKeyword.trim()) && (
+                                                    <div
+                                                        onClick={handleAddDirectEmail}
+                                                        style={{
+                                                            marginTop: '8px',
+                                                            color: '#1a73e8',
+                                                            fontWeight: '600',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '6px'
+                                                        }}
+                                                    >
+                                                        <span>➕</span>
+                                                        <span><strong>{recipientSearchKeyword.trim()}</strong> 직접 추가하기 (Enter)</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            recipientSearchResults.map((userItem, idx) => {
+                                                const isAlreadyAdded = recipientList.some(
+                                                    r => r.email && r.email.trim().toLowerCase() === userItem.email?.trim().toLowerCase()
+                                                );
+                                                const isSelected = idx === activeSearchIndex;
+
+                                                // 아바타 색상 결정 (구글 스타일 팔레트)
+                                                const avatarBg = userItem.companyName?.includes('콜마') ? '#ea580c'
+                                                    : userItem.companyName?.includes('더파운더즈') ? '#4f46e5'
+                                                    : userItem.companyName ? '#0891b2' : '#ea4335';
+
+                                                return (
+                                                    <div
+                                                        key={userItem.id || userItem.email || idx}
+                                                        onClick={() => {
+                                                            if (!isAlreadyAdded) {
+                                                                handleAddRecipientUser(userItem);
+                                                            }
+                                                        }}
+                                                        onMouseEnter={() => setActiveSearchIndex(idx)}
+                                                        style={{
+                                                            padding: '10px 16px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '12px',
+                                                            cursor: isAlreadyAdded ? 'default' : 'pointer',
+                                                            backgroundColor: isSelected ? '#f1f3f4' : isAlreadyAdded ? '#f8fafc' : '#ffffff',
+                                                            transition: 'background-color 0.1s',
+                                                            borderBottom: '1px solid #f1f3f4',
+                                                            opacity: isAlreadyAdded ? 0.6 : 1
+                                                        }}
+                                                    >
+                                                        {/* Google Mail 스타일 원형 아바타 */}
+                                                        <div style={{
+                                                            width: '36px',
+                                                            height: '36px',
+                                                            borderRadius: '50%',
+                                                            backgroundColor: avatarBg,
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            color: '#ffffff',
+                                                            flexShrink: 0,
+                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                                                        }}>
+                                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="#ffffff">
+                                                                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                                                            </svg>
+                                                        </div>
+
+                                                        {/* 2줄 텍스트 (이름/회사/직급 + 이메일) */}
+                                                        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                                                            <div style={{
+                                                                fontSize: '14px',
+                                                                fontWeight: '600',
+                                                                color: '#202124',
+                                                                overflow: 'hidden',
+                                                                textOverflow: 'ellipsis',
+                                                                whiteSpace: 'nowrap'
+                                                            }}>
+                                                                {userItem.companyName && userItem.companyName !== '-' ? `${userItem.companyName} ` : ''}
+                                                                {userItem.name || userItem.username}
+                                                                {userItem.position ? ` ${userItem.position}` : ''}
+                                                                {userItem.department && userItem.department !== '-' ? ` (${userItem.department})` : ''}
+                                                            </div>
+                                                            <div style={{
+                                                                fontSize: '12px',
+                                                                color: '#5f6368',
+                                                                marginTop: '2px',
+                                                                overflow: 'hidden',
+                                                                textOverflow: 'ellipsis',
+                                                                whiteSpace: 'nowrap'
+                                                            }}>
+                                                                {userItem.email}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* 상태 표시 */}
+                                                        {isAlreadyAdded && (
+                                                            <span style={{ fontSize: '11px', color: '#10b981', fontWeight: 'bold', background: '#ecfdf5', padding: '2px 8px', borderRadius: '10px' }}>
+                                                                추가됨
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                )}
+
+                                {recipientList.length === 0 && (
                                     <p style={{ margin: '6px 0 0 0', color: '#e53e3e', fontSize: '12px', fontWeight: '600' }}>
-                                        ⚠️ 제조사에 등록된 이메일이 없습니다. 이메일 주소를 직접 입력해 주세요.
+                                        ⚠️ 수신자가 지정되지 않았습니다. 사용자/제조사명을 검색하여 선택하거나 이메일을 직접 입력해 주세요.
                                     </p>
                                 )}
                             </div>
@@ -1800,6 +2275,14 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                     </div>
                 </div>
             )}
+
+            {/* Standardized File/Photo Preview Modal */}
+            <CommonFilePreviewModal
+                isOpen={!!previewModalFile}
+                file={previewModalFile}
+                title={previewModalFile?.title || '첨부 파일 미리보기'}
+                onClose={() => setPreviewModalFile(null)}
+            />
         </div>
     );
 };

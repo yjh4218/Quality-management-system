@@ -173,7 +173,7 @@ class ErrorBoundary extends React.Component {
         } catch (err) {
             console.error("Automatic bug report via api.jsx failed, attempting direct fetch fallback:", err);
             try {
-                const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+                const baseURL = import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:8080' : '');
                 await fetch(`${baseURL}/api/bug-reports`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

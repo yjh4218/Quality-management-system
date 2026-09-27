@@ -8,6 +8,9 @@ import {
     saveAnnouncementCategory,
     deleteAnnouncementCategory,
     sendAnnouncementEmail,
+    getAnnouncementRecipients,
+    previewAnnouncementRecipients,
+    searchAnnouncementRecipients,
     getManufacturerCategories,
     getManufacturers,
     getCompanyDepartmentsAndEmails
@@ -52,6 +55,16 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [isEmailPreviewOpen, setIsEmailPreviewOpen] = useState(false);
     const [previewAnnouncement, setPreviewAnnouncement] = useState(null);
+    const [previewRecipientsList, setPreviewRecipientsList] = useState([]);
+    const [originalRecipientsList, setOriginalRecipientsList] = useState([]);
+    const [loadingRecipients, setLoadingRecipients] = useState(false);
+
+    // Recipient Search & Add State
+    const [recipientSearchKeyword, setRecipientSearchKeyword] = useState('');
+    const [recipientSearchResults, setRecipientSearchResults] = useState([]);
+    const [isSearchingRecipients, setIsSearchingRecipients] = useState(false);
+    const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
+    const searchDropdownRef = useRef(null);
 
     // Announcement Form State
     const [selectedAnnouncement, setSelectedAnnouncement] = useState({
@@ -114,7 +127,8 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
         try {
             setLoading(true);
             const response = await getAnnouncementCategories();
-            setCategoriesList(response.data || []);
+            const list = Array.isArray(response?.data) ? response.data : (Array.isArray(response) ? response : []);
+            setCategoriesList(list);
         } catch (error) {
             toast.error("공지 분류 목록을 불러오는 데 실패했습니다.");
         } finally {
@@ -125,7 +139,8 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
     const fetchMfrCategories = async () => {
         try {
             const data = await getManufacturerCategories();
-            setMfrCategories(data || []);
+            const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+            setMfrCategories(list);
         } catch (error) {
             console.error("제조사 카테고리 로딩 실패:", error);
         }
@@ -192,10 +207,139 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
         }
     };
 
-    const handleOpenEmailPreview = (announcement) => {
+    // 수신자 자동완성 외부 클릭 감지
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (searchDropdownRef.current && !searchDropdownRef.current.contains(event.target)) {
+                setIsSearchDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // 수신자 검색 디바운스 (150ms)
+    useEffect(() => {
+        if (!recipientSearchKeyword || recipientSearchKeyword.trim().length < 1) {
+            setRecipientSearchResults([]);
+            setIsSearchingRecipients(false);
+            setIsSearchDropdownOpen(false);
+            return;
+        }
+
+        const timer = setTimeout(async () => {
+            setIsSearchingRecipients(true);
+            try {
+                const results = await searchAnnouncementRecipients(recipientSearchKeyword.trim());
+                setRecipientSearchResults(Array.isArray(results) ? results : []);
+                setIsSearchDropdownOpen(true);
+            } catch (err) {
+                console.error("수신자 검색 실패:", err);
+                setRecipientSearchResults([]);
+            } finally {
+                setIsSearchingRecipients(false);
+            }
+        }, 150);
+
+        return () => clearTimeout(timer);
+    }, [recipientSearchKeyword]);
+
+    const handleAddRecipientUser = (targetUser) => {
+        if (!targetUser || !targetUser.email) {
+            toast.warning("유효한 이메일 주소가 없는 사용자입니다.");
+            return;
+        }
+        const alreadyExists = previewRecipientsList.some(
+            r => r.email && r.email.trim().toLowerCase() === targetUser.email.trim().toLowerCase()
+        );
+        if (alreadyExists) {
+            toast.warning(`[${targetUser.name || targetUser.username}] 님은 이미 수신 목록에 포함되어 있습니다.`);
+            return;
+        }
+
+        const newRecipient = {
+            id: targetUser.id || `custom-${Date.now()}`,
+            username: targetUser.username,
+            name: targetUser.name || targetUser.username,
+            email: targetUser.email.trim(),
+            companyName: targetUser.companyName || '-',
+            department: targetUser.department || '-',
+            position: targetUser.position || '',
+            role: targetUser.role || '',
+            isCustom: true
+        };
+
+        setPreviewRecipientsList(prev => [...prev, newRecipient]);
+        setRecipientSearchKeyword('');
+        setIsSearchDropdownOpen(false);
+    };
+
+    const handleAddDirectEmail = () => {
+        const trimmed = recipientSearchKeyword.trim();
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(trimmed)) {
+            toast.warning("올바른 이메일 형식(예: user@example.com)을 입력해 주세요.");
+            return;
+        }
+        const alreadyExists = previewRecipientsList.some(
+            r => r.email && r.email.trim().toLowerCase() === trimmed.toLowerCase()
+        );
+        if (alreadyExists) {
+            toast.warning("이미 수신 목록에 포함된 이메일 주소입니다.");
+            return;
+        }
+
+        const newRecipient = {
+            id: `direct-${Date.now()}`,
+            username: trimmed.split('@')[0],
+            name: trimmed.split('@')[0],
+            email: trimmed,
+            companyName: '외부',
+            department: '-',
+            position: '',
+            role: '',
+            isCustom: true
+        };
+
+        setPreviewRecipientsList(prev => [...prev, newRecipient]);
+        setRecipientSearchKeyword('');
+        setIsSearchDropdownOpen(false);
+    };
+
+    const handleRemoveRecipient = (emailToRemove) => {
+        setPreviewRecipientsList(prev => prev.filter(r => r.email !== emailToRemove));
+    };
+
+    const handleResetRecipients = () => {
+        setPreviewRecipientsList([...originalRecipientsList]);
+        toast.info("기본 타겟 수신자 목록으로 초기화되었습니다.");
+    };
+
+    const handleOpenEmailPreview = async (announcement) => {
         const cat = announcement.category || categoriesList.find(c => c.id === announcement.categoryId) || { name: '일반', color: '#475569', bold: false };
         setPreviewAnnouncement({ ...announcement, category: cat });
         setIsEmailPreviewOpen(true);
+        setLoadingRecipients(true);
+        setRecipientSearchKeyword('');
+        setRecipientSearchResults([]);
+        setIsSearchDropdownOpen(false);
+        try {
+            let recipients = [];
+            if (announcement.id) {
+                recipients = await getAnnouncementRecipients(announcement.id);
+            } else {
+                recipients = await previewAnnouncementRecipients(announcement);
+            }
+            const list = Array.isArray(recipients) ? recipients : [];
+            setPreviewRecipientsList(list);
+            setOriginalRecipientsList(list);
+        } catch (err) {
+            console.error("수신자 목록 로딩 실패:", err);
+            setPreviewRecipientsList([]);
+            setOriginalRecipientsList([]);
+        } finally {
+            setLoadingRecipients(false);
+        }
     };
 
     const handleOpenDetail = (announcement) => {
@@ -211,9 +355,9 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
                 announcementNumber: announcement.announcementNumber,
                 title: announcement.title,
                 content: announcement.content,
-                categoryId: announcement.categoryId || '',
+                categoryId: announcement.categoryId || (categoriesList[0]?.id || ''),
                 targetType: announcement.targetType || 'ALL',
-                targetCategory: announcement.targetCategory || '',
+                targetCategory: announcement.targetCategory || (mfrCategories[0]?.name || ''),
                 targetManufacturer: announcement.targetManufacturer || '',
                 targetDepartments: announcement.targetDepartments || '',
                 emailSent: announcement.emailSent || false,
@@ -233,7 +377,7 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
                 content: '',
                 categoryId: categoriesList.length > 0 ? categoriesList[0].id : '',
                 targetType: 'ALL',
-                targetCategory: '',
+                targetCategory: mfrCategories.length > 0 ? mfrCategories[0].name : '',
                 targetManufacturer: '',
                 targetDepartments: '',
                 emailSent: false,
@@ -405,11 +549,16 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
     };
 
     const handleSendEmail = async (id) => {
+        if (!previewRecipientsList || previewRecipientsList.length === 0) {
+            toast.error("수신 대상자가 0명입니다. 수신자를 1명 이상 지정해 주세요.");
+            return;
+        }
         setIsEmailPreviewOpen(false);
         try {
             setLoading(true);
-            await sendAnnouncementEmail(id);
-            toast.success("이메일 발송이 성공적으로 완료되었습니다.");
+            const emails = previewRecipientsList.map(r => r.email).filter(Boolean);
+            await sendAnnouncementEmail(id, { recipientEmails: emails });
+            toast.success(`총 ${emails.length}명에게 이메일 발송이 성공적으로 완료되었습니다.`);
             fetchAnnouncements();
             if (isDrawerOpen && selectedAnnouncement.id === id) {
                 setSelectedAnnouncement(prev => ({ ...prev, emailSent: true, emailSentAt: new Date().toISOString() }));
@@ -997,23 +1146,35 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
                                                     name="targetType"
                                                     value="CATEGORY"
                                                     checked={selectedAnnouncement.targetType === 'CATEGORY'}
-                                                    onChange={(e) => setSelectedAnnouncement(prev => ({ ...prev, targetType: e.target.value, targetCategory: mfrCategories[0]?.name || '', targetManufacturer: '', targetDepartments: '' }))}
+                                                    onChange={(e) => setSelectedAnnouncement(prev => ({ 
+                                                        ...prev, 
+                                                        targetType: e.target.value, 
+                                                        targetCategory: prev.targetCategory || (mfrCategories[0]?.name || ''), 
+                                                        targetManufacturer: '', 
+                                                        targetDepartments: '' 
+                                                    }))}
                                                     style={{ width: '18px', height: '18px' }}
                                                 />
                                                 🏭 제조사 구분별 공지 (특정 구분의 제조사 사용자에게 노출)
                                             </label>
 
                                             {selectedAnnouncement.targetType === 'CATEGORY' && (
-                                                <div style={{ paddingLeft: '28px' }}>
+                                                <div style={{ paddingLeft: '28px', marginTop: '6px' }}>
                                                     <select
                                                         value={selectedAnnouncement.targetCategory}
                                                         onChange={(e) => setSelectedAnnouncement(prev => ({ ...prev, targetCategory: e.target.value }))}
-                                                        style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e0', fontSize: '13px', width: '250px' }}
+                                                        style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e0', fontSize: '13px', width: '280px', backgroundColor: '#fff', fontWeight: '600' }}
                                                     >
+                                                        <option value="">-- 제조사 구분 선택 --</option>
                                                         {mfrCategories.map(cat => (
-                                                            <option key={cat.id} value={cat.name}>{cat.name}</option>
+                                                            <option key={cat.id || cat.name} value={cat.name}>{cat.name}</option>
                                                         ))}
                                                     </select>
+                                                    {mfrCategories.length === 0 && (
+                                                        <span style={{ fontSize: '12px', color: '#e53e3e', display: 'block', marginTop: '4px' }}>
+                                                            ⚠️ 등록된 제조사 구분이 없습니다.
+                                                        </span>
+                                                    )}
                                                 </div>
                                             )}
 
@@ -1107,16 +1268,21 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
                                         <div className="form-group" style={{ marginBottom: '20px' }}>
                                             <label style={{ fontWeight: 'bold', fontSize: '13px' }}>공지 분류 <span style={{ color: '#e53e3e' }}>*</span></label>
                                             <select
-                                                value={selectedAnnouncement.categoryId}
-                                                onChange={(e) => setSelectedAnnouncement({ ...selectedAnnouncement, categoryId: e.target.value })}
+                                                value={selectedAnnouncement.categoryId ? String(selectedAnnouncement.categoryId) : ''}
+                                                onChange={(e) => setSelectedAnnouncement({ ...selectedAnnouncement, categoryId: e.target.value ? Number(e.target.value) : '' })}
                                                 style={{ padding: '14px', borderRadius: '12px', fontWeight: '600', width: '100%', border: '1px solid #cbd5e1', fontSize: '14px', backgroundColor: '#fff' }}
                                                 required
                                             >
                                                 <option value="">-- 분류 선택 --</option>
                                                 {categoriesList.map(cat => (
-                                                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                                    <option key={cat.id} value={String(cat.id)}>{cat.name}</option>
                                                 ))}
                                             </select>
+                                            {categoriesList.length === 0 && (
+                                                <span style={{ fontSize: '12px', color: '#e53e3e', display: 'block', marginTop: '4px' }}>
+                                                    ⚠️ 등록된 공지 분류가 없습니다. 분류 관리 탭에서 분류를 먼저 등록하세요.
+                                                </span>
+                                            )}
                                         </div>
 
                                         <div className="form-group" style={{ marginBottom: '20px' }}>
@@ -1385,14 +1551,311 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
                         </div>
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                            <div style={{ padding: '14px', background: '#f5f3ff', borderRadius: '12px', border: '1px solid #ddd6fe', fontSize: '13px', color: '#4c1d95', fontWeight: 'bold' }}>
-                                📢 수신 대상: <span style={{ textDecoration: 'underline' }}>
-                                    {previewAnnouncement.targetType === 'MANUFACTURER'
-                                        ? '일반 제조사 (부자재 제외) 활성 사용자 전원'
-                                        : previewAnnouncement.targetType === 'PACKAGING'
-                                            ? '포장재 제조사 (부자재 카테고리) 활성 사용자 전원'
-                                            : 'QMS 시스템 가입 활성 사용자 전원'}
+                            {/* 상단 타겟 안내 및 카운트 배너 */}
+                            <div style={{ padding: '14px 18px', background: '#f5f3ff', borderRadius: '12px', border: '1px solid #ddd6fe', fontSize: '13px', color: '#4c1d95', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div>
+                                    📢 <b>기본 타겟 조건:</b> {
+                                        previewAnnouncement.targetType === 'MANUFACTURER'
+                                            ? `특정 제조사 [${previewAnnouncement.targetManufacturer || '전체'}]`
+                                            : previewAnnouncement.targetType === 'CATEGORY'
+                                                ? `제조사 구분 [${previewAnnouncement.targetCategory || '전체'}]`
+                                                : '전체 사용자 (시스템 활성 계정)'
+                                    }
+                                </div>
+                                <span style={{ backgroundColor: '#7c3aed', color: '#fff', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold' }}>
+                                    총 {previewRecipientsList.length}명 수신 예정
                                 </span>
+                            </div>
+
+                            {/* 사용자 이름 검색 및 자동완성 수신자 추가 */}
+                            <div style={{ position: 'relative', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '14px 16px' }} ref={searchDropdownRef}>
+                                <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#1e293b', marginBottom: '8px' }}>
+                                    🔍 수신자 추가 (이름, 회사명 또는 부서 검색)
+                                </label>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    <div style={{ position: 'relative', flex: 1 }}>
+                                        <input
+                                            type="text"
+                                            value={recipientSearchKeyword}
+                                            onChange={(e) => setRecipientSearchKeyword(e.target.value)}
+                                            onFocus={() => {
+                                                if (recipientSearchResults.length > 0) setIsSearchDropdownOpen(true);
+                                            }}
+                                            placeholder="사용자 이름을 입력하시면 하단에 회사명/이름 자동완성이 표시됩니다..."
+                                            style={{
+                                                width: '100%',
+                                                padding: '10px 36px 10px 14px',
+                                                borderRadius: '10px',
+                                                border: '1px solid #cbd5e1',
+                                                fontSize: '13px',
+                                                outline: 'none',
+                                                boxSizing: 'border-box'
+                                            }}
+                                        />
+                                        {isSearchingRecipients ? (
+                                            <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '12px', color: '#6366f1' }}>
+                                                ⏳
+                                            </span>
+                                        ) : recipientSearchKeyword ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setRecipientSearchKeyword('');
+                                                    setIsSearchDropdownOpen(false);
+                                                }}
+                                                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '14px' }}
+                                            >
+                                                ✕
+                                            </button>
+                                        ) : null}
+                                    </div>
+
+                                    {/* 이메일 직접 입력 형식 감지 시 추가 버튼 */}
+                                    {/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientSearchKeyword.trim()) && (
+                                        <button
+                                            type="button"
+                                            onClick={handleAddDirectEmail}
+                                            style={{
+                                                padding: '10px 16px',
+                                                background: '#0d9488',
+                                                color: '#fff',
+                                                border: 'none',
+                                                borderRadius: '10px',
+                                                fontSize: '12px',
+                                                fontWeight: '700',
+                                                cursor: 'pointer',
+                                                whiteSpace: 'nowrap'
+                                            }}
+                                        >
+                                            ➕ 이메일 직접 등록
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* 자동완성 결과 드롭다운 */}
+                                {isSearchDropdownOpen && recipientSearchKeyword.trim().length > 0 && (
+                                    <div
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        style={{
+                                        position: 'absolute',
+                                        top: '100%',
+                                        left: 0,
+                                        right: 0,
+                                        marginTop: '6px',
+                                        backgroundColor: '#ffffff',
+                                        borderRadius: '12px',
+                                        border: '1px solid #c7d2fe',
+                                        boxShadow: '0 10px 25px -5px rgba(0,0,0,0.15), 0 8px 10px -6px rgba(0,0,0,0.1)',
+                                        maxHeight: '220px',
+                                        overflowY: 'auto',
+                                        zIndex: 1200
+                                    }}>
+                                        {isSearchingRecipients ? (
+                                            <div style={{ padding: '14px', textAlign: 'center', color: '#6366f1', fontSize: '13px' }}>
+                                                🔍 검색 중입니다...
+                                            </div>
+                                        ) : recipientSearchResults.length === 0 ? (
+                                            <div style={{ padding: '14px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
+                                                일치하는 사용자가 없습니다.
+                                                {/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientSearchKeyword.trim()) && (
+                                                    <div style={{ marginTop: '6px', color: '#0d9488', fontWeight: 'bold' }}>
+                                                        우측 [➕ 이메일 직접 등록] 버튼을 눌러 바로 추가할 수 있습니다.
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            recipientSearchResults.map((userItem) => {
+                                                const isAlreadyAdded = previewRecipientsList.some(
+                                                    r => r.email && r.email.trim().toLowerCase() === userItem.email?.trim().toLowerCase()
+                                                );
+
+                                                // 아바타 색상 결정 (구글 스타일 팔레트)
+                                                const avatarBg = userItem.companyName?.includes('콜마') ? '#ea580c'
+                                                    : userItem.companyName?.includes('더파운더즈') ? '#4f46e5'
+                                                    : userItem.companyName ? '#0891b2' : '#ea4335';
+
+                                                return (
+                                                    <div
+                                                        key={userItem.id || userItem.email}
+                                                        onClick={() => !isAlreadyAdded && handleAddRecipientUser(userItem)}
+                                                        style={{
+                                                            padding: '10px 16px',
+                                                            borderBottom: '1px solid #f1f5f9',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '12px',
+                                                            cursor: isAlreadyAdded ? 'default' : 'pointer',
+                                                            backgroundColor: isAlreadyAdded ? '#f8fafc' : '#ffffff',
+                                                            transition: 'background-color 0.15s',
+                                                            opacity: isAlreadyAdded ? 0.6 : 1
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            if (!isAlreadyAdded) e.currentTarget.style.backgroundColor = '#f1f3f4';
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            if (!isAlreadyAdded) e.currentTarget.style.backgroundColor = '#ffffff';
+                                                        }}
+                                                    >
+                                                        {/* Google Mail 스타일 원형 아바타 */}
+                                                        <div style={{
+                                                            width: '36px',
+                                                            height: '36px',
+                                                            borderRadius: '50%',
+                                                            backgroundColor: avatarBg,
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            color: '#ffffff',
+                                                            flexShrink: 0,
+                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                                                        }}>
+                                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="#ffffff">
+                                                                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                                                            </svg>
+                                                        </div>
+
+                                                        {/* 2줄 텍스트 (이름/회사/직급 + 이메일) */}
+                                                        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                                                            <div style={{
+                                                                fontSize: '14px',
+                                                                fontWeight: '600',
+                                                                color: '#202124',
+                                                                overflow: 'hidden',
+                                                                textOverflow: 'ellipsis',
+                                                                whiteSpace: 'nowrap'
+                                                            }}>
+                                                                {userItem.companyName && userItem.companyName !== '-' ? `${userItem.companyName} ` : ''}
+                                                                {userItem.name || userItem.username}
+                                                                {userItem.position ? ` ${userItem.position}` : ''}
+                                                                {userItem.department && userItem.department !== '-' ? ` (${userItem.department})` : ''}
+                                                            </div>
+                                                            <div style={{
+                                                                fontSize: '12px',
+                                                                color: '#5f6368',
+                                                                marginTop: '2px',
+                                                                overflow: 'hidden',
+                                                                textOverflow: 'ellipsis',
+                                                                whiteSpace: 'nowrap'
+                                                            }}>
+                                                                {userItem.email}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* 상태 표시 */}
+                                                        {isAlreadyAdded && (
+                                                            <span style={{ fontSize: '11px', color: '#10b981', fontWeight: 'bold', background: '#ecfdf5', padding: '2px 8px', borderRadius: '10px' }}>
+                                                                추가됨
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* 발송 대상 메일 리스트 카드 */}
+                            <div style={{ border: '1px solid #e2e8f0', borderRadius: '14px', background: '#f8fafc', padding: '16px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                    <span style={{ fontSize: '13px', fontWeight: '800', color: '#1e293b' }}>
+                                        👥 발송 대상 메일 리스트 ({previewRecipientsList.length}명)
+                                    </span>
+                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                        {originalRecipientsList.length > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={handleResetRecipients}
+                                                style={{
+                                                    padding: '4px 10px',
+                                                    fontSize: '11px',
+                                                    fontWeight: '700',
+                                                    color: '#475569',
+                                                    background: '#ffffff',
+                                                    border: '1px solid #cbd5e1',
+                                                    borderRadius: '6px',
+                                                    cursor: 'pointer'
+                                                }}
+                                                title="기본 타겟 조건의 수신자 목록으로 되돌립니다"
+                                            >
+                                                🔄 기본 수신자로 초기화
+                                            </button>
+                                        )}
+                                        {loadingRecipients && (
+                                            <span style={{ fontSize: '12px', color: '#6366f1', fontWeight: '600' }}>⏳ 수신자 목록 조회 중...</span>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {loadingRecipients ? (
+                                    <div style={{ textAlign: 'center', padding: '24px', color: '#64748b', fontSize: '13px' }}>
+                                        수신 대상자 목록을 조회하고 있습니다...
+                                    </div>
+                                ) : previewRecipientsList.length === 0 ? (
+                                    <div style={{ textAlign: 'center', padding: '20px', color: '#dc2626', fontSize: '13px', background: '#fef2f2', borderRadius: '8px', border: '1px dashed #fca5a5' }}>
+                                        ⚠️ 수신 대상자가 0명입니다. 상단 검색창에서 대상자를 추가하거나 [기본 수신자로 초기화]를 클릭하세요.
+                                    </div>
+                                ) : (
+                                    <div style={{ maxHeight: '160px', overflowY: 'auto', background: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
+                                            <thead>
+                                                <tr style={{ background: '#f1f5f9', borderBottom: '1px solid #e2e8f0', color: '#475569', position: 'sticky', top: 0 }}>
+                                                    <th style={{ padding: '8px 12px', width: '140px' }}>회사 / 이름</th>
+                                                    <th style={{ padding: '8px 12px' }}>발송 이메일 주소</th>
+                                                    <th style={{ padding: '8px 12px', width: '100px' }}>부서</th>
+                                                    <th style={{ padding: '8px 12px', width: '80px', textAlign: 'center' }}>구분</th>
+                                                    <th style={{ padding: '8px 12px', width: '50px', textAlign: 'center' }}>제외</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {previewRecipientsList.map((rec, idx) => (
+                                                    <tr key={rec.id || rec.email || idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                        <td style={{ padding: '8px 12px', fontWeight: '700', color: '#0f172a' }}>
+                                                            {rec.companyName && rec.companyName !== '-' ? `[${rec.companyName}] ` : ''}{rec.name || rec.username}
+                                                        </td>
+                                                        <td style={{ padding: '8px 12px', color: '#2563eb', fontFamily: 'monospace', fontSize: '11px' }}>
+                                                            {rec.email}
+                                                        </td>
+                                                        <td style={{ padding: '8px 12px', color: '#64748b' }}>
+                                                            {rec.department || '-'}
+                                                        </td>
+                                                        <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                                                            {rec.isCustom ? (
+                                                                <span style={{ fontSize: '10px', color: '#7c3aed', background: '#f5f3ff', border: '1px solid #ddd6fe', padding: '2px 6px', borderRadius: '8px', fontWeight: 'bold' }}>
+                                                                    직접 추가
+                                                                </span>
+                                                            ) : (
+                                                                <span style={{ fontSize: '10px', color: '#475569', background: '#f1f5f9', border: '1px solid #e2e8f0', padding: '2px 6px', borderRadius: '8px', fontWeight: '600' }}>
+                                                                    기본 대상
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                        <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleRemoveRecipient(rec.email)}
+                                                                style={{
+                                                                    background: '#fee2e2',
+                                                                    border: 'none',
+                                                                    borderRadius: '6px',
+                                                                    color: '#ef4444',
+                                                                    width: '24px',
+                                                                    height: '24px',
+                                                                    cursor: 'pointer',
+                                                                    fontWeight: 'bold',
+                                                                    fontSize: '12px'
+                                                                }}
+                                                                title="수신 대상에서 제외"
+                                                            >
+                                                                ✕
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
                             </div>
 
                             <div style={{ border: '1px solid #cbd5e1', borderRadius: '16px', padding: '24px', background: '#ffffff', fontFamily: '"Malgun Gothic", sans-serif' }}>
@@ -1440,9 +1903,18 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
                                 type="button"
                                 className="primary"
                                 onClick={() => handleSendEmail(previewAnnouncement.id)}
-                                style={{ padding: '10px 35px', borderRadius: '10px', fontWeight: '800', backgroundColor: '#4f46e5', color: '#fff', border: 'none', cursor: 'pointer' }}
+                                disabled={previewRecipientsList.length === 0}
+                                style={{
+                                    padding: '10px 35px',
+                                    borderRadius: '10px',
+                                    fontWeight: '800',
+                                    backgroundColor: previewRecipientsList.length === 0 ? '#94a3b8' : '#4f46e5',
+                                    color: '#fff',
+                                    border: 'none',
+                                    cursor: previewRecipientsList.length === 0 ? 'not-allowed' : 'pointer'
+                                }}
                             >
-                                📧 메일 최종 발송
+                                📧 메일 최종 발송 ({previewRecipientsList.length}명)
                             </button>
                         </div>
                     </div>

@@ -90,6 +90,9 @@ public class SystemInitializationService {
         runIsolated("seedNotificationSettings", this::seedNotificationSettings);
         runIsolated("seedSampleBomMaterials", this::seedSampleBomMaterials);
         runIsolated("seedMasterProductBomsAndPlanningSets", this::seedMasterProductBomsAndPlanningSets);
+        runIsolated("seedAndRepairAnnouncementCategories", this::seedAndRepairAnnouncementCategories);
+        runIsolated("seedAndRepairManufacturerCategories", this::seedAndRepairManufacturerCategories);
+        runIsolated("seedAndRepairManufacturers", this::seedAndRepairManufacturers);
 
         log.info(">>>> [SYSTEM INIT] Data Seeding & Repair Completed.");
         runIsolated("performDataAudit", this::performDataAudit);
@@ -356,7 +359,11 @@ public class SystemInitializationService {
         createIfMissing("qa", "QA담당", "더파운더즈", "ROLE_QUALITY");
         createIfMissing("ko", "공장장", "한국콜마", "ROLE_MANUFACTURER");
         
-        // Ensure 'ko' company is updated to '한국콜마' if it already exists to match seeded claim manufacturers
+        // Ensure test users have email and department set for notification & announcement preview
+        jdbcTemplate.update("UPDATE users SET email = 'admin@thefounders.co.kr', department = '관리팀' WHERE username = 'admin' AND (email IS NULL OR email = '')");
+        jdbcTemplate.update("UPDATE users SET email = 'qc@thefounders.co.kr', department = '품질팀' WHERE username = 'qc' AND (email IS NULL OR email = '')");
+        jdbcTemplate.update("UPDATE users SET email = 'qa@thefounders.co.kr', department = 'QA팀' WHERE username = 'qa' AND (email IS NULL OR email = '')");
+        jdbcTemplate.update("UPDATE users SET email = 'kolmar_plant@kolmar.co.kr', company_name = '한국콜마', department = '생산관리팀' WHERE username = 'ko' AND (email IS NULL OR email = '')");
         jdbcTemplate.update("UPDATE users SET company_name = '한국콜마' WHERE username = 'ko'");
         
         log.info(">>>> [SYSTEM INIT] Test users verified/seeded.");
@@ -1852,5 +1859,79 @@ public class SystemInitializationService {
         } catch (Exception e) {
             log.error(">>>> [SYSTEM INIT] [ERROR] Failed to seed master BOM and planning sets: {}", e.getMessage(), e);
         }
+    }
+
+    private void seedAndRepairAnnouncementCategories() {
+        log.info(">>>> [SYSTEM INIT] Seeding & Repairing Announcement Categories...");
+        try {
+            String[][] defaultCats = {
+                {"긴급", "#dc2626", "TRUE", "1"},
+                {"중요", "#ea580c", "TRUE", "2"},
+                {"법령", "#2563eb", "FALSE", "3"},
+                {"일반", "#475569", "FALSE", "4"}
+            };
+            for (String[] cat : defaultCats) {
+                String name = cat[0];
+                String color = cat[1];
+                boolean bold = Boolean.parseBoolean(cat[2]);
+                int sortOrder = Integer.parseInt(cat[3]);
+
+                Integer exists = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM announcement_categories WHERE name = ? AND (is_deleted = false OR is_deleted IS NULL)",
+                    Integer.class, name
+                );
+                if (exists == null || exists == 0) {
+                    Integer countBySort = jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM announcement_categories WHERE sort_order = ? AND (is_deleted = false OR is_deleted IS NULL)",
+                        Integer.class, sortOrder
+                    );
+                    if (countBySort != null && countBySort > 0) {
+                        jdbcTemplate.update(
+                            "UPDATE announcement_categories SET name = ?, color = ?, is_bold = ?, is_deleted = false, updated_at = CURRENT_TIMESTAMP WHERE sort_order = ?",
+                            name, color, bold, sortOrder
+                        );
+                    } else {
+                        jdbcTemplate.update(
+                            "INSERT INTO announcement_categories (name, color, is_bold, sort_order, is_deleted, created_at, updated_at) VALUES (?, ?, ?, ?, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                            name, color, bold, sortOrder
+                        );
+                    }
+                }
+            }
+            log.info(">>>> [SYSTEM INIT] Announcement categories seeded/repaired successfully.");
+        } catch (Exception e) {
+            log.error(">>>> [SYSTEM INIT] Announcement categories repair failed: {}", e.getMessage(), e);
+        }
+    }
+
+    private void seedAndRepairManufacturerCategories() {
+        log.info(">>>> [SYSTEM INIT] Seeding & Repairing Manufacturer Categories...");
+        try {
+            String[] defaultMfrCats = {"화장품", "공산품", "부자재(용기)", "사료", "동물용 의약외품"};
+            for (String catName : defaultMfrCats) {
+                Integer exists = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM manufacturer_categories WHERE name = ?",
+                    Integer.class, catName
+                );
+                if (exists == null || exists == 0) {
+                    jdbcTemplate.update(
+                        "INSERT INTO manufacturer_categories (name, is_active, created_at) VALUES (?, TRUE, CURRENT_TIMESTAMP)",
+                        catName
+                    );
+                }
+            }
+            log.info(">>>> [SYSTEM INIT] Manufacturer categories seeded/repaired successfully.");
+        } catch (Exception e) {
+            log.error(">>>> [SYSTEM INIT] Manufacturer categories repair failed: {}", e.getMessage(), e);
+        }
+    }
+
+    private void seedAndRepairManufacturers() {
+        try {
+            jdbcTemplate.update("UPDATE manufacturers SET name = '글로벌 코스메틱', category = '화장품' WHERE id = 1 AND (name LIKE '%?%' OR name LIKE '%\ufffd%')");
+            jdbcTemplate.update("UPDATE manufacturers SET name = '퓨어 코스', category = '화장품' WHERE id = 2 AND (name LIKE '%?%' OR name LIKE '%\ufffd%')");
+            jdbcTemplate.update("UPDATE manufacturers SET name = '에코 팜스', category = '동물용 의약외품' WHERE id = 3 AND (name LIKE '%?%' OR name LIKE '%\ufffd%')");
+            jdbcTemplate.update("UPDATE manufacturers SET name = '한국콜마', category = '화장품' WHERE (id = 4 OR manufacturer_code = 'M001') AND (name LIKE '%?%' OR name LIKE '%\ufffd%')");
+        } catch (Exception ignored) {}
     }
 }

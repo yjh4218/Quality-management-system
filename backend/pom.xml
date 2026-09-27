@@ -184,6 +184,7 @@
 				<artifactId>spring-boot-maven-plugin</artifactId>
 				<configuration>
 					<mainClass>com.example.ims.ImsApplication</mainClass>
+					<jvmArguments>-Dfile.encoding=UTF-8</jvmArguments>
 				</configuration>
 			</plugin>
 		</plugins>

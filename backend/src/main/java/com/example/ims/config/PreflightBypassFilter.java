@@ -27,12 +27,37 @@ public class PreflightBypassFilter implements Filter {
         "http://127.0.0.1:5173"
     );
 
+    @org.springframework.beans.factory.annotation.Value("${cors.allowed-origins:}")
+    private String configuredAllowedOrigins;
+
+    private volatile Set<String> mergedAllowedOrigins;
+
+    private Set<String> getMergedAllowedOrigins() {
+        if (mergedAllowedOrigins == null) {
+            synchronized (this) {
+                if (mergedAllowedOrigins == null) {
+                    Set<String> set = new java.util.HashSet<>(ALLOWED_ORIGINS);
+                    if (configuredAllowedOrigins != null && !configuredAllowedOrigins.trim().isEmpty()) {
+                        for (String part : configuredAllowedOrigins.split(",")) {
+                            String trimmed = part.trim().toLowerCase();
+                            if (!trimmed.isEmpty() && !trimmed.contains("*")) {
+                                set.add(trimmed);
+                            }
+                        }
+                    }
+                    mergedAllowedOrigins = Collections.unmodifiableSet(set);
+                }
+            }
+        }
+        return mergedAllowedOrigins;
+    }
+
     private boolean isAllowedOrigin(String origin) {
         if (origin == null || origin.trim().isEmpty()) {
             return false;
         }
         String clean = origin.trim().toLowerCase();
-        if (ALLOWED_ORIGINS.contains(clean)) {
+        if (getMergedAllowedOrigins().contains(clean)) {
             return true;
         }
         try {

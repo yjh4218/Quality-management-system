@@ -1,5 +1,7 @@
 package com.example.ims.controller;
 
+import com.example.ims.dto.AnnouncementEmailSendRequestDto;
+import com.example.ims.dto.UserRecipientDto;
 import com.example.ims.entity.Announcement;
 import com.example.ims.entity.AnnouncementCategory;
 import com.example.ims.service.AnnouncementService;
@@ -78,13 +80,46 @@ public class AnnouncementController {
     }
 
     /**
-     * 전체공지 대상 사용자들에게 이메일 발송
+     * 전체공지 대상 사용자들에게 이메일 발송 (지정된 커스텀 수신 목록이 있으면 해당 목록으로 발송)
      */
     @PostMapping("/{id}/send-email")
     @PreAuthorize("@perm.can('announcements', 'EDIT')")
-    public ResponseEntity<Void> sendAnnouncementEmail(@PathVariable Long id) {
-        announcementService.sendAnnouncementEmail(id);
+    public ResponseEntity<Void> sendAnnouncementEmail(
+            @PathVariable Long id,
+            @RequestBody(required = false) AnnouncementEmailSendRequestDto request) {
+        if (request != null && request.getRecipientEmails() != null) {
+            announcementService.sendAnnouncementEmail(id, request.getRecipientEmails());
+        } else {
+            announcementService.sendAnnouncementEmail(id);
+        }
         return ResponseEntity.ok().build();
+    }
+
+    /**
+     * 특정 공지의 실제 수신 대상자 리스트 조회
+     */
+    @GetMapping("/{id}/recipients")
+    @PreAuthorize("@perm.can('announcements', 'VIEW')")
+    public ResponseEntity<List<UserRecipientDto>> getAnnouncementRecipients(@PathVariable Long id) {
+        return ResponseEntity.ok(announcementService.getRecipientsForAnnouncement(id));
+    }
+
+    /**
+     * 작성/수정 중인 공지 초안 기준 수신 대상자 리스트 실시간 미리보기
+     */
+    @PostMapping("/preview-recipients")
+    @PreAuthorize("@perm.can('announcements', 'VIEW')")
+    public ResponseEntity<List<UserRecipientDto>> previewRecipients(@RequestBody Announcement announcement) {
+        return ResponseEntity.ok(announcementService.getPreviewRecipients(announcement));
+    }
+
+    /**
+     * 공지 수신자 추가를 위한 사용자 검색 (이름/회사/부서/계정/이메일)
+     */
+    @GetMapping("/search-recipients")
+    @PreAuthorize("@perm.can('announcements', 'VIEW') or @perm.can('claims', 'VIEW')")
+    public ResponseEntity<List<UserRecipientDto>> searchRecipients(@RequestParam(required = false, defaultValue = "") String keyword) {
+        return ResponseEntity.ok(announcementService.searchRecipients(keyword));
     }
 
     // --- Announcement Category APIs ---

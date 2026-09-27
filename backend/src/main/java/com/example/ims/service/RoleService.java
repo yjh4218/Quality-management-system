@@ -1,5 +1,6 @@
 package com.example.ims.service;
 
+import com.example.ims.config.RoleConstants;
 import com.example.ims.entity.Role;
 import com.example.ims.event.EntityChangeEvent;
 import com.example.ims.repository.RoleRepository;
@@ -169,7 +170,7 @@ public class RoleService {
     @Transactional(readOnly = true)
     public boolean hasPermission(String roleKey, String permissionKey) {
         if (roleKey == null || permissionKey == null) return false;
-        if (roleKey.contains("ROLE_ADMIN") || "ROLE_ADMIN".equals(roleKey) || "ADMIN".equals(roleKey)) return true;
+        if (roleKey.contains(RoleConstants.ADMIN) || RoleConstants.ADMIN.equals(roleKey) || RoleConstants.ADMIN_NAME.equals(roleKey)) return true;
         
         Optional<Role> roleOpt = roleRepository.findByRoleKey(roleKey);
         if (roleOpt.isEmpty()) return false;

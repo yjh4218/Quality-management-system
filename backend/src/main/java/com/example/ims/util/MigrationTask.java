@@ -444,7 +444,7 @@ public class MigrationTask implements CommandLineRunner {
             String[] categories = {"화장품", "공산품", "부자재(용기)", "사료", "동물용 의약외품"};
             for (String cat : categories) {
                 jdbcTemplate.update(
-                    "INSERT INTO manufacturer_categories (name, is_active, active, created_at) VALUES (?, TRUE, TRUE, CURRENT_TIMESTAMP)",
+                    "INSERT INTO manufacturer_categories (name, is_active, created_at) VALUES (?, TRUE, CURRENT_TIMESTAMP)",
                     cat
                 );
             }

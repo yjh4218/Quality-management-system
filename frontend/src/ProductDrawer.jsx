@@ -28,6 +28,7 @@ import { calculateAllCountrySpaceRatios, generateOptimizationSuggestions } from 
 import PackagingViewer3D from './components/PackagingViewer3D';
 import useFormDraft from './hooks/useFormDraft';
 import DraftRestoreBanner from './components/common/DraftRestoreBanner';
+import CommonFilePreviewModal from './components/common/CommonFilePreviewModal';
 import {
     calcAllPalletPatterns,
     generateArrangementOptions,
@@ -210,6 +211,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
     const [snapshotUploading, setSnapshotUploading] = useState(false);
     const [confirmDialogState, setConfirmDialogState] = useState(null); // { icon, title, message, asIs, toBe, onConfirm }
     const [isDownloadingSpec, setIsDownloadingSpec] = useState(false);
+    const [previewImageModal, setPreviewImageModal] = useState(null);
 
     useEffect(() => {
         if (product) {
@@ -630,8 +632,9 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
     const getFullFileUrl = (url) => {
         if (!url) return '';
+        if (api.getFileUrl) return api.getFileUrl(url);
         if (url.startsWith('http://') || url.startsWith('https://')) return url;
-        const baseUrl = api.getBaseURL ? api.getBaseURL() : 'http://localhost:8080';
+        const baseUrl = api.getBaseURL ? api.getBaseURL() : (import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:8080' : ''));
         return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
     };
 
@@ -4735,7 +4738,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                         대표 이미지
                                                     </div>
                                                 )}
-                                                <div style={{ width: '100%', height: '100px', overflow: 'hidden', borderRadius: '6px', marginBottom: '8px', cursor: 'pointer', background: '#f8f9fa' }} onClick={() => window.open(getFileUrl(path), '_blank')}>
+                                                <div style={{ width: '100%', height: '100px', overflow: 'hidden', borderRadius: '6px', marginBottom: '8px', cursor: 'pointer', background: '#f8f9fa' }} onClick={() => setPreviewImageModal({ url: getFileUrl(path), title: `${formData.productName || '제품'} 사진 #${idx + 1}` })}>
                                                     <img 
                                                         src={getFileUrl(path)} 
                                                         alt={`Product ${idx}`} 
@@ -9095,6 +9098,14 @@ const ProductDrawer = ({ product, onClose, user }) => {
                     </div>
                 </div>
             )}
+
+            {/* Standardized File/Photo Preview Modal */}
+            <CommonFilePreviewModal
+                isOpen={!!previewImageModal}
+                file={previewImageModal}
+                title={previewImageModal?.title || '제품 사진 미리보기'}
+                onClose={() => setPreviewImageModal(null)}
+            />
         </div>
     );
 };

@@ -1,5 +1,6 @@
 package com.example.ims.service;
 
+import com.example.ims.entity.Brand;
 import com.example.ims.entity.Manufacturer;
 import com.example.ims.entity.PackagingMaterial;
 import com.example.ims.entity.Product;
@@ -228,55 +229,54 @@ public class ProductService {
         // 선택된 채널 정보를 기반으로 제품명 뒤에 _채널코드 접미사 자동 반영
         formatProductNameWithChannel(product);
         
-        // Handle Brand verification
+        // Handle Brand verification (하드코딩 제거 및 필수값 검증 적용)
+        Brand resolvedBrand = null;
         if (product.getBrand() != null && product.getBrand().getId() != null) {
-            product.setBrand(brandRepository.findById(product.getBrand().getId())
-                    .orElseGet(() -> brandRepository.findByName("아누아").orElse(null)));
-        } else if (product.getBrand() != null && product.getBrand().getName() != null && !product.getBrand().getName().isEmpty()) {
-            String brandName = product.getBrand().getName();
-            product.setBrand(brandRepository.findByName(brandName)
-                    .orElseGet(() -> brandRepository.findByName("아누아").orElse(null)));
-        } else {
-            // 기본 브랜드 지정 ('아누아')
-            product.setBrand(brandRepository.findByName("아누아").orElse(null));
+            resolvedBrand = brandRepository.findById(product.getBrand().getId()).orElse(null);
         }
+        if (resolvedBrand == null && product.getBrand() != null && product.getBrand().getName() != null && !product.getBrand().getName().trim().isEmpty()) {
+            resolvedBrand = brandRepository.findByName(product.getBrand().getName().trim()).orElse(null);
+        }
+        if (resolvedBrand == null) {
+            List<Brand> allBrands = brandRepository.findAll();
+            if (allBrands != null && allBrands.size() == 1) {
+                resolvedBrand = allBrands.get(0);
+            }
+        }
+        if (resolvedBrand == null) {
+            throw new IllegalArgumentException("브랜드 정보는 필수 항목입니다. 브랜드를 선택해 주세요.");
+        }
+        product.setBrand(resolvedBrand);
 
         // Handle Manufacturer verification with graceful fallback for Sets/New products
+        Manufacturer resolvedMfr = null;
         if (product.getManufacturerInfo() != null && product.getManufacturerInfo().getId() != null) {
-            product.setManufacturerInfo(manufacturerRepository.findById(product.getManufacturerInfo().getId())
-                    .orElseGet(() -> manufacturerRepository.findByName("한국콜마").orElse(null)));
-        } else if (product.getManufacturerInfo() != null && product.getManufacturerInfo().getName() != null && !product.getManufacturerInfo().getName().isEmpty()) {
-            String mfrName = product.getManufacturerInfo().getName();
-            product.setManufacturerInfo(manufacturerRepository.findByName(mfrName)
-                    .orElseGet(() -> manufacturerRepository.findByName("한국콜마").orElse(null)));
-        } else {
+            resolvedMfr = manufacturerRepository.findById(product.getManufacturerInfo().getId()).orElse(null);
+        }
+        if (resolvedMfr == null && product.getManufacturerInfo() != null && product.getManufacturerInfo().getName() != null && !product.getManufacturerInfo().getName().trim().isEmpty()) {
+            resolvedMfr = manufacturerRepository.findByName(product.getManufacturerInfo().getName().trim()).orElse(null);
+        }
+        if (resolvedMfr == null && product.getComponents() != null && !product.getComponents().isEmpty()) {
             // 구성품이 있는 기획세트인 경우 첫 번째 구성품의 등록 제조사 룩업 시도
-            Manufacturer resolvedMfr = null;
-            if (product.getComponents() != null && !product.getComponents().isEmpty()) {
-                for (ProductComponent pc : product.getComponents()) {
-                    if (pc.getItemCode() != null) {
-                        resolvedMfr = productRepository.findByItemCode(pc.getItemCode())
-                                .map(Product::getManufacturerInfo)
-                                .orElse(null);
-                        if (resolvedMfr != null) break;
-                    }
+            for (ProductComponent pc : product.getComponents()) {
+                if (pc.getItemCode() != null) {
+                    resolvedMfr = productRepository.findByItemCode(pc.getItemCode())
+                            .map(Product::getManufacturerInfo)
+                            .orElse(null);
+                    if (resolvedMfr != null) break;
                 }
             }
-            if (resolvedMfr == null) {
-                resolvedMfr = manufacturerRepository.findByName("한국콜마").orElse(null);
-                if (resolvedMfr == null) {
-                    java.util.List<Manufacturer> actives = manufacturerRepository.findByActiveTrue();
-                    if (actives != null && !actives.isEmpty()) {
-                        resolvedMfr = actives.get(0);
-                    }
-                }
+        }
+        if (resolvedMfr == null) {
+            List<Manufacturer> actives = manufacturerRepository.findByActiveTrue();
+            if (actives != null && actives.size() == 1) {
+                resolvedMfr = actives.get(0);
             }
-            product.setManufacturerInfo(resolvedMfr);
         }
-
-        if (product.getManufacturerInfo() == null) {
-            throw new RuntimeException("제조사 정보는 필수 항목입니다. 제조사를 선택해 주세요.");
+        if (resolvedMfr == null) {
+            throw new IllegalArgumentException("제조사 정보는 필수 항목입니다. 제조사를 선택해 주세요.");
         }
+        product.setManufacturerInfo(resolvedMfr);
 
         // 기획세트 여부 자동 판별 (구성품이 있거나 productType이 기획세트인 경우)
         if (product.getProductType() == ProductType.SET || (product.getComponents() != null && !product.getComponents().isEmpty())) {

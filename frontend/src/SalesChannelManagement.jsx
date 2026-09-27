@@ -57,8 +57,9 @@ const SalesChannelManagement = ({ user }) => {
 
     const getFullFileUrl = (url) => {
         if (!url) return '';
+        if (api.getFileUrl) return api.getFileUrl(url);
         if (url.startsWith('http://') || url.startsWith('https://')) return url;
-        const baseUrl = api.getBaseURL ? api.getBaseURL() : 'http://localhost:8080';
+        const baseUrl = api.getBaseURL ? api.getBaseURL() : (import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:8080' : ''));
         return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
     };
 

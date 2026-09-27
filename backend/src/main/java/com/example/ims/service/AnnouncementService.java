@@ -1,5 +1,6 @@
 package com.example.ims.service;
 
+import com.example.ims.dto.UserRecipientDto;
 import com.example.ims.entity.Announcement;
 import com.example.ims.entity.User;
 import com.example.ims.entity.Manufacturer;
@@ -40,6 +41,9 @@ public class AnnouncementService {
     private final ManufacturerRepository manufacturerRepository;
     private final EmailService emailService;
     private final AnnouncementCategoryRepository announcementCategoryRepository;
+
+    @org.springframework.beans.factory.annotation.Value("${app.frontend.url:http://localhost:5173}")
+    private String frontendUrl;
 
     /**
      * 모든 전체공지 목록 조회 (관리자 또는 공지 모니터링 관리 페이지용)
@@ -303,6 +307,14 @@ public class AnnouncementService {
      */
     @Transactional
     public void sendAnnouncementEmail(Long id) {
+        sendAnnouncementEmail(id, null);
+    }
+
+    /**
+     * 커스텀 수신 대상자 또는 기존 타겟 대상자에게 전체공지 이메일 발송
+     */
+    @Transactional
+    public void sendAnnouncementEmail(Long id, List<String> customRecipientEmails) {
         Announcement announcement = announcementRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Announcement not found with id: " + id));
 
@@ -311,37 +323,95 @@ public class AnnouncementService {
             announcementCategoryRepository.findById(announcement.getCategoryId()).ifPresent(announcement::setCategory);
         }
 
-        List<User> targetUsers;
-        String targetType = announcement.getTargetType() != null ? announcement.getTargetType() : "ALL";
+        List<String> targetEmails;
+        if (customRecipientEmails != null && !customRecipientEmails.isEmpty()) {
+            targetEmails = customRecipientEmails.stream()
+                    .filter(Objects::nonNull)
+                    .map(String::trim)
+                    .filter(e -> !e.isEmpty() && e.contains("@"))
+                    .distinct()
+                    .collect(Collectors.toList());
+        } else {
+            List<User> targetUsers = resolveTargetUsers(
+                    announcement.getTargetType(),
+                    announcement.getTargetCategory(),
+                    announcement.getTargetManufacturer(),
+                    announcement.getTargetDepartments()
+            );
+            targetEmails = targetUsers.stream()
+                    .map(User::getEmail)
+                    .filter(Objects::nonNull)
+                    .map(String::trim)
+                    .filter(e -> !e.isEmpty() && e.contains("@"))
+                    .distinct()
+                    .collect(Collectors.toList());
+        }
 
-        if ("ALL".equalsIgnoreCase(targetType)) {
-            targetUsers = userRepository.findByEnabledTrueAndEmailIsNotNull().stream()
+        if (targetEmails.isEmpty()) {
+            log.info("No target emails found for announcement email: {}", announcement.getId());
+            return;
+        }
+
+        // 이메일 발송
+        for (String email : targetEmails) {
+            try {
+                // 프로퍼티/환경변수(app.frontend.url)에서 주입받은 도메인 주소 사용
+                emailService.sendAnnouncementNotificationEmail(email, announcement, frontendUrl);
+            } catch (Exception e) {
+                log.error("Failed to send announcement email to: {}", email, e);
+            }
+        }
+
+        announcement.setEmailSent(true);
+        announcement.setEmailSentAt(java.time.LocalDateTime.now());
+        announcementRepository.save(announcement);
+    }
+
+    /**
+     * 공지 수신자 추가를 위한 활성 사용자 검색 (이름, 회사명, 부서명, 계정명, 이메일)
+     */
+    @Transactional(readOnly = true)
+    public List<UserRecipientDto> searchRecipients(String keyword) {
+        if (keyword == null || keyword.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        org.springframework.data.domain.Pageable limit = org.springframework.data.domain.PageRequest.of(0, 30);
+        return userRepository.searchActiveRecipients(keyword.trim(), limit).stream()
+                .map(UserRecipientDto::fromEntity)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 공지 수신 대상 사용자 조회 로직 공통화
+     */
+    public List<User> resolveTargetUsers(String targetType, String targetCategory, String targetManufacturer, String targetDepartments) {
+        String type = targetType != null ? targetType : "ALL";
+
+        if ("ALL".equalsIgnoreCase(type)) {
+            return userRepository.findByEnabledTrueAndEmailIsNotNull().stream()
                     .filter(u -> !u.getEmail().trim().isEmpty())
                     .collect(Collectors.toList());
-        } else if ("CATEGORY".equalsIgnoreCase(targetType)) {
-            String targetCat = announcement.getTargetCategory();
-            List<String> targetCompanies = (targetCat != null && !targetCat.isEmpty())
-                    ? manufacturerRepository.findByCategory(targetCat).stream().map(Manufacturer::getName).filter(Objects::nonNull).toList()
+        } else if ("CATEGORY".equalsIgnoreCase(type)) {
+            List<String> targetCompanies = (targetCategory != null && !targetCategory.isEmpty())
+                    ? manufacturerRepository.findByCategory(targetCategory).stream().map(Manufacturer::getName).filter(Objects::nonNull).toList()
                     : Collections.emptyList();
-            targetUsers = targetCompanies.isEmpty() ? Collections.emptyList() :
+            return targetCompanies.isEmpty() ? Collections.emptyList() :
                     userRepository.findByEnabledTrueAndEmailIsNotNullAndCompanyNameIn(targetCompanies).stream()
                             .filter(u -> u.getRole() != null && u.getRole().contains("ROLE_MANUFACTURER"))
                             .filter(u -> !u.getEmail().trim().isEmpty())
                             .collect(Collectors.toList());
-        } else if ("MANUFACTURER".equalsIgnoreCase(targetType)) {
-            String targetMfr = announcement.getTargetManufacturer();
-            String targetDepts = announcement.getTargetDepartments();
-            List<User> mfrUsers = (targetMfr != null && !targetMfr.isEmpty())
-                    ? userRepository.findByEnabledTrueAndEmailIsNotNullAndCompanyName(targetMfr)
+        } else if ("MANUFACTURER".equalsIgnoreCase(type)) {
+            List<User> mfrUsers = (targetManufacturer != null && !targetManufacturer.isEmpty())
+                    ? userRepository.findByEnabledTrueAndEmailIsNotNullAndCompanyName(targetManufacturer)
                     : Collections.emptyList();
-            targetUsers = mfrUsers.stream()
+            return mfrUsers.stream()
                     .filter(u -> u.getRole() != null && u.getRole().contains("ROLE_MANUFACTURER"))
                     .filter(u -> !u.getEmail().trim().isEmpty())
                     .filter(u -> {
-                        if (targetDepts == null || targetDepts.trim().isEmpty()) {
+                        if (targetDepartments == null || targetDepartments.trim().isEmpty()) {
                             return true; // 부서 미지정 시 회사 소속 전체 발송
                         }
-                        List<String> deptList = Arrays.stream(targetDepts.split(","))
+                        List<String> deptList = Arrays.stream(targetDepartments.split(","))
                                 .map(String::trim)
                                 .collect(Collectors.toList());
                         return u.getDepartment() != null && deptList.contains(u.getDepartment().trim());
@@ -349,33 +419,48 @@ public class AnnouncementService {
                     .collect(Collectors.toList());
         } else {
             // 하위 호환성 카테고리 매칭
-            List<String> targetCompanies = manufacturerRepository.findByCategory(targetType).stream()
+            List<String> targetCompanies = manufacturerRepository.findByCategory(type).stream()
                     .map(Manufacturer::getName).filter(Objects::nonNull).toList();
-            targetUsers = targetCompanies.isEmpty() ? Collections.emptyList() :
+            return targetCompanies.isEmpty() ? Collections.emptyList() :
                     userRepository.findByEnabledTrueAndEmailIsNotNullAndCompanyNameIn(targetCompanies).stream()
                             .filter(u -> u.getRole() != null && u.getRole().contains("ROLE_MANUFACTURER"))
                             .filter(u -> !u.getEmail().trim().isEmpty())
                             .collect(Collectors.toList());
         }
+    }
 
-        if (targetUsers.isEmpty()) {
-            log.info("No target users found for announcement email: {}", announcement.getId());
-            return;
-        }
+    /**
+     * 특정 공지의 실제 수신 대상자 리스트 조회
+     */
+    @Transactional(readOnly = true)
+    public List<UserRecipientDto> getRecipientsForAnnouncement(Long id) {
+        Announcement announcement = announcementRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Announcement not found with id: " + id));
 
-        // 이메일 발송
-        for (User targetUser : targetUsers) {
-            try {
-                // local/prod 구분을 단순화하기 위해 baseUrl을 http://localhost:5173으로 지정하되, 
-                // 필요시 프로파일이나 설정을 가져와서 셋팅할 수 있습니다. 
-                emailService.sendAnnouncementNotificationEmail(targetUser.getEmail(), announcement, "http://localhost:5173");
-            } catch (Exception e) {
-                log.error("Failed to send announcement email to user: {}", targetUser.getUsername(), e);
-            }
-        }
+        return resolveTargetUsers(
+                announcement.getTargetType(),
+                announcement.getTargetCategory(),
+                announcement.getTargetManufacturer(),
+                announcement.getTargetDepartments()
+        ).stream()
+         .map(UserRecipientDto::fromEntity)
+         .collect(Collectors.toList());
+    }
 
-        announcement.setEmailSent(true);
-        announcement.setEmailSentAt(java.time.LocalDateTime.now());
-        announcementRepository.save(announcement);
+    /**
+     * 작성/수정 중인 공지 초안(Draft)의 수신 대상자 리스트 실시간 미리보기
+     */
+    @Transactional(readOnly = true)
+    public List<UserRecipientDto> getPreviewRecipients(Announcement draft) {
+        if (draft == null) return Collections.emptyList();
+
+        return resolveTargetUsers(
+                draft.getTargetType(),
+                draft.getTargetCategory(),
+                draft.getTargetManufacturer(),
+                draft.getTargetDepartments()
+        ).stream()
+         .map(UserRecipientDto::fromEntity)
+         .collect(Collectors.toList());
     }
 }
