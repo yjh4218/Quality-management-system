@@ -10,6 +10,11 @@ export function useDateRangePreset(setStartDate, setEndDate) {
         let startObj = new Date();
 
         switch (type) {
+            case '전체':
+            case 'all':
+            case 'ALL':
+                startObj = null;
+                break;
             case '월':
             case 'month':
                 startObj.setMonth(today.getMonth() - 1);
@@ -30,14 +35,16 @@ export function useDateRangePreset(setStartDate, setEndDate) {
                 break;
         }
 
-        const startStr = startObj.toISOString().split('T')[0];
+        const startStr = startObj ? startObj.toISOString().split('T')[0] : '';
+        const finalEndStr = startObj ? endStr : '';
         if (setStartDate) setStartDate(startStr);
-        if (setEndDate) setEndDate(endStr);
+        if (setEndDate) setEndDate(finalEndStr);
     };
 
     const renderPresetButtons = () => (
         <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
             {[
+                { label: '전체', key: '전체', title: '전체 기간 무제한 조회' },
                 { label: '월', key: '월', title: '최근 1개월' },
                 { label: '분기', key: '분기', title: '최근 3개월 (분기)' },
                 { label: '반년', key: '반년', title: '최근 6개월 (반년)' },

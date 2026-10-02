@@ -87,11 +87,10 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
     const [showSearchPopup, setShowSearchPopup] = useState(false);
 
     const isInternal = user?.role === 'ROLE_ADMIN' || user?.role === 'ROLE_QUALITY' || user?.role === 'ADMIN' || user?.role === 'QUALITY' ||
-        user?.companyName === '더파운더즈' ||
         user?.roles?.some(r => ['ROLE_ADMIN', 'ROLE_QUALITY', 'ADMIN', 'QUALITY'].includes(r.authority));
 
     const loadData = React.useCallback(async (force = false, pageNum = 0) => {
-        const currentSearchKey = `${searchParams.sharedWithManufacturer}-${searchParams.qualityStatus}-${searchParams.consumerReplyNeeded}-${searchParams.isCriticalClaim}-${pageNum}`;
+        const currentSearchKey = `${searchParams.startDate}-${searchParams.endDate}-${searchParams.sharedWithManufacturer}-${searchParams.qualityStatus}-${searchParams.consumerReplyNeeded}-${searchParams.isCriticalClaim}-${pageNum}`;
         if (!force && lastSearchRef.current === currentSearchKey) return;
         
         lastSearchRef.current = currentSearchKey; // Set early to prevent race conditions
@@ -125,6 +124,10 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) 
             setLoading(false);
         }
     }, [searchParams]);
+
+    const fetchClaims = React.useCallback(() => {
+        loadData(true, 0);
+    }, [loadData]);
 
     const filteredClaims = useMemo(() => {
         return actualClaims.filter(c => {

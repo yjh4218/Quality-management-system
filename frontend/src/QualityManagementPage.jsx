@@ -535,7 +535,7 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
                     getRowId={p => String(p.data.id)}
                     columnDefs={colDefs}
                     getRowClass={getRowClass}
-                    rowSelection="multiple"
+                    rowSelection={{ mode: 'multiRow' }}
                     suppressRowClickSelection={true}
                     onCellValueChanged={onCellValueChanged}
                     onRowDoubleClicked={p => handleRowAction(p.data)}

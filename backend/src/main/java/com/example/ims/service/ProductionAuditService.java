@@ -61,7 +61,7 @@ public class ProductionAuditService {
 
         if (isManager) {
             // 관리 권한이 있는 사용자는 요청한 제조사명으로 조회 (필터링 없이 전체)
-            if (manufacturerName != null && !manufacturerName.isEmpty() && !manufacturerName.equals("더파운더즈")) {
+            if (manufacturerName != null && !manufacturerName.trim().isEmpty() && !"ALL".equalsIgnoreCase(manufacturerName.trim()) && !"전체".equalsIgnoreCase(manufacturerName.trim())) {
                 audits = repository.findByManufacturerNameAndIsDeletedFalseInternal(manufacturerName);
             } else {
                 audits = repository.findByIsDeletedFalse();
@@ -88,7 +88,7 @@ public class ProductionAuditService {
 
         if (isManager) {
             // 관리 권한이 있는 사용자는 요청한 제조사의 미진행 전체 조회
-            if (manufacturerName != null && !manufacturerName.isEmpty() && !manufacturerName.equals("더파운더즈")) {
+            if (manufacturerName != null && !manufacturerName.trim().isEmpty() && !"ALL".equalsIgnoreCase(manufacturerName.trim()) && !"전체".equalsIgnoreCase(manufacturerName.trim())) {
                 products = repository.findPendingProductsByManufacturerInternal(manufacturerName);
             } else {
                 products = repository.findPendingProducts();

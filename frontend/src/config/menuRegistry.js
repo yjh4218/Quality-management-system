@@ -30,7 +30,89 @@ export const MENU_REGISTRY = [
         actions: ['VIEW']
     },
 
-    // 2. 🛠️ 시스템 관리
+    // 2. 📋 전자결재 관리
+    {
+        key: 'approvalPending',
+        category: '📋 전자결재 관리',
+        label: '결재 대기함',
+        icon: '⏳',
+        path: 'approvalPending',
+        actions: ['VIEW', 'EDIT', 'DELETE']
+    },
+    {
+        key: 'approvalSubmitted',
+        category: '📋 전자결재 관리',
+        label: '기안 문서함',
+        icon: '📤',
+        path: 'approvalSubmitted',
+        actions: ['VIEW', 'EDIT', 'DELETE']
+    },
+    {
+        key: 'approvalInProgress',
+        category: '📋 전자결재 관리',
+        label: '진행 중 문서',
+        icon: '🔄',
+        path: 'approvalInProgress',
+        actions: ['VIEW', 'EDIT', 'DELETE']
+    },
+    {
+        key: 'approvalCompleted',
+        category: '📋 전자결재 관리',
+        label: '결재 완료함',
+        icon: '✅',
+        path: 'approvalCompleted',
+        actions: ['VIEW', 'EDIT', 'DELETE']
+    },
+    {
+        key: 'approvalRejected',
+        category: '📋 전자결재 관리',
+        label: '반려 문서함',
+        icon: '❌',
+        path: 'approvalRejected',
+        actions: ['VIEW', 'EDIT', 'DELETE']
+    },
+    {
+        key: 'approvalReference',
+        category: '📋 전자결재 관리',
+        label: '참조 문서함',
+        icon: '👀',
+        path: 'approvalReference',
+        actions: ['VIEW', 'EDIT', 'DELETE']
+    },
+    {
+        key: 'approvalHistory',
+        category: '📋 전자결재 관리',
+        label: '내 결재 내역',
+        icon: '📜',
+        path: 'approvalHistory',
+        actions: ['VIEW', 'EDIT', 'DELETE']
+    },
+    {
+        key: 'approvalDocTypes',
+        category: '📋 전자결재 관리',
+        label: '결재 문서유형 관리',
+        icon: '📑',
+        path: 'approvalDocTypes',
+        actions: ['VIEW', 'EDIT']
+    },
+    {
+        key: 'approvalTemplates',
+        category: '📋 전자결재 관리',
+        label: '결재선 템플릿 빌더',
+        icon: '📐',
+        path: 'approvalTemplates',
+        actions: ['VIEW', 'EDIT']
+    },
+    {
+        key: 'approvalNotificationRules',
+        category: '📋 전자결재 관리',
+        label: '결재 알림 설정',
+        icon: '🔔',
+        path: 'approvalNotificationRules',
+        actions: ['VIEW', 'EDIT']
+    },
+
+    // 3. 🛠️ 시스템 관리
     {
         key: 'users',
         category: '🛠️ 시스템 관리',
@@ -324,7 +406,9 @@ export const MENU_REGISTRY = [
         icon: '📉',
         path: 'lotPpmDashboard',
         actions: ['VIEW']
-    }
+    },
+
+
 ];
 
 export default MENU_REGISTRY;

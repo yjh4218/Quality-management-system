@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AgGridReact } from 'ag-grid-react'; // React Grid Logic
-import { getUsers, getRoles, approveUser, toggleUserStatus, updateUserRole, unlockUser, resetUserPassword, getSystemSettings, saveSystemSettings, testSendEmail } from './api';
+import { getUsers, getRoles, approveUser, toggleUserStatus, updateUserRole, unlockUser, resetUserPassword, getSystemSettings, saveSystemSettings, testSendEmail, getManufacturers } from './api';
 import { usePermissions } from './usePermissions';
 import { matchesAllTokens, matchesMultiFieldTokens } from './utils/searchUtils';
+import DepartmentManagementTab from './DepartmentManagementTab';
 
 const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) => {
     const { canEdit, canDelete } = usePermissions(currentUser);
@@ -14,6 +15,7 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
         role: ''
     });
     const [roles, setRoles] = useState([]);
+    const [manufacturers, setManufacturers] = useState([]);
     const [quickFilterText, setQuickFilterText] = useState('');
     const [showRoleGuide, setShowRoleGuide] = useState(false);
     const [activeTab, setActiveTab] = useState('users'); // 'users' or 'settings'
@@ -77,7 +79,29 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
         }
         fetchUsers();
         fetchRoles();
+        const loadMfrs = async () => {
+            try {
+                const res = await getManufacturers();
+                setManufacturers(res.data || []);
+            } catch (e) {
+                console.error("Failed to load manufacturers", e);
+            }
+        };
+        loadMfrs();
     }, [navigationData]);
+
+    const companyOptions = useMemo(() => {
+        const set = new Set();
+        if (currentUser?.companyName) set.add(currentUser.companyName);
+        manufacturers.forEach(m => {
+            const name = m.name?.trim() || m.manufacturerName?.trim();
+            if (name) set.add(name);
+        });
+        rowData.forEach(u => {
+            if (u.companyName && u.companyName.trim()) set.add(u.companyName.trim());
+        });
+        return Array.from(set).sort();
+    }, [currentUser, manufacturers, rowData]);
 
     const handleSaveSettings = async () => {
         try {
@@ -391,6 +415,18 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
                                     👥 사용자 목록
                                 </button>
                                 <button
+                                    onClick={() => setActiveTab('departments')}
+                                    style={{
+                                        padding: '6px 12px', fontSize: '12px', fontWeight: 'bold', borderRadius: '6px', border: 'none',
+                                        backgroundColor: activeTab === 'departments' ? '#fff' : 'transparent',
+                                        color: activeTab === 'departments' ? '#1e293b' : '#64748b',
+                                        boxShadow: activeTab === 'departments' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    🏢 부서/역할 관리
+                                </button>
+                                <button
                                     onClick={() => setActiveTab('settings')}
                                     style={{
                                         padding: '6px 12px', fontSize: '12px', fontWeight: 'bold', borderRadius: '6px', border: 'none',
@@ -492,14 +528,18 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
                             </div>
                             <div>
                                 <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>🏢 업체명</label>
-                                <input
-                                    type="text"
-                                    placeholder="업체명 검색"
+                                <select
                                     value={searchFields.companyName}
                                     onChange={(e) => setSearchFields({ ...searchFields, companyName: e.target.value })}
-                                    onKeyDown={(e) => e.key === 'Enter' && fetchUsers()}
-                                    style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
-                                />
+                                    style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', backgroundColor: '#fff' }}
+                                >
+                                    <option value="">전체 업체 ({companyOptions.length}개 사)</option>
+                                    {companyOptions.map(c => (
+                                        <option key={c} value={c}>
+                                            {c} {c === currentUser?.companyName ? '(소속/본사)' : '(제조원)'}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
                             <div>
                                 <label style={{ fontSize: '12px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>📁 부서</label>
@@ -685,6 +725,16 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {activeTab === 'departments' && (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                    <DepartmentManagementTab
+                        currentUser={currentUser}
+                        showAlert={showAlert}
+                        showConfirm={showConfirm}
+                    />
                 </div>
             )}
 

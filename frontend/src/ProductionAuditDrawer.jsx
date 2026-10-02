@@ -5,7 +5,8 @@ import {
     toggleProductDisclosure,
     uploadFile,
     getProductionAuditHistory,
-    deleteProductionAudit
+    deleteProductionAudit,
+    fetchApprovalDocTypes
 } from './api';
 import * as api from './api';
 import { toast } from 'react-toastify';
@@ -13,6 +14,7 @@ import DOMPurify from 'dompurify';
 import ProductSearchPopup from './ProductSearchPopup';
 import SaveConfirmModal from './components/SaveConfirmModal';
 import { usePermissions } from './usePermissions';
+import ApprovalSubmitModal from './ApprovalSubmitModal';
 
 const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
     const [formData, setFormData] = useState({
@@ -49,9 +51,20 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
     const [deptEmails, setDeptEmails] = useState({});
     const [selectedDepts, setSelectedDepts] = useState([]);
     const [emailModalTab, setEmailModalTab] = useState('preview');
+    const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
+    const [isProdAuditDocTypeActive, setIsProdAuditDocTypeActive] = useState(false);
 
-    const { canEdit, isAdmin, hasPerm, canDelete } = usePermissions(user);
+    const { canEdit, isAdmin, hasPerm, canDelete, canApproveProdAudit } = usePermissions(user);
     const canRegister = canEdit('qualityPhotoAudit');
+
+    useEffect(() => {
+        fetchApprovalDocTypes(true)
+            .then(res => {
+                const list = res.data || [];
+                setIsProdAuditDocTypeActive(list.some(dt => dt.code === 'PROD_AUDIT'));
+            })
+            .catch(() => setIsProdAuditDocTypeActive(false));
+    }, []);
 
     useEffect(() => {
         setIsQualityUser(isAdmin || user?.roles?.some(r => r.authority?.includes('QUALITY') || r.authority?.includes('RESPONSIBLE_SALES')));
@@ -760,6 +773,17 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
                                         >
                                             💾 내역 저장
                                         </button>
+                                        {isEditMode && canApproveProdAudit && isProdAuditDocTypeActive && (
+                                            <button 
+                                                type="button"
+                                                onClick={() => setIsApprovalModalOpen(true)} 
+                                                className="outline" 
+                                                style={{ padding: '8px 16px', borderColor: '#6366f1', color: '#4f46e5', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                                                title="이 생산감리 건을 전자결재로 상신합니다."
+                                            >
+                                                📝 전자결재 상신
+                                            </button>
+                                        )}
                                         {isEditMode && formData.status === 'SUBMITTED' && (
                                             <>
                                                 <button 
@@ -794,11 +818,50 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
                     onClose={() => setIsConfirmOpen(false)}
                     onConfirm={handleSave}
                 />
+
+                {isApprovalModalOpen && (
+                    <ApprovalSubmitModal
+                        isOpen={isApprovalModalOpen}
+                        onClose={() => setIsApprovalModalOpen(false)}
+                        initialDocTypeCode="PROD_AUDIT"
+                        initialSourceRecordId={audit?.id}
+                        initialTitle={`[생산감리] ${formData.productName || formData.itemCode || '품목'} 감리 품의`}
+                        initialContent={[
+                            '■ 1. 생산감리 기본 정보',
+                            '--------------------------------------------------------------------------------',
+                            `• 품 목 명 : [${formData.itemCode || '-'}] ${formData.productName || '-'}`,
+                            `• 제 조 사 : ${formData.manufacturerName || '-'}`,
+                            `• 생산일자 : ${formData.productionDate || '-'} | 판정상태: ${formData.status || '-'}`,
+                            `• 감리담당 : ${user?.name || '품질관리팀'}`,
+                            '',
+                            '■ 2. 공정 및 품질 점검 현황 (사진 감리 첨부 현황)',
+                            '--------------------------------------------------------------------------------',
+                            `• 용기/외관 사진 : ${formData.containerImages ? '등록 완료' : '미등록'}`,
+                            `• 단상자/포장 사진 : ${formData.boxImages ? '등록 완료' : '미등록'}`,
+                            `• 팔레트/적재 사진 : ${formData.loadImages ? '등록 완료' : '미등록'}`,
+                            `• 제조사 공개 여부 : ${formData.isDisclosed ? '공개' : '비공개'}`,
+                            '',
+                            '■ 3. 주요 지적사항 및 보완/반려 사유',
+                            '--------------------------------------------------------------------------------',
+                            formData.rejectionReason ? `[지적 사항]\n${formData.rejectionReason}` : '특이 지적사항 및 부적합 사항 없음.',
+                            '',
+                            '■ 4. 품질보증팀 종합 검토 의견',
+                            '--------------------------------------------------------------------------------',
+                            '생산 공정 전반이 표준 작업 지침서 및 품질 기준에 준하여 적합하게 수행되었음을 확인하여 품의를 상신합니다.'
+                        ].join('\n')}
+                        currentUser={user}
+                        onSubmitted={() => {
+                            setIsApprovalModalOpen(false);
+                            toast.success("생산감리 전자결재 상신이 완료되었습니다.");
+                            onSaveSuccess?.();
+                        }}
+                    />
+                )}
             </div>
             
             {/* Email Preview & Send Modal */}
             {isEmailModalOpen && (
-                <div className="modal-overlay" style={{ zIndex: 1100 }}>
+                <div className="modal-overlay" style={{ zIndex: 10001 }}>
                     <div className="modal-content" style={{ width: '700px', maxWidth: '90vw', padding: '0', overflow: 'hidden', background: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.5)', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }} onClick={e => e.stopPropagation()}>
                         
                         <div className="modal-header" style={{ borderBottom: '1px solid #edf2f7', padding: '20px 25px', background: '#f8fafc' }}>

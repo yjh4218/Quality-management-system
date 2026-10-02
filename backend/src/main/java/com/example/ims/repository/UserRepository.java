@@ -35,4 +35,16 @@ public interface UserRepository extends JpaRepository<User, Long> {
                         "LOWER(u.username) LIKE LOWER(CONCAT('%', :kw, '%')) OR " +
                         "LOWER(u.email) LIKE LOWER(CONCAT('%', :kw, '%')))")
         List<User> searchActiveRecipients(@org.springframework.data.repository.query.Param("kw") String kw, org.springframework.data.domain.Pageable pageable);
+
+        @org.springframework.data.jpa.repository.Query("SELECT u FROM User u WHERE u.enabled = true AND " +
+                        "(:companyName IS NULL OR u.companyName = :companyName) AND (" +
+                        ":kw IS NULL OR :kw = '' OR " +
+                        "LOWER(u.name) LIKE LOWER(CONCAT('%', :kw, '%')) OR " +
+                        "LOWER(u.department) LIKE LOWER(CONCAT('%', :kw, '%')) OR " +
+                        "LOWER(u.username) LIKE LOWER(CONCAT('%', :kw, '%')) OR " +
+                        "LOWER(u.email) LIKE LOWER(CONCAT('%', :kw, '%')))")
+        List<User> searchActiveCompanyUsers(
+                        @org.springframework.data.repository.query.Param("companyName") String companyName,
+                        @org.springframework.data.repository.query.Param("kw") String kw,
+                        org.springframework.data.domain.Pageable pageable);
 }

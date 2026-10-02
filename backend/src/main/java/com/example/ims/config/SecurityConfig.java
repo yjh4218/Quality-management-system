@@ -87,6 +87,9 @@ public class SecurityConfig {
                         
                         .requestMatchers("/api/admin/system/**").hasRole("ADMIN")
                         .requestMatchers("/api/admin/trash/**").hasRole("ADMIN")
+                        // [전자결재 보안] 결재 기준정보/템플릿/알림규칙/부서 관리 API (인증된 내부 사용자 접근 허용, 제조사는 컨트롤러에서 차단)
+                        .requestMatchers("/api/admin/approval-doc-types/**", "/api/admin/approval-templates/**", "/api/admin/notification-rules/**", "/api/admin/departments/**").authenticated()
+                        .requestMatchers("/api/approvals/**").authenticated()
                         
                         .requestMatchers("/api/audit-templates/**").authenticated()
                         

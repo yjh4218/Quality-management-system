@@ -140,7 +140,7 @@ const ProductSearchPopup = ({
     if (!isOpen) return null;
 
     return (
-        <div className="drawer-overlay" style={{ zIndex: 3500 }}>
+        <div className="drawer-overlay" style={{ zIndex: 10001 }}>
             <div 
                 className="modal-content" 
                 style={{ 

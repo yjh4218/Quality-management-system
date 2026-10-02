@@ -1,4 +1,6 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, lazy, Suspense, useCallback } from 'react';
+import { toast } from 'react-toastify';
+import { TabErrorBoundary } from './components/common/GlobalErrorBoundary.jsx';
 import LoginPage from './LoginPage';
 import ProductListPage from './ProductListPage';
 import UserManagementPage from './UserManagementPage';
@@ -63,7 +65,7 @@ import NotificationSettingsPage from './NotificationSettingsPage.jsx';
 import HelpCenterModal from './components/HelpCenterModal';
 import CommandPaletteModal from './components/common/CommandPaletteModal';
 import ProfileModal from './ProfileModal';
-import { getCurrentUser, logout, getMyNotifications, getUnreadNotificationCount, readNotification, readAllNotifications, deleteNotification, submitBugReport, getBaseURL, getFormattedReporterInfo } from './api';
+import { getCurrentUser, logout, getMyNotifications, getUnreadNotificationCount, readNotification, readAllNotifications, deleteNotification, submitBugReport, getBaseURL, getFormattedReporterInfo, fetchApprovalUnreadCounts } from './api';
 import ManufacturerAuditItemPage from './ManufacturerAuditItemPage';
 import ManufacturerCategoryPage from './ManufacturerCategoryPage';
 import AccessLogPage from './AccessLogPage.jsx';
@@ -74,6 +76,10 @@ import ManufacturerGuidePage from './ManufacturerGuidePage.jsx';
 import VendorUploadPage from './VendorUploadPage.jsx';
 import DocumentCycleConfigPage from './DocumentCycleConfigPage.jsx';
 import ChannelNoteCategoryConfigPage from './ChannelNoteCategoryConfigPage.jsx';
+import ApprovalInboxPage from './ApprovalInboxPage.jsx';
+import ApprovalDocTypeManagementPage from './ApprovalDocTypeManagementPage.jsx';
+import ApprovalTemplateBuilderPage from './ApprovalTemplateBuilderPage.jsx';
+import ApprovalNotificationRulesPage from './ApprovalNotificationRulesPage.jsx';
 
 const PAGE_INFO = {
     dashboard: { title: '📊 시스템 대시보드' },
@@ -115,7 +121,18 @@ const PAGE_INFO = {
     manufacturerGuide: { title: '🤝 제조사 협업 가이드' },
     documentRequests: { title: '📋 필수 품질서류 관리' },
     documentTypeConfig: { title: '⚙️ 추가서류 설정' },
-    systemBenchmark: { title: '⚡ 시스템 속도 측정 센터' }
+    systemBenchmark: { title: '⚡ 시스템 속도 측정 센터' },
+    approvals: { title: '📋 통합 전자결재함' },
+    approvalPending: { title: '⏳ 결재 대기함' },
+    approvalSubmitted: { title: '📤 기안 문서함' },
+    approvalInProgress: { title: '🔄 진행 중 문서' },
+    approvalCompleted: { title: '✅ 결재 완료함' },
+    approvalRejected: { title: '❌ 반려 문서함' },
+    approvalReference: { title: '👀 참조 문서함' },
+    approvalHistory: { title: '📜 내 결재 내역' },
+    approvalDocTypes: { title: '📑 결재 문서유형 관리' },
+    approvalTemplates: { title: '📐 결재선 템플릿 빌더' },
+    approvalNotificationRules: { title: '🔔 결재 알림 설정' }
 };
 
 class ErrorBoundary extends React.Component {
@@ -222,7 +239,7 @@ class ErrorBoundary extends React.Component {
                             🔄 새로고침 및 복구
                         </button>
                     </div>
-                    {process.env.NODE_ENV === 'development' && (
+                    {import.meta.env?.DEV && (
                         <pre style={{ 
                             marginTop: '40px', padding: '20px', background: '#fff', border: '1px solid #e2e8f0', 
                             borderRadius: '8px', textAlign: 'left', maxWidth: '800px', overflow: 'auto', fontSize: '12px' 
@@ -260,56 +277,26 @@ const App = () => {
         return !!localStorage.getItem('user_info');
     });
 
-    // [전역 감지] 시스템 자바스크립트 uncaught 에러 및 unhandled rejection 감지 후 자동 버그 신고 연동 (모든 에러 100% 수집)
-    useEffect(() => {
-        const submitGlobalBugReport = async (errorMsg, stackTrace, source = 'Global JS Error', category = 'RUNTIME') => {
-            // 브라우저 확장 프로그램(Chrome Extension) 발 외부 오류는 시스템 결함이 아니므로 버그 리포트 전송 제외
-            if (errorMsg.includes("A listener indicated an asynchronous response") ||
-                errorMsg.includes("message channel closed") ||
-                errorMsg.includes("chrome-extension://") ||
-                errorMsg.includes("moz-extension://")) {
-                return;
-            }
-            try {
-                const reporterInfo = getFormattedReporterInfo(user);
-                await submitBugReport({
-                    screenName: window.__QMS_ACTIVE_PAGE__ || '전역 에러 감지',
-                    url: window.location.href,
-                    severity: category === 'NETWORK' ? 'HIGH' : 'CRITICAL',
-                    errorCategory: category,
-                    description: `[자동 감지] ${source}: ${errorMsg}`,
-                    steps: `시스템 전역에서 예외 상황이 감지되었습니다.\n\n[오류 분류]: ${category}\n[오류 메시지]\n${errorMsg}\n\n[Stack Trace]\n${stackTrace || 'N/A'}`,
-                    reporterName: reporterInfo.name,
-                    reporterUsername: reporterInfo.username
-                });
-            } catch (err) {
-                console.error("Global bug report auto submission failed:", err);
-            }
-        };
+    // [QMS 표준 알림 & 컨펌 시스템]
+    const showAlert = useCallback((message, type = 'info') => {
+        if (!message) return;
+        if (type === 'error') {
+            toast.error(message);
+        } else if (type === 'success') {
+            toast.success(message);
+        } else if (type === 'warning') {
+            toast.warning(message);
+        } else {
+            toast.info(message);
+        }
+    }, []);
 
-        const handleGlobalError = (event) => {
-            const errorMsg = event.message || 'Unknown global error';
-            const stackTrace = event.error?.stack || 'N/A';
-            const isNetwork = errorMsg.includes('Load failed') || errorMsg.includes('Failed to fetch') || errorMsg.includes('Network Error');
-            submitGlobalBugReport(errorMsg, stackTrace, 'Uncaught Exception', isNetwork ? 'NETWORK' : 'RUNTIME');
-        };
-
-        const handleUnhandledRejection = (event) => {
-            const reason = event.reason;
-            const errorMsg = reason instanceof Error ? reason.message : String(reason);
-            const stackTrace = reason instanceof Error ? reason.stack : 'N/A';
-            const isNetwork = errorMsg.includes('Load failed') || errorMsg.includes('Failed to fetch') || errorMsg.includes('Network Error');
-            submitGlobalBugReport(errorMsg, stackTrace, 'Unhandled Rejection', isNetwork ? 'NETWORK' : 'PROMISE');
-        };
-
-        window.addEventListener('error', handleGlobalError);
-        window.addEventListener('unhandledrejection', handleUnhandledRejection);
-
-        return () => {
-            window.removeEventListener('error', handleGlobalError);
-            window.removeEventListener('unhandledrejection', handleUnhandledRejection);
-        };
-    }, [user]);
+    const showConfirm = useCallback((message, onConfirm) => {
+        if (!message) return;
+        if (window.confirm(message)) {
+            if (typeof onConfirm === 'function') onConfirm();
+        }
+    }, []);
     const [tabs, setTabs] = useState([
         { id: 'dashboard', page: 'dashboard', title: '📊 시스템 대시보드', data: null }
     ]);
@@ -337,6 +324,8 @@ const App = () => {
         }
     });
     const [tabContextMenu, setTabContextMenu] = useState({ visible: false, x: 0, y: 0, tabId: null });
+    // [전자결재] 각 결재함별 읽지 않은 문서 수
+    const [approvalUnreadCounts, setApprovalUnreadCounts] = useState({});
 
     // [전역 Data-Density 시스템: 해상도 자동 감지 + 수동 토글]
     const [density, setDensity] = useState(() => {
@@ -483,7 +472,8 @@ const App = () => {
         quality: false,
         packaging: false,
         inbound: false,
-        claim: false
+        claim: false,
+        approval: false
     });
     const tabBarRef = React.useRef(null);
 
@@ -522,15 +512,30 @@ const App = () => {
         window.__QMS_ACTIVE_PAGE__ = currentPageName;
     }, [isLoggedIn, activeTabId, tabs, isProfileOpen, isHelpOpen]);
 
-    // [추가] 활성 탭 자동 스크롤
+    // [추가] 활성 탭 자동 스크롤 및 AG Grid 뷰포트 크기 자동 복원
     useEffect(() => {
         if (!activeTabId) return;
+        
+        // 1. 활성 탭 스크롤 위치 보정
         setTimeout(() => {
             const activeTabElement = document.querySelector(`.tab-item.active`);
             if (activeTabElement && tabBarRef.current) {
                 activeTabElement.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
             }
         }, 100);
+
+        // 2. 탭 전환 시(display: none -> flex) AG Grid 가상 렌더러가 뷰포트 0px로 인식하여 행이 증발하는 현상 완벽 방지
+        const t1 = setTimeout(() => {
+            window.dispatchEvent(new Event('resize'));
+        }, 50);
+        const t2 = setTimeout(() => {
+            window.dispatchEvent(new Event('resize'));
+        }, 150);
+
+        return () => {
+            clearTimeout(t1);
+            clearTimeout(t2);
+        };
     }, [activeTabId]);
 
     const toggleSection = (section) => {
@@ -548,6 +553,7 @@ const App = () => {
                     packaging: false,
                     inbound: false,
                     claim: false,
+                    approval: false,
                     [section]: true
                 };
             } else {
@@ -588,6 +594,18 @@ const App = () => {
         }
     };
 
+    const loadApprovalUnreadCounts = useCallback(async () => {
+        if (!isLoggedIn) return;
+        try {
+            const res = await fetchApprovalUnreadCounts();
+            if (res && res.data) {
+                setApprovalUnreadCounts(res.data);
+            }
+        } catch (err) {
+            console.debug("Failed to fetch approval unread counts", err);
+        }
+    }, [isLoggedIn]);
+
     const handleReadNotification = async (notification) => {
         try {
             await readNotification(notification.id);
@@ -602,9 +620,12 @@ const App = () => {
                 const claimId = searchParams.get('claimId');
                 const auditId = searchParams.get('auditId');
                 const itemCode = searchParams.get('itemCode');
+                const docId = searchParams.get('docId');
 
                 // Determine routing
-                if (claimId) {
+                if (docId || url.pathname === '/approvals') {
+                    handleNavigate('approvals', { documentId: docId ? Number(docId) : null });
+                } else if (claimId) {
                     import('./api').then(({ getClaimById }) => {
                         getClaimById(claimId, false)
                             .then(res => {
@@ -623,7 +644,8 @@ const App = () => {
                         '/user-management': 'users',
                         '/claims': 'claims',
                         '/production-audits': 'qualityPhotoAudit',
-                        '/announcements': 'announcements'
+                        '/announcements': 'announcements',
+                        '/approvals': 'approvals'
                     };
                     const pageKey = pathMap[url.pathname];
                     if (pageKey) handleNavigate(pageKey);
@@ -661,6 +683,7 @@ const App = () => {
         
         fetchNotifications();
         fetchUnreadCount();
+        loadApprovalUnreadCounts();
 
         let eventSource = null;
         let reconnectTimeout = null;
@@ -677,6 +700,7 @@ const App = () => {
                     
                     fetchNotifications();
                     fetchUnreadCount();
+                    loadApprovalUnreadCounts();
 
                     // [추가] 이메일 발송 실패 실시간 토스트 피드백
                     if (newNotif.type === 'EMAIL_FAILURE') {
@@ -723,6 +747,7 @@ const App = () => {
         // 30 seconds Short Polling fallback
         const interval = setInterval(() => {
             fetchUnreadCount();
+            loadApprovalUnreadCounts();
             if (isNotifOpenRef.current) {
                 fetchNotifications();
             }
@@ -739,6 +764,7 @@ const App = () => {
         // [SWR 포커스 재검증] 브라우저 복귀 시 상태 최신화
         const handleWindowFocus = () => {
             fetchUnreadCount();
+            loadApprovalUnreadCounts();
         };
         window.addEventListener('focus', handleWindowFocus);
 
@@ -868,10 +894,12 @@ const App = () => {
         else if (['packagingTemplates', 'spaceRatioCalculator', 'outboxCalculator'].includes(pageKey)) targetSection = 'packaging';
         else if (['qualityDashboard', 'quality', 'releaseRecord'].includes(pageKey)) targetSection = 'inbound';
         else if (['claims', 'claimDashboard'].includes(pageKey)) targetSection = 'claim';
+        else if (['approvals', 'approvalPending', 'approvalSubmitted', 'approvalInProgress', 'approvalCompleted', 'approvalRejected', 'approvalReference', 'approvalHistory', 'approvalDocTypes', 'approvalTemplates', 'approvalNotificationRules'].includes(pageKey)) targetSection = 'approval';
 
         if (targetSection) {
             setOpenSections({
                 monitoring: false,
+                approval: false,
                 system: false,
                 products: false,
                 partner: false,
@@ -919,6 +947,19 @@ const App = () => {
     };
 
     const handleNavigate = (page, data = null) => {
+        // [전자결재 보안 강화] 협력업체(제조사) 계정의 결재 화면 직접 진입 원천 차단
+        const isUserManufacturer = user?.roles?.some(r => r.authority?.includes('MANUFACTURER')) || user?.department === '제조사';
+        const approvalPages = [
+            'approvals', 
+            'approvalPending', 'approvalSubmitted', 'approvalInProgress', 
+            'approvalCompleted', 'approvalRejected', 'approvalReference', 'approvalHistory',
+            'approvalDocTypes', 'approvalTemplates', 'approvalNotificationRules'
+        ];
+        if (isUserManufacturer && approvalPages.includes(page)) {
+            toast.warning("협력업체(제조사) 계정은 사내 전자결재 기능에 접근할 수 없습니다.");
+            return;
+        }
+
         const pageTitle = PAGE_INFO[page]?.title || page;
         
         setTabs(prev => {
@@ -945,7 +986,7 @@ const App = () => {
     }, []);
 
     const handleCloseTab = (tabId, e) => {
-        e.stopPropagation();
+        if (e?.stopPropagation) e.stopPropagation();
         if (tabs.length === 1) return; // Don't close the last tab
         
         const newTabs = tabs.filter(t => t.id !== tabId);
@@ -1074,8 +1115,8 @@ const App = () => {
     const isManufacturer = checkRole('MANUFACTURER');
     const isSales = checkRole('SALES');
 
-    const isACompany = user?.companyName === '더파운더즈';
-    const isAQualityTeam = isQuality || (isACompany && user?.department === 'Quality');
+    const isACompany = !isManufacturer;
+    const isAQualityTeam = isQuality || (isACompany && (user?.department === 'Quality' || user?.department === '품질팀'));
 
     const hasPermission = (menuKey, action = 'VIEW') => {
         if (isAdmin) return true;
@@ -1110,7 +1151,15 @@ const App = () => {
     const hasQualityAccess = canAccess('qualityPhotoAudit') || canAccess('productionAuditDashboard');
     const hasPackagingAccess = canAccess('packagingTemplates') || canAccess('spaceRatioCalculator') || canAccess('outboxCalculator');
     const hasInboundAccess = canAccess('quality') || canAccess('releaseRecord') || canAccess('qualityDashboard');
-    const hasClaimAccess = canAccess('claims') || canAccess('claimDashboard');
+    const hasClaimAccess = canAccess('claims') || canAccess('claimDashboard') || canAccess('lotPpmDashboard');
+    // [전자결재 RBAC 권한 제어]
+    const hasApprovalAccess = !isManufacturer && (
+        isAdmin || 
+        canAccess('approvals') || 
+        canAccess('approvalPending') || canAccess('approvalSubmitted') || canAccess('approvalInProgress') ||
+        canAccess('approvalCompleted') || canAccess('approvalRejected') || canAccess('approvalReference') || canAccess('approvalHistory') ||
+        canAccess('approvalDocTypes') || canAccess('approvalTemplates') || canAccess('approvalNotificationRules')
+    );
 
     // [고도화 5] 현재 활성화된 섹션 판단 로직
     const isSectionActive = (section) => {
@@ -1124,21 +1173,46 @@ const App = () => {
             case 'quality': return ['qualityPhotoAudit', 'productionAuditDashboard'].includes(activePage);
             case 'packaging': return ['packagingTemplates', 'spaceRatioCalculator', 'outboxCalculator'].includes(activePage);
             case 'inbound': return ['qualityDashboard', 'quality', 'releaseRecord'].includes(activePage);
-            case 'claim': return ['claims', 'claimDashboard'].includes(activePage);
+            case 'claim': return ['claims', 'claimDashboard', 'lotPpmDashboard'].includes(activePage);
+            case 'approval': return [
+                'approvals', 
+                'approvalPending', 'approvalSubmitted', 'approvalInProgress', 
+                'approvalCompleted', 'approvalRejected', 'approvalReference', 'approvalHistory',
+                'approvalDocTypes', 'approvalTemplates', 'approvalNotificationRules'
+            ].includes(activePage);
             default: return false;
         }
     };
-    const renderSidebarItem = (pageKey, label) => {
+    const renderSidebarItem = (pageKey, label, badgeCount = null) => {
         const isCurrentActive = tabs.find(t => t.id === activeTabId)?.page === pageKey;
         const isFav = favorites.includes(pageKey);
+        const count = typeof badgeCount === 'number' ? badgeCount : 0;
         return (
             <div key={pageKey} className="sidebar-item-wrapper">
                 <button
                     type="button"
                     className={`sidebar-item ${isCurrentActive ? 'active' : ''}`}
                     onClick={() => handleNavigate(pageKey)}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                 >
-                    {label}
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+                    {count > 0 && (
+                        <span 
+                            style={{
+                                marginLeft: '6px',
+                                padding: '1px 6px',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                borderRadius: '10px',
+                                background: '#ef4444',
+                                color: '#ffffff',
+                                lineHeight: '14px',
+                                flexShrink: 0
+                            }}
+                        >
+                            {count > 99 ? '99+' : count}
+                        </span>
+                    )}
                 </button>
                 <button
                     type="button"
@@ -1189,6 +1263,51 @@ const App = () => {
                 </div>
 
                 <nav className="sidebar-menu">
+                    {/* [시스템 관리] - 빠른 바로가기 상단 별도 메뉴 */}
+                    {hasSystemAccess && (
+                    <div className="sidebar-group sidebar-system-group" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '4px', marginBottom: '8px' }}>
+                        <button 
+                            className={`sidebar-group-header ${isSectionActive('system') ? 'active' : ''}`} 
+                            onClick={() => toggleSection('system')}
+                        >
+                            <span>🛠️ 시스템 관리</span>
+                            <span className={`arrow ${openSections.system ? 'open' : ''}`}>▼</span>
+                        </button>
+                        {openSections.system && (
+                            <div className="sidebar-group-content open">
+                                {(canAccess('users') || canAccess('roles') || canAccess('accessLogs')) && (
+                                    <>
+                                        <div className="sidebar-sub-header">사용자 및 보안</div>
+                                        {canAccess('users') && renderSidebarItem('users', '👥 사용자 승인 관리')}
+                                        {canAccess('roles') && renderSidebarItem('roles', '🔐 권한 관리')}
+                                        {canAccess('accessLogs') && renderSidebarItem('accessLogs', '🕒 사용자 접근 로그')}
+                                    </>
+                                )}
+
+                                {(canAccess('logs') || canAccess('bugReports') || canAccess('systemBenchmark')) && (
+                                    <>
+                                        <div className="sidebar-sub-header">운영 모니터링</div>
+                                        {canAccess('logs') && renderSidebarItem('logs', '📜 시스템 변경 이력')}
+                                        {canAccess('bugReports') && renderSidebarItem('bugReports', '🐞 버그 리포트 관리')}
+                                        {canAccess('systemBenchmark') && renderSidebarItem('systemBenchmark', '⚡ 시스템 속도 측정 센터')}
+                                    </>
+                                )}
+
+                                {(canAccess('guideManagement') || canAccess('dashboardMgmt') || canAccess('trashBin') || canAccess('mailTemplates') || canAccess('notificationSettings')) && (
+                                    <>
+                                        <div className="sidebar-sub-header">설정 및 유지보수</div>
+                                        {canAccess('guideManagement') && renderSidebarItem('guideManagement', '📖 가이드 관리')}
+                                        {canAccess('dashboardMgmt') && renderSidebarItem('dashboardMgmt', '🎨 대시보드 제작/관리')}
+                                        {canAccess('trashBin') && renderSidebarItem('trashBin', '🗑️ 데이터 복구 (휴지통)')}
+                                        {canAccess('mailTemplates') && renderSidebarItem('mailTemplates', '📧 제조사 전달 메일 관리')}
+                                        {canAccess('notificationSettings') && renderSidebarItem('notificationSettings', '🔔 알림 설정 관리')}
+                                    </>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                    )}
+
                     {favorites.length > 0 && (
                         <div className="sidebar-fav-group">
                             <button
@@ -1248,50 +1367,45 @@ const App = () => {
                     </div>
                     )}
 
-                    {/* [시스템 관리] */}
-                    {hasSystemAccess && (
+                    {/* [전자결재 관리] */}
+                    {hasApprovalAccess && (
                     <div className="sidebar-group">
                         <button 
-                            className={`sidebar-group-header ${isSectionActive('system') ? 'active' : ''}`} 
-                            onClick={() => toggleSection('system')}
+                            className={`sidebar-group-header ${isSectionActive('approval') ? 'active' : ''}`} 
+                            onClick={() => toggleSection('approval')}
                         >
-                            <span>🛠️ 시스템 관리</span>
-                            <span className={`arrow ${openSections.system ? 'open' : ''}`}>▼</span>
+                            <span>📋 전자결재</span>
+                            <span className={`arrow ${openSections.approval ? 'open' : ''}`}>▼</span>
                         </button>
-                        {openSections.system && (
+                        {openSections.approval && (
                             <div className="sidebar-group-content open">
-                                {(canAccess('users') || canAccess('roles') || canAccess('accessLogs')) && (
+                                {(isAdmin || canAccess('approvalPending') || canAccess('approvals')) && 
+                                    renderSidebarItem('approvalPending', '⏳ 결재 대기함', approvalUnreadCounts.PENDING)}
+                                {(isAdmin || canAccess('approvalSubmitted') || canAccess('approvals')) && 
+                                    renderSidebarItem('approvalSubmitted', '📤 기안 문서함', approvalUnreadCounts.SUBMITTED)}
+                                {(isAdmin || canAccess('approvalInProgress') || canAccess('approvals')) && 
+                                    renderSidebarItem('approvalInProgress', '🔄 진행 중 문서', approvalUnreadCounts.IN_PROGRESS)}
+                                {(isAdmin || canAccess('approvalCompleted') || canAccess('approvals')) && 
+                                    renderSidebarItem('approvalCompleted', '✅ 결재 완료함', approvalUnreadCounts.COMPLETED)}
+                                {(isAdmin || canAccess('approvalRejected') || canAccess('approvals')) && 
+                                    renderSidebarItem('approvalRejected', '❌ 반려 문서함', approvalUnreadCounts.REJECTED)}
+                                {(isAdmin || canAccess('approvalReference') || canAccess('approvals')) && 
+                                    renderSidebarItem('approvalReference', '👀 참조 문서함', approvalUnreadCounts.REFERENCE)}
+                                {(isAdmin || canAccess('approvalHistory') || canAccess('approvals')) && 
+                                    renderSidebarItem('approvalHistory', '📜 내 결재 내역', approvalUnreadCounts.PROCESSED)}
+                                {(isAdmin || canAccess('approvalDocTypes') || canAccess('approvalTemplates') || canAccess('approvalNotificationRules')) && (
                                     <>
-                                        <div className="sidebar-sub-header">사용자 및 보안</div>
-                                        {canAccess('users') && renderSidebarItem('users', '👥 사용자 승인 관리')}
-                                        {canAccess('roles') && renderSidebarItem('roles', '🔐 권한 관리')}
-                                        {canAccess('accessLogs') && renderSidebarItem('accessLogs', '🕒 사용자 접근 로그')}
-                                    </>
-                                )}
-
-                                {(canAccess('logs') || canAccess('bugReports') || canAccess('systemBenchmark')) && (
-                                    <>
-                                        <div className="sidebar-sub-header">운영 모니터링</div>
-                                        {canAccess('logs') && renderSidebarItem('logs', '📜 시스템 변경 이력')}
-                                        {canAccess('bugReports') && renderSidebarItem('bugReports', '🐞 버그 리포트 관리')}
-                                        {canAccess('systemBenchmark') && renderSidebarItem('systemBenchmark', '⚡ 시스템 속도 측정 센터')}
-                                    </>
-                                )}
-
-                                {(canAccess('guideManagement') || canAccess('dashboardMgmt') || canAccess('trashBin') || canAccess('mailTemplates') || canAccess('notificationSettings')) && (
-                                    <>
-                                        <div className="sidebar-sub-header">설정 및 유지보수</div>
-                                        {canAccess('guideManagement') && renderSidebarItem('guideManagement', '📖 가이드 관리')}
-                                        {canAccess('dashboardMgmt') && renderSidebarItem('dashboardMgmt', '🎨 대시보드 제작/관리')}
-                                        {canAccess('trashBin') && renderSidebarItem('trashBin', '🗑️ 데이터 복구 (휴지통)')}
-                                        {canAccess('mailTemplates') && renderSidebarItem('mailTemplates', '📧 제조사 전달 메일 관리')}
-                                        {canAccess('notificationSettings') && renderSidebarItem('notificationSettings', '🔔 알림 설정 관리')}
+                                        <div className="sidebar-sub-header">결재선 마스터 설정</div>
+                                        {(isAdmin || canAccess('approvalDocTypes')) && renderSidebarItem('approvalDocTypes', '📑 결재 문서유형 관리')}
+                                        {(isAdmin || canAccess('approvalTemplates')) && renderSidebarItem('approvalTemplates', '📐 결재선 템플릿 빌더')}
+                                        {(isAdmin || canAccess('approvalNotificationRules')) && renderSidebarItem('approvalNotificationRules', '🔔 결재 알림 설정')}
                                     </>
                                 )}
                             </div>
                         )}
                     </div>
                     )}
+
 
                     {/* [품목코드 관리] */}
                     {hasProductsAccess && (
@@ -1448,6 +1562,8 @@ const App = () => {
                         )}
                     </div>
                     )}
+
+
                 </nav>
 
                 <div className="sidebar-footer">
@@ -1643,125 +1759,179 @@ const App = () => {
                                 style={{ display: tab.id === activeTabId ? 'flex' : 'none' }}
                             >
                                 <div className="page-container-inner">
-                                {canAccess('users') && tab.page === 'users' && (
-                                    <UserManagementPage 
-                                        user={user}
-                                        navigationData={tab.data} 
-                                        onNavigated={() => {}} // No-op as data is stored in tab
-                                    />
-                                )}
-                                {canAccess('logs') && tab.page === 'logs' && <LogManagementPage user={user} />}
-                                {canAccess('roles') && tab.page === 'roles' && <RoleManagementPage user={user} />}
-                                {canAccess('guideManagement') && tab.page === 'guideManagement' && <GuideManagementPage user={user} />}
-                                {canAccess('dashboardMgmt') && tab.page === 'dashboardMgmt' && <DashboardManagementPage user={user} />}
-                                {canAccess('mailTemplates') && tab.page === 'mailTemplates' && <MailTemplatePage user={user} />}
-                                {canAccess('announcements') && tab.page === 'announcements' && <AnnouncementManagementPage user={user} onNavigate={handleNavigate} />}
-                                {canAccess('notifications') && tab.page === 'notifications' && <NotificationListPage user={user} onNavigate={handleNavigate} />}
+                                    <TabErrorBoundary 
+                                        tabId={tab.id} 
+                                        tabTitle={tab.title} 
+                                        onCloseTab={() => handleCloseTab(tab.id)}
+                                    >
+                                        {canAccess('users') && tab.page === 'users' && (
+                                            <UserManagementPage 
+                                                user={user}
+                                                navigationData={tab.data} 
+                                                onNavigated={() => {}} // No-op as data is stored in tab
+                                            />
+                                        )}
+                                        {canAccess('logs') && tab.page === 'logs' && <LogManagementPage user={user} />}
+                                        {canAccess('roles') && tab.page === 'roles' && <RoleManagementPage user={user} />}
+                                        {canAccess('guideManagement') && tab.page === 'guideManagement' && <GuideManagementPage user={user} />}
+                                        {canAccess('dashboardMgmt') && tab.page === 'dashboardMgmt' && <DashboardManagementPage user={user} />}
+                                        {canAccess('mailTemplates') && tab.page === 'mailTemplates' && <MailTemplatePage user={user} />}
+                                        {canAccess('announcements') && tab.page === 'announcements' && <AnnouncementManagementPage user={user} onNavigate={handleNavigate} />}
+                                        {canAccess('notifications') && tab.page === 'notifications' && <NotificationListPage user={user} onNavigate={handleNavigate} />}
 
-                                {canAccess('documentRequests') && tab.page === 'documentRequests' && (
-                                    <DocumentRequestManagementPage 
-                                        user={user} 
-                                        onNavigateToConfig={() => handleNavigate('documentTypeConfig')}
-                                    />
-                                )}
-                                {canAccess('documentRequests') && tab.page === 'documentTypeConfig' && (
-                                    <DocumentCycleConfigPage 
-                                        user={user} 
-                                        onBack={() => handleNavigate('documentRequests')}
-                                    />
-                                )}
+                                        {canAccess('documentRequests') && tab.page === 'documentRequests' && (
+                                            <DocumentRequestManagementPage 
+                                                user={user} 
+                                                onNavigateToConfig={() => handleNavigate('documentTypeConfig')}
+                                            />
+                                        )}
+                                        {canAccess('documentRequests') && tab.page === 'documentTypeConfig' && (
+                                            <DocumentCycleConfigPage 
+                                                user={user} 
+                                                onBack={() => handleNavigate('documentRequests')}
+                                            />
+                                        )}
 
-                                {tab.page === 'brands' && <BrandManagementPage user={user} onNavigate={handleNavigate} />}
-                                {tab.page === 'manufacturers' && <ManufacturerManagementPage user={user} />}
-                                {tab.page === 'salesChannels' && <SalesChannelManagement user={user} />}
-                                {tab.page === 'channelNoteConfig' && <ChannelNoteCategoryConfigPage user={user} />}
-                                {tab.page === 'manufacturerCategories' && <ManufacturerCategoryPage user={user} />}
-                                {tab.page === 'products' && (
-                                    <ProductListPage 
-                                        user={user} 
-                                        navigationData={tab.data} 
-                                        onNavigated={() => {}} 
-                                    />
-                                )}
-                                {tab.page === 'quality' && (
-                                    <QualityManagementPage 
-                                        user={user} 
-                                        navigationData={tab.data} 
-                                        onNavigated={() => {}} 
-                                    />
-                                )}
-                                {canAccess('releaseRecord') && tab.page === 'releaseRecord' && (
-                                    <MarketReleaseRecordPage user={user} />
-                                )}
-                                {canAccess('qualityPhotoAudit') && tab.page === 'qualityPhotoAudit' && (
-                                    <ProductionAuditPage 
-                                        user={user} 
-                                        navigationData={tab.data}
-                                        onNavigated={() => {}}
-                                    />
-                                )}
-                                {canAccess('ingredientCompliance') && tab.page === 'ingredientCompliance' && <IngredientCompliancePage user={user} />}
-                                {tab.page === 'dashboard' && (
-                                    <DashboardPage 
-                                        user={user} 
-                                        onNavigate={handleNavigate} 
-                                    />
-                                )}
-                                {tab.page === 'claims' && (
-                                    <ClaimManagementPage 
-                                        user={user} 
-                                        navigationData={tab.data}
-                                        onNavigated={() => {}}
-                                        onNavigate={handleNavigate}
-                                    />
-                                )}
-                                {tab.page === 'claimDashboard' && (
-                                    <ClaimDashboardPage 
-                                        user={user}
-                                        onNavigate={handleNavigate}
-                                    />
-                                )}
-                                {tab.page === 'lotPpmDashboard' && (
-                                    <LotPpmDashboardPage 
-                                        user={user}
-                                        onNavigate={handleNavigate}
-                                    />
-                                )}
-                                {tab.page === 'qualityDashboard' && (
-                                    <QualityDashboardPage 
-                                        user={user}
-                                        onNavigate={handleNavigate}
-                                    />
-                                )}
-                                {tab.page === 'productDashboard' && (
-                                    <ProductDashboardPage user={user} onNavigate={handleNavigate} />
-                                )}
-                                {tab.page === 'productionAuditDashboard' && (
-                                    <ProductionAuditDashboardPage user={user} onNavigate={handleNavigate} />
-                                )}
-                                {tab.page === 'bomMaster' && <BomMasterPage user={user} />}
-                                {tab.page === 'bomCategories' && <BomCategoryManagementPage user={user} />}
-                                {tab.page === 'packagingTemplates' && <PackagingTemplatePage user={user} />}
-                                {canAccess('spaceRatioCalculator') && tab.page === 'spaceRatioCalculator' && (
-                                    <PackagingSpaceRatioCalculatorPage user={user} onNavigate={handleNavigate} />
-                                )}
-                                {canAccess('outboxCalculator') && tab.page === 'outboxCalculator' && (
-                                    <OutboxSpecCalculatorPage user={user} onNavigate={handleNavigate} />
-                                )}
-                                {tab.page === 'manufacturerAuditItems' && <ManufacturerAuditItemPage user={user} />}
-                                {tab.page === 'manufacturerAudits' && <ManufacturerAuditPage user={user} />}
-                                {tab.page === 'manufacturerAuditDashboard' && <ManufacturerAuditDashboard user={user} onNavigate={handleNavigate} />}
-                                {canAccess('manufacturerGuide') && tab.page === 'manufacturerGuide' && (
-                                    <ManufacturerGuidePage user={user} />
-                                )}
-                                {canAccess('trashBin') && tab.page === 'trashBin' && <TrashBinPage user={user} />}
-                                {canAccess('accessLogs') && tab.page === 'accessLogs' && <AccessLogPage user={user} />}
-                                {canAccess('bugReports') && tab.page === 'bugReports' && <BugReportPage user={user} />}
-                                {canAccess('notificationSettings') && tab.page === 'notificationSettings' && <NotificationSettingsPage user={user} />}
-                                {canAccess('systemBenchmark') && tab.page === 'systemBenchmark' && <SystemBenchmarkPage user={user} />}
+                                        {tab.page === 'brands' && <BrandManagementPage user={user} onNavigate={handleNavigate} />}
+                                        {tab.page === 'manufacturers' && <ManufacturerManagementPage user={user} />}
+                                        {tab.page === 'salesChannels' && <SalesChannelManagement user={user} />}
+                                        {tab.page === 'channelNoteConfig' && <ChannelNoteCategoryConfigPage user={user} />}
+                                        {tab.page === 'manufacturerCategories' && <ManufacturerCategoryPage user={user} />}
+                                        {tab.page === 'products' && (
+                                            <ProductListPage 
+                                                user={user} 
+                                                navigationData={tab.data} 
+                                                onNavigated={() => {}} 
+                                            />
+                                        )}
+                                        {tab.page === 'quality' && (
+                                            <QualityManagementPage 
+                                                user={user} 
+                                                navigationData={tab.data} 
+                                                onNavigated={() => {}} 
+                                            />
+                                        )}
+                                        {canAccess('releaseRecord') && tab.page === 'releaseRecord' && (
+                                            <MarketReleaseRecordPage user={user} />
+                                        )}
+                                        {canAccess('qualityPhotoAudit') && tab.page === 'qualityPhotoAudit' && (
+                                            <ProductionAuditPage 
+                                                user={user} 
+                                                navigationData={tab.data}
+                                                onNavigated={() => {}}
+                                            />
+                                        )}
+                                        {canAccess('ingredientCompliance') && tab.page === 'ingredientCompliance' && <IngredientCompliancePage user={user} />}
+                                        {tab.page === 'dashboard' && (
+                                            <DashboardPage 
+                                                user={user} 
+                                                onNavigate={handleNavigate} 
+                                            />
+                                        )}
+                                        {tab.page === 'claims' && (
+                                            <ClaimManagementPage 
+                                                user={user} 
+                                                navigationData={tab.data}
+                                                onNavigated={() => {}}
+                                                onNavigate={handleNavigate}
+                                            />
+                                        )}
+                                        {tab.page === 'claimDashboard' && (
+                                            <ClaimDashboardPage 
+                                                user={user}
+                                                onNavigate={handleNavigate}
+                                            />
+                                        )}
+                                        {tab.page === 'lotPpmDashboard' && (
+                                            <LotPpmDashboardPage 
+                                                user={user}
+                                                onNavigate={handleNavigate}
+                                            />
+                                        )}
+                                        {tab.page === 'qualityDashboard' && (
+                                            <QualityDashboardPage 
+                                                user={user}
+                                                onNavigate={handleNavigate}
+                                            />
+                                        )}
+                                        {tab.page === 'productDashboard' && (
+                                            <ProductDashboardPage user={user} onNavigate={handleNavigate} />
+                                        )}
+                                        {tab.page === 'productionAuditDashboard' && (
+                                            <ProductionAuditDashboardPage user={user} onNavigate={handleNavigate} />
+                                        )}
+                                        {tab.page === 'bomMaster' && <BomMasterPage user={user} />}
+                                        {tab.page === 'bomCategories' && <BomCategoryManagementPage user={user} />}
+                                        {tab.page === 'packagingTemplates' && <PackagingTemplatePage user={user} />}
+                                        {canAccess('spaceRatioCalculator') && tab.page === 'spaceRatioCalculator' && (
+                                            <PackagingSpaceRatioCalculatorPage user={user} onNavigate={handleNavigate} />
+                                        )}
+                                        {canAccess('outboxCalculator') && tab.page === 'outboxCalculator' && (
+                                            <OutboxSpecCalculatorPage user={user} onNavigate={handleNavigate} />
+                                        )}
+                                        {tab.page === 'manufacturerAuditItems' && <ManufacturerAuditItemPage user={user} />}
+                                        {tab.page === 'manufacturerAudits' && <ManufacturerAuditPage user={user} />}
+                                        {tab.page === 'manufacturerAuditDashboard' && <ManufacturerAuditDashboard user={user} onNavigate={handleNavigate} />}
+                                        {canAccess('manufacturerGuide') && tab.page === 'manufacturerGuide' && (
+                                            <ManufacturerGuidePage user={user} />
+                                        )}
+                                        {canAccess('trashBin') && tab.page === 'trashBin' && <TrashBinPage user={user} />}
+                                        {canAccess('accessLogs') && tab.page === 'accessLogs' && <AccessLogPage user={user} />}
+                                        {canAccess('bugReports') && tab.page === 'bugReports' && <BugReportPage user={user} />}
+                                        {canAccess('notificationSettings') && tab.page === 'notificationSettings' && <NotificationSettingsPage user={user} />}
+                                        {canAccess('systemBenchmark') && tab.page === 'systemBenchmark' && <SystemBenchmarkPage user={user} />}
+                                        {!isManufacturer && (
+                                            tab.page === 'approvals' || 
+                                            tab.page === 'approvalPending' || 
+                                            tab.page === 'approvalSubmitted' || 
+                                            tab.page === 'approvalInProgress' || 
+                                            tab.page === 'approvalCompleted' || 
+                                            tab.page === 'approvalRejected' || 
+                                            tab.page === 'approvalReference' || 
+                                            tab.page === 'approvalHistory'
+                                        ) && (
+                                            <ApprovalInboxPage 
+                                                currentUser={user} 
+                                                navigationData={tab.data} 
+                                                onNavigated={() => {}}
+                                                showAlert={showAlert} 
+                                                showConfirm={showConfirm} 
+                                                fixedTab={
+                                                    tab.page === 'approvalPending' ? 'PENDING' :
+                                                    tab.page === 'approvalSubmitted' ? 'SUBMITTED' :
+                                                    tab.page === 'approvalInProgress' ? 'IN_PROGRESS' :
+                                                    tab.page === 'approvalCompleted' ? 'COMPLETED' :
+                                                    tab.page === 'approvalRejected' ? 'REJECTED' :
+                                                    tab.page === 'approvalReference' ? 'REFERENCE' :
+                                                    tab.page === 'approvalHistory' ? 'PROCESSED' : null
+                                                }
+                                                onUnreadChanged={loadApprovalUnreadCounts}
+                                            />
+                                        )}
+                                        {!isManufacturer && (isAdmin || canAccess('approvalDocTypes')) && tab.page === 'approvalDocTypes' && (
+                                            <ApprovalDocTypeManagementPage 
+                                                user={user}
+                                                showAlert={showAlert} 
+                                                showConfirm={showConfirm} 
+                                            />
+                                        )}
+                                        {!isManufacturer && (isAdmin || canAccess('approvalTemplates')) && tab.page === 'approvalTemplates' && (
+                                            <ApprovalTemplateBuilderPage 
+                                                currentUser={user} 
+                                                showAlert={showAlert} 
+                                                showConfirm={showConfirm} 
+                                            />
+                                        )}
+                                        {!isManufacturer && (isAdmin || canAccess('approvalNotificationRules')) && tab.page === 'approvalNotificationRules' && (
+                                            <ApprovalNotificationRulesPage 
+                                                user={user}
+                                                showAlert={showAlert} 
+                                            />
+                                        )}
+                                    </TabErrorBoundary>
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        ))}
                     </Suspense>
                 </div>
             </main>

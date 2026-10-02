@@ -23,6 +23,7 @@ public class ManufacturerService {
     private final UserRepository userRepository;
     private final ManufacturerAuditRepository manufacturerAuditRepository;
     private final ClaimRepository claimRepository;
+    private final DepartmentService departmentService;
 
     @Transactional(readOnly = true)
     public ManufacturerScorecardDto getScorecard(Long manufacturerId) {
@@ -100,6 +101,10 @@ public class ManufacturerService {
         auditLogService.logEntityChange("MANUFACTURER", saved.getId(), action, username, 
                 null, username, null, null,
                 description, oldManufacturer, saved);
+
+        if (isNew && saved.getName() != null && !saved.getName().isBlank()) {
+            departmentService.seedDefaultDepartments(saved.getName());
+        }
         return saved;
     }
 

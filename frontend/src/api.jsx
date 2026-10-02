@@ -39,6 +39,9 @@ export const extractDomainPrefix = (url) => {
         if (clean.startsWith('/api/mail-templates')) return '/api/mail-templates';
         if (clean.startsWith('/api/mail-histories')) return '/api/mail-histories';
         if (clean.startsWith('/api/guides')) return '/api/guides';
+        if (clean.startsWith('/api/departments')) return '/api/departments';
+        if (clean.startsWith('/api/admin/departments')) return '/api/admin/departments';
+        if (clean.startsWith('/api/approvals')) return '/api/approvals';
         return `/${parts[0]}/${parts[1]}`;
     }
     return clean;
@@ -342,7 +345,8 @@ api.interceptors.response.use(
             }
 
             const isNetworkError = !error.response;
-            const isSystemBug = isNetworkError || (error.response?.status >= 500) || (error.response?.status === 403) || error.code === 'ECONNABORTED';
+            const isApi404 = error.response?.status === 404 && error.config?.url?.includes('/api/');
+            const isSystemBug = isNetworkError || (error.response?.status >= 500) || (error.response?.status === 403) || isApi404 || error.code === 'ECONNABORTED';
 
             if (isSystemBug) {
                 // 네트워크 에러는 서버에 전송이 원천 불가능하므로, 바로 큐로만 적재하고 불필요한 전송 시도는 건너뜁니다.
@@ -489,7 +493,9 @@ const MASTER_PREFIXES = [
     '/api/guides',
     '/api/mail-templates',
     '/api/announcements/categories',
-    '/api/mail-categories'
+    '/api/mail-categories',
+    '/api/approval-doc-types',
+    '/api/admin/approval-doc-types'
 ];
 
 const getTtlForUrl = (url) => {
@@ -1286,5 +1292,102 @@ export const calculateSpaceRatio = (params) => {
 export const getSpaceRatioLogs = (page = 0, size = 20) => {
     return api.get(`/api/space-ratio/logs?page=${page}&size=${size}`);
 };
+
+// ════════════════════════════════════════════════════════════════
+// 📋 전자결재 (Approval) & 부서/역할 관리 API
+// ════════════════════════════════════════════════════════════════
+
+// 1. 부서 및 부서 역할 관리 API
+export const fetchActiveDepartments = (companyName) => 
+    api.get('/api/departments', { params: { companyName }, skipToast: true });
+
+export const fetchCompanyUsersForApproval = (keyword, companyName) => 
+    api.get('/api/departments/users', { params: { keyword, companyName }, skipToast: true });
+
+export const fetchAdminDepartments = (companyName, activeOnly = false) => 
+    api.get('/api/admin/departments', { params: { companyName, activeOnly } });
+
+export const fetchAdminDepartment = (id) => 
+    api.get(`/api/admin/departments/${id}`);
+
+export const saveDepartment = (data) => 
+    data.id ? api.put(`/api/admin/departments/${data.id}`, data) : api.post('/api/admin/departments', data);
+
+export const deleteDepartment = (id) => 
+    api.delete(`/api/admin/departments/${id}`);
+
+export const assignDepartmentRole = (deptId, data) => 
+    api.post(`/api/admin/departments/${deptId}/roles`, data);
+
+export const removeDepartmentRole = (deptId, roleCode) => 
+    api.delete(`/api/admin/departments/${deptId}/roles/${roleCode}`);
+
+export const fetchDepartmentRoleHistory = (deptId) => 
+    api.get(`/api/admin/departments/${deptId}/roles`);
+
+export const initBatchDepartments = (companyName) => 
+    api.post('/api/admin/departments/batch-init', null, { params: companyName ? { companyName } : {} });
+
+// 2. 결재 문서유형 & 템플릿 & 알림규칙 관리 API
+export const fetchApprovalDocTypes = (activeOnly = false) => 
+    api.get(activeOnly ? '/api/approval-doc-types' : '/api/admin/approval-doc-types');
+
+export const saveApprovalDocType = (data) => {
+    swrCache.invalidateByPrefix('/api/approval-doc-types');
+    swrCache.invalidateByPrefix('/api/admin/approval-doc-types');
+    return data.id ? api.put(`/api/admin/approval-doc-types/${data.id}`, data) : api.post('/api/admin/approval-doc-types', data);
+};
+
+export const fetchApprovalTemplate = (docTypeCode) => 
+    api.get(`/api/approval-templates/${docTypeCode}`);
+
+export const fetchAdminApprovalTemplateByDocTypeId = (docTypeId) => 
+    api.get(`/api/admin/approval-templates/${docTypeId}`);
+
+export const fetchApprovalTemplateHistory = (docTypeId) => 
+    api.get(`/api/admin/approval-templates/${docTypeId}/history`);
+
+export const saveApprovalTemplate = (data) => 
+    api.post('/api/admin/approval-templates', data);
+
+export const fetchNotificationRules = () => 
+    api.get('/api/admin/notification-rules');
+
+export const updateNotificationRule = (id, isActive) => 
+    api.put(`/api/admin/notification-rules/${id}`, { isActive });
+
+// 3. 결재 상신 및 문서 처리 API
+export const submitApproval = (data) => 
+    api.post('/api/approvals', data);
+
+export const fetchApprovalInbox = (tab = 'PENDING', page = 0, size = 20) => 
+    api.get('/api/approvals', { params: { tab, page, size } });
+
+export const fetchApprovalDocumentDetail = (id) => 
+    api.get(`/api/approvals/${id}`);
+
+export const approveApprovalDocument = (id, comment) => 
+    api.post(`/api/approvals/${id}/approve`, { comment });
+
+export const rejectApprovalDocument = (id, comment) => 
+    api.post(`/api/approvals/${id}/reject`, { comment });
+
+export const recallApprovalDocument = (id) => 
+    api.post(`/api/approvals/${id}/recall`);
+
+export const resubmitApprovalDocument = (id, data) => 
+    api.post(`/api/approvals/${id}/resubmit`, data);
+
+export const addAdhocApprover = (id, userId, stepType = 'APPROVAL') => 
+    api.post(`/api/approvals/${id}/adhoc-approver`, { userId, stepType });
+
+export const fetchApprovalStatusBySource = (docTypeCode, sourceRecordId) => 
+    api.get('/api/approvals/status-by-source', { params: { docTypeCode, sourceRecordId }, skipToast: true });
+
+export const markApprovalDocumentAsRead = (id) => 
+    api.post(`/api/approvals/${id}/read`, null, { skipToast: true });
+
+export const fetchApprovalUnreadCounts = () => 
+    api.get('/api/approvals/unread-counts', { skipToast: true });
 
 

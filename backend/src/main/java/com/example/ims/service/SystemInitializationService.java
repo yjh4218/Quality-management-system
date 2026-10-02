@@ -93,6 +93,7 @@ public class SystemInitializationService {
         runIsolated("seedAndRepairAnnouncementCategories", this::seedAndRepairAnnouncementCategories);
         runIsolated("seedAndRepairManufacturerCategories", this::seedAndRepairManufacturerCategories);
         runIsolated("seedAndRepairManufacturers", this::seedAndRepairManufacturers);
+        runIsolated("seedAndRepairManufacturerDepartments", this::seedAndRepairManufacturerDepartments);
 
         log.info(">>>> [SYSTEM INIT] Data Seeding & Repair Completed.");
         runIsolated("performDataAudit", this::performDataAudit);
@@ -1933,5 +1934,157 @@ public class SystemInitializationService {
             jdbcTemplate.update("UPDATE manufacturers SET name = '에코 팜스', category = '동물용 의약외품' WHERE id = 3 AND (name LIKE '%?%' OR name LIKE '%\ufffd%')");
             jdbcTemplate.update("UPDATE manufacturers SET name = '한국콜마', category = '화장품' WHERE (id = 4 OR manufacturer_code = 'M001') AND (name LIKE '%?%' OR name LIKE '%\ufffd%')");
         } catch (Exception ignored) {}
+    }
+
+    private void seedAndRepairManufacturerDepartments() {
+        log.info(">>>> [SYSTEM INIT] Seeding & Repairing Departments, Approval Doc Types, and Rules...");
+        try {
+            // Check if departments table exists (case-insensitive for H2/PostgreSQL compatibility)
+            Integer tableExists = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables WHERE LOWER(table_name) = 'departments'",
+                Integer.class
+            );
+            if (tableExists != null && tableExists > 0) {
+                java.util.Set<String> targetCompanies = new java.util.LinkedHashSet<>();
+                targetCompanies.add("더파운더즈");
+
+                try {
+                    java.util.List<String> mfrNames = jdbcTemplate.queryForList(
+                        "SELECT DISTINCT name FROM manufacturers WHERE name IS NOT NULL AND TRIM(name) != ''",
+                        String.class
+                    );
+                    targetCompanies.addAll(mfrNames);
+                } catch (Exception ex) {
+                    log.debug("No manufacturers table or empty");
+                }
+
+                String[][] defaultDepts = {
+                    {"SALES", "영업팀", "1"},
+                    {"PROD_MGMT", "생산관리팀", "2"},
+                    {"QC", "품질관리(QC)팀", "3"},
+                    {"PURCHASE", "구매/SCM팀", "4"},
+                    {"RND", "연구개발(R&D)팀", "5"},
+                    {"MGMT", "경영지원팀", "6"}
+                };
+
+                for (String company : targetCompanies) {
+                    for (String[] dept : defaultDepts) {
+                        Integer count = jdbcTemplate.queryForObject(
+                            "SELECT COUNT(*) FROM departments WHERE company_name = ? AND code = ?",
+                            Integer.class, company, dept[0]
+                        );
+                        if (count == null || count == 0) {
+                            jdbcTemplate.update(
+                                "INSERT INTO departments (company_name, code, name, display_order, is_active, created_at) " +
+                                "VALUES (?, ?, ?, ?, TRUE, CURRENT_TIMESTAMP)",
+                                company, dept[0], dept[1], Integer.parseInt(dept[2])
+                            );
+                        }
+                    }
+                }
+                log.info(">>>> [SYSTEM INIT] Departments seeded/repaired successfully for {} companies.", targetCompanies.size());
+            }
+
+            // Ensure source_record_id and template_id are nullable on approval_documents
+            try {
+                jdbcTemplate.execute("ALTER TABLE approval_documents ALTER COLUMN source_record_id DROP NOT NULL");
+            } catch (Exception ignored) {}
+            try {
+                jdbcTemplate.execute("ALTER TABLE approval_documents ALTER COLUMN template_id DROP NOT NULL");
+            } catch (Exception ignored) {}
+
+            // Seed default approval doc types if empty
+            Integer docTypesTableExists = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables WHERE LOWER(table_name) = 'approval_doc_types'",
+                Integer.class
+            );
+            if (docTypesTableExists != null && docTypesTableExists > 0) {
+                String[][] defaultDocTypes = {
+                    {"CLAIM_REPORT", "클레임 대책보고서", "claims"},
+                    {"MARKET_RELEASE", "출하 승인서", "market_release_records"},
+                    {"PROD_AUDIT", "공정 품질 감사 보고서", "production_audits"},
+                    {"MFR_AUDIT", "제조사 Audit 보고서", "manufacturer_audits"},
+                    {"GENERAL", "일반 결재 기안서", "approval_documents"}
+                };
+                for (String[] dt : defaultDocTypes) {
+                    Integer count = jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM approval_doc_types WHERE code = ?",
+                        Integer.class, dt[0]
+                    );
+                    if (count == null || count == 0) {
+                        jdbcTemplate.update(
+                            "INSERT INTO approval_doc_types (code, name, source_table, is_active, created_at) VALUES (?, ?, ?, TRUE, CURRENT_TIMESTAMP)",
+                            dt[0], dt[1], dt[2]
+                        );
+                    }
+                }
+                log.info(">>>> [SYSTEM INIT] Default approval document types verified/seeded.");
+
+                // Seed default approval templates & steps for each doc type
+                Integer adminUserId = jdbcTemplate.queryForObject("SELECT MIN(id) FROM users WHERE role LIKE '%ADMIN%' OR id = 1", Integer.class);
+                if (adminUserId == null) adminUserId = 1;
+
+                java.util.List<java.util.Map<String, Object>> allDocTypes = jdbcTemplate.queryForList("SELECT id, code FROM approval_doc_types");
+                for (java.util.Map<String, Object> dtRow : allDocTypes) {
+                    Long dtId = ((Number) dtRow.get("id")).longValue();
+                    Integer tplCount = jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM approval_templates WHERE doc_type_id = ? AND is_current = TRUE",
+                        Integer.class, dtId
+                    );
+                    if (tplCount == null || tplCount == 0) {
+                        jdbcTemplate.update(
+                            "INSERT INTO approval_templates (doc_type_id, version, is_current, created_by, created_at) VALUES (?, 1, TRUE, ?, CURRENT_TIMESTAMP)",
+                            dtId, adminUserId
+                        );
+                        Long tplId = jdbcTemplate.queryForObject(
+                            "SELECT id FROM approval_templates WHERE doc_type_id = ? AND is_current = TRUE ORDER BY id DESC LIMIT 1",
+                            Long.class, dtId
+                        );
+                        if (tplId != null) {
+                            jdbcTemplate.update(
+                                "INSERT INTO approval_template_steps (template_id, step_order, step_type, assignee_type, assignee_role, is_required) VALUES (?, 1, 'APPROVAL', 'ROLE', 'DEPT_HEAD', TRUE)",
+                                tplId
+                            );
+                        }
+                    }
+                }
+                log.info(">>>> [SYSTEM INIT] Default approval templates & steps verified/seeded.");
+            }
+
+            // Seed default approval notification rules if empty
+            Integer rulesTableExists = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables WHERE LOWER(table_name) = 'notification_rules'",
+                Integer.class
+            );
+            if (rulesTableExists != null && rulesTableExists > 0) {
+                String[][] defaultRules = {
+                    {"MY_TURN", "IN_APP"},
+                    {"MY_TURN", "EMAIL"},
+                    {"REFERENCE_TAGGED", "IN_APP"},
+                    {"REFERENCE_TAGGED", "EMAIL"},
+                    {"REJECTED", "IN_APP"},
+                    {"REJECTED", "EMAIL"},
+                    {"APPROVED", "IN_APP"},
+                    {"APPROVED", "EMAIL"},
+                    {"RECALLED", "IN_APP"},
+                    {"RECALLED", "EMAIL"}
+                };
+                for (String[] rule : defaultRules) {
+                    Integer count = jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM notification_rules WHERE event_type = ? AND channel = ?",
+                        Integer.class, rule[0], rule[1]
+                    );
+                    if (count == null || count == 0) {
+                        jdbcTemplate.update(
+                            "INSERT INTO notification_rules (event_type, channel, is_active) VALUES (?, ?, TRUE)",
+                            rule[0], rule[1]
+                        );
+                    }
+                }
+                log.info(">>>> [SYSTEM INIT] Default notification rules verified/seeded.");
+            }
+        } catch (Exception e) {
+            log.error(">>>> [SYSTEM INIT] Departments and approval master seeding failed: {}", e.getMessage(), e);
+        }
     }
 }

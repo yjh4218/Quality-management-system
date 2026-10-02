@@ -27,7 +27,11 @@ const FUNCTIONAL_PERMISSIONS = [
     { key: 'SENSITIVE_DATA_VIEW', label: '🕵️ 민감 정보(BOM/원가) 조회', description: '제품의 원재료 및 단가 등 민감한 비즈니스 데이터를 조회할 수 있습니다.' },
     { key: 'PRODUCT_PACKAGING_VIEW', label: '📦 제품 포장재/사양서 조회 권한', description: '제품 마스터에서 포장재 정보 및 사양서 탭을 조회할 수 있는 권한입니다.' },
     { key: 'AUDIT_EDIT_APPROVED', label: '🛡️ 승인된 생산감리 수정 권한', description: '이미 [승인됨] 상태인 생산감리 항목을 예외적으로 수정할 수 있는 권한입니다.' },
-    { key: 'ANNOUNCEMENT_ALL_VIEW', label: '📢 모든 전체공지 조회 권한', description: '특정 대상과 무관하게 시스템의 모든 전체공지를 조회할 수 있습니다.' }
+    { key: 'ANNOUNCEMENT_ALL_VIEW', label: '📢 모든 전체공지 조회 권한', description: '특정 대상과 무관하게 시스템의 모든 전체공지를 조회할 수 있습니다.' },
+    { key: 'APPROVAL_PROD_AUDIT_ENABLE', label: '🏭 생산감리 결재 연동 및 상신 권한', description: '생산감리 점검 항목에 대해 전자결재(PROD_AUDIT) 상신 버튼을 활성화하고 결재 시스템을 연동합니다.' },
+    { key: 'APPROVAL_CLAIM_ENABLE', label: '💬 CX 클레임 결재 연동 및 상신 권한', description: 'CX 클레임 관리 항목에 대해 전자결재(CLAIM_REPORT) 상신 버튼을 활성화하고 결재 시스템을 연동합니다.' },
+    { key: 'APPROVAL_MFG_AUDIT_ENABLE', label: '🔍 제조사 Audit 결재 연동 및 상신 권한', description: '제조사 Audit 관리 항목에 대해 전자결재(MFG_AUDIT) 상신 버튼을 활성화하고 결재 시스템을 연동합니다.' },
+    { key: 'APPROVAL_MARKET_RELEASE_ENABLE', label: '🚀 시장출하 승인 결재 연동 및 상신 권한', description: '시장출하 판정 기록에 대해 전자결재(MARKET_RELEASE) 상신 버튼을 활성화하고 결재 시스템을 연동합니다.' }
 ];
 
 const FP_DEPENDENCIES = {
@@ -39,7 +43,11 @@ const FP_DEPENDENCIES = {
     'SENSITIVE_DATA_VIEW': 'bomMaster',
     'PRODUCT_PACKAGING_VIEW': 'products',
     'AUDIT_EDIT_APPROVED': 'qualityPhotoAudit',
-    'ANNOUNCEMENT_ALL_VIEW': 'announcements'
+    'ANNOUNCEMENT_ALL_VIEW': 'announcements',
+    'APPROVAL_PROD_AUDIT_ENABLE': 'qualityPhotoAudit',
+    'APPROVAL_CLAIM_ENABLE': 'claims',
+    'APPROVAL_MFG_AUDIT_ENABLE': 'manufacturerAudits',
+    'APPROVAL_MARKET_RELEASE_ENABLE': 'marketReleaseRecords'
 };
 
 const RoleManagementPage = ({ user }) => {

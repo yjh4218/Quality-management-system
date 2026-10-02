@@ -60,6 +60,10 @@ export const usePermissions = (user) => {
         canViewHistory: hasFunctionalPermission('VIEW_CHANGE_HISTORY') || isAdmin,
         canViewSystemLegend: hasFunctionalPermission('GRID_SYSTEM_LEGEND_VIEW') || hasFunctionalPermission('GRID_SYSTEM_LEGEND_MANAGE') || isAdmin,
         canManageSystemLegend: hasFunctionalPermission('GRID_SYSTEM_LEGEND_MANAGE') || isAdmin,
+        canApproveProdAudit: hasFunctionalPermission('APPROVAL_PROD_AUDIT_ENABLE') || isAdmin,
+        canApproveClaim: hasFunctionalPermission('APPROVAL_CLAIM_ENABLE') || isAdmin,
+        canApproveMfgAudit: hasFunctionalPermission('APPROVAL_MFG_AUDIT_ENABLE') || isAdmin,
+        canApproveMarketRelease: hasFunctionalPermission('APPROVAL_MARKET_RELEASE_ENABLE') || isAdmin,
         // Utility for UI
         getAccessProps: (menuKey, action = 'EDIT') => ({
             disabled: !hasPermission(menuKey, action),

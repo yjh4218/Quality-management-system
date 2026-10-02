@@ -1041,6 +1041,22 @@ body:has(.modal-overlay) {
   justify-content: center !important;
 }
 
+/* 전자결재 문서함 그리드 - 결재 문서 제목 컬럼 및 헤더 좌측 정렬 */
+.approval-inbox-grid .approval-title-header .ag-header-cell-label,
+.approval-inbox-grid .approval-title-header .ag-header-cell-text {
+  justify-content: flex-start !important;
+  text-align: left !important;
+  padding-left: 6px !important;
+}
+
+.approval-inbox-grid .approval-title-cell,
+.approval-inbox-grid .approval-title-cell .ag-cell-wrapper,
+.approval-inbox-grid .approval-title-cell .ag-cell-value {
+  justify-content: flex-start !important;
+  text-align: left !important;
+  padding-left: 8px !important;
+}
+
 /* AG Grid Checkbox 선명하게 (Alpine 테마용 커스텀) */
 .ag-theme-alpine .ag-checkbox-input-wrapper {
   box-shadow: 0 0 0 1.5px #555 !important;

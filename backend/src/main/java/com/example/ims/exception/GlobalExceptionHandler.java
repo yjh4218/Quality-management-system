@@ -1,5 +1,8 @@
 package com.example.ims.exception;
 
+import com.example.ims.entity.BugReport;
+import com.example.ims.service.BugReportService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,8 +26,11 @@ import java.util.UUID;
  * 모든 500 에러에 대해 추적을 위한 Correlation-ID를 발급합니다.
  */
 @RestControllerAdvice
+@RequiredArgsConstructor
 @Slf4j
 public class GlobalExceptionHandler {
+
+    private final BugReportService bugReportService;
 
     private boolean isEventStream(HttpServletRequest request) {
         if (request == null) return false;
@@ -281,6 +287,22 @@ public class GlobalExceptionHandler {
         
         // 운영 로그에만 상세 내용 기록 (스택트레이스 포함)
         log.error("[CORRELATION-ID: {}] Unhandled server error: {}", correlationId, ex.getMessage(), ex);
+
+        // [자동 버그리포트 연동] 500 에러 발생 시 시스템 감사 및 추적을 위해 BugReport 자동 적재
+        try {
+            bugReportService.submitReport(BugReport.builder()
+                    .screenName("SERVER-EXCEPTION")
+                    .errorCategory("API_500")
+                    .description("[Correlation-ID: " + correlationId + "] " + (msg != null ? msg : ex.getClass().getSimpleName()))
+                    .url(request != null ? request.getDescription(false) : null)
+                    .serverError(ex.getClass().getName() + ": " + msg)
+                    .steps("Unhandled server exception captured by GlobalExceptionHandler")
+                    .severity("CRITICAL")
+                    .reporterUsername("SYSTEM_AUTO")
+                    .build());
+        } catch (Exception bugEx) {
+            log.warn("Failed to auto-submit BugReport for correlation {}: {}", correlationId, bugEx.getMessage());
+        }
 
         Map<String, String> response = new HashMap<>();
         response.put("message", "시스템 내부 무결성 검사 중 오류가 발생했습니다. 증상이 지속되면 관리자에게 문의하세요.");

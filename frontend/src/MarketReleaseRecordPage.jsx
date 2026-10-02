@@ -1,7 +1,22 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import api from './api';
+import api, { fetchApprovalDocTypes } from './api';
+import ApprovalSubmitModal from './ApprovalSubmitModal';
+import { usePermissions } from './usePermissions';
+import { toast } from 'react-toastify';
 
 const MarketReleaseRecordPage = ({ user }) => {
+    const { canApproveMarketRelease, canEdit } = usePermissions(user);
+    const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
+    const [isMarketReleaseDocTypeActive, setIsMarketReleaseDocTypeActive] = useState(false);
+
+    useEffect(() => {
+        fetchApprovalDocTypes(true)
+            .then(res => {
+                const list = res.data || [];
+                setIsMarketReleaseDocTypeActive(list.some(dt => dt.code === 'MARKET_RELEASE'));
+            })
+            .catch(() => setIsMarketReleaseDocTypeActive(false));
+    }, []);
     // A single date picker
     const [releaseDate, setReleaseDate] = useState(() => {
         const today = new Date();
@@ -149,6 +164,27 @@ const MarketReleaseRecordPage = ({ user }) => {
                         >
                             🖨️ 양식 인쇄
                         </button>
+                        {(canApproveMarketRelease || canEdit('marketRelease')) && isMarketReleaseDocTypeActive && (
+                            <button 
+                                className="primary" 
+                                onClick={() => setIsApprovalModalOpen(true)} 
+                                style={{ 
+                                    padding: '10px 20px', 
+                                    borderRadius: '10px', 
+                                    fontWeight: '800', 
+                                    backgroundColor: '#4f46e5',
+                                    color: '#fff',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px'
+                                }} 
+                                title="당일 시장출하 적부판정 기록을 전자결재로 상신합니다."
+                            >
+                                📝 전자결재 상신
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -287,6 +323,41 @@ const MarketReleaseRecordPage = ({ user }) => {
                     @page { size: A4; margin: 15mm; }
                 }
             `}</style>
+
+            {/* Electronic Approval Submit Modal */}
+            {isApprovalModalOpen && (
+                <ApprovalSubmitModal
+                    isOpen={isApprovalModalOpen}
+                    onClose={() => setIsApprovalModalOpen(false)}
+                    initialDocTypeCode="MARKET_RELEASE"
+                    initialTitle={`[시장출하 승인] ${releaseDate} 시장출하 적부판정 기록 품의`}
+                    initialContent={[
+                        `■ 1. 시장출하 적부판정 승인 요청 개요 (기준일자: ${releaseDate})`,
+                        '--------------------------------------------------------------------------------',
+                        `• 총 대상 품목 : ${groupedRecords.length}건`,
+                        `• 총 출하 수량 : ${groupedRecords.reduce((acc, cur) => acc + Number(cur.quantity || 0), 0).toLocaleString()}개`,
+                        `• 판정 부서 : 품질보증팀 | 기안자: ${user?.name || '-'}`,
+                        '',
+                        '■ 2. 세부 품목별 출하 적부 판정 내역',
+                        '--------------------------------------------------------------------------------',
+                        'NO | 제품명 | Lot No. | 수량 | 판정결과 | 판정일자 | 시험성적서번호',
+                        '---+----------------------+---------------+----------+----------+------------+-----------------',
+                        ...groupedRecords.map((r, i) => 
+                            `${String(i + 1).padStart(2, ' ')} | ${(r.productName || '-').padEnd(20, ' ')} | ${(r.lotNumber || '-').padEnd(13, ' ')} | ${(r.quantity ? Number(r.quantity).toLocaleString() : '0').padStart(8, ' ')}개 | ${(r.finalInspectionResult || '적합').padEnd(8, ' ')} | ${r.qualityDecisionDate || '-'} | ${r.testReportNumbers || '-'}`
+                        ),
+                        '--------------------------------------------------------------------------------',
+                        '',
+                        '■ 3. 품질보증부서 종합 판정 의견',
+                        '--------------------------------------------------------------------------------',
+                        '위 기재된 모든 제품은 완제품 품질 규격 및 시험검사 기준에 적합하게 제조·검사되었음을 확인하여 시장 출하를 품의합니다.'
+                    ].join('\n')}
+                    currentUser={user}
+                    onSubmitted={() => {
+                        setIsApprovalModalOpen(false);
+                        toast.success("시장출하 적부판정 전자결재 상신이 완료되었습니다.");
+                    }}
+                />
+            )}
         </div>
     );
 };

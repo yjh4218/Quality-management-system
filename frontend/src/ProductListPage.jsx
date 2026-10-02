@@ -763,7 +763,7 @@ const ProductListPage = ({ user, navigationData, onNavigated }) => {
                     columnDefs={colDefs}
                     onRowDoubleClicked={handleRowClick}
                     pagination={false}
-                    rowSelection="multiple"
+                    rowSelection={{ mode: 'multiRow' }}
                     animateRows={true}
                     getRowStyle={getRowStyle}
                 />

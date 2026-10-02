@@ -9,7 +9,8 @@ import {
     uploadAuditPhoto,
     exportAuditToExcel,
     getManufacturerAuditHistory,
-    getBaseURL
+    getBaseURL,
+    fetchApprovalDocTypes
 } from './api';
 import { toast } from 'react-toastify';
 import ManufacturerSearchModal from './ManufacturerSearchModal';
@@ -17,6 +18,7 @@ import { usePermissions } from './usePermissions';
 import GridColorLegendPopover from './components/common/GridColorLegendPopover';
 import GridConditionalFormattingModal from './components/common/GridConditionalFormattingModal';
 import CommonFilePreviewModal from './components/common/CommonFilePreviewModal';
+import ApprovalSubmitModal from './ApprovalSubmitModal';
 
 const MFR_AUDIT_LEGENDS = [
     {
@@ -40,7 +42,7 @@ const MFR_AUDIT_FORMATTABLE_COLUMNS = [
 ];
 
 const ManufacturerAuditPage = ({ user }) => {
-    const { canEdit, canDelete } = usePermissions(user);
+    const { canEdit, canDelete, canApproveMfgAudit } = usePermissions(user);
     const isAdmin = user?.roles?.some(r => r.authority?.includes('ADMIN')) || user?.role === 'ADMIN';
     const [isFormattingModalOpen, setIsFormattingModalOpen] = useState(false);
     const [customRules, setCustomRules] = useState(() => {
@@ -105,12 +107,23 @@ const ManufacturerAuditPage = ({ user }) => {
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedAudit, setSelectedAudit] = useState(null);
+    const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
+    const [isMfgAuditDocTypeActive, setIsMfgAuditDocTypeActive] = useState(false);
     const [templates, setTemplates] = useState([]);
     const [fullTemplate, setFullTemplate] = useState(null);
     const [showSearchModal, setShowSearchModal] = useState(false);
     const [previewImage, setPreviewImage] = useState(null);
     const [activeTab, setActiveTab] = useState('form');
     const [auditHistory, setAuditHistory] = useState([]);
+
+    useEffect(() => {
+        fetchApprovalDocTypes(true)
+            .then(res => {
+                const list = res.data || [];
+                setIsMfgAuditDocTypeActive(list.some(dt => dt.code === 'MFR_AUDIT'));
+            })
+            .catch(() => setIsMfgAuditDocTypeActive(false));
+    }, []);
 
     const fieldTranslations = {
         'AuditDate': '점검 일자',
@@ -639,45 +652,85 @@ const ManufacturerAuditPage = ({ user }) => {
             </div>
 
             {isModalOpen && (
-                <div className="drawer-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)' }} onClick={(e) => e.target === e.currentTarget && setIsModalOpen(false)}>
-                    <div className="card" style={{ width: '1200px', maxWidth: '98vw', maxHeight: '92vh', padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
-                        <div style={{ padding: '0 25px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
-                            <div style={{ display: 'flex', gap: '2px', alignItems: 'flex-end', height: '60px' }}>
-                                <button onClick={() => setActiveTab('form')} style={{ padding: '0 30px', height: '45px', fontSize: '14px', fontWeight: 'bold', border: 'none', background: 'transparent', borderBottom: activeTab === 'form' ? '3px solid #3b82f6' : 'none', color: activeTab === 'form' ? '#3b82f6' : '#64748b', cursor: 'pointer', transition: 'all 0.2s ease', outline: 'none' }}>점검 내용</button>
-                                {selectedAudit && <button onClick={() => setActiveTab('history')} style={{ padding: '0 30px', height: '45px', fontSize: '14px', fontWeight: 'bold', border: 'none', background: 'transparent', borderBottom: activeTab === 'history' ? '3px solid #3b82f6' : 'none', color: activeTab === 'history' ? '#3b82f6' : '#64748b', cursor: 'pointer', transition: 'all 0.2s ease', outline: 'none' }}>변경 이력</button>}
+                <div className="drawer-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 10000 }} onClick={(e) => e.target === e.currentTarget && setIsModalOpen(false)}>
+                    <div className="card" style={{ width: '1200px', maxWidth: '98vw', maxHeight: '92vh', padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', borderRadius: '12px' }}>
+                        {/* 1. Modal Top Bar (ui-ux-guide.md 표준 헤더) */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 24px', borderBottom: '1px solid #e2e8f0', background: '#fff' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ fontSize: '20px' }}>🏭</span>
+                                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#0f172a' }}>
+                                    {selectedAudit ? '제조사 현장 Audit 점검 상세 / 수정' : '신규 제조사 현장 Audit 점검 등록'}
+                                </h3>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                                <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '500' }}>{formData.manufacturer?.name} | {formData.auditDate}</span>
-                                <button onClick={() => setIsModalOpen(false)} style={{ fontSize: '24px', background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', lineHeight: 1 }}>&times;</button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                {formData.manufacturer?.name && (
+                                    <span style={{ fontSize: '13px', background: '#eff6ff', color: '#1e40af', padding: '4px 10px', borderRadius: '6px', fontWeight: 'bold' }}>
+                                        {formData.manufacturer?.name} | {formData.auditDate}
+                                    </span>
+                                )}
+                                <button onClick={() => setIsModalOpen(false)} style={{ fontSize: '22px', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', lineHeight: 1 }}>&times;</button>
+                            </div>
+                        </div>
+
+                        {/* 2. Modal Sub Tab Bar */}
+                        <div style={{ padding: '0 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
+                            <div style={{ display: 'flex', gap: '4px', alignItems: 'flex-end', height: '48px' }}>
+                                <button onClick={() => setActiveTab('form')} style={{ padding: '0 24px', height: '48px', fontSize: '14px', fontWeight: 'bold', border: 'none', background: 'transparent', borderBottom: activeTab === 'form' ? '3px solid #2563eb' : 'none', color: activeTab === 'form' ? '#2563eb' : '#64748b', cursor: 'pointer', transition: 'all 0.2s ease', outline: 'none' }}>점검 내용</button>
+                                {selectedAudit && <button onClick={() => setActiveTab('history')} style={{ padding: '0 24px', height: '48px', fontSize: '14px', fontWeight: 'bold', border: 'none', background: 'transparent', borderBottom: activeTab === 'history' ? '3px solid #2563eb' : 'none', color: activeTab === 'history' ? '#2563eb' : '#64748b', cursor: 'pointer', transition: 'all 0.2s ease', outline: 'none' }}>변경 이력</button>}
                             </div>
                         </div>
 
                         {activeTab === 'form' ? (
                             <>
-                                <div style={{ flex: 1, overflowY: 'auto', padding: '25px' }}>
-                                    {/* Modal Content omitted for brevity in this scratch but should be complete in actual file */}
-                                    {/* (Rest of the original form content) */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 0.8fr', gap: '20px', marginBottom: '25px', padding: '15px', background: '#f1f5f9', borderRadius: '8px' }}>
+                                <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+                                    {/* 상단 4대 메타 필드 (필수 라벨 * 및 ui-ux-guide.md 표준 폼 스타일) */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 0.8fr', gap: '16px', marginBottom: '24px', padding: '16px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
                                         <div>
-                                            <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>제조사 정보</label>
-                                            <div style={{ display: 'flex', gap: '5px', marginTop: '5px', alignItems: 'center' }}>
-                                                <input type="text" readOnly placeholder="코드" value={manufacturerCode} style={{ width: '85px', padding: '8px', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '13px' }} />
-                                                <div onClick={() => setShowSearchModal(true)} style={{ cursor: 'pointer', fontSize: '18px', padding: '0 5px' }} title="제조사 검색">🔍</div>
-                                                <input type="text" readOnly placeholder="제조사명" value={formData.manufacturer?.name || ''} style={{ flex: 1, padding: '8px', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '13px' }} />
+                                            <label style={{ fontSize: '12px', color: '#334155', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>
+                                                제조사 정보 <span style={{ color: '#ef4444' }}>*</span>
+                                            </label>
+                                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                                <input type="text" readOnly placeholder="코드" value={manufacturerCode} style={{ width: '90px', padding: '8px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', fontFamily: 'monospace' }} />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowSearchModal(true)}
+                                                    style={{
+                                                        padding: '8px 12px',
+                                                        background: '#2563eb',
+                                                        color: '#fff',
+                                                        border: 'none',
+                                                        borderRadius: '6px',
+                                                        cursor: 'pointer',
+                                                        fontSize: '12px',
+                                                        fontWeight: 'bold',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        whiteSpace: 'nowrap'
+                                                    }}
+                                                    title="제조사 검색 모달 열기"
+                                                >
+                                                    🔍 검색
+                                                </button>
+                                                <input type="text" readOnly placeholder="제조사명 (검색 버튼 클릭)" value={formData.manufacturer?.name || ''} style={{ flex: 1, padding: '8px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', fontWeight: 'bold', color: '#0f172a' }} />
                                             </div>
                                         </div>
                                         <div>
-                                            <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>점검 분류 (템플릿)</label>
-                                            <select value={formData.template?.id || ''} onChange={e => handleTemplateChange(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px', marginTop: '5px', fontSize: '13px', height: '35px' }}>
+                                            <label style={{ fontSize: '12px', color: '#334155', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>
+                                                점검 분류 (템플릿) <span style={{ color: '#ef4444' }}>*</span>
+                                            </label>
+                                            <select value={formData.template?.id || ''} onChange={e => handleTemplateChange(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', height: '37px', backgroundColor: '#fff' }}>
                                                 <option value="">분류 선택</option>
                                                 {templates.map(t => <option key={t.id} value={t.id}>{t.classificationName}</option>)}
                                             </select>
                                         </div>
                                         <div>
-                                            <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>점검일자 / 유형</label>
-                                            <div style={{ display: 'flex', gap: '5px', marginTop: '5px' }}>
-                                                <input type="date" value={formData.auditDate} onChange={e => setFormData({ ...formData, auditDate: e.target.value })} style={{ flex: 2, padding: '7px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '13px' }} />
-                                                <select value={formData.auditType} onChange={e => setFormData({ ...formData, auditType: e.target.value })} style={{ flex: 1, padding: '7px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '13px' }}>
+                                            <label style={{ fontSize: '12px', color: '#334155', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>
+                                                점검일자 / 유형 <span style={{ color: '#ef4444' }}>*</span>
+                                            </label>
+                                            <div style={{ display: 'flex', gap: '6px' }}>
+                                                <input type="date" value={formData.auditDate} onChange={e => setFormData({ ...formData, auditDate: e.target.value })} style={{ flex: 2, padding: '7px 8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', backgroundColor: '#fff' }} />
+                                                <select value={formData.auditType} onChange={e => setFormData({ ...formData, auditType: e.target.value })} style={{ flex: 1, padding: '7px 8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', backgroundColor: '#fff' }}>
                                                     <option value="정기">정기</option>
                                                     <option value="신규">신규</option>
                                                     <option value="비정기">비정기</option>
@@ -685,8 +738,10 @@ const ManufacturerAuditPage = ({ user }) => {
                                             </div>
                                         </div>
                                         <div>
-                                            <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>점검 담당자</label>
-                                            <input type="text" value={formData.auditor || ''} onChange={e => setFormData({ ...formData, auditor: e.target.value })} placeholder="담당자 이름" style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '4px', marginTop: '5px', fontSize: '13px' }} />
+                                            <label style={{ fontSize: '12px', color: '#334155', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>
+                                                점검 담당자 <span style={{ color: '#ef4444' }}>*</span>
+                                            </label>
+                                            <input type="text" value={formData.auditor || ''} onChange={e => setFormData({ ...formData, auditor: e.target.value })} placeholder="담당자 이름" style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', backgroundColor: '#fff' }} />
                                         </div>
                                     </div>
                                     {fullTemplate ? (
@@ -802,18 +857,33 @@ const ManufacturerAuditPage = ({ user }) => {
                                     <div className="footer-left">
                                         {selectedAudit && <span>📅 점검일: <strong>{formData.auditDate || '-'}</strong></span>}
                                     </div>
-                                    <div className="footer-actions">
+                                    <div className="footer-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                         {selectedAudit && canDelete('manufacturerAudits') && (
                                             <button
                                                 className="outline"
                                                 onClick={() => handleDelete(selectedAudit.id)}
-                                                style={{ padding: '8px 16px', color: '#c53030', borderColor: '#feb2b2', marginRight: 'auto' }}
+                                                style={{ padding: '8px 16px', color: '#dc2626', borderColor: '#fca5a5', marginRight: 'auto', borderRadius: '6px', fontWeight: 'bold' }}
                                             >
                                                 🗑️ 삭제
                                             </button>
                                         )}
-                                        <button className="secondary" onClick={() => setIsModalOpen(false)} style={{ minWidth: '80px' }}>닫기</button>
-                                        <button className="primary" onClick={handleSave} style={{ minWidth: '150px', background: '#003366', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 'bold', padding: '10px 20px' }}>💾 데이터 저장 및 분석</button>
+                                        {selectedAudit && canApproveMfgAudit && isMfgAuditDocTypeActive && (
+                                            <button
+                                                type="button"
+                                                className="outline"
+                                                onClick={() => setIsApprovalModalOpen(true)}
+                                                style={{ padding: '8px 16px', borderColor: '#6366f1', color: '#4f46e5', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '6px', borderRadius: '6px' }}
+                                                title="이 제조사 Audit 건을 전자결재로 상신합니다."
+                                            >
+                                                📝 전자결재 상신
+                                            </button>
+                                        )}
+                                        <button className="secondary" onClick={() => setIsModalOpen(false)} style={{ minWidth: '80px', padding: '9px 18px', borderRadius: '6px', fontWeight: 'bold' }}>
+                                            취소
+                                        </button>
+                                        <button className="primary" onClick={handleSave} style={{ minWidth: '150px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', padding: '9px 22px' }}>
+                                            💾 데이터 저장 및 분석
+                                        </button>
                                     </div>
                                 </div>
                             </>
@@ -894,6 +964,46 @@ const ManufacturerAuditPage = ({ user }) => {
                 user={user}
                 onSave={handleSaveCustomRules}
             />
+
+            {/* Electronic Approval Submit Modal */}
+            {isApprovalModalOpen && (
+                <ApprovalSubmitModal
+                    isOpen={isApprovalModalOpen}
+                    onClose={() => setIsApprovalModalOpen(false)}
+                    initialDocTypeCode="MFR_AUDIT"
+                    initialSourceRecordId={selectedAudit?.id}
+                    initialTitle={`[제조사Audit] ${formData.manufacturer?.name || ''} ${formData.auditDate || ''} 점검 품의`}
+                    initialContent={[
+                        '■ 1. 제조사 Audit 점검 개요',
+                        '--------------------------------------------------------------------------------',
+                        `• 제 조 사 : ${formData.manufacturer?.name || '-'}`,
+                        `• 점 검 일 : ${formData.auditDate || '-'} | 점검자: ${formData.auditor || user?.name || '-'}`,
+                        `• 점검분류 : ${formData.auditType || '정기'} 점검 (${formData.template?.name || '표준 Audit 체크리스트'})`,
+                        '',
+                        '■ 2. 종합 평가 및 판정 결과',
+                        '--------------------------------------------------------------------------------',
+                        `• 종합점수 : ${formData.totalScore != null ? formData.totalScore + '점' : '-'} | 평가등급: ${formData.grade ? formData.grade + '등급' : '-'}`,
+                        `• 점검항목수 : 총 ${formData.results?.length || 0}개 세부 점검 항목`,
+                        '',
+                        '■ 3. 우수 사례 (Best Practices)',
+                        '--------------------------------------------------------------------------------',
+                        formData.positiveFeedback || '특이 우수 사항 없음.',
+                        '',
+                        '■ 4. 부적합 및 개선 필요 항목 (Negative Findings)',
+                        '--------------------------------------------------------------------------------',
+                        formData.negativeFeedback || '특이 부적합 및 개선 지적사항 없음.',
+                        '',
+                        '■ 5. 최종 종합 평가 및 개선 요청사항',
+                        '--------------------------------------------------------------------------------',
+                        formData.finalEvaluation || '제조사 품질 시스템 현장 감사 결과에 따라 위와 같이 품의를 상신합니다.'
+                    ].join('\n')}
+                    currentUser={user}
+                    onSubmitted={() => {
+                        setIsApprovalModalOpen(false);
+                        toast.success("제조사 Audit 전자결재 상신이 완료되었습니다.");
+                    }}
+                />
+            )}
         </div>
     );
 };

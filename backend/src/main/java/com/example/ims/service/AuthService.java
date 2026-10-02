@@ -41,10 +41,9 @@ public class AuthService {
         }
 
         com.example.ims.entity.Manufacturer matchedManufacturer = null;
-        // 제조사 소속일 경우 실제 존재하는 회사인지 검증
-        if (dto.companyName() != null && !"더파운더즈".equals(dto.companyName()) && !dto.companyName().isBlank()) {
-            matchedManufacturer = manufacturerRepository.findByName(dto.companyName())
-                    .orElseThrow(() -> new IllegalArgumentException("등록되지 않은 소속(제조사)입니다."));
+        // 등록된 제조사 목록에 존재하는 경우 제조사 엔티티 매핑
+        if (dto.companyName() != null && !dto.companyName().isBlank()) {
+            matchedManufacturer = manufacturerRepository.findByName(dto.companyName()).orElse(null);
         }
 
         validatePasswordComplexity(dto.password());

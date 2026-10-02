@@ -1,7 +1,9 @@
+import './utils/globalErrorListener';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
+import { GlobalErrorBoundary } from './components/common/GlobalErrorBoundary.jsx';
 import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
@@ -40,7 +42,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <ThemeProvider theme={theme}>
             <CssBaseline />
             <LocalizationProvider dateAdapter={AdapterDayjs}>
-                <App />
+                <GlobalErrorBoundary>
+                    <App />
+                </GlobalErrorBoundary>
                 <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} />
             </LocalizationProvider>
         </ThemeProvider>

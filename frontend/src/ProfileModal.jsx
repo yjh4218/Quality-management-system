@@ -65,7 +65,7 @@ const ProfileModal = ({ user, onClose, onUpdate }) => {
                         
                         <div className="form-group">
                             <label style={{ fontWeight: '700', color: '#4a5568' }}>회사(제조사)명</label>
-                            {user.companyName === '더파운더즈' ? (
+                            {!(user.roles?.some(r => r.authority === 'ROLE_MANUFACTURER') || user.role === 'ROLE_MANUFACTURER') ? (
                                 <input name="companyName" value={formData.companyName} disabled style={{ backgroundColor: '#f7fafc', cursor: 'not-allowed' }} />
                             ) : (
                                 <select name="companyName" value={formData.companyName} onChange={handleChange} required style={{ height: '45px' }}>

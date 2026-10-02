@@ -1053,7 +1053,7 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
                                 ref={gridRef}
                                 theme="legacy"
                                 rowHeight={54}
-                                rowSelection="multiple"
+                                rowSelection={{ mode: 'multiRow' }}
                                 rowData={filteredAnnouncements}
                                 columnDefs={columnDefs}
                                 pagination={true}
@@ -1531,14 +1531,20 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
             {isEmailPreviewOpen && previewAnnouncement && (
                 <div style={{
                     position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100,
+                    padding: '20px'
                 }}>
                     <div style={{
-                        backgroundColor: 'white', padding: '40px', borderRadius: '24px', width: '90%', maxWidth: '700px',
-                        maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)',
-                        position: 'relative', border: '1px solid #e2e8f0'
+                        backgroundColor: 'white', borderRadius: '24px', width: '95%', maxWidth: '920px',
+                        maxHeight: '92vh', display: 'flex', flexDirection: 'column',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        position: 'relative', border: '1px solid #e2e8f0', overflow: 'hidden'
                     }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #f1f5f9', paddingBottom: '16px' }}>
+                        <div style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            padding: '24px 32px 18px 32px', borderBottom: '1px solid #f1f5f9', flexShrink: 0
+                        }}>
                             <h2 style={{ fontSize: '20px', fontWeight: '900', color: '#4f46e5', margin: 0 }}>
                                 📧 공지 알림 메일 발송 미리보기
                             </h2>
@@ -1550,7 +1556,7 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
                             </button>
                         </div>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '24px 32px', overflowY: 'auto', flex: 1 }}>
                             {/* 상단 타겟 안내 및 카운트 배너 */}
                             <div style={{ padding: '14px 18px', background: '#f5f3ff', borderRadius: '12px', border: '1px solid #ddd6fe', fontSize: '13px', color: '#4c1d95', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div>
@@ -1669,10 +1675,10 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
                                                     r => r.email && r.email.trim().toLowerCase() === userItem.email?.trim().toLowerCase()
                                                 );
 
-                                                // 아바타 색상 결정 (구글 스타일 팔레트)
-                                                const avatarBg = userItem.companyName?.includes('콜마') ? '#ea580c'
-                                                    : userItem.companyName?.includes('더파운더즈') ? '#4f46e5'
-                                                    : userItem.companyName ? '#0891b2' : '#ea4335';
+                                                // 아바타 색상 결정 (해시 기반 동적 팔레트)
+                                                const avatarColors = ['#4f46e5', '#0891b2', '#059669', '#d97706', '#7c3aed', '#db2777'];
+                                                const hash = (userItem.companyName || userItem.name || '').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+                                                const avatarBg = avatarColors[hash % avatarColors.length];
 
                                                 return (
                                                     <div
@@ -1796,41 +1802,41 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
                                         ⚠️ 수신 대상자가 0명입니다. 상단 검색창에서 대상자를 추가하거나 [기본 수신자로 초기화]를 클릭하세요.
                                     </div>
                                 ) : (
-                                    <div style={{ maxHeight: '160px', overflowY: 'auto', background: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                    <div style={{ maxHeight: '200px', overflowY: 'auto', background: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
                                             <thead>
-                                                <tr style={{ background: '#f1f5f9', borderBottom: '1px solid #e2e8f0', color: '#475569', position: 'sticky', top: 0 }}>
-                                                    <th style={{ padding: '8px 12px', width: '140px' }}>회사 / 이름</th>
-                                                    <th style={{ padding: '8px 12px' }}>발송 이메일 주소</th>
-                                                    <th style={{ padding: '8px 12px', width: '100px' }}>부서</th>
-                                                    <th style={{ padding: '8px 12px', width: '80px', textAlign: 'center' }}>구분</th>
-                                                    <th style={{ padding: '8px 12px', width: '50px', textAlign: 'center' }}>제외</th>
+                                                <tr style={{ background: '#f1f5f9', borderBottom: '1px solid #e2e8f0', color: '#475569', position: 'sticky', top: 0, zIndex: 1 }}>
+                                                    <th style={{ padding: '10px 14px', width: '180px', whiteSpace: 'nowrap' }}>회사 / 이름</th>
+                                                    <th style={{ padding: '10px 14px' }}>발송 이메일 주소</th>
+                                                    <th style={{ padding: '10px 14px', width: '120px', whiteSpace: 'nowrap' }}>부서</th>
+                                                    <th style={{ padding: '10px 14px', width: '90px', textAlign: 'center', whiteSpace: 'nowrap' }}>구분</th>
+                                                    <th style={{ padding: '10px 14px', width: '60px', textAlign: 'center', whiteSpace: 'nowrap' }}>제외</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {previewRecipientsList.map((rec, idx) => (
                                                     <tr key={rec.id || rec.email || idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                        <td style={{ padding: '8px 12px', fontWeight: '700', color: '#0f172a' }}>
+                                                        <td style={{ padding: '9px 14px', fontWeight: '700', color: '#0f172a', whiteSpace: 'nowrap' }}>
                                                             {rec.companyName && rec.companyName !== '-' ? `[${rec.companyName}] ` : ''}{rec.name || rec.username}
                                                         </td>
-                                                        <td style={{ padding: '8px 12px', color: '#2563eb', fontFamily: 'monospace', fontSize: '11px' }}>
+                                                        <td style={{ padding: '9px 14px', color: '#2563eb', fontFamily: 'monospace', fontSize: '12px', wordBreak: 'break-all' }}>
                                                             {rec.email}
                                                         </td>
-                                                        <td style={{ padding: '8px 12px', color: '#64748b' }}>
+                                                        <td style={{ padding: '9px 14px', color: '#64748b', whiteSpace: 'nowrap' }}>
                                                             {rec.department || '-'}
                                                         </td>
-                                                        <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                                                        <td style={{ padding: '9px 14px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                                                             {rec.isCustom ? (
-                                                                <span style={{ fontSize: '10px', color: '#7c3aed', background: '#f5f3ff', border: '1px solid #ddd6fe', padding: '2px 6px', borderRadius: '8px', fontWeight: 'bold' }}>
+                                                                <span style={{ fontSize: '10px', color: '#7c3aed', background: '#f5f3ff', border: '1px solid #ddd6fe', padding: '3px 8px', borderRadius: '8px', fontWeight: 'bold' }}>
                                                                     직접 추가
                                                                 </span>
                                                             ) : (
-                                                                <span style={{ fontSize: '10px', color: '#475569', background: '#f1f5f9', border: '1px solid #e2e8f0', padding: '2px 6px', borderRadius: '8px', fontWeight: '600' }}>
+                                                                <span style={{ fontSize: '10px', color: '#475569', background: '#f1f5f9', border: '1px solid #e2e8f0', padding: '3px 8px', borderRadius: '8px', fontWeight: '600' }}>
                                                                     기본 대상
                                                                 </span>
                                                             )}
                                                         </td>
-                                                        <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                                                        <td style={{ padding: '9px 14px', textAlign: 'center' }}>
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleRemoveRecipient(rec.email)}
@@ -1843,7 +1849,10 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
                                                                     height: '24px',
                                                                     cursor: 'pointer',
                                                                     fontWeight: 'bold',
-                                                                    fontSize: '12px'
+                                                                    fontSize: '12px',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center'
                                                                 }}
                                                                 title="수신 대상에서 제외"
                                                             >
@@ -1890,7 +1899,10 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
                             </div>
                         </div>
 
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
+                        <div style={{
+                            display: 'flex', justifyContent: 'flex-end', gap: '12px',
+                            padding: '16px 32px 24px 32px', borderTop: '1px solid #f1f5f9', background: '#fafafa', flexShrink: 0
+                        }}>
                             <button
                                 type="button"
                                 className="secondary"

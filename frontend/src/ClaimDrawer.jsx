@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { createClaim, updateClaim, uploadClaimResponse, uploadClaimPhoto, getClaimHistory, deleteClaim, getFileUrl } from './api';
+import { createClaim, updateClaim, uploadClaimResponse, uploadClaimPhoto, getClaimHistory, deleteClaim, getFileUrl, fetchApprovalDocTypes } from './api';
 import * as api from './api';
 import { toast } from 'react-toastify';
 import DOMPurify from 'dompurify';
@@ -10,6 +10,7 @@ import NumericFormattedInput from './components/common/NumericFormattedInput';
 import useFormDraft from './hooks/useFormDraft';
 import DraftRestoreBanner from './components/common/DraftRestoreBanner';
 import CommonFilePreviewModal from './components/common/CommonFilePreviewModal';
+import ApprovalSubmitModal from './ApprovalSubmitModal';
 
 const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNavigateToEdit }) => {
     const [formData, setFormData] = useState({
@@ -56,11 +57,22 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
     const stands = user?.roles || [];
     const isManufacturer = stands.some(r => r.authority === 'ROLE_MANUFACTURER');
     const isAdmin = stands.some(r => r.authority === 'ROLE_ADMIN');
-    const isQuality = stands.some(r => r.authority === 'ROLE_QUALITY' || 
-        (user?.companyName === '더파운더즈' && (user?.department === 'Quality' || user?.department === '품질팀' || user?.department === '품질')));
+    const isQuality = stands.some(r => r.authority === 'ROLE_QUALITY') || 
+        (!isManufacturer && (user?.department === 'Quality' || user?.department === '품질팀' || user?.department === '품질'));
 
-    const { canEdit: canEditClaim, canDelete: canDeleteClaim } = usePermissions(user);
+    const { canEdit: canEditClaim, canDelete: canDeleteClaim, canApproveClaim } = usePermissions(user);
+    const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
+    const [isClaimDocTypeActive, setIsClaimDocTypeActive] = useState(false);
     const hasGlobalEdit = canEditClaim('claims');
+
+    useEffect(() => {
+        fetchApprovalDocTypes(true)
+            .then(res => {
+                const list = res.data || [];
+                setIsClaimDocTypeActive(list.some(dt => dt.code === 'CLAIM_REPORT'));
+            })
+            .catch(() => setIsClaimDocTypeActive(false));
+    }, []);
 
     // 폼 자동 임시저장(Autosave) 및 복원 훅
     const { hasDraft, draftSavedAt, restoreDraft, clearDraft } = useFormDraft(
@@ -1697,6 +1709,17 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                             </button>
                         )}
                         <button type="button" className="secondary" onClick={onClose} style={{ minWidth: '80px' }}>닫기</button>
+                        {claim && canApproveClaim && isClaimDocTypeActive && (
+                            <button 
+                                type="button" 
+                                className="outline" 
+                                onClick={() => setIsApprovalModalOpen(true)} 
+                                style={{ minWidth: '100px', color: '#4f46e5', borderColor: '#818cf8', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                                title="이 CX 클레임 건을 전자결재로 상신합니다."
+                            >
+                                📝 전자결재 상신
+                            </button>
+                        )}
                         {(canEditQuality || canEditMfr) && (
                             <button 
                                 type="submit" 
@@ -1731,7 +1754,7 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
             )}
             
             {isEmailModalOpen && (
-                <div className="modal-overlay" style={{ zIndex: 1100 }}>
+                <div className="modal-overlay" style={{ zIndex: 10001 }}>
                     <div className="modal-content" onClick={e => e.stopPropagation()} style={{ width: '700px', maxWidth: '95vw', borderRadius: '16px', backdropFilter: 'blur(20px)', background: 'rgba(255, 255, 255, 0.95)', border: '1px solid rgba(255, 255, 255, 0.3)', boxShadow: '0 20px 40px rgba(0, 0, 0, 0.15)' }}>
                         <div className="modal-header" style={{ borderBottom: '1px solid #edf2f7', padding: '20px 25px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
@@ -1943,10 +1966,10 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                                 );
                                                 const isSelected = idx === activeSearchIndex;
 
-                                                // 아바타 색상 결정 (구글 스타일 팔레트)
-                                                const avatarBg = userItem.companyName?.includes('콜마') ? '#ea580c'
-                                                    : userItem.companyName?.includes('더파운더즈') ? '#4f46e5'
-                                                    : userItem.companyName ? '#0891b2' : '#ea4335';
+                                                // 아바타 색상 결정 (해시 기반 동적 팔레트)
+                                                const avatarColors = ['#4f46e5', '#0891b2', '#059669', '#d97706', '#7c3aed', '#db2777'];
+                                                const hash = (userItem.companyName || userItem.name || '').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+                                                const avatarBg = avatarColors[hash % avatarColors.length];
 
                                                 return (
                                                     <div
@@ -2283,6 +2306,48 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                 title={previewModalFile?.title || '첨부 파일 미리보기'}
                 onClose={() => setPreviewModalFile(null)}
             />
+
+            {/* Electronic Approval Submit Modal */}
+            {isApprovalModalOpen && (
+                <ApprovalSubmitModal
+                    isOpen={isApprovalModalOpen}
+                    onClose={() => setIsApprovalModalOpen(false)}
+                    initialDocTypeCode="CLAIM_REPORT"
+                    initialSourceRecordId={claim?.id}
+                    initialTitle={`[CX클레임] ${formData.claimNumber || ''} ${formData.productName || '품목'} 클레임 품의`}
+                    initialContent={[
+                        '■ 1. CX 클레임 기본 정보',
+                        '--------------------------------------------------------------------------------',
+                        `• 접수번호 : ${formData.claimNumber || '-'}`,
+                        `• 품 목 명 : ${formData.productName || '-'} (코드: ${formData.itemCode || '-'})`,
+                        `• 제 조 사 : ${formData.manufacturer || '-'}`,
+                        `• 제조번호(LOT) : ${formData.lotNumber || '-'}`,
+                        `• 발생국가/채널 : ${formData.country || '-'}`,
+                        `• 불량유형 : ${formData.primaryCategory || '-'} > ${formData.secondaryCategory || '-'} ${formData.tertiaryCategory ? '> ' + formData.tertiaryCategory : ''}`,
+                        `• 발생수량 : ${formData.occurrenceQty != null ? Number(formData.occurrenceQty).toLocaleString() + '개' : '-'}`,
+                        `• 접수일자 : ${formData.receiptDate || '-'} | 진행상태: ${formData.qualityStatus || '-'}`,
+                        '',
+                        '■ 2. 클레임 상세 내용',
+                        '--------------------------------------------------------------------------------',
+                        formData.claimContent || '등록된 상세 내용이 없습니다.',
+                        '',
+                        '■ 3. 원인 분석 및 재발방지 대책',
+                        '--------------------------------------------------------------------------------',
+                        `[원인 분석]\n${formData.mfrRootCauseAnalysis || formData.rootCauseAnalysis || '특이사항 없음'}`,
+                        `\n[재발방지 대책]\n${formData.mfrPreventativeAction || formData.preventativeAction || '특이사항 없음'}`,
+                        '',
+                        '■ 4. 품질보증팀 종합 검토 의견',
+                        '--------------------------------------------------------------------------------',
+                        formData.qualityRemarks || '품질 기준 및 원인 분석 결과에 따라 위와 같이 대책보고서를 품의합니다.'
+                    ].join('\n')}
+                    currentUser={user}
+                    onSubmitted={() => {
+                        setIsApprovalModalOpen(false);
+                        toast.success("CX 클레임 전자결재 상신이 완료되었습니다.");
+                        onSaved?.();
+                    }}
+                />
+            )}
         </div>
     );
 };

@@ -60,7 +60,7 @@ public class QualityReportController {
         }
         
         String companyFilter = null;
-        if (!user.getRole().contains("ADMIN") && !"더파운더즈".equals(user.getCompanyName())) {
+        if (user.getRole() != null && user.getRole().toUpperCase().contains("MANUFACTURER")) {
             companyFilter = user.getCompanyName();
         }
 
@@ -123,12 +123,13 @@ public class QualityReportController {
                                                    @AuthenticationPrincipal UserDetails userDetails) {
         User user = userRepository.findByUsername(userDetails.getUsername())
                 .orElseThrow(() -> new RuntimeException("User not found"));
-        boolean isACompanyQuality = "더파운더즈".equals(user.getCompanyName()) && "Quality".equals(user.getDepartment());
-        boolean isQualityRole = user.getRole().contains("QUALITY") || user.getRole().contains("QUALITY_TEAM");
-        boolean isResponsibleSales = user.getRole().contains("RESPONSIBLE_SALES");
-        boolean isAdmin = user.getRole().contains("ADMIN");
+        boolean isInternalQuality = (user.getRole() != null && (user.getRole().contains("QUALITY") || user.getRole().contains("QUALITY_TEAM")))
+                || "Quality".equalsIgnoreCase(user.getDepartment());
+        boolean isResponsibleSales = user.getRole() != null && user.getRole().contains("RESPONSIBLE_SALES");
+        boolean isAdmin = user.getRole() != null && user.getRole().contains("ADMIN");
+        boolean isManufacturer = user.getRole() != null && user.getRole().contains("MANUFACTURER");
         
-        if (!isAdmin && !isACompanyQuality && !isQualityRole && !isResponsibleSales && !user.getRole().contains("MANUFACTURER")) {
+        if (!isAdmin && !isInternalQuality && !isResponsibleSales && !isManufacturer) {
             throw new RuntimeException("수정 권한이 없습니다.");
         }
         return ResponseEntity.ok(qualityReportService.updateInbound(id, updatedData, user, isAdmin));
@@ -140,12 +141,13 @@ public class QualityReportController {
                                                                @AuthenticationPrincipal UserDetails userDetails) {
         User user = userRepository.findByUsername(userDetails.getUsername())
                 .orElseThrow(() -> new RuntimeException("User not found"));
-        boolean isACompanyQuality = "더파운더즈".equals(user.getCompanyName()) && "Quality".equals(user.getDepartment());
-        boolean isQualityRole = user.getRole().contains("QUALITY") || user.getRole().contains("QUALITY_TEAM");
-        boolean isResponsibleSales = user.getRole().contains("RESPONSIBLE_SALES");
-        boolean isAdmin = user.getRole().contains("ADMIN");
+        boolean isInternalQuality = (user.getRole() != null && (user.getRole().contains("QUALITY") || user.getRole().contains("QUALITY_TEAM")))
+                || "Quality".equalsIgnoreCase(user.getDepartment());
+        boolean isResponsibleSales = user.getRole() != null && user.getRole().contains("RESPONSIBLE_SALES");
+        boolean isAdmin = user.getRole() != null && user.getRole().contains("ADMIN");
+        boolean isManufacturer = user.getRole() != null && user.getRole().contains("MANUFACTURER");
         
-        if (!isAdmin && !isACompanyQuality && !isQualityRole && !isResponsibleSales && !user.getRole().contains("MANUFACTURER")) {
+        if (!isAdmin && !isInternalQuality && !isResponsibleSales && !isManufacturer) {
             throw new RuntimeException("수정 권한이 없습니다.");
         }
         return ResponseEntity.ok(qualityReportService.updateInboundBatch(updates, user, isAdmin));
@@ -299,11 +301,12 @@ public class QualityReportController {
         User user = userRepository.findByUsername(userDetails.getUsername())
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-        boolean isACompanyQuality = "더파운더즈".equals(user.getCompanyName()) && "Quality".equals(user.getDepartment());
-        boolean isQualityRole = user.getRole().contains("QUALITY") || user.getRole().contains("QUALITY_TEAM");
-        boolean isResponsibleSales = user.getRole().contains("RESPONSIBLE_SALES");
-        if (!user.getRole().contains("ADMIN") && !isACompanyQuality && !isQualityRole && !isResponsibleSales) {
-            throw new RuntimeException("품질 검사 및 수정을 위한 권한이 없습니다. (더파운더즈 품질팀 또는 책임판매관리자만 가능)");
+        boolean isInternalQuality = (user.getRole() != null && (user.getRole().contains("QUALITY") || user.getRole().contains("QUALITY_TEAM")))
+                || "Quality".equalsIgnoreCase(user.getDepartment());
+        boolean isResponsibleSales = user.getRole() != null && user.getRole().contains("RESPONSIBLE_SALES");
+        boolean isAdmin = user.getRole() != null && user.getRole().contains("ADMIN");
+        if (!isAdmin && !isInternalQuality && !isResponsibleSales) {
+            throw new RuntimeException("품질 검사 및 수정을 위한 권한이 없습니다. (품질팀 또는 책임판매관리자만 가능)");
         }
     }
 }

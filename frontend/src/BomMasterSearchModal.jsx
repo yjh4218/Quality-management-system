@@ -132,7 +132,7 @@ const BomMasterSearchModal = ({ onClose, onSelect }) => {
     }, [materials, filters]);
 
     return (
-        <div className="drawer-overlay" style={{ zIndex: 3001 }}>
+        <div className="drawer-overlay" style={{ zIndex: 10001 }}>
             <div className="modal-content" style={{ width: '1040px', maxWidth: '96vw' }} onClick={e => e.stopPropagation()}>
                 {/* 1. Modal Header */}
                 <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', padding: '16px 24px' }}>

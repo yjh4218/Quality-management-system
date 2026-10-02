@@ -4,6 +4,7 @@ import SaveConfirmModal from './SaveConfirmModal';
 import { usePermissions } from '../usePermissions';
 import NumericFormattedInput from './common/NumericFormattedInput';
 import { toast } from 'react-toastify';
+import ApprovalSubmitModal from '../ApprovalSubmitModal';
 
 const QualityDetailDrawer = ({
     isOpen,
@@ -28,6 +29,7 @@ const QualityDetailDrawer = ({
 }) => {
     const { canViewHistory } = usePermissions(user);
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+    const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
     const [productInfo, setProductInfo] = useState(null);
 
     useEffect(() => {
@@ -236,6 +238,29 @@ const QualityDetailDrawer = ({
                         </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {(isInternalQuality || isAdmin) && !isManufacturer && (
+                            <button 
+                                type="button"
+                                onClick={() => setIsApprovalModalOpen(true)}
+                                className="outline"
+                                style={{
+                                    fontSize: '13px',
+                                    padding: '6px 14px',
+                                    backgroundColor: '#eff6ff',
+                                    color: '#1d4ed8',
+                                    borderColor: '#93c5fd',
+                                    borderRadius: '8px',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '5px'
+                                }}
+                            >
+                                <span>🚀</span>
+                                <span>출하승인서 결재</span>
+                            </button>
+                        )}
                         {onOpenLabelModal && (
                             <button 
                                 onClick={() => onOpenLabelModal(selectedInbound.id)}
@@ -755,6 +780,43 @@ const QualityDetailDrawer = ({
                 onClose={() => setIsConfirmOpen(false)}
                 onConfirm={handleConfirmFinalSave}
             />
+
+            {isApprovalModalOpen && (
+                <ApprovalSubmitModal
+                    isOpen={isApprovalModalOpen}
+                    onClose={() => setIsApprovalModalOpen(false)}
+                    currentUser={user}
+                    initialDocTypeCode="MARKET_RELEASE"
+                    initialSourceRecordId={selectedInbound?.id}
+                    initialTitle={`[출하승인] ${selectedInbound.productName || ''} (${selectedInbound.itemCode || ''}) - LOT ${selectedInbound.lotNumber || ''}`}
+                    initialContent={`1. 품목 개요
+• 품목코드: ${selectedInbound.itemCode || '-'}
+• 제 품 명: ${selectedInbound.productName || '-'}
+• 제 조 사: ${selectedInbound.manufacturer || '-'}
+• LOT 번호: ${selectedInbound.lotNumber || '-'}
+• 입고수량: ${selectedInbound.quantity ? Number(selectedInbound.quantity).toLocaleString() : '0'} 개
+• 입고일자: ${selectedInbound.inboundDate || '-'}
+• GRN 번호: ${selectedInbound.grnNumber || '-'}
+
+2. 품질 검사 결과 요약
+• 입고검사 결과: ${selectedInbound.inboundInspectionResult || '적합'}
+• 완제품 판정: ${selectedInbound.finalInspectionResult || '적합'}
+• 비중값: ${selectedInbound.specificGravity || '기준 적합'}
+• 성적서 판정일: ${selectedInbound.coaDecisionDate || '-'}
+• 최종 판정일: ${selectedInbound.qualityDecisionDate || '-'}
+
+3. 출하 승인 요청 사유
+상기 품목에 대해 당사 입고 및 완제품 품질 규격 적합성 평가를 모두 통과하였기에 시장 출하 및 WMS 정상 재고 이관을 승인 요청합니다.`}
+                    onSubmitted={() => {
+                        toast.success("출하승인서 결재가 성공적으로 상신되었습니다.");
+                        setIsApprovalModalOpen(false);
+                        if (window.__QMS_REFRESH_QUALITY__) window.__QMS_REFRESH_QUALITY__();
+                    }}
+                    onActionCompleted={() => {
+                        if (window.__QMS_REFRESH_QUALITY__) window.__QMS_REFRESH_QUALITY__();
+                    }}
+                />
+            )}
         </div>
     );
 };

@@ -16,7 +16,7 @@ const SaveConfirmModal = ({ isOpen, onClose, onConfirm, title = "저장 확인",
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                zIndex: 10000,
+                zIndex: 12000,
                 backdropFilter: 'blur(2px)'
             }}
         >
