@@ -25,6 +25,17 @@ public class EmailService {
     private String backendUrl;
 
     private void handleMailFailure(String toEmail, String mailSubject, Exception e) {
+        String errMsg = e.getMessage() != null ? e.getMessage() : e.toString();
+        boolean isResendFreeTierRestriction = errMsg.contains("Resend 무료 기본 발신자") 
+                || errMsg.contains("403 Forbidden")
+                || errMsg.contains("own email address")
+                || errMsg.contains("You can only send testing emails");
+
+        if (isResendFreeTierRestriction) {
+            log.warn("[MAIL NOTICE] Resend 무료 플랜 정책 제한으로 외부 도메인 수신자({}) 메일 발송이 스킵되었습니다. (Subject: {}) - 시스템 및 인앱 알림은 정상 동작합니다.", toEmail, mailSubject);
+            return;
+        }
+
         log.error("[MAIL ERROR] Failed to send email to: {}, Subject: {}", toEmail, mailSubject, e);
 
         // 1. 버그 리포트 등록 (DB 직접 입력으로 CORS 우회)

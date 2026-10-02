@@ -662,13 +662,24 @@ const ManufacturerAuditPage = ({ user }) => {
                                     {selectedAudit ? '제조사 현장 Audit 점검 상세 / 수정' : '신규 제조사 현장 Audit 점검 등록'}
                                 </h3>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                 {formData.manufacturer?.name && (
                                     <span style={{ fontSize: '13px', background: '#eff6ff', color: '#1e40af', padding: '4px 10px', borderRadius: '6px', fontWeight: 'bold' }}>
                                         {formData.manufacturer?.name} | {formData.auditDate}
                                     </span>
                                 )}
-                                <button onClick={() => setIsModalOpen(false)} style={{ fontSize: '22px', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', lineHeight: 1 }}>&times;</button>
+                                {selectedAudit && canApproveMfgAudit && isMfgAuditDocTypeActive && (
+                                    <button
+                                        type="button"
+                                        className="outline"
+                                        onClick={() => setIsApprovalModalOpen(true)}
+                                        style={{ padding: '6px 14px', borderColor: '#6366f1', color: '#4f46e5', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '6px', borderRadius: '6px', fontSize: '13px' }}
+                                        title="이 제조사 Audit 건을 전자결재로 상신합니다."
+                                    >
+                                        📝 전자결재 상신
+                                    </button>
+                                )}
+                                <button onClick={() => setIsModalOpen(false)} style={{ fontSize: '22px', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', lineHeight: 1 }} title="닫기">&times;</button>
                             </div>
                         </div>
 
@@ -865,17 +876,6 @@ const ManufacturerAuditPage = ({ user }) => {
                                                 style={{ padding: '8px 16px', color: '#dc2626', borderColor: '#fca5a5', marginRight: 'auto', borderRadius: '6px', fontWeight: 'bold' }}
                                             >
                                                 🗑️ 삭제
-                                            </button>
-                                        )}
-                                        {selectedAudit && canApproveMfgAudit && isMfgAuditDocTypeActive && (
-                                            <button
-                                                type="button"
-                                                className="outline"
-                                                onClick={() => setIsApprovalModalOpen(true)}
-                                                style={{ padding: '8px 16px', borderColor: '#6366f1', color: '#4f46e5', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '6px', borderRadius: '6px' }}
-                                                title="이 제조사 Audit 건을 전자결재로 상신합니다."
-                                            >
-                                                📝 전자결재 상신
                                             </button>
                                         )}
                                         <button className="secondary" onClick={() => setIsModalOpen(false)} style={{ minWidth: '80px', padding: '9px 18px', borderRadius: '6px', fontWeight: 'bold' }}>

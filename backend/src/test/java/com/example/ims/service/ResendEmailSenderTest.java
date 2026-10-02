@@ -126,16 +126,46 @@ public class ResendEmailSenderTest {
     }
 
     @Test
-    public void testSendFailure500ServerError() {
+    public void testSendFallbackWhenSandboxRestricted() {
+        // 첫 번째 전송: 403 Forbidden과 함께 계정 본인 이메일 안내 반환
         mockServer.expect(requestTo("https://api.resend.com/emails"))
                 .andExpect(method(HttpMethod.POST))
-                .andRespond(withServerError().body("Internal Server Error"));
+                .andExpect(jsonPath("$.to[0]").value("recipient@userdomain.com"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN)
+                        .body("{\"message\":\"You can only send testing emails to your own email address (tester@gmail.com). To send emails to other recipients, please verify a domain.\",\"name\":\"validation_error\",\"statusCode\":403}")
+                        .contentType(MediaType.APPLICATION_JSON));
 
-        MailSendException exception = assertThrows(MailSendException.class, () -> {
-            resendEmailSender.send("recipient@userdomain.com", "Test Subject", "<h1>Hello World</h1>");
+        // 두 번째 전송 (자동 Fallback): tester@gmail.com으로 전달 발송
+        mockServer.expect(requestTo("https://api.resend.com/emails"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(jsonPath("$.to[0]").value("tester@gmail.com"))
+                .andExpect(jsonPath("$.subject").value("[전달 -> recipient@userdomain.com] Test Subject"))
+                .andRespond(withSuccess("{\"id\": \"fallback-999\"}", MediaType.APPLICATION_JSON));
+
+        assertDoesNotThrow(() -> {
+            resendEmailSender.send("recipient@userdomain.com", "Test Subject", "<h1>Test Body</h1>");
         });
 
-        assertTrue(exception.getMessage().contains("Resend API error status=500"));
+        assertEquals("tester@gmail.com", resendEmailSender.getCachedSandboxEmail());
+        mockServer.verify();
+    }
+
+    @Test
+    public void testSendAutoRedirectWhenSandboxEmailCached() throws Exception {
+        setField(resendEmailSender, "envFromAddress", "onboarding@resend.dev");
+        resendEmailSender.setCachedSandboxEmail("tester@gmail.com");
+
+        // 캐시된 샌드박스 이메일이 있을 때는 403 유발 없이 곧바로 tester@gmail.com으로 전달 발송
+        mockServer.expect(requestTo("https://api.resend.com/emails"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(jsonPath("$.to[0]").value("tester@gmail.com"))
+                .andExpect(jsonPath("$.subject").value("[전달 -> newuser@otherdomain.com] Urgent Notice"))
+                .andRespond(withSuccess("{\"id\": \"cached-redirect-1\"}", MediaType.APPLICATION_JSON));
+
+        assertDoesNotThrow(() -> {
+            resendEmailSender.send("newuser@otherdomain.com", "Urgent Notice", "<p>Hello</p>");
+        });
+
         mockServer.verify();
     }
 }

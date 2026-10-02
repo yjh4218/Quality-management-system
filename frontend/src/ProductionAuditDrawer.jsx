@@ -496,9 +496,22 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', width: '100%' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <h2 style={{ margin: 0 }}>{isEditMode ? '📸 생산감리 상세 정보' : '✨ 신규 생산감리 등록'}</h2>
-                            <button onClick={onClose} className="secondary close-button">
-                                <span className="icon">×</span> 닫기
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                {isEditMode && canApproveProdAudit && isProdAuditDocTypeActive && (
+                                    <button 
+                                        type="button"
+                                        onClick={() => setIsApprovalModalOpen(true)} 
+                                        className="outline" 
+                                        style={{ padding: '6px 14px', borderColor: '#6366f1', color: '#4f46e5', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', borderRadius: '6px' }}
+                                        title="이 생산감리 건을 전자결재로 상신합니다."
+                                    >
+                                        📝 전자결재 상신
+                                    </button>
+                                )}
+                                <button onClick={onClose} className="secondary close-button">
+                                    <span className="icon">×</span> 닫기
+                                </button>
+                            </div>
                         </div>
                         
                         <div style={{ display: 'flex', gap: '5px' }}>
@@ -773,17 +786,6 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
                                         >
                                             💾 내역 저장
                                         </button>
-                                        {isEditMode && canApproveProdAudit && isProdAuditDocTypeActive && (
-                                            <button 
-                                                type="button"
-                                                onClick={() => setIsApprovalModalOpen(true)} 
-                                                className="outline" 
-                                                style={{ padding: '8px 16px', borderColor: '#6366f1', color: '#4f46e5', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                                                title="이 생산감리 건을 전자결재로 상신합니다."
-                                            >
-                                                📝 전자결재 상신
-                                            </button>
-                                        )}
                                         {isEditMode && formData.status === 'SUBMITTED' && (
                                             <>
                                                 <button 

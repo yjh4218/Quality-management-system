@@ -238,6 +238,28 @@ const QualityDetailDrawer = ({
                         </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {onOpenLabelModal && (
+                            <button 
+                                onClick={() => onOpenLabelModal(selectedInbound.id)}
+                                className="outline"
+                                style={{
+                                    fontSize: '13px',
+                                    padding: '6px 14px',
+                                    backgroundColor: '#fff',
+                                    color: '#4f46e5',
+                                    borderColor: '#6366f1',
+                                    borderRadius: '8px',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '5px'
+                                }}
+                            >
+                                <span>🏷️</span>
+                                <span>관리품 라벨 출력</span>
+                            </button>
+                        )}
                         {(isInternalQuality || isAdmin) && !isManufacturer && (
                             <button 
                                 type="button"
@@ -259,28 +281,6 @@ const QualityDetailDrawer = ({
                             >
                                 <span>🚀</span>
                                 <span>출하승인서 결재</span>
-                            </button>
-                        )}
-                        {onOpenLabelModal && (
-                            <button 
-                                onClick={() => onOpenLabelModal(selectedInbound.id)}
-                                className="outline"
-                                style={{
-                                    fontSize: '13px',
-                                    padding: '6px 14px',
-                                    backgroundColor: '#fff',
-                                    color: '#4f46e5',
-                                    borderColor: '#6366f1',
-                                    borderRadius: '8px',
-                                    fontWeight: 'bold',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '5px'
-                                }}
-                            >
-                                <span>🏷️</span>
-                                <span>관리품 라벨 출력</span>
                             </button>
                         )}
                         <button onClick={onClose} className="secondary close-button">

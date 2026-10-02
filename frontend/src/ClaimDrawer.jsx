@@ -939,9 +939,32 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                             </span>
                         )}
                     </div>
-                    <button onClick={onClose} className="secondary close-button">
-                        <span className="icon">×</span> 닫기
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {claim && canApproveClaim && isClaimDocTypeActive && (
+                            <button 
+                                type="button" 
+                                className="outline" 
+                                onClick={() => setIsApprovalModalOpen(true)} 
+                                style={{ 
+                                    padding: '6px 14px', 
+                                    color: '#4f46e5', 
+                                    borderColor: '#818cf8', 
+                                    fontWeight: 'bold', 
+                                    display: 'inline-flex', 
+                                    alignItems: 'center', 
+                                    gap: '6px',
+                                    fontSize: '13px',
+                                    borderRadius: '6px'
+                                }}
+                                title="이 CX 클레임 건을 전자결재로 상신합니다."
+                            >
+                                📝 전자결재 상신
+                            </button>
+                        )}
+                        <button onClick={onClose} className="secondary close-button">
+                            <span className="icon">×</span> 닫기
+                        </button>
+                    </div>
                 </div>
 
                 {hasDraft && (
@@ -1709,17 +1732,6 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                             </button>
                         )}
                         <button type="button" className="secondary" onClick={onClose} style={{ minWidth: '80px' }}>닫기</button>
-                        {claim && canApproveClaim && isClaimDocTypeActive && (
-                            <button 
-                                type="button" 
-                                className="outline" 
-                                onClick={() => setIsApprovalModalOpen(true)} 
-                                style={{ minWidth: '100px', color: '#4f46e5', borderColor: '#818cf8', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                                title="이 CX 클레임 건을 전자결재로 상신합니다."
-                            >
-                                📝 전자결재 상신
-                            </button>
-                        )}
                         {(canEditQuality || canEditMfr) && (
                             <button 
                                 type="submit" 
