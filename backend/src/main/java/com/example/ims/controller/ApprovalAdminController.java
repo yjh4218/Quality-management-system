@@ -60,21 +60,20 @@ public class ApprovalAdminController {
     // ═══════════════════════════════════════════
 
     /**
-     * 특정 문서유형의 현재 활성 결재선 템플릿 조회 (일반 사용자 상신 폼 및 관리자 조회 공통)
+     * 특정 문서유형의 현재 활성 결재선 템플릿 조회 (숫자 ID 또는 문자열 Code 다형성 지원)
      */
-    @GetMapping({"/api/approval-templates/{docTypeCode}", "/api/admin/approval-templates/code/{docTypeCode}"})
-    public ResponseEntity<ApprovalTemplateDto> getCurrentTemplateByCode(@PathVariable String docTypeCode) {
-        ApprovalTemplateDto tpl = adminService.getCurrentTemplate(docTypeCode);
+    @GetMapping({"/api/approval-templates/{identifier}", "/api/admin/approval-templates/{identifier}", "/api/admin/approval-templates/code/{identifier}"})
+    public ResponseEntity<ApprovalTemplateDto> getCurrentTemplate(@PathVariable String identifier) {
+        ApprovalTemplateDto tpl;
+        if (identifier.matches("^\\d+$")) {
+            tpl = adminService.getCurrentTemplateByDocTypeId(Long.parseLong(identifier));
+        } else {
+            tpl = adminService.getCurrentTemplate(identifier);
+        }
         return tpl != null ? ResponseEntity.ok(tpl) : ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/api/admin/approval-templates/{docTypeId}")
-    public ResponseEntity<ApprovalTemplateDto> getCurrentTemplateByDocTypeId(@PathVariable Long docTypeId) {
-        ApprovalTemplateDto tpl = adminService.getCurrentTemplateByDocTypeId(docTypeId);
-        return tpl != null ? ResponseEntity.ok(tpl) : ResponseEntity.noContent().build();
-    }
-
-    @GetMapping("/api/admin/approval-templates/{docTypeId}/history")
+    @GetMapping("/api/admin/approval-templates/{docTypeId:\\d+}/history")
     public ResponseEntity<List<ApprovalTemplateDto>> getTemplateHistory(@PathVariable Long docTypeId) {
         return ResponseEntity.ok(adminService.getTemplateHistory(docTypeId));
     }

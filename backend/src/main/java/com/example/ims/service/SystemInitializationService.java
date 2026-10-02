@@ -1964,7 +1964,10 @@ public class SystemInitializationService {
                     {"QC", "품질관리(QC)팀", "3"},
                     {"PURCHASE", "구매/SCM팀", "4"},
                     {"RND", "연구개발(R&D)팀", "5"},
-                    {"MGMT", "경영지원팀", "6"}
+                    {"MGMT", "경영지원팀", "6"},
+                    {"ADMIN_MGMT", "관리팀", "7"},
+                    {"QA", "QA팀", "8"},
+                    {"QUALITY", "품질팀", "9"}
                 };
 
                 for (String company : targetCompanies) {
@@ -1983,6 +1986,45 @@ public class SystemInitializationService {
                     }
                 }
                 log.info(">>>> [SYSTEM INIT] Departments seeded/repaired successfully for {} companies.", targetCompanies.size());
+
+                // Seed default department roles (DEPT_HEAD) for 더파운더즈
+                try {
+                    Integer adminUserId = jdbcTemplate.queryForObject("SELECT MIN(id) FROM users WHERE role LIKE '%ADMIN%' OR id = 1", Integer.class);
+                    if (adminUserId == null) adminUserId = 1;
+
+                    java.util.List<java.util.Map<String, Object>> founderDepts = jdbcTemplate.queryForList(
+                        "SELECT id, code, name FROM departments WHERE company_name = '더파운더즈'"
+                    );
+                    for (java.util.Map<String, Object> dept : founderDepts) {
+                        Long dId = ((Number) dept.get("id")).longValue();
+                        String dCode = (String) dept.get("code");
+                        Integer count = jdbcTemplate.queryForObject(
+                            "SELECT COUNT(*) FROM department_roles WHERE department_id = ? AND role_code = 'DEPT_HEAD' AND is_active = TRUE",
+                            Integer.class, dId
+                        );
+                        if (count == null || count == 0) {
+                            Integer targetUserId = adminUserId;
+                            if ("QC".equalsIgnoreCase(dCode) || "QUALITY".equalsIgnoreCase(dCode)) {
+                                try {
+                                    Integer qcId = jdbcTemplate.queryForObject("SELECT MIN(id) FROM users WHERE username = 'qc' OR role LIKE '%QUALITY%'", Integer.class);
+                                    if (qcId != null) targetUserId = qcId;
+                                } catch (Exception ignored) {}
+                            } else if ("QA".equalsIgnoreCase(dCode)) {
+                                try {
+                                    Integer qaId = jdbcTemplate.queryForObject("SELECT MIN(id) FROM users WHERE username = 'qa'", Integer.class);
+                                    if (qaId != null) targetUserId = qaId;
+                                } catch (Exception ignored) {}
+                            }
+                            jdbcTemplate.update(
+                                "INSERT INTO department_roles (department_id, user_id, role_code, is_active, created_at) VALUES (?, ?, 'DEPT_HEAD', TRUE, CURRENT_TIMESTAMP)",
+                                dId, targetUserId
+                            );
+                        }
+                    }
+                    log.info(">>>> [SYSTEM INIT] Department roles (DEPT_HEAD) seeded/verified successfully.");
+                } catch (Exception ex) {
+                    log.warn(">>>> [SYSTEM INIT] Failed to seed department roles: {}", ex.getMessage());
+                }
             }
 
             // Ensure source_record_id and template_id are nullable on approval_documents
@@ -1999,6 +2041,11 @@ public class SystemInitializationService {
                 Integer.class
             );
             if (docTypesTableExists != null && docTypesTableExists > 0) {
+                // Ensure CLAIM_REPORT is active
+                try {
+                    jdbcTemplate.update("UPDATE approval_doc_types SET is_active = TRUE WHERE code = 'CLAIM_REPORT' AND is_active = FALSE");
+                } catch (Exception ignored) {}
+
                 String[][] defaultDocTypes = {
                     {"CLAIM_REPORT", "클레임 대책보고서", "claims"},
                     {"MARKET_RELEASE", "출하 승인서", "market_release_records"},

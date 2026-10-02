@@ -36,6 +36,8 @@ public class ApprovalService {
     private final AuditLogService auditLogService;
     private final WmsInboundRepository wmsInboundRepository;
     private final ClaimRepository claimRepository;
+    private final ProductionAuditRepository productionAuditRepository;
+    private final ManufacturerAuditRepository manufacturerAuditRepository;
     private final ApprovalDocumentReadRepository readRepository;
 
     // ═══════════════════════════════════════════
@@ -64,12 +66,14 @@ public class ApprovalService {
             throw new IllegalArgumentException("해당 문서 유형에 기본 결재선 템플릿이 없으므로, [결재라인 지정]에서 결재자를 직접 선택해 주십시오.");
         }
 
-        // 중복 상신 체크 (동일 소속 원본 레코드에 대해 이미 진행 중인 결재가 있는 경우)
-        documentRepository.findFirstByDocTypeCodeAndSourceRecordIdAndStatusInOrderByCreatedAtDesc(
-                dto.getDocTypeCode(), dto.getSourceRecordId(), List.of("PENDING")
-        ).ifPresent(existing -> {
-            throw new IllegalStateException("해당 건에 대해 이미 진행 중인 결재가 존재합니다. (문서번호: " + existing.getId() + ")");
-        });
+        // 중복 상신 체크 (동일 소속 원본 레코드에 대해 이미 진행 중인 결재가 있는 경우, sourceRecordId가 있을 때만 검사)
+        if (dto.getSourceRecordId() != null) {
+            documentRepository.findFirstByDocTypeCodeAndSourceRecordIdAndStatusInOrderByCreatedAtDesc(
+                    dto.getDocTypeCode(), dto.getSourceRecordId(), List.of("PENDING")
+            ).ifPresent(existing -> {
+                throw new IllegalStateException("해당 건에 대해 이미 진행 중인 결재가 존재합니다. (문서번호: " + existing.getId() + ")");
+            });
+        }
 
         // 1. 문서 인스턴스 생성
         ApprovalDocument doc = ApprovalDocument.builder()
@@ -258,6 +262,18 @@ public class ApprovalService {
                     }
                     claimRepository.save(claim);
                     log.info("[Approval Hook] CLAIM_REPORT 결재 승인 연동 완료: 클레임 ID {}, 5단계 종결 전환", sourceId);
+                });
+            } else if ("PROD_AUDIT".equalsIgnoreCase(docTypeCode)) {
+                productionAuditRepository.findById(sourceId).ifPresent(audit -> {
+                    audit.setStatus("APPROVED");
+                    productionAuditRepository.save(audit);
+                    log.info("[Approval Hook] PROD_AUDIT 결재 승인 연동 완료: 생산감리 ID {}, APPROVED 전환", sourceId);
+                });
+            } else if ("MFR_AUDIT".equalsIgnoreCase(docTypeCode)) {
+                manufacturerAuditRepository.findById(sourceId).ifPresent(audit -> {
+                    audit.setModifierInfo(doc.getSubmittedBy() != null ? doc.getSubmittedBy().getName() + " (전자결재 최종승인)" : "전자결재 최종승인");
+                    manufacturerAuditRepository.save(audit);
+                    log.info("[Approval Hook] MFR_AUDIT 결재 승인 연동 완료: 제조사Audit ID {}, 승인완료 기록", sourceId);
                 });
             }
         } catch (Exception ex) {
@@ -796,8 +812,28 @@ public class ApprovalService {
             }
         }
 
+        // 만약 템플릿 스텝에서 승인자가 resolve되지 않았으나 사용자가 adhoc 결재자를 추가한 경우
         if (instances.stream().noneMatch(s -> !"REFERENCE".equalsIgnoreCase(s.getStepType()))) {
-            throw new IllegalArgumentException("유효한 결재선이 지정되지 않았습니다. 부서 역할(부서장) 마스터 또는 결재자를 확인해 주십시오.");
+            if (dto.getAdhocApproverUserIds() != null && !dto.getAdhocApproverUserIds().isEmpty()) {
+                int adhocOrder = 1;
+                for (Long uid : dto.getAdhocApproverUserIds()) {
+                    User adhocUser = userRepository.findById(uid).orElse(null);
+                    if (adhocUser != null && validateSameCompany(submitter, adhocUser)) {
+                        instances.add(ApprovalStepInstance.builder()
+                                .document(doc)
+                                .stepOrder(adhocOrder++)
+                                .stepType("APPROVAL")
+                                .assigneeUser(adhocUser)
+                                .isAdhoc(true)
+                                .status("PENDING")
+                                .build());
+                    }
+                }
+            }
+        }
+
+        if (instances.stream().noneMatch(s -> !"REFERENCE".equalsIgnoreCase(s.getStepType()))) {
+            throw new IllegalArgumentException("유효한 결재선이 지정되지 않았습니다. [결재라인 지정]에서 결재자를 선택해 주십시오.");
         }
 
         return instances;
@@ -807,47 +843,73 @@ public class ApprovalService {
         String assigneeType = tStep.getAssigneeType();
 
         if ("USER".equalsIgnoreCase(assigneeType) && tStep.getAssigneeUserId() != null) {
-            return userRepository.findById(tStep.getAssigneeUserId()).orElse(null);
-        }
-
-        if ("SUBMITTER_MANAGER".equalsIgnoreCase(assigneeType)) {
-            // 상신자의 부서장 찾기
-            String deptName = submitter.getDepartment();
-            String compName = submitter.getCompanyName() != null ? submitter.getCompanyName().trim() : "";
-
-            Optional<Department> deptOpt = (compName != null && !compName.isEmpty())
-                    ? departmentRepository.findByCompanyNameAndName(compName, deptName)
-                    : departmentRepository.findAll().stream()
-                            .filter(d -> d.getName() != null && d.getName().equalsIgnoreCase(deptName))
-                            .findFirst();
-
-            return deptOpt
-                    .flatMap(dept -> departmentRoleRepository.findByDepartmentIdAndRoleCodeAndIsActiveTrue(dept.getId(), "DEPT_HEAD"))
-                    .map(DepartmentRole::getUser)
+            return userRepository.findById(tStep.getAssigneeUserId())
+                    .filter(User::isEnabled)
                     .orElse(null);
         }
 
-        if ("ROLE".equalsIgnoreCase(assigneeType)) {
+        if ("SUBMITTER_MANAGER".equalsIgnoreCase(assigneeType) || "ROLE".equalsIgnoreCase(assigneeType)) {
             String roleCode = tStep.getAssigneeRole() != null ? tStep.getAssigneeRole() : "DEPT_HEAD";
 
+            // 1단계: 지정된 부서 ID 또는 상신자 소속 부서명 기반 부서 엔티티 탐색
             Long deptId = tStep.getAssigneeDepartmentId();
-            if (deptId == null) {
-                // 상신자 부서 기준
-                String deptName = submitter.getDepartment();
-                String compName = submitter.getCompanyName() != null ? submitter.getCompanyName().trim() : "";
-                deptId = ((compName != null && !compName.isEmpty())
-                        ? departmentRepository.findByCompanyNameAndName(compName, deptName)
-                        : departmentRepository.findAll().stream()
-                                .filter(d -> d.getName() != null && d.getName().equalsIgnoreCase(deptName))
-                                .findFirst())
+            String compName = submitter.getCompanyName() != null ? submitter.getCompanyName().trim() : "";
+            String deptName = submitter.getDepartment() != null ? submitter.getDepartment().trim() : "";
+
+            if (deptId == null && !deptName.isEmpty()) {
+                deptId = departmentRepository.findByCompanyNameAndName(compName, deptName)
                         .map(Department::getId)
-                        .orElse(null);
+                        .orElseGet(() -> departmentRepository.findAll().stream()
+                                .filter(d -> d.getName() != null && (
+                                        d.getName().equalsIgnoreCase(deptName)
+                                        || d.getName().contains(deptName)
+                                        || deptName.contains(d.getName())
+                                ))
+                                .findFirst()
+                                .map(Department::getId)
+                                .orElse(null));
             }
 
+            // 2단계: 부서 역할(DEPT_HEAD) 매핑 탐색
             if (deptId != null) {
-                return departmentRoleRepository.findByDepartmentIdAndRoleCodeAndIsActiveTrue(deptId, roleCode)
+                User deptRoleUser = departmentRoleRepository.findByDepartmentIdAndRoleCodeAndIsActiveTrue(deptId, roleCode)
                         .map(DepartmentRole::getUser)
+                        .filter(u -> u != null && u.isEnabled())
                         .orElse(null);
+                if (deptRoleUser != null) {
+                    return deptRoleUser;
+                }
+            }
+
+            // 3단계 Fallback: 동일 부서 내 다른 활성 사용자 탐색 (상신자 본인 제외 우선)
+            if (!deptName.isEmpty() && !compName.isEmpty()) {
+                User sameDeptUser = userRepository.findAll().stream()
+                        .filter(u -> u.isEnabled()
+                                && compName.equalsIgnoreCase(u.getCompanyName())
+                                && deptName.equalsIgnoreCase(u.getDepartment())
+                                && !u.getId().equals(submitter.getId()))
+                        .findFirst()
+                        .orElse(null);
+                if (sameDeptUser != null) {
+                    return sameDeptUser;
+                }
+            }
+
+            // 4단계 Fallback: 동일 회사 내 최고 관리자(ROLE_ADMIN) 탐색
+            User fallbackAdmin = userRepository.findAll().stream()
+                    .filter(u -> u.isEnabled()
+                            && compName.equalsIgnoreCase(u.getCompanyName())
+                            && u.getRole() != null && u.getRole().contains("ROLE_ADMIN")
+                            && !u.getId().equals(submitter.getId()))
+                    .findFirst()
+                    .orElseGet(() -> userRepository.findAll().stream()
+                            .filter(u -> u.isEnabled() && u.getRole() != null && u.getRole().contains("ROLE_ADMIN"))
+                            .findFirst()
+                            .orElse(null));
+
+            if (fallbackAdmin != null) {
+                log.info("부서장 미지정으로 관리자(id={})로 결재선 Fallback 배정", fallbackAdmin.getId());
+                return fallbackAdmin;
             }
         }
 

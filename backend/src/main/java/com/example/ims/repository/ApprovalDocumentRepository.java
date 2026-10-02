@@ -24,14 +24,21 @@ public interface ApprovalDocumentRepository extends JpaRepository<ApprovalDocume
     @EntityGraph(attributePaths = {"docType", "submittedBy"})
     Page<ApprovalDocument> findByStatusOrderByCreatedAtDesc(String status, Pageable pageable);
 
-    // 수신함 (Inbox): 내게 차례가 온 결재/합의 건 (step_instances에 assignee_user_id = :userId and status = 'PENDING')
+    // 수신함 (Inbox): 내게 차례가 온 결재/합의 건 (합의자 CONSENSUS 포함 및 이전 필수단계 완료 여부 검증)
     @EntityGraph(attributePaths = {"docType", "submittedBy"})
     @Query("SELECT DISTINCT d FROM ApprovalDocument d " +
            "JOIN d.stepInstances s " +
            "WHERE s.assigneeUser.id = :userId " +
            "AND s.status = 'PENDING' " +
            "AND d.status = 'PENDING' " +
-           "AND s.stepType IN ('APPROVAL', 'AGREEMENT') " +
+           "AND s.stepType IN ('APPROVAL', 'CONSENSUS', 'AGREEMENT') " +
+           "AND NOT EXISTS (" +
+           "    SELECT 1 FROM ApprovalStepInstance prev " +
+           "    WHERE prev.document = d " +
+           "    AND prev.stepOrder < s.stepOrder " +
+           "    AND prev.stepType != 'REFERENCE' " +
+           "    AND prev.status != 'APPROVED'" +
+           ") " +
            "ORDER BY d.createdAt DESC")
     Page<ApprovalDocument> findPendingForAssignee(@Param("userId") Long userId, Pageable pageable);
 

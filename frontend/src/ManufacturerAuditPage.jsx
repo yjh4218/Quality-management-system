@@ -1001,6 +1001,9 @@ const ManufacturerAuditPage = ({ user }) => {
                     onSubmitted={() => {
                         setIsApprovalModalOpen(false);
                         toast.success("제조사 Audit 전자결재 상신이 완료되었습니다.");
+                        if (window.confirm("제조사 Audit 전자결재가 정상 상신되었습니다.\n기안 문서함으로 이동하여 진행 상태를 확인하시겠습니까?")) {
+                            window.__QMS_NAVIGATE__?.('approvalSubmitted');
+                        }
                     }}
                 />
             )}

@@ -346,7 +346,16 @@ api.interceptors.response.use(
 
             const isNetworkError = !error.response;
             const isApi404 = error.response?.status === 404 && error.config?.url?.includes('/api/');
-            const isSystemBug = isNetworkError || (error.response?.status >= 500) || (error.response?.status === 403) || isApi404 || error.code === 'ECONNABORTED';
+            const isSystem400 = (error.response?.status === 400 || error.response?.status === 409) && (
+                typeof errorMsg === 'string' && (
+                    errorMsg.includes('Failed to convert') ||
+                    errorMsg.includes('유효한 결재선') ||
+                    errorMsg.includes('NullPointer') ||
+                    errorMsg.includes('TypeMismatch') ||
+                    errorMsg.includes('IllegalArgumentException')
+                )
+            );
+            const isSystemBug = isNetworkError || (error.response?.status >= 500) || (error.response?.status === 403) || isApi404 || isSystem400 || error.code === 'ECONNABORTED';
 
             if (isSystemBug) {
                 // 네트워크 에러는 서버에 전송이 원천 불가능하므로, 바로 큐로만 적재하고 불필요한 전송 시도는 건너뜁니다.

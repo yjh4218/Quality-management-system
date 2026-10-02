@@ -57,6 +57,10 @@ class ApprovalServiceTest {
     @Mock
     private ClaimRepository claimRepository;
     @Mock
+    private ProductionAuditRepository productionAuditRepository;
+    @Mock
+    private ManufacturerAuditRepository manufacturerAuditRepository;
+    @Mock
     private ApprovalDocumentReadRepository readRepository;
 
     @InjectMocks
