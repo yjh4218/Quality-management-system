@@ -65,4 +65,10 @@ public class BugReportController {
         String status = payload.status();
         return ResponseEntity.ok(bugReportService.updateStatus(id, status));
     }
+
+    @GetMapping("/open-count")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<java.util.Map<String, Long>> getOpenCount() {
+        return ResponseEntity.ok(java.util.Map.of("openCount", bugReportService.getOpenReportCount()));
+    }
 }

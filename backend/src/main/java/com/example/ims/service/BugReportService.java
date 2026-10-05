@@ -112,4 +112,9 @@ public class BugReportService {
 
         return updated;
     }
+
+    @Transactional(readOnly = true)
+    public long getOpenReportCount() {
+        return bugReportRepository.countByStatus("OPEN");
+    }
 }

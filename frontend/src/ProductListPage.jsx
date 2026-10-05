@@ -9,6 +9,7 @@ import useDateRangePreset from './hooks/useDateRangePreset';
 import { splitSearchTokens, matchesAllTokens } from './utils/searchUtils';
 import GridColorLegendPopover from './components/common/GridColorLegendPopover';
 import GridConditionalFormattingModal from './components/common/GridConditionalFormattingModal';
+import useGridTabRecovery from './hooks/useGridTabRecovery';
 
 const PRODUCT_LEGENDS = [
     { label: '필수 정보 미기입 품목', color: '#b91c1c', bg: '#fff4f4', icon: '⚠️', scope: '행 전체', desc: '브랜드/제조사/재활용등급 등 필수 품질 규격 미기입 품목 (연빨강 배경 경고)' },
@@ -30,10 +31,11 @@ const PRODUCT_FORMATTABLE_COLUMNS = [
     { field: 'dimensionsStatus', headerName: '체적 상태' }
 ];
 
-const ProductListPage = ({ user, navigationData, onNavigated }) => {
+const ProductListPage = ({ user, navigationData, onNavigated, isActive = true }) => {
     const defaultPageSize = 20;
     const { canView, canEdit: canEditProduct, hasPerm, isAdmin } = usePermissions(user);
     const gridRef = useRef(null);
+    useGridTabRecovery(gridRef, isActive);
     const [rowData, setRowData] = useState([]);
     const [selectedProduct, setSelectedProduct] = useState(null);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);

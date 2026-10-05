@@ -52,6 +52,7 @@ const ManufacturerAuditDashboard = lazyRetry(() => import('./ManufacturerAuditDa
 const IngredientCompliancePage = lazyRetry(() => import('./IngredientCompliancePage.jsx'));
 const DocumentRequestManagementPage = lazyRetry(() => import('./DocumentRequestManagementPage.jsx'));
 const SystemBenchmarkPage = lazyRetry(() => import('./SystemBenchmarkPage.jsx'));
+const ProductBomInquiryPage = lazyRetry(() => import('./ProductBomInquiryPage.jsx'));
 
 import BomCategoryManagementPage from './BomCategoryManagementPage.jsx';
 import PackagingTemplatePage from './PackagingTemplatePage.jsx';
@@ -95,6 +96,7 @@ const PAGE_INFO = {
     salesChannels: { title: '🌐 유통 채널 관리' },
     channelNoteConfig: { title: '⚙️ 유통 채널 포장 특이사항 항목 설정' },
     products: { title: '📦 제품코드 마스터' },
+    productBomInquiry: { title: '📦 제품코드별 포장재 조회' },
     bomMaster: { title: '📏 BOM 마스터' },
     bomCategories: { title: '⚙️ BOM 유형 설정' },
     packagingTemplates: { title: '📋 포장공정 템플릿' },
@@ -450,6 +452,17 @@ const App = () => {
         setTabContextMenu({ visible: false, x: 0, y: 0, tabId: null });
     };
 
+    const handleTabSelect = (tabId) => {
+        if (activeTabId === tabId) return;
+        setActiveTabId(tabId);
+        window.dispatchEvent(new CustomEvent('qms-tab-activated', { detail: { tabId } }));
+        requestAnimationFrame(() => {
+            window.dispatchEvent(new Event('resize'));
+        });
+        setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
+        setTimeout(() => window.dispatchEvent(new Event('resize')), 150);
+    };
+
     // Notification states
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
@@ -524,17 +537,25 @@ const App = () => {
             }
         }, 100);
 
-        // 2. 탭 전환 시(display: none -> flex) AG Grid 가상 렌더러가 뷰포트 0px로 인식하여 행이 증발하는 현상 완벽 방지
+        // 2. 탭 전환 시(tab-hidden -> tab-active) AG Grid 가상 렌더러가 화면 크기를 즉시 갱신하도록 rAF 및 지연 디스패치
+        window.dispatchEvent(new CustomEvent('qms-tab-activated', { detail: { tabId: activeTabId } }));
+        requestAnimationFrame(() => {
+            window.dispatchEvent(new Event('resize'));
+        });
         const t1 = setTimeout(() => {
             window.dispatchEvent(new Event('resize'));
         }, 50);
         const t2 = setTimeout(() => {
             window.dispatchEvent(new Event('resize'));
         }, 150);
+        const t3 = setTimeout(() => {
+            window.dispatchEvent(new Event('resize'));
+        }, 300);
 
         return () => {
             clearTimeout(t1);
             clearTimeout(t2);
+            clearTimeout(t3);
         };
     }, [activeTabId]);
 
@@ -887,7 +908,7 @@ const App = () => {
         let targetSection = null;
         if (['dashboard', 'announcements', 'notifications'].includes(pageKey)) targetSection = 'monitoring';
         else if (['users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin', 'accessLogs', 'bugReports', 'mailTemplates', 'notificationSettings', 'systemBenchmark'].includes(pageKey)) targetSection = 'system';
-        else if (['products', 'brands', 'ingredientCompliance', 'bomMaster', 'bomCategories', 'salesChannels'].includes(pageKey)) targetSection = 'products';
+        else if (['products', 'productBomInquiry', 'brands', 'ingredientCompliance', 'bomMaster', 'bomCategories', 'salesChannels'].includes(pageKey)) targetSection = 'products';
         else if (['manufacturers', 'manufacturerCategories'].includes(pageKey)) targetSection = 'partner';
         else if (['manufacturerAudits', 'manufacturerAuditDashboard', 'manufacturerAuditItems'].includes(pageKey)) targetSection = 'audit';
         else if (['qualityPhotoAudit', 'productionAuditDashboard'].includes(pageKey)) targetSection = 'quality';
@@ -1139,13 +1160,14 @@ const App = () => {
     };
 
     const canAccess = (menuKey) => {
+        if (menuKey === 'productBomInquiry') return isAdmin || hasPermission('bomMaster') || hasPermission('products') || hasPermission('productBomInquiry');
         if (menuKey === 'systemBenchmark') return isAdmin || isAQualityTeam || hasPermission('logs') || hasPermission('systemBenchmark');
         return hasPermission(menuKey, 'VIEW');
     };
 
     const hasMonitoringAccess = canAccess('dashboard') || canAccess('announcements') || canAccess('notifications');
     const hasSystemAccess = canAccess('users') || canAccess('logs') || canAccess('roles') || canAccess('guideManagement') || canAccess('dashboardMgmt') || canAccess('trashBin') || canAccess('accessLogs') || canAccess('bugReports') || canAccess('mailTemplates') || canAccess('notificationSettings') || canAccess('systemBenchmark');
-    const hasProductsAccess = canAccess('products') || canAccess('brands') || canAccess('ingredientCompliance') || canAccess('bomMaster') || canAccess('bomCategories') || canAccess('salesChannels') || canAccess('productDashboard');
+    const hasProductsAccess = canAccess('products') || canAccess('productBomInquiry') || canAccess('brands') || canAccess('ingredientCompliance') || canAccess('bomMaster') || canAccess('bomCategories') || canAccess('salesChannels') || canAccess('productDashboard');
     const hasPartnerAccess = canAccess('manufacturers') || canAccess('manufacturerCategories') || canAccess('manufacturerGuide');
     const hasAuditAccess = canAccess('manufacturerAudits') || canAccess('manufacturerAuditDashboard') || canAccess('manufacturerAuditItems');
     const hasQualityAccess = canAccess('qualityPhotoAudit') || canAccess('productionAuditDashboard');
@@ -1167,7 +1189,7 @@ const App = () => {
         switch(section) {
             case 'monitoring': return ['dashboard', 'announcements', 'notifications'].includes(activePage);
             case 'system': return ['users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin', 'accessLogs', 'bugReports', 'mailTemplates', 'notificationSettings', 'systemBenchmark'].includes(activePage);
-            case 'products': return ['products', 'brands', 'ingredientCompliance', 'bomMaster', 'bomCategories', 'salesChannels', 'productDashboard'].includes(activePage);
+            case 'products': return ['products', 'productBomInquiry', 'brands', 'ingredientCompliance', 'bomMaster', 'bomCategories', 'salesChannels', 'productDashboard'].includes(activePage);
             case 'partner': return ['manufacturers', 'manufacturerCategories', 'manufacturerGuide'].includes(activePage);
             case 'audit': return ['manufacturerAudits', 'manufacturerAuditDashboard', 'manufacturerAuditItems'].includes(activePage);
             case 'quality': return ['qualityPhotoAudit', 'productionAuditDashboard'].includes(activePage);
@@ -1434,6 +1456,7 @@ const App = () => {
                                     <>
                                         <div className="sidebar-sub-header">BOM/구성품 관리</div>
                                         {canAccess('bomMaster') && renderSidebarItem('bomMaster', '📏 구성품 BOM 마스터 관리')}
+                                        {canAccess('productBomInquiry') && renderSidebarItem('productBomInquiry', '📦 제품코드별 포장재 조회')}
                                         {canAccess('bomCategories') && renderSidebarItem('bomCategories', '⚙️ BOM 유형 설정/관리')}
                                     </>
                                 )}
@@ -1604,7 +1627,7 @@ const App = () => {
                             <div 
                                 key={tab.id} 
                                 className={`tab-item ${tab.id === activeTabId ? 'active' : ''}`}
-                                onClick={() => setActiveTabId(tab.id)}
+                                onClick={() => handleTabSelect(tab.id)}
                                 onContextMenu={(e) => handleTabContextMenu(e, tab.id)}
                                 title="우클릭 시 탭 정리 메뉴"
                             >
@@ -1755,8 +1778,7 @@ const App = () => {
                         {tabs.map(tab => (
                             <div 
                                 key={tab.id} 
-                                className="tab-page-wrapper"
-                                style={{ display: tab.id === activeTabId ? 'flex' : 'none' }}
+                                className={`tab-page-wrapper ${tab.id === activeTabId ? 'tab-active' : 'tab-hidden'}`}
                             >
                                 <div className="page-container-inner">
                                     <TabErrorBoundary 
@@ -1802,6 +1824,7 @@ const App = () => {
                                                 user={user} 
                                                 navigationData={tab.data} 
                                                 onNavigated={() => {}} 
+                                                isActive={tab.id === activeTabId}
                                             />
                                         )}
                                         {tab.page === 'quality' && (
@@ -1834,6 +1857,7 @@ const App = () => {
                                                 navigationData={tab.data}
                                                 onNavigated={() => {}}
                                                 onNavigate={handleNavigate}
+                                                isActive={tab.id === activeTabId}
                                             />
                                         )}
                                         {tab.page === 'claimDashboard' && (
@@ -1860,6 +1884,7 @@ const App = () => {
                                         {tab.page === 'productionAuditDashboard' && (
                                             <ProductionAuditDashboardPage user={user} onNavigate={handleNavigate} />
                                         )}
+                                        {tab.page === 'productBomInquiry' && <ProductBomInquiryPage user={user} isActive={tab.id === activeTabId} />}
                                         {tab.page === 'bomMaster' && <BomMasterPage user={user} />}
                                         {tab.page === 'bomCategories' && <BomCategoryManagementPage user={user} />}
                                         {tab.page === 'packagingTemplates' && <PackagingTemplatePage user={user} />}

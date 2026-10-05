@@ -807,6 +807,15 @@ export const aggregateBomByComponents = (components) =>
     api.post('/api/packaging-specs/components/aggregate-bom', components);
 export const uploadPackagingSpec3DSnapshot = (specId, mode, imageBase64, viewConfig = null) => 
     api.post(`/api/packaging-specs/${specId}/3d-snapshot`, { mode, imageBase64, viewConfig });
+export const getProductBomSummaries = (params = {}) => {
+    const query = new URLSearchParams();
+    if (params.productId) query.append('productId', params.productId);
+    if (params.itemCode) query.append('itemCode', params.itemCode);
+    if (params.keyword) query.append('keyword', params.keyword);
+    if (params.bomType) query.append('bomType', params.bomType);
+    if (params.latestOnly !== undefined) query.append('latestOnly', params.latestOnly);
+    return api.get(`/api/packaging-specs/product-bom-summary?${query.toString()}`);
+};
 
 
 // Production Audit (Photo Audit) APIs
@@ -927,6 +936,7 @@ export const submitBugReport = (report = {}) => {
     return bugReportAxios.post('/api/bug-reports', payload).then(res => res.data);
 };
 export const getBugReports = () => api.get('/api/bug-reports').then(res => res.data);
+export const getOpenBugReportCount = () => api.get('/api/bug-reports/open-count', { skipLoading: true, skipToast: true }).then(res => res.data?.openCount ?? 0).catch(() => 0);
 export const updateBugReportStatus = (id, status) => api.patch(`/api/bug-reports/${id}/status`, { status }).then(res => res.data);
 
 // Claim APIs
@@ -1398,5 +1408,42 @@ export const markApprovalDocumentAsRead = (id) =>
 
 export const fetchApprovalUnreadCounts = () => 
     api.get('/api/approvals/unread-counts', { skipToast: true });
+
+// [동적 화면 빌더 API]
+export const fetchDynamicScreens = () => 
+    api.get('/api/dynamic/screens', { skipToast: true });
+
+export const createDynamicScreen = (data) => 
+    api.post('/api/dynamic/screens', data);
+
+export const updateDynamicScreen = (id, data) => 
+    api.put(`/api/dynamic/screens/${id}`, data);
+
+export const fetchDynamicSearchCatalogs = () => 
+    api.get('/api/dynamic/screens/catalogs');
+
+export const fetchDynamicMasterDataSources = () => 
+    api.get('/api/dynamic/screens/data-sources');
+
+export const fetchDynamicMenusTree = () => 
+    api.get('/api/dynamic/menus/tree');
+
+export const createDynamicMenu = (data) => 
+    api.post('/api/dynamic/menus', data);
+
+export const updateDynamicMenu = (id, data) => 
+    api.put(`/api/dynamic/menus/${id}`, data);
+
+export const deleteDynamicMenu = (id) => 
+    api.delete(`/api/dynamic/menus/${id}`);
+
+export const fetchScreenMenuMappings = () => 
+    api.get('/api/dynamic/menus/screens');
+
+export const linkScreenToMenu = (screenId, data) => 
+    api.put(`/api/dynamic/menus/screens/${screenId}/link`, data);
+
+export const batchReorderDynamicMenus = (items) => 
+    api.put('/api/dynamic/menus/batch-reorder', items);
 
 

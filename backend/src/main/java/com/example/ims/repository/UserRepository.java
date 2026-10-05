@@ -37,6 +37,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
         List<User> searchActiveRecipients(@org.springframework.data.repository.query.Param("kw") String kw, org.springframework.data.domain.Pageable pageable);
 
         @org.springframework.data.jpa.repository.Query("SELECT u FROM User u WHERE u.enabled = true AND " +
+                        "u.manufacturer IS NULL AND " +
+                        "(u.role IS NULL OR (NOT LOWER(u.role) LIKE '%manufacturer%')) AND " +
                         "(:companyName IS NULL OR u.companyName = :companyName) AND (" +
                         ":kw IS NULL OR :kw = '' OR " +
                         "LOWER(u.name) LIKE LOWER(CONCAT('%', :kw, '%')) OR " +

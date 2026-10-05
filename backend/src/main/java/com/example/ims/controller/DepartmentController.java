@@ -163,7 +163,7 @@ public class DepartmentController {
     private String resolveUserCompany(String requestedCompany, String username) {
         User user = getUser(username);
         if (isAdmin(user)) {
-            return requestedCompany;
+            return (requestedCompany != null && !requestedCompany.isBlank()) ? requestedCompany : user.getCompanyName();
         }
         return user.getCompanyName();
     }

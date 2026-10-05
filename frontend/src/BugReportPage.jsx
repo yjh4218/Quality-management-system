@@ -141,6 +141,17 @@ ${selectedReport.serverError || '없음'}
         }
     ], []);
 
+    const getRowStyle = (params) => {
+        if (params.data?.status === 'OPEN') {
+            return {
+                fontWeight: 800,
+                backgroundColor: '#fff5f5',
+                color: '#0f172a'
+            };
+        }
+        return null;
+    };
+
     return (
         <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#f1f5f9' }}>
 
@@ -244,6 +255,7 @@ ${selectedReport.serverError || '없음'}
                         paginationPageSize={50}
                         quickFilterText={quickFilterText}
                         onRowClicked={(e) => setSelectedReport(e.data)}
+                        getRowStyle={getRowStyle}
                     />
                 </div>
 

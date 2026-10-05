@@ -61,7 +61,13 @@ backend/src/main/resources/application-secret.properties
 *.pptx
 screenshots/
 
-# Database Dumps
+# Database Dumps & Local Data
 backend/supabase_restore_*.sql
 backend/supabase_stored_files_*.sql
+data/
+backend/data/
+*.db
+*.mv.db
 
+# Scratch and temporary scripts
+scratch/

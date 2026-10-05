@@ -47,7 +47,7 @@ const FP_DEPENDENCIES = {
     'APPROVAL_PROD_AUDIT_ENABLE': 'qualityPhotoAudit',
     'APPROVAL_CLAIM_ENABLE': 'claims',
     'APPROVAL_MFG_AUDIT_ENABLE': 'manufacturerAudits',
-    'APPROVAL_MARKET_RELEASE_ENABLE': 'marketReleaseRecords'
+    'APPROVAL_MARKET_RELEASE_ENABLE': 'releaseRecord'
 };
 
 const RoleManagementPage = ({ user }) => {

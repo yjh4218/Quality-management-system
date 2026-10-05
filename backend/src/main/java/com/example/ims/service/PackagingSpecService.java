@@ -7,9 +7,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.example.ims.dto.PackagingSpecFullDto;
+import com.example.ims.dto.ProductBomSummaryDto;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Comparator;
 import java.util.stream.Collectors;
 
@@ -27,6 +31,7 @@ public class PackagingSpecService {
     private final PackagingSpecBomItemRepository bomItemRepository;
     private final PackagingSpecRevisionRepository revisionRepository;
     private final PackagingSpecComponentRepository componentRepository;
+    private final MasterPackagingMaterialRepository masterMaterialRepository;
     private final PackagingMethodImageRepository methodImageRepository;
     private final AuditLogService auditLogService;
     private final com.example.ims.repository.ChannelSpecialNoteRepository specialNoteRepository;
@@ -988,5 +993,206 @@ public class PackagingSpecService {
         }
 
         return result;
+    }
+
+    /**
+     * 제품코드별 포장재 BOM 리스트 통합 조회 (EU PPWR / 규제 대응용 플랫 조회)
+     */
+    @Transactional(readOnly = true)
+    public List<ProductBomSummaryDto> getProductBomSummaries(Long productId, String itemCode, String keyword, String bomType, Boolean latestOnly) {
+        List<ProductBomSummaryDto> result = new java.util.ArrayList<>();
+
+        // 1. PackagingSpecBomItem 경로 조회
+        List<PackagingSpecBomItem> items = bomItemRepository.searchBomItemsWithProduct(
+                productId,
+                (itemCode != null && !itemCode.trim().isEmpty()) ? itemCode.trim() : null,
+                (keyword != null && !keyword.trim().isEmpty()) ? keyword.trim() : null,
+                (bomType != null && !bomType.trim().isEmpty()) ? bomType.trim() : null
+        );
+
+        if (Boolean.TRUE.equals(latestOnly)) {
+            // 제품별 최신 packagingSpec의 version 구하기
+            Map<Long, Integer> maxVersionMap = items.stream()
+                    .map(PackagingSpecBomItem::getPackagingSpec)
+                    .filter(Objects::nonNull)
+                    .filter(s -> s.getProduct() != null && s.getProduct().getId() != null)
+                    .collect(Collectors.groupingBy(
+                            s -> s.getProduct().getId(),
+                            Collectors.collectingAndThen(
+                                    Collectors.maxBy(Comparator.comparingInt(s -> s.getVersion() != null ? s.getVersion() : 0)),
+                                    opt -> opt.map(s -> s.getVersion() != null ? s.getVersion() : 0).orElse(0)
+                            )
+                    ));
+
+            items = items.stream()
+                    .filter(b -> {
+                        PackagingSpecification s = b.getPackagingSpec();
+                        if (s == null || s.getProduct() == null) return false;
+                        Integer maxVer = maxVersionMap.get(s.getProduct().getId());
+                        int currentVer = s.getVersion() != null ? s.getVersion() : 0;
+                        return maxVer != null && maxVer.equals(currentVer);
+                    })
+                    .collect(Collectors.toList());
+        }
+
+        for (PackagingSpecBomItem item : items) {
+            result.add(convertToProductBomSummaryDto(item));
+        }
+
+        // 2. PackagingSpecComponent 경로 조회 (사양서 시트1 구성품 탭 데이터)
+        List<PackagingSpecification> allSpecs = (productId != null)
+                ? specRepository.findByProductId(productId)
+                : specRepository.findAll();
+
+        if (allSpecs != null && !allSpecs.isEmpty()) {
+            Map<Long, List<PackagingSpecification>> specsByProd = allSpecs.stream()
+                    .filter(s -> s.getProduct() != null && s.getProduct().getId() != null)
+                    .collect(Collectors.groupingBy(s -> s.getProduct().getId()));
+
+            List<MasterPackagingMaterial> allMaterials = masterMaterialRepository != null ? masterMaterialRepository.findAll() : java.util.Collections.emptyList();
+            Map<String, MasterPackagingMaterial> matCodeMap = allMaterials.stream()
+                    .filter(m -> m.getBomCode() != null && !m.getBomCode().trim().isEmpty())
+                    .collect(Collectors.toMap(MasterPackagingMaterial::getBomCode, m -> m, (a, b) -> a));
+
+            Set<String> alreadyAddedKeys = result.stream()
+                    .map(r -> (r.getProductId() + "_" + r.getSpecVersion() + "_" + r.getBomCode()))
+                    .collect(Collectors.toSet());
+
+            for (Map.Entry<Long, List<PackagingSpecification>> entry : specsByProd.entrySet()) {
+                List<PackagingSpecification> pSpecs = entry.getValue();
+                if (pSpecs == null || pSpecs.isEmpty()) continue;
+
+                List<PackagingSpecification> targetSpecs;
+                if (Boolean.TRUE.equals(latestOnly)) {
+                    PackagingSpecification latest = pSpecs.stream()
+                            .max(Comparator.comparingInt(s -> s.getVersion() != null ? s.getVersion() : 0))
+                            .orElse(pSpecs.get(0));
+                    targetSpecs = java.util.Collections.singletonList(latest);
+                } else {
+                    targetSpecs = pSpecs;
+                }
+
+                for (PackagingSpecification s : targetSpecs) {
+                    Product prod = s.getProduct();
+                    if (prod == null) continue;
+
+                    // 제품코드 조건
+                    if (itemCode != null && !itemCode.trim().isEmpty() && (prod.getItemCode() == null || !prod.getItemCode().toLowerCase().contains(itemCode.trim().toLowerCase()))) {
+                        continue;
+                    }
+
+                    List<PackagingSpecComponent> comps = componentRepository.findBySpecId(s.getId());
+                    if (comps == null || comps.isEmpty()) continue;
+
+                    for (PackagingSpecComponent comp : comps) {
+                        String bCode = comp.getBomCode();
+                        MasterPackagingMaterial matchedMat = (bCode != null) ? matCodeMap.get(bCode) : null;
+
+                        String cType = (matchedMat != null && matchedMat.getType() != null) ? matchedMat.getType() : "기타";
+                        if (bomType != null && !bomType.trim().isEmpty() && !cType.equalsIgnoreCase(bomType.trim())) {
+                            continue;
+                        }
+
+                        // 키워드 검색 필터링
+                        if (keyword != null && !keyword.trim().isEmpty()) {
+                            String kw = keyword.trim().toLowerCase();
+                            boolean match = (prod.getItemCode() != null && prod.getItemCode().toLowerCase().contains(kw))
+                                    || (prod.getProductName() != null && prod.getProductName().toLowerCase().contains(kw))
+                                    || (prod.getBrand() != null && prod.getBrand().getName() != null && prod.getBrand().getName().toLowerCase().contains(kw))
+                                    || (comp.getBomCode() != null && comp.getBomCode().toLowerCase().contains(kw))
+                                    || (comp.getComponentName() != null && comp.getComponentName().toLowerCase().contains(kw))
+                                    || (comp.getSpecDetails() != null && comp.getSpecDetails().toLowerCase().contains(kw))
+                                    || (cType.toLowerCase().contains(kw));
+                            if (!match) continue;
+                        }
+
+                        String dupKey = prod.getId() + "_" + s.getVersion() + "_" + bCode;
+                        if (bCode != null && alreadyAddedKeys.contains(dupKey)) {
+                            continue;
+                        }
+
+                        ProductBomSummaryDto dto = ProductBomSummaryDto.builder()
+                                .productId(prod.getId())
+                                .itemCode(prod.getItemCode())
+                                .productName(prod.getProductName())
+                                .englishProductName(prod.getEnglishProductName())
+                                .brandName(prod.getBrand() != null ? prod.getBrand().getName() : null)
+                                .productManufacturer(prod.getManufacturerInfo() != null ? prod.getManufacturerInfo().getName() : null)
+                                .packagingSpecId(s.getId())
+                                .specVersion(s.getVersion())
+                                .inboxQty(s.getInboxQty())
+                                .outboxQty(s.getOutboxQty())
+                                .inboxSize(s.getInboxSize())
+                                .outboxSize(s.getOutboxSize())
+                                .inboxType(s.getInboxType())
+                                .outboxType(s.getOutboxType())
+                                .palletTotalProductQty(s.getPalletTotalProductQty())
+                                .bomItemId(comp.getId())
+                                .masterMaterialId(matchedMat != null ? matchedMat.getId() : null)
+                                .bomCode(comp.getBomCode())
+                                .componentName(comp.getComponentName())
+                                .type(cType)
+                                .detailedType(matchedMat != null ? matchedMat.getDetailedType() : null)
+                                .detailedMaterial(matchedMat != null && matchedMat.getDetailedMaterial() != null ? matchedMat.getDetailedMaterial() : comp.getSpecDetails())
+                                .material(matchedMat != null && matchedMat.getMaterial() != null ? matchedMat.getMaterial() : comp.getSpecDetails())
+                                .weight(comp.getWeight() != null ? comp.getWeight() : (matchedMat != null ? matchedMat.getWeight() : null))
+                                .thickness(matchedMat != null ? matchedMat.getThickness() : null)
+                                .specification(comp.getSizeDimension() != null && !comp.getSizeDimension().trim().isEmpty() ? comp.getSizeDimension() : (matchedMat != null ? matchedMat.getSpecification() : null))
+                                .usageCount(comp.getQuantity() != null ? comp.getQuantity().doubleValue() : 1.0)
+                                .bomManufacturer(comp.getSupplier() != null ? comp.getSupplier() : (matchedMat != null ? matchedMat.getManufacturer() : null))
+                                .sortOrder(comp.getId() != null ? comp.getId().intValue() : 0)
+                                .isMultiLayer(matchedMat != null && matchedMat.getIsMultiLayer() != null ? matchedMat.getIsMultiLayer() : false)
+                                .imagePath(comp.getImagePath() != null ? comp.getImagePath() : (matchedMat != null ? matchedMat.getImagePath() : null))
+                                .build();
+
+                        result.add(dto);
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private ProductBomSummaryDto convertToProductBomSummaryDto(PackagingSpecBomItem item) {
+        PackagingSpecification spec = item.getPackagingSpec();
+        Product prod = spec != null ? spec.getProduct() : null;
+        MasterPackagingMaterial mat = item.getMasterMaterial();
+
+        return ProductBomSummaryDto.builder()
+                .productId(prod != null ? prod.getId() : null)
+                .itemCode(prod != null ? prod.getItemCode() : null)
+                .productName(prod != null ? prod.getProductName() : null)
+                .englishProductName(prod != null ? prod.getEnglishProductName() : null)
+                .brandName(prod != null && prod.getBrand() != null ? prod.getBrand().getName() : null)
+                .productManufacturer(prod != null && prod.getManufacturerInfo() != null ? prod.getManufacturerInfo().getName() : null)
+                .packagingSpecId(spec != null ? spec.getId() : null)
+                .specVersion(spec != null ? spec.getVersion() : null)
+                .inboxQty(spec != null ? spec.getInboxQty() : null)
+                .outboxQty(spec != null ? spec.getOutboxQty() : null)
+                .inboxSize(spec != null ? spec.getInboxSize() : null)
+                .outboxSize(spec != null ? spec.getOutboxSize() : null)
+                .inboxType(spec != null ? spec.getInboxType() : null)
+                .outboxType(spec != null ? spec.getOutboxType() : null)
+                .palletTotalProductQty(spec != null ? spec.getPalletTotalProductQty() : null)
+                .bomItemId(item.getId())
+                .masterMaterialId(mat != null ? mat.getId() : null)
+                .bomCode(mat != null ? mat.getBomCode() : null)
+                .componentName(mat != null ? mat.getComponentName() : null)
+                .type(mat != null ? mat.getType() : null)
+                .detailedType(mat != null ? mat.getDetailedType() : null)
+                .detailedMaterial(mat != null ? mat.getDetailedMaterial() : null)
+                .material(mat != null ? mat.getMaterial() : null)
+                .weight(mat != null ? mat.getWeight() : null)
+                .thickness(mat != null ? mat.getThickness() : null)
+                .specification(item.getSpecification() != null && !item.getSpecification().trim().isEmpty()
+                        ? item.getSpecification()
+                        : (mat != null ? mat.getSpecification() : null))
+                .usageCount(item.getUsageCount())
+                .bomManufacturer(mat != null ? mat.getManufacturer() : null)
+                .sortOrder(item.getSortOrder())
+                .isMultiLayer(mat != null ? mat.getIsMultiLayer() : false)
+                .imagePath(mat != null ? mat.getImagePath() : null)
+                .build();
     }
 }

@@ -74,6 +74,15 @@ const ApprovalSubmitModal = ({
     const userCompany = currentUser?.companyName || '';
     const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
+    // 협력업체(제조사) 계정 여부 판별 (사내 전자결재 기안 불가)
+    const isManufacturer = useMemo(() => {
+        if (!currentUser) return false;
+        return currentUser.roles?.some(r => (r.authority || r).includes('ROLE_MANUFACTURER') || (r.authority || r).includes('MANUFACTURER'))
+            || (currentUser.role && currentUser.role.includes('MANUFACTURER'))
+            || currentUser.department === '제조사'
+            || Boolean(currentUser.manufacturer);
+    }, [currentUser]);
+
     // 현재 모드 ('CREATE' | 'VIEW' | 'EDIT')
     const [mode, setMode] = useState(initialMode);
 
@@ -247,6 +256,10 @@ const ApprovalSubmitModal = ({
 
     // 신규 상신 (CREATE)
     const handleCreateSubmit = async () => {
+        if (isManufacturer) {
+            showAlert?.("협력업체(제조사) 계정은 사내 전자결재를 기안할 수 없습니다.", "error");
+            return;
+        }
         if (!docTypeCode) {
             showAlert?.("문서 유형을 선택해 주세요.");
             return;
@@ -452,7 +465,7 @@ const ApprovalSubmitModal = ({
                             >
                                 🖨️ 인쇄
                             </button>
-                            {!isReadOnly && (
+                            {!isReadOnly && !isManufacturer && (
                                 <button
                                     type="button"
                                     onClick={() => setLineModalOpen(true)}
@@ -1070,16 +1083,18 @@ const ApprovalSubmitModal = ({
                             {/* CREATE 모드 액션 버튼들 (신규 상신) */}
                             {mode === 'CREATE' && (
                                 <>
-                                    <button
-                                        type="button"
-                                        onClick={() => setLineModalOpen(true)}
-                                        style={{
-                                            padding: '10px 18px', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1',
-                                            borderRadius: '6px', fontSize: '13px', fontWeight: 'bold', color: '#334155', cursor: 'pointer'
-                                        }}
-                                    >
-                                        👥 결재라인 수정
-                                    </button>
+                                    {!isManufacturer && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setLineModalOpen(true)}
+                                            style={{
+                                                padding: '10px 18px', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1',
+                                                borderRadius: '6px', fontSize: '13px', fontWeight: 'bold', color: '#334155', cursor: 'pointer'
+                                            }}
+                                        >
+                                            👥 결재라인 수정
+                                        </button>
+                                    )}
                                     <button
                                         type="button"
                                         onClick={onClose}
@@ -1093,15 +1108,18 @@ const ApprovalSubmitModal = ({
                                     <button
                                         type="button"
                                         onClick={handleCreateSubmit}
-                                        disabled={submitting}
+                                        disabled={submitting || isManufacturer}
                                         style={{
-                                            padding: '10px 28px', backgroundColor: '#2563eb', border: 'none',
+                                            padding: '10px 28px',
+                                            backgroundColor: isManufacturer ? '#94a3b8' : '#2563eb',
+                                            border: 'none',
                                             borderRadius: '6px', fontSize: '14px', fontWeight: 'bold', color: '#fff',
-                                            cursor: submitting ? 'not-allowed' : 'pointer',
-                                            boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.4)'
+                                            cursor: (submitting || isManufacturer) ? 'not-allowed' : 'pointer',
+                                            boxShadow: isManufacturer ? 'none' : '0 4px 6px -1px rgba(37, 99, 235, 0.4)'
                                         }}
+                                        title={isManufacturer ? '협력업체(제조사) 계정은 기안할 수 없습니다.' : '결재 상신'}
                                     >
-                                        {submitting ? '상신 중...' : '📝 결재 상신'}
+                                        {isManufacturer ? '🚫 기안 불가 (협력사)' : submitting ? '상신 중...' : '📝 결재 상신'}
                                     </button>
                                 </>
                             )}

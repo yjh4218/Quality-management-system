@@ -6,6 +6,7 @@ import com.example.ims.repository.PackagingSpecificationRepository;
 import com.example.ims.repository.ProductRepository;
 import com.example.ims.service.PackagingSpecExportService;
 import com.example.ims.dto.PackagingSpecFullDto;
+import com.example.ims.dto.ProductBomSummaryDto;
 import com.example.ims.service.PackagingSpecService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +38,20 @@ public class PackagingSpecificationController {
     @GetMapping("/product/{productId}")
     public ResponseEntity<List<PackagingSpecification>> getSpecsByProduct(@PathVariable Long productId) {
         return ResponseEntity.ok(specRepository.findByProductId(productId));
+    }
+
+    /**
+     * 제품코드별 포장재 BOM 리스트 통합 조회 API (EU PPWR / 규제 대응용)
+     */
+    @GetMapping("/product-bom-summary")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MENU_PRODUCTS_VIEW') or hasAuthority('MENU_PACKAGING_VIEW')")
+    public ResponseEntity<List<ProductBomSummaryDto>> getProductBomSummaries(
+            @RequestParam(required = false) Long productId,
+            @RequestParam(required = false) String itemCode,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String bomType,
+            @RequestParam(required = false, defaultValue = "true") Boolean latestOnly) {
+        return ResponseEntity.ok(specService.getProductBomSummaries(productId, itemCode, keyword, bomType, latestOnly));
     }
 
     @PostMapping

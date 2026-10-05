@@ -758,12 +758,12 @@ public class ApprovalService {
             }
         }
 
-        // Ad-hoc 결재자 추가 (동일 회사 검증)
+        // Ad-hoc 결재자 추가 (동일 회사 검증 및 제조사 배제)
         if (dto.getAdhocApproverUserIds() != null && !dto.getAdhocApproverUserIds().isEmpty()) {
             int adhocOrder = maxOrder + 1;
             for (Long uid : dto.getAdhocApproverUserIds()) {
                 User adhocUser = userRepository.findById(uid).orElse(null);
-                if (adhocUser != null && validateSameCompany(submitter, adhocUser)) {
+                if (adhocUser != null && !isManufacturerUser(adhocUser) && validateSameCompany(submitter, adhocUser)) {
                     instances.add(ApprovalStepInstance.builder()
                             .document(doc)
                             .stepOrder(adhocOrder++)
@@ -777,12 +777,12 @@ public class ApprovalService {
             maxOrder = adhocOrder - 1;
         }
 
-        // Ad-hoc 합의자 추가 (동일 회사 검증)
+        // Ad-hoc 합의자 추가 (동일 회사 검증 및 제조사 배제)
         if (dto.getAdhocConsensusUserIds() != null && !dto.getAdhocConsensusUserIds().isEmpty()) {
             int consensusOrder = maxOrder + 1;
             for (Long uid : dto.getAdhocConsensusUserIds()) {
                 User adhocUser = userRepository.findById(uid).orElse(null);
-                if (adhocUser != null && validateSameCompany(submitter, adhocUser)) {
+                if (adhocUser != null && !isManufacturerUser(adhocUser) && validateSameCompany(submitter, adhocUser)) {
                     instances.add(ApprovalStepInstance.builder()
                             .document(doc)
                             .stepOrder(consensusOrder++)
@@ -795,11 +795,11 @@ public class ApprovalService {
             }
         }
 
-        // Ad-hoc 참조자 추가 (동일 회사 검증)
+        // Ad-hoc 참조자 추가 (동일 회사 검증 및 제조사 배제)
         if (dto.getAdhocReferenceUserIds() != null && !dto.getAdhocReferenceUserIds().isEmpty()) {
             for (Long uid : dto.getAdhocReferenceUserIds()) {
                 User adhocRef = userRepository.findById(uid).orElse(null);
-                if (adhocRef != null && validateSameCompany(submitter, adhocRef)) {
+                if (adhocRef != null && !isManufacturerUser(adhocRef) && validateSameCompany(submitter, adhocRef)) {
                     instances.add(ApprovalStepInstance.builder()
                             .document(doc)
                             .stepOrder(0)
@@ -818,7 +818,7 @@ public class ApprovalService {
                 int adhocOrder = 1;
                 for (Long uid : dto.getAdhocApproverUserIds()) {
                     User adhocUser = userRepository.findById(uid).orElse(null);
-                    if (adhocUser != null && validateSameCompany(submitter, adhocUser)) {
+                    if (adhocUser != null && !isManufacturerUser(adhocUser) && validateSameCompany(submitter, adhocUser)) {
                         instances.add(ApprovalStepInstance.builder()
                                 .document(doc)
                                 .stepOrder(adhocOrder++)
@@ -916,14 +916,18 @@ public class ApprovalService {
         return null;
     }
 
+    private boolean isManufacturerUser(User user) {
+        if (user == null) return false;
+        return (user.getRole() != null && (user.getRole().contains("ROLE_MANUFACTURER") || user.getRole().contains("MANUFACTURER")))
+                || "제조사".equalsIgnoreCase(user.getDepartment())
+                || user.getManufacturer() != null;
+    }
+
     private void validateNotManufacturer(User user) {
         if (user == null) {
             throw new AccessDeniedException("인증된 사용자 정보가 필요합니다.");
         }
-        boolean isManufacturer = (user.getRole() != null && (user.getRole().contains("ROLE_MANUFACTURER") || user.getRole().contains("MANUFACTURER")))
-                || "제조사".equalsIgnoreCase(user.getDepartment())
-                || user.getManufacturer() != null;
-        if (isManufacturer) {
+        if (isManufacturerUser(user)) {
             throw new AccessDeniedException("협력업체(제조사) 계정은 사내 전자결재 시스템에 접근할 수 없습니다.");
         }
     }

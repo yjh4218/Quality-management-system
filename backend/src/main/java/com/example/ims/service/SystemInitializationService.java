@@ -94,6 +94,7 @@ public class SystemInitializationService {
         runIsolated("seedAndRepairManufacturerCategories", this::seedAndRepairManufacturerCategories);
         runIsolated("seedAndRepairManufacturers", this::seedAndRepairManufacturers);
         runIsolated("seedAndRepairManufacturerDepartments", this::seedAndRepairManufacturerDepartments);
+        runIsolated("seedAndRepairDynamicScreens", this::seedAndRepairDynamicScreens);
 
         log.info(">>>> [SYSTEM INIT] Data Seeding & Repair Completed.");
         runIsolated("performDataAudit", this::performDataAudit);
@@ -2132,6 +2133,32 @@ public class SystemInitializationService {
             }
         } catch (Exception e) {
             log.error(">>>> [SYSTEM INIT] Departments and approval master seeding failed: {}", e.getMessage(), e);
+        }
+    }
+
+    private void seedAndRepairDynamicScreens() {
+        try {
+            Integer tableExists = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables WHERE LOWER(table_name) = 'dynamic_screen'",
+                Integer.class
+            );
+            if (tableExists != null && tableExists > 0) {
+                org.springframework.core.io.Resource res119 = new org.springframework.core.io.ClassPathResource("db/migration/V119__dynamic_screen_indexes_and_seeds.sql");
+                org.springframework.core.io.Resource res120 = new org.springframework.core.io.ClassPathResource("db/migration/V120__seed_dynamic_claim_screen_columns.sql");
+                org.springframework.core.io.Resource res121 = new org.springframework.core.io.ClassPathResource("db/migration/V121__seed_system_standard_menus.sql");
+                org.springframework.core.io.Resource res122 = new org.springframework.core.io.ClassPathResource("db/migration/V122__seed_all_system_standard_submenus.sql");
+                org.springframework.core.io.Resource res123 = new org.springframework.core.io.ClassPathResource("db/migration/V123__seed_menu_dividers.sql");
+                org.springframework.core.io.Resource res124 = new org.springframework.core.io.ClassPathResource("db/migration/V124__update_product_search_filter_catalog_label.sql");
+                org.springframework.core.io.Resource res125 = new org.springframework.core.io.ClassPathResource("db/migration/V125__sync_dynamic_screen_product_endpoint.sql");
+                org.springframework.core.io.Resource res126 = new org.springframework.core.io.ClassPathResource("db/migration/V126__seed_product_bom_inquiry_submenu.sql");
+                org.springframework.jdbc.datasource.init.ResourceDatabasePopulator populator = 
+                    new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(res119, res120, res121, res122, res123, res124, res125, res126);
+                populator.setContinueOnError(true);
+                populator.execute(jdbcTemplate.getDataSource());
+                log.info(">>>> [SYSTEM INIT] Dynamic screens, columns, menus, and dividers seeded/verified successfully.");
+            }
+        } catch (Exception e) {
+            log.error(">>>> [SYSTEM INIT] Failed to seed dynamic screens: {}", e.getMessage(), e);
         }
     }
 }

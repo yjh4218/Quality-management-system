@@ -9,6 +9,7 @@ import useDateRangePreset from './hooks/useDateRangePreset';
 import { splitSearchTokens, matchesAllTokens } from './utils/searchUtils';
 import GridColorLegendPopover from './components/common/GridColorLegendPopover';
 import GridConditionalFormattingModal from './components/common/GridConditionalFormattingModal';
+import useGridTabRecovery from './hooks/useGridTabRecovery';
 
 const CLAIM_LEGENDS = [
     { label: '치명 클레임 (CRITICAL)', color: '#be123c', bg: '#fff5f5', icon: '🔴', scope: '행 전체', desc: '중대 결함으로 지정된 고위험 클레임 건 (연분홍 배경 & 붉은 글자)' },
@@ -29,9 +30,10 @@ const CLAIM_FORMATTABLE_COLUMNS = [
     { field: 'mfrStatus', headerName: '제조사 처리 상태' }
 ];
 
-const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated }) => {
+const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated, isActive = true }) => {
     const { canView, isAdmin } = usePermissions(user);
     const gridRef = useRef(null);
+    useGridTabRecovery(gridRef, isActive);
     const [actualClaims, setActualClaims] = useState([]);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [selectedClaim, setSelectedClaim] = useState(null);

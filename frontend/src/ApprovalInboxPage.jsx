@@ -29,6 +29,15 @@ const ApprovalInboxPage = ({
     const [submitModalOpen, setSubmitModalOpen] = useState(false);
     const [unreadOnly, setUnreadOnly] = useState(false);
 
+    // 협력업체(제조사) 계정 여부 판별 (사내 전자결재 기안 불가)
+    const isManufacturer = useMemo(() => {
+        if (!currentUser) return false;
+        return currentUser.roles?.some(r => (r.authority || r).includes('ROLE_MANUFACTURER') || (r.authority || r).includes('MANUFACTURER'))
+            || (currentUser.role && currentUser.role.includes('MANUFACTURER'))
+            || currentUser.department === '제조사'
+            || Boolean(currentUser.manufacturer);
+    }, [currentUser]);
+
     // fixedTab prop이 변경되면 activeTab 동기화
     useEffect(() => {
         if (fixedTab) {
@@ -262,12 +271,14 @@ const ApprovalInboxPage = ({
                         <span>읽지 않은 항목만 보기 ({unreadCount})</span>
                     </label>
 
-                    <button
-                        onClick={() => setSubmitModalOpen(true)}
-                        style={{ padding: '8px 18px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                    >
-                        ➕ 신규 결재 상신
-                    </button>
+                    {!isManufacturer && (
+                        <button
+                            onClick={() => setSubmitModalOpen(true)}
+                            style={{ padding: '8px 18px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                        >
+                            ➕ 신규 결재 상신
+                        </button>
+                    )}
                     <button
                         onClick={loadInbox}
                         style={{ padding: '8px 14px', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}

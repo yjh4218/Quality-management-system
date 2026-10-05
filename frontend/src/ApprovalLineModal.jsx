@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { fetchActiveDepartments, fetchCompanyUsersForApproval, getManufacturers } from './api';
+import { fetchActiveDepartments, fetchCompanyUsersForApproval } from './api';
 
 /**
  * 조직도 기반 전자결재 결재라인 지정 모달 (이미지 2, 4 UI/UX 준용)
- * - 조직도(회사 > 부서 > 사원) 트리 브라우징
+ * - 조직도(회사 > 부서 > 사원) 트리 브라우징 (사내 본사 임직원 전용)
  * - 사용자 다중 선택 및 [결재], [합의], [수신참조] 액션 배정
  * - 순서 조정 (▲, ▼) 및 결재 단계 자동 번호 부여
  */
@@ -59,39 +59,34 @@ const ApprovalLineModal = ({
         setSelectedCandidateIds(new Set());
     }, [isOpen, initialApprovers, initialConsensus, initialReferences]);
 
-    // 회사 및 부서 마스터 동적 로드
+    // 회사 및 부서 마스터 동적 로드 (사내 전자결재 조직도: 외부 제조사는 결재 대상이 아니므로 본사 조직/부서만 로드)
     useEffect(() => {
         if (!isOpen) return;
         const loadOrgData = async () => {
             try {
-                const [mfrRes, deptRes] = await Promise.all([
-                    getManufacturers().catch(() => ({ data: [] })),
-                    fetchActiveDepartments().catch(() => ({ data: [] }))
-                ]);
+                const deptRes = await fetchActiveDepartments(userCompany).catch(() => ({ data: [] }));
+                const deptList = deptRes.data || [];
 
-                const compSet = new Set();
-                if (userCompany) compSet.add(userCompany);
-                (mfrRes.data || []).forEach(m => {
-                    const name = m.name?.trim() || m.manufacturerName?.trim();
-                    if (name) compSet.add(name);
-                });
-                (deptRes.data || []).forEach(d => {
-                    if (d.companyName && d.companyName.trim()) compSet.add(d.companyName.trim());
-                });
+                // 기안자의 소속 회사(본사)를 우선하고, 없을 경우 부서 마스터의 회사명을 동적으로 결정
+                let targetCompany = userCompany;
+                if (!targetCompany && deptList.length > 0) {
+                    targetCompany = deptList[0].companyName;
+                }
 
-                const compList = Array.from(compSet).sort();
+                const compList = targetCompany ? [targetCompany] : [];
                 setCompanies(compList);
-                setDepartments(deptRes.data || []);
-
-                if (!selectedCompany && compList.length > 0) {
-                    setSelectedCompany(userCompany || compList[0]);
+                setDepartments(deptList);
+                setSelectedCompany(targetCompany);
+                setSelectedDeptId(null);
+                if (targetCompany) {
+                    setExpandedCompanies(new Set([targetCompany]));
                 }
             } catch (err) {
                 console.error("Failed to load org data", err);
             }
         };
         loadOrgData();
-    }, [isOpen, userCompany, selectedCompany]);
+    }, [isOpen, userCompany]);
 
     // 부서별 또는 검색 사용자 로드
     const loadUsers = useCallback(async () => {
@@ -352,7 +347,10 @@ const ApprovalLineModal = ({
                                 return (
                                     <div key={comp} style={{ marginBottom: '6px' }}>
                                         <div
-                                            onClick={() => toggleCompanyExpand(comp)}
+                                            onClick={() => {
+                                                toggleCompanyExpand(comp);
+                                                setSelectedDeptId(null);
+                                            }}
                                             style={{
                                                 display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 8px',
                                                 borderRadius: '4px', cursor: 'pointer',

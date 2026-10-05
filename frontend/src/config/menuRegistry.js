@@ -193,6 +193,14 @@ export const MENU_REGISTRY = [
         path: 'notificationSettings',
         actions: ['VIEW', 'EDIT']
     },
+    {
+        key: 'menuManagement',
+        category: '🛠️ 시스템 관리',
+        label: '메뉴 관리',
+        icon: '📁',
+        path: 'menuManagement',
+        actions: ['VIEW', 'EDIT', 'DELETE']
+    },
 
     // 3. 📦 품목코드 관리
     {
@@ -234,6 +242,14 @@ export const MENU_REGISTRY = [
         icon: '🧪',
         path: 'ingredientCompliance',
         actions: ['VIEW', 'EDIT']
+    },
+    {
+        key: 'productBomInquiry',
+        category: '📦 품목코드 관리',
+        label: '제품코드별 포장재 조회',
+        icon: '📦',
+        path: 'productBomInquiry',
+        actions: ['VIEW']
     },
     {
         key: 'bomMaster',

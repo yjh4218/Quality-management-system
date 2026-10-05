@@ -21,4 +21,6 @@ public interface BugReportRepository extends JpaRepository<BugReport, Long> {
     Optional<BugReport> findFirstByScreenNameAndErrorCategoryAndCreatedAtAfterOrderByCreatedAtDesc(
         String screenName, String errorCategory, LocalDateTime since
     );
+
+    long countByStatus(String status);
 }
