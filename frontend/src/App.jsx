@@ -53,6 +53,8 @@ const IngredientCompliancePage = lazyRetry(() => import('./IngredientComplianceP
 const DocumentRequestManagementPage = lazyRetry(() => import('./DocumentRequestManagementPage.jsx'));
 const SystemBenchmarkPage = lazyRetry(() => import('./SystemBenchmarkPage.jsx'));
 const ProductBomInquiryPage = lazyRetry(() => import('./ProductBomInquiryPage.jsx'));
+const DynamicScreenRenderer = lazyRetry(() => import('./DynamicScreenRenderer.jsx'));
+const ScreenMenuManagementPage = lazyRetry(() => import('./ScreenMenuManagementPage.jsx'));
 
 import BomCategoryManagementPage from './BomCategoryManagementPage.jsx';
 import PackagingTemplatePage from './PackagingTemplatePage.jsx';
@@ -66,7 +68,7 @@ import NotificationSettingsPage from './NotificationSettingsPage.jsx';
 import HelpCenterModal from './components/HelpCenterModal';
 import CommandPaletteModal from './components/common/CommandPaletteModal';
 import ProfileModal from './ProfileModal';
-import { getCurrentUser, logout, getMyNotifications, getUnreadNotificationCount, readNotification, readAllNotifications, deleteNotification, submitBugReport, getBaseURL, getFormattedReporterInfo, fetchApprovalUnreadCounts } from './api';
+import api, { getCurrentUser, logout, getMyNotifications, getUnreadNotificationCount, getOpenBugReportCount, readNotification, readAllNotifications, deleteNotification, submitBugReport, getBaseURL, getFormattedReporterInfo, fetchApprovalUnreadCounts, fetchDynamicMenusTree, fetchDynamicScreens } from './api';
 import ManufacturerAuditItemPage from './ManufacturerAuditItemPage';
 import ManufacturerCategoryPage from './ManufacturerCategoryPage';
 import AccessLogPage from './AccessLogPage.jsx';
@@ -134,7 +136,11 @@ const PAGE_INFO = {
     approvalHistory: { title: '📜 내 결재 내역' },
     approvalDocTypes: { title: '📑 결재 문서유형 관리' },
     approvalTemplates: { title: '📐 결재선 템플릿 빌더' },
-    approvalNotificationRules: { title: '🔔 결재 알림 설정' }
+    approvalNotificationRules: { title: '🔔 결재 알림 설정' },
+    dynScreenProduct: { title: '📋 제품 메타 그리드 (Notion형)' },
+    dynScreenClaim: { title: '📊 클레임 다이나믹 분석' },
+    menuManagement: { title: '📁 메뉴 및 화면 관리' },
+    screenPositionManagement: { title: '🧭 화면 위치 관리' }
 };
 
 class ErrorBoundary extends React.Component {
@@ -328,6 +334,60 @@ const App = () => {
     const [tabContextMenu, setTabContextMenu] = useState({ visible: false, x: 0, y: 0, tabId: null });
     // [전자결재] 각 결재함별 읽지 않은 문서 수
     const [approvalUnreadCounts, setApprovalUnreadCounts] = useState({});
+    // [시스템 관리] 미확인(OPEN) 버그 리포트 수
+    const [openBugCount, setOpenBugCount] = useState(0);
+    // [동적 화면 & 메뉴 트리] 활성 동적 화면 및 계층 메뉴 트리
+    const [dynamicScreens, setDynamicScreens] = useState([]);
+    const [dynamicMenuTree, setDynamicMenuTree] = useState([]);
+
+    const loadDynamicScreens = async () => {
+        try {
+            const [screenRes, menuRes] = await Promise.allSettled([
+                fetchDynamicScreens(),
+                fetchDynamicMenusTree()
+            ]);
+            if (screenRes.status === 'fulfilled') {
+                const sData = screenRes.value?.data?.data || screenRes.value?.data || [];
+                setDynamicScreens(Array.isArray(sData) ? sData : []);
+            }
+            if (menuRes.status === 'fulfilled') {
+                const rawMenu = menuRes.value?.data || menuRes.value || [];
+                const mData = Array.isArray(rawMenu) ? rawMenu : (rawMenu.data || []);
+                if (Array.isArray(mData) && mData.length > 0) {
+                    setDynamicMenuTree(mData);
+                }
+            } else {
+                console.warn('[MENU SYNC] fetchDynamicMenusTree rejected:', menuRes.reason);
+            }
+        } catch (err) {
+            console.warn('[MENU SYNC] Failed to load dynamic screens or menu tree', err);
+        }
+    };
+
+    // [동적 메뉴 트리 전역 상시 동기화] 마운트 즉시 1회 로드 및 관리 센터 업데이트 이벤트 수신
+    useEffect(() => {
+        loadDynamicScreens();
+
+        const handleMenuSyncEvent = () => {
+            loadDynamicScreens();
+        };
+
+        window.addEventListener('dynamic-menu-updated', handleMenuSyncEvent);
+        window.addEventListener('qms_menu_updated', handleMenuSyncEvent);
+        window.addEventListener('focus', handleMenuSyncEvent);
+
+        return () => {
+            window.removeEventListener('dynamic-menu-updated', handleMenuSyncEvent);
+            window.removeEventListener('qms_menu_updated', handleMenuSyncEvent);
+            window.removeEventListener('focus', handleMenuSyncEvent);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (isLoggedIn) {
+            loadDynamicScreens();
+        }
+    }, [isLoggedIn]);
 
     // [전역 Data-Density 시스템: 해상도 자동 감지 + 수동 토글]
     const [density, setDensity] = useState(() => {
@@ -486,7 +546,8 @@ const App = () => {
         packaging: false,
         inbound: false,
         claim: false,
-        approval: false
+        approval: false,
+        dynamic: false
     });
     const tabBarRef = React.useRef(null);
 
@@ -538,7 +599,6 @@ const App = () => {
         }, 100);
 
         // 2. 탭 전환 시(tab-hidden -> tab-active) AG Grid 가상 렌더러가 화면 크기를 즉시 갱신하도록 rAF 및 지연 디스패치
-        window.dispatchEvent(new CustomEvent('qms-tab-activated', { detail: { tabId: activeTabId } }));
         requestAnimationFrame(() => {
             window.dispatchEvent(new Event('resize'));
         });
@@ -547,15 +607,11 @@ const App = () => {
         }, 50);
         const t2 = setTimeout(() => {
             window.dispatchEvent(new Event('resize'));
-        }, 150);
-        const t3 = setTimeout(() => {
-            window.dispatchEvent(new Event('resize'));
-        }, 300);
+        }, 200);
 
         return () => {
             clearTimeout(t1);
             clearTimeout(t2);
-            clearTimeout(t3);
         };
     }, [activeTabId]);
 
@@ -575,6 +631,7 @@ const App = () => {
                     inbound: false,
                     claim: false,
                     approval: false,
+                    dynamic: false,
                     [section]: true
                 };
             } else {
@@ -624,6 +681,16 @@ const App = () => {
             }
         } catch (err) {
             console.debug("Failed to fetch approval unread counts", err);
+        }
+    }, [isLoggedIn]);
+
+    const fetchOpenBugCount = useCallback(async () => {
+        if (!isLoggedIn) return;
+        try {
+            const count = await getOpenBugReportCount();
+            setOpenBugCount(count);
+        } catch (err) {
+            console.debug("Failed to fetch open bug count", err);
         }
     }, [isLoggedIn]);
 
@@ -705,6 +772,7 @@ const App = () => {
         fetchNotifications();
         fetchUnreadCount();
         loadApprovalUnreadCounts();
+        fetchOpenBugCount();
 
         let eventSource = null;
         let reconnectTimeout = null;
@@ -722,6 +790,7 @@ const App = () => {
                     fetchNotifications();
                     fetchUnreadCount();
                     loadApprovalUnreadCounts();
+                    fetchOpenBugCount();
 
                     // [추가] 이메일 발송 실패 실시간 토스트 피드백
                     if (newNotif.type === 'EMAIL_FAILURE') {
@@ -769,6 +838,7 @@ const App = () => {
         const interval = setInterval(() => {
             fetchUnreadCount();
             loadApprovalUnreadCounts();
+            fetchOpenBugCount();
             if (isNotifOpenRef.current) {
                 fetchNotifications();
             }
@@ -786,8 +856,20 @@ const App = () => {
         const handleWindowFocus = () => {
             fetchUnreadCount();
             loadApprovalUnreadCounts();
+            fetchOpenBugCount();
+            loadDynamicScreens();
         };
         window.addEventListener('focus', handleWindowFocus);
+
+        // [동적 화면 & 메뉴 업데이트 이벤트 수신]
+        const handleDynamicMenuUpdated = () => {
+            loadDynamicScreens();
+        };
+        window.addEventListener('dynamic-menu-updated', handleDynamicMenuUpdated);
+        window.addEventListener('qms_menu_updated', handleDynamicMenuUpdated);
+
+        // 최초 1회 동적 화면 로드
+        loadDynamicScreens();
 
         return () => {
             isClosing = true;
@@ -800,7 +882,10 @@ const App = () => {
             clearInterval(interval);
             document.removeEventListener('mousedown', handleOutsideClick);
             window.removeEventListener('focus', handleWindowFocus);
+            window.removeEventListener('dynamic-menu-updated', handleDynamicMenuUpdated);
+            window.removeEventListener('qms_menu_updated', handleDynamicMenuUpdated);
         };
+
     }, [isLoggedIn]);
 
     useEffect(() => {
@@ -908,7 +993,7 @@ const App = () => {
         let targetSection = null;
         if (['dashboard', 'announcements', 'notifications'].includes(pageKey)) targetSection = 'monitoring';
         else if (['users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin', 'accessLogs', 'bugReports', 'mailTemplates', 'notificationSettings', 'systemBenchmark'].includes(pageKey)) targetSection = 'system';
-        else if (['products', 'productBomInquiry', 'brands', 'ingredientCompliance', 'bomMaster', 'bomCategories', 'salesChannels'].includes(pageKey)) targetSection = 'products';
+        else if (['products', 'brands', 'ingredientCompliance', 'bomMaster', 'bomCategories', 'salesChannels'].includes(pageKey)) targetSection = 'products';
         else if (['manufacturers', 'manufacturerCategories'].includes(pageKey)) targetSection = 'partner';
         else if (['manufacturerAudits', 'manufacturerAuditDashboard', 'manufacturerAuditItems'].includes(pageKey)) targetSection = 'audit';
         else if (['qualityPhotoAudit', 'productionAuditDashboard'].includes(pageKey)) targetSection = 'quality';
@@ -981,7 +1066,19 @@ const App = () => {
             return;
         }
 
-        const pageTitle = PAGE_INFO[page]?.title || page;
+        let pageTitle = PAGE_INFO[page]?.title || data?.title;
+        if (!pageTitle && page.startsWith('dynScreen_')) {
+            const screenCode = page.replace('dynScreen_', '');
+            const foundScreen = dynamicScreens.find(ds => ds.screenCode === screenCode);
+            if (foundScreen) {
+                pageTitle = `📋 ${foundScreen.screenName}`;
+            } else {
+                pageTitle = `📋 ${screenCode}`;
+            }
+        }
+        if (!pageTitle) {
+            pageTitle = page;
+        }
         
         setTabs(prev => {
             const exists = prev.find(t => t.page === page);
@@ -997,6 +1094,9 @@ const App = () => {
         
         setActiveTabId(page);
         setIsMobileMenuOpen(false);
+        // 화면 재진입 시 AG Grid 레이아웃 강제 동기화
+        setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
+        setTimeout(() => window.dispatchEvent(new Event('resize')), 200);
     };
 
     useEffect(() => {
@@ -1167,7 +1267,7 @@ const App = () => {
 
     const hasMonitoringAccess = canAccess('dashboard') || canAccess('announcements') || canAccess('notifications');
     const hasSystemAccess = canAccess('users') || canAccess('logs') || canAccess('roles') || canAccess('guideManagement') || canAccess('dashboardMgmt') || canAccess('trashBin') || canAccess('accessLogs') || canAccess('bugReports') || canAccess('mailTemplates') || canAccess('notificationSettings') || canAccess('systemBenchmark');
-    const hasProductsAccess = canAccess('products') || canAccess('productBomInquiry') || canAccess('brands') || canAccess('ingredientCompliance') || canAccess('bomMaster') || canAccess('bomCategories') || canAccess('salesChannels') || canAccess('productDashboard');
+    const hasProductsAccess = canAccess('products') || canAccess('brands') || canAccess('ingredientCompliance') || canAccess('bomMaster') || canAccess('bomCategories') || canAccess('salesChannels') || canAccess('productDashboard');
     const hasPartnerAccess = canAccess('manufacturers') || canAccess('manufacturerCategories') || canAccess('manufacturerGuide');
     const hasAuditAccess = canAccess('manufacturerAudits') || canAccess('manufacturerAuditDashboard') || canAccess('manufacturerAuditItems');
     const hasQualityAccess = canAccess('qualityPhotoAudit') || canAccess('productionAuditDashboard');
@@ -1182,13 +1282,48 @@ const App = () => {
         canAccess('approvalCompleted') || canAccess('approvalRejected') || canAccess('approvalReference') || canAccess('approvalHistory') ||
         canAccess('approvalDocTypes') || canAccess('approvalTemplates') || canAccess('approvalNotificationRules')
     );
+    // [동적 화면 및 Notion형 그리드 권한 제어]
+    const hasDynamicAccess = !isManufacturer && (
+        isAdmin || canAccess('dynScreenProduct') || canAccess('dynScreenClaim')
+    );
+
+    // [동적 메뉴 표준 루트 코드 매핑]
+    const STANDARD_ROOT_MAP = {
+        'SYSTEM_ROOT': 'system',
+        'MONITORING_ROOT': 'monitoring',
+        'APPROVAL_ROOT': 'approval',
+        'PRODUCTS_ROOT': 'products',
+        'PARTNER_ROOT': 'partner',
+        'AUDIT_ROOT': 'audit',
+        'QUALITY_ROOT': 'quality',
+        'PACKAGING_ROOT': 'packaging',
+        'DYNAMIC_ROOT': 'dynamic',
+        'INBOUND_ROOT': 'inbound',
+        'CLAIM_ROOT': 'claim'
+    };
 
     // [고도화 5] 현재 활성화된 섹션 판단 로직
     const isSectionActive = (section) => {
         const activePage = tabs.find(t => t.id === activeTabId)?.page;
+        if (!activePage) return false;
+
+        // 커스텀 대메뉴 활성화 판별
+        if (section.startsWith('custom_')) {
+            const rootId = Number(section.replace('custom_', ''));
+            const customRoot = (dynamicMenuTree || []).find(m => m.id === rootId);
+            if (customRoot) {
+                if (customRoot.screen && `dynScreen_${customRoot.screen.screenCode}` === activePage) return true;
+                return (customRoot.children || []).some(c => 
+                    (c.screen && `dynScreen_${c.screen.screenCode}` === activePage) ||
+                    (c.children || []).some(sub => sub.screen && `dynScreen_${sub.screen.screenCode}` === activePage)
+                );
+            }
+            return false;
+        }
+
         switch(section) {
             case 'monitoring': return ['dashboard', 'announcements', 'notifications'].includes(activePage);
-            case 'system': return ['users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin', 'accessLogs', 'bugReports', 'mailTemplates', 'notificationSettings', 'systemBenchmark'].includes(activePage);
+            case 'system': return ['users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin', 'accessLogs', 'bugReports', 'mailTemplates', 'notificationSettings', 'systemBenchmark', 'menuManagement'].includes(activePage);
             case 'products': return ['products', 'productBomInquiry', 'brands', 'ingredientCompliance', 'bomMaster', 'bomCategories', 'salesChannels', 'productDashboard'].includes(activePage);
             case 'partner': return ['manufacturers', 'manufacturerCategories', 'manufacturerGuide'].includes(activePage);
             case 'audit': return ['manufacturerAudits', 'manufacturerAuditDashboard', 'manufacturerAuditItems'].includes(activePage);
@@ -1196,6 +1331,7 @@ const App = () => {
             case 'packaging': return ['packagingTemplates', 'spaceRatioCalculator', 'outboxCalculator'].includes(activePage);
             case 'inbound': return ['qualityDashboard', 'quality', 'releaseRecord'].includes(activePage);
             case 'claim': return ['claims', 'claimDashboard', 'lotPpmDashboard'].includes(activePage);
+            case 'dynamic': return ['dynScreenProduct', 'dynScreenClaim'].includes(activePage) || (activePage && activePage.startsWith('dynScreen_'));
             case 'approval': return [
                 'approvals', 
                 'approvalPending', 'approvalSubmitted', 'approvalInProgress', 
@@ -1251,6 +1387,198 @@ const App = () => {
         );
     };
 
+    // [시스템 표준 메뉴 -> 라우트 키 매핑 테이블]
+    const SYSTEM_MENU_ROUTE_MAP = {
+        // [현황 모니터링]
+        'SYS_DASHBOARD': { routeKey: 'dashboard', defaultLabel: '시스템 대시보드', defaultIcon: '📊' },
+        'SYS_ANNOUNCEMENTS': { routeKey: 'announcements', defaultLabel: '전체공지', defaultIcon: '📢' },
+        'SYS_NOTIFICATIONS': { routeKey: 'notifications', defaultLabel: '수신 알림 확인', defaultIcon: '🔔', badge: 'noti' },
+
+        // [전자결재]
+        'SYS_APPROVAL_PENDING': { routeKey: 'approvalPending', defaultLabel: '결재 대기함', defaultIcon: '⏳', approvalStatus: 'PENDING' },
+        'SYS_APPROVAL_SUBMITTED': { routeKey: 'approvalSubmitted', defaultLabel: '기안 문서함', defaultIcon: '📤', approvalStatus: 'SUBMITTED' },
+        'SYS_APPROVAL_IN_PROGRESS': { routeKey: 'approvalInProgress', defaultLabel: '진행 중 문서', defaultIcon: '🔄', approvalStatus: 'IN_PROGRESS' },
+        'SYS_APPROVAL_COMPLETED': { routeKey: 'approvalCompleted', defaultLabel: '결재 완료함', defaultIcon: '✅', approvalStatus: 'COMPLETED' },
+        'SYS_APPROVAL_REJECTED': { routeKey: 'approvalRejected', defaultLabel: '반려 문서함', defaultIcon: '❌', approvalStatus: 'REJECTED' },
+        'SYS_APPROVAL_REFERENCE': { routeKey: 'approvalReference', defaultLabel: '참조 문서함', defaultIcon: '👀', approvalStatus: 'REFERENCE' },
+        'SYS_APPROVAL_HISTORY': { routeKey: 'approvalHistory', defaultLabel: '내 결재 내역', defaultIcon: '📜', approvalStatus: 'PROCESSED' },
+        'SYS_APPROVAL_DOC_TYPES': { routeKey: 'approvalDocTypes', defaultLabel: '결재 문서유형 관리', defaultIcon: '📑' },
+        'SYS_APPROVAL_TEMPLATES': { routeKey: 'approvalTemplates', defaultLabel: '결재선 템플릿 빌더', defaultIcon: '📐' },
+        'SYS_APPROVAL_NOTI_RULES': { routeKey: 'approvalNotificationRules', defaultLabel: '결재 알림 설정', defaultIcon: '🔔' },
+
+        // [품목코드 관리]
+        'SYS_PRODUCTS': { routeKey: 'products', defaultLabel: '제품코드 마스터', defaultIcon: '📦' },
+        'SYS_PRODUCT_BOM_INQUIRY': { routeKey: 'productBomInquiry', defaultLabel: '제품코드별 포장재 조회', defaultIcon: '📦' },
+        'SYS_PRODUCT_DASHBOARD': { routeKey: 'productDashboard', defaultLabel: '제품코드 대시보드', defaultIcon: '📊' },
+        'SYS_BRANDS': { routeKey: 'brands', defaultLabel: '브랜드 마스터 관리', defaultIcon: '🏷️' },
+        'SYS_SALES_CHANNELS': { routeKey: 'salesChannels', defaultLabel: '유통 채널 관리', defaultIcon: '🌐' },
+        'SYS_INGREDIENT_COMPLIANCE': { routeKey: 'ingredientCompliance', defaultLabel: '성분 안전성 검토 (Global Compliance)', defaultIcon: '🧪' },
+        'SYS_BOM_MASTER': { routeKey: 'bomMaster', defaultLabel: '구성품 BOM 마스터 관리', defaultIcon: '📏' },
+        'SYS_BOM_CATEGORIES': { routeKey: 'bomCategories', defaultLabel: 'BOM 유형 설정/관리', defaultIcon: '⚙️' },
+
+        // [제조사 등록 관리]
+        'SYS_MANUFACTURERS': { routeKey: 'manufacturers', defaultLabel: '제조사 정보 관리', defaultIcon: '🏭' },
+        'SYS_MANUFACTURER_CATEGORIES': { routeKey: 'manufacturerCategories', defaultLabel: '제조사 구분 관리', defaultIcon: '📂' },
+        'SYS_MANUFACTURER_GUIDE': { routeKey: 'manufacturerGuide', defaultLabel: '제조사 협업 가이드', defaultIcon: '🤝' },
+
+        // [Audit 관리]
+        'SYS_MANUFACTURER_AUDITS': { routeKey: 'manufacturerAudits', defaultLabel: '제조사 Audit 관리', defaultIcon: '📝' },
+        'SYS_MANUFACTURER_AUDIT_DASHBOARD': { routeKey: 'manufacturerAuditDashboard', defaultLabel: '제조사 Audit 대시보드', defaultIcon: '📊' },
+        'SYS_MANUFACTURER_AUDIT_ITEMS': { routeKey: 'manufacturerAuditItems', defaultLabel: '제조사 점검항목 관리', defaultIcon: '📋' },
+
+        // [생산감리 관리]
+        'SYS_QUALITY_PHOTO_AUDIT': { routeKey: 'qualityPhotoAudit', defaultLabel: '신제품 생산감리 (사진감리)', defaultIcon: '📸' },
+        'SYS_PRODUCTION_AUDIT_DASHBOARD': { routeKey: 'productionAuditDashboard', defaultLabel: '생산감리 대시보드', defaultIcon: '📊' },
+        'SYS_DOCUMENT_REQUESTS': { routeKey: 'documentRequests', defaultLabel: '필수 품질서류 관리', defaultIcon: '📋' },
+
+        // [포장재 관리]
+        'SYS_PACKAGING_TEMPLATES': { routeKey: 'packagingTemplates', defaultLabel: '포장공정 템플릿 관리', defaultIcon: '📋' },
+        'SYS_SPACE_RATIO_CALCULATOR': { routeKey: 'spaceRatioCalculator', defaultLabel: '포장공간비율 계산기', defaultIcon: '📐' },
+        'SYS_OUTBOX_CALCULATOR': { routeKey: 'outboxCalculator', defaultLabel: '아웃박스 규격 계산기', defaultIcon: '📦' },
+
+        // [입고검사 관리]
+        'SYS_QUALITY_DASHBOARD': { routeKey: 'qualityDashboard', defaultLabel: '입고 품질 검사 대시보드', defaultIcon: '🚚' },
+        'SYS_QUALITY': { routeKey: 'quality', defaultLabel: '입고 품질 관리', defaultIcon: '📦' },
+        'SYS_RELEASE_RECORD': { routeKey: 'releaseRecord', defaultLabel: '시장출하 적부판정 기록', defaultIcon: '📄' },
+
+        // [CX 클레임 관리]
+        'SYS_CLAIMS': { routeKey: 'claims', defaultLabel: '클레임 조회 및 입력', defaultIcon: '🔍' },
+        'SYS_CLAIM_DASHBOARD': { routeKey: 'claimDashboard', defaultLabel: '클레임 대시보드', defaultIcon: '📈' },
+        'SYS_LOT_PPM_DASHBOARD': { routeKey: 'lotPpmDashboard', defaultLabel: 'LOT PPM 분석 & 근본원인', defaultIcon: '📉' },
+
+        // [시스템 관리]
+        'SYS_USERS': { routeKey: 'users', defaultLabel: '사용자 승인 관리', defaultIcon: '👥' },
+        'SYS_ROLES': { routeKey: 'roles', defaultLabel: '권한 관리', defaultIcon: '🔐' },
+        'SYS_ACCESS_LOGS': { routeKey: 'accessLogs', defaultLabel: '사용자 접근 로그', defaultIcon: '🕒' },
+        'SYS_LOGS': { routeKey: 'logs', defaultLabel: '시스템 변경 이력', defaultIcon: '📜' },
+        'SYS_BUG_REPORTS': { routeKey: 'bugReports', defaultLabel: '버그 리포트 관리', defaultIcon: '🐞', badge: 'bug' },
+        'SYS_SYSTEM_BENCHMARK': { routeKey: 'systemBenchmark', defaultLabel: '시스템 속도 측정 센터', defaultIcon: '⚡' },
+        'SYS_GUIDE_MGMT': { routeKey: 'guideManagement', defaultLabel: '가이드 관리', defaultIcon: '📖' },
+        'SYS_DASHBOARD_MGMT': { routeKey: 'dashboardMgmt', defaultLabel: '대시보드 제작/관리', defaultIcon: '🎨' },
+        'SYS_TRASH_BIN': { routeKey: 'trashBin', defaultLabel: '데이터 복구 (휴지통)', defaultIcon: '🗑️' },
+        'SYS_MAIL_TEMPLATES': { routeKey: 'mailTemplates', defaultLabel: '제조사 전달 메일 관리', defaultIcon: '📧' },
+        'SYS_NOTIFICATION_SETTINGS': { routeKey: 'notificationSettings', defaultLabel: '알림 설정 관리', defaultIcon: '🔔' },
+        'SYS_MENU_MANAGEMENT': { routeKey: 'menuManagement', defaultLabel: '메뉴 및 화면 관리', defaultIcon: '📁' },
+
+        // [동적 화면 관리]
+        'SYS_DYN_SCREEN_PRODUCT': { routeKey: 'dynScreenProduct', defaultLabel: '제품 메타 그리드', defaultIcon: '📋' },
+        'SYS_DYN_SCREEN_CLAIM': { routeKey: 'dynScreenClaim', defaultLabel: '클레임 다이나믹 분석', defaultIcon: '📊' }
+    };
+
+    // [시스템 화면 및 메뉴 관리 센터 연동] menuOrder 기반 동적 순서 사이드바 렌더러
+    const renderDynamicSidebarSection = (rootCode, fallbackRender = null) => {
+        if (!dynamicMenuTree || dynamicMenuTree.length === 0) {
+            return fallbackRender ? fallbackRender() : null;
+        }
+        const targetCodeUpper = (rootCode || '').toUpperCase();
+        const rootNode = dynamicMenuTree.find(m => (m.menuCode || '').toUpperCase() === targetCodeUpper);
+        if (!rootNode || !rootNode.children || rootNode.children.length === 0) {
+            return fallbackRender ? fallbackRender() : null;
+        }
+
+        // menuOrder 오름차순 정렬
+        const sortedChildren = [...rootNode.children]
+            .filter(item => item.isActive !== false)
+            .sort((a, b) => (a.menuOrder ?? 999) - (b.menuOrder ?? 999));
+
+        if (sortedChildren.length === 0) {
+            return fallbackRender ? fallbackRender() : null;
+        }
+
+        return sortedChildren.map((item, idx) => {
+            const isDivider = item.menuType === 'DIVIDER' || (item.menuCode && item.menuCode.startsWith('DIV_'));
+
+            // 1. 구분선(소분류 헤더)
+            if (isDivider) {
+                let hasVisibleChildAfter = isAdmin;
+                if (!hasVisibleChildAfter) {
+                    for (let i = idx + 1; i < sortedChildren.length; i++) {
+                        const nextItem = sortedChildren[i];
+                        if (nextItem.menuType === 'DIVIDER' || (nextItem.menuCode && nextItem.menuCode.startsWith('DIV_'))) break;
+                        const sysCfg = SYSTEM_MENU_ROUTE_MAP[nextItem.menuCode];
+                        if (sysCfg && canAccess(sysCfg.routeKey)) {
+                            hasVisibleChildAfter = true;
+                            break;
+                        }
+                        if (nextItem.screenCode || nextItem.screen?.screenCode) {
+                            hasVisibleChildAfter = true;
+                            break;
+                        }
+                    }
+                }
+                if (!hasVisibleChildAfter) return null;
+                return (
+                    <div key={`div_${item.id || item.menuCode || idx}`} className="sidebar-sub-header">
+                        {item.menuName}
+                    </div>
+                );
+            }
+
+            // 2. 시스템 표준 메뉴
+            if (item.menuType === 'SYSTEM' || item.isSystem) {
+                const sysConfig = SYSTEM_MENU_ROUTE_MAP[item.menuCode];
+                if (sysConfig) {
+                    const routeKey = sysConfig.routeKey;
+                    const isAccessible = isAdmin || canAccess(routeKey);
+                    if (!isAccessible) return null;
+
+                    let badgeCount = null;
+                    if (sysConfig.badge === 'bug') badgeCount = openBugCount;
+                    else if (sysConfig.badge === 'noti') badgeCount = unreadCount;
+                    else if (sysConfig.approvalStatus && approvalUnreadCounts) {
+                        badgeCount = approvalUnreadCounts[sysConfig.approvalStatus] || null;
+                    }
+
+                    const label = `${item.icon || sysConfig.defaultIcon} ${item.menuName || sysConfig.defaultLabel}`;
+                    return renderSidebarItem(routeKey, label, badgeCount);
+                }
+            }
+
+            // 3. 동적 추가 화면 및 서브메뉴
+            const sCode = item.screenCode || 
+                          item.screen?.screenCode || 
+                          (item.menuCode?.startsWith('MENU_SCR_') ? item.menuCode.replace('MENU_', '') : null) ||
+                          (item.screenId ? `SCR_${item.screenId}` : null);
+            if (sCode) {
+                const navKey = `dynScreen_${sCode}`;
+                return renderSidebarItem(navKey, `${item.icon || '🔬'} ${item.menuName}`);
+            }
+
+            // 4. 하위 자식이 있는 2계층 커스텀 서브메뉴
+            if (item.children && item.children.length > 0) {
+                const validSubs = item.children.filter(s => s.isActive !== false && (s.screenCode || s.screen?.screenCode || s.menuCode?.startsWith('MENU_SCR_')));
+                if (validSubs.length === 0) return null;
+                return (
+                    <div key={`subgroup_${item.id}`} style={{ marginTop: '4px' }}>
+                        <div className="sidebar-sub-header" style={{ paddingLeft: '14px', fontSize: '11px', color: '#64748b' }}>
+                            {item.icon || '📁'} {item.menuName}
+                        </div>
+                        {validSubs.map(sub => {
+                            const subCode = sub.screenCode || sub.screen?.screenCode || (sub.menuCode?.startsWith('MENU_SCR_') ? sub.menuCode.replace('MENU_', '') : null);
+                            const navKey = `dynScreen_${subCode}`;
+                            return renderSidebarItem(navKey, `${sub.icon || '📋'} ${sub.menuName}`);
+                        })}
+                    </div>
+                );
+            }
+
+            return null;
+        });
+    };
+
+    // [기존 호환 헬퍼 유지]
+    const renderDynamicSubItemsForRoot = (rootCode) => {
+        return null; // renderDynamicSidebarSection으로 일원화
+    };
+
+    // 표준 대메뉴 외 사용자가 신규 생성한 커스텀 최상위 대메뉴 목록
+    const customRootMenus = (dynamicMenuTree || []).filter(
+        m => !Object.keys(STANDARD_ROOT_MAP).includes(m.menuCode) && !m.parentId && m.isActive !== false
+    );
+
+    // [전자결재] 결재 대기 및 진행 중 문서 합산 카운트
+    const totalApprovalCount = (approvalUnreadCounts.PENDING || 0) + (approvalUnreadCounts.IN_PROGRESS || 0);
+
     return (
         <ErrorBoundary user={user}>
             <div className={`app-container ${isMobileMenuOpen ? 'mobile-menu-active' : ''}`}>
@@ -1285,307 +1613,479 @@ const App = () => {
                 </div>
 
                 <nav className="sidebar-menu">
-                    {/* [시스템 관리] - 빠른 바로가기 상단 별도 메뉴 */}
-                    {hasSystemAccess && (
-                    <div className="sidebar-group sidebar-system-group" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '4px', marginBottom: '8px' }}>
-                        <button 
-                            className={`sidebar-group-header ${isSectionActive('system') ? 'active' : ''}`} 
-                            onClick={() => toggleSection('system')}
-                        >
-                            <span>🛠️ 시스템 관리</span>
-                            <span className={`arrow ${openSections.system ? 'open' : ''}`}>▼</span>
-                        </button>
-                        {openSections.system && (
-                            <div className="sidebar-group-content open">
-                                {(canAccess('users') || canAccess('roles') || canAccess('accessLogs')) && (
-                                    <>
-                                        <div className="sidebar-sub-header">사용자 및 보안</div>
-                                        {canAccess('users') && renderSidebarItem('users', '👥 사용자 승인 관리')}
-                                        {canAccess('roles') && renderSidebarItem('roles', '🔐 권한 관리')}
-                                        {canAccess('accessLogs') && renderSidebarItem('accessLogs', '🕒 사용자 접근 로그')}
-                                    </>
-                                )}
+                    {/* [관리자 전용 메뉴 섹터] - 관리자 계정만 노출 */}
+                    {isAdmin && (
+                        <div className="sidebar-section-container admin-section">
+                            <div className="sidebar-section-header">
+                                <span className="sidebar-section-badge admin">ADMIN</span>
+                                <span className="sidebar-section-title">관리자 전용 메뉴</span>
+                            </div>
 
-                                {(canAccess('logs') || canAccess('bugReports') || canAccess('systemBenchmark')) && (
-                                    <>
-                                        <div className="sidebar-sub-header">운영 모니터링</div>
-                                        {canAccess('logs') && renderSidebarItem('logs', '📜 시스템 변경 이력')}
-                                        {canAccess('bugReports') && renderSidebarItem('bugReports', '🐞 버그 리포트 관리')}
-                                        {canAccess('systemBenchmark') && renderSidebarItem('systemBenchmark', '⚡ 시스템 속도 측정 센터')}
-                                    </>
-                                )}
+                            {/* [시스템 관리] */}
+                            {hasSystemAccess && (
+                            <div className="sidebar-group sidebar-system-group" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '4px', marginBottom: '8px' }}>
+                                <button 
+                                    className={`sidebar-group-header ${isSectionActive('system') ? 'active' : ''}`} 
+                                    onClick={() => toggleSection('system')}
+                                >
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <span>🛠️ 시스템 관리</span>
+                                        {openBugCount > 0 && (
+                                            <span className="sidebar-group-badge danger">{openBugCount > 99 ? '99+' : openBugCount}</span>
+                                        )}
+                                    </span>
+                                    <span className={`arrow ${openSections.system ? 'open' : ''}`}>▼</span>
+                                </button>
+                                {openSections.system && (
+                                    <div className="sidebar-group-content open">
+                                        {renderDynamicSidebarSection('SYSTEM_ROOT', () => (
+                                            <>
+                                                {(canAccess('users') || canAccess('roles') || canAccess('accessLogs')) && (
+                                                    <>
+                                                        <div className="sidebar-sub-header">사용자 및 보안</div>
+                                                        {canAccess('users') && renderSidebarItem('users', '👥 사용자 승인 관리')}
+                                                        {canAccess('roles') && renderSidebarItem('roles', '🔐 권한 관리')}
+                                                        {canAccess('accessLogs') && renderSidebarItem('accessLogs', '🕒 사용자 접근 로그')}
+                                                    </>
+                                                )}
 
-                                {(canAccess('guideManagement') || canAccess('dashboardMgmt') || canAccess('trashBin') || canAccess('mailTemplates') || canAccess('notificationSettings')) && (
-                                    <>
-                                        <div className="sidebar-sub-header">설정 및 유지보수</div>
-                                        {canAccess('guideManagement') && renderSidebarItem('guideManagement', '📖 가이드 관리')}
-                                        {canAccess('dashboardMgmt') && renderSidebarItem('dashboardMgmt', '🎨 대시보드 제작/관리')}
-                                        {canAccess('trashBin') && renderSidebarItem('trashBin', '🗑️ 데이터 복구 (휴지통)')}
-                                        {canAccess('mailTemplates') && renderSidebarItem('mailTemplates', '📧 제조사 전달 메일 관리')}
-                                        {canAccess('notificationSettings') && renderSidebarItem('notificationSettings', '🔔 알림 설정 관리')}
-                                    </>
+                                                {(canAccess('logs') || canAccess('bugReports') || canAccess('systemBenchmark')) && (
+                                                    <>
+                                                        <div className="sidebar-sub-header">운영 모니터링</div>
+                                                        {canAccess('logs') && renderSidebarItem('logs', '📜 시스템 변경 이력')}
+                                                        {canAccess('bugReports') && renderSidebarItem('bugReports', '🐞 버그 리포트 관리', openBugCount)}
+                                                        {canAccess('systemBenchmark') && renderSidebarItem('systemBenchmark', '⚡ 시스템 속도 측정 센터')}
+                                                    </>
+                                                )}
+
+                                                {(canAccess('guideManagement') || canAccess('dashboardMgmt') || canAccess('trashBin') || canAccess('mailTemplates') || canAccess('notificationSettings')) && (
+                                                    <>
+                                                        <div className="sidebar-sub-header">설정 및 유지보수</div>
+                                                        {canAccess('guideManagement') && renderSidebarItem('guideManagement', '📖 가이드 관리')}
+                                                        {canAccess('dashboardMgmt') && renderSidebarItem('dashboardMgmt', '🎨 대시보드 제작/관리')}
+                                                        {canAccess('trashBin') && renderSidebarItem('trashBin', '🗑️ 데이터 복구 (휴지통)')}
+                                                        {canAccess('mailTemplates') && renderSidebarItem('mailTemplates', '📧 제조사 전달 메일 관리')}
+                                                        {canAccess('notificationSettings') && renderSidebarItem('notificationSettings', '🔔 알림 설정 관리')}
+                                                    </>
+                                                )}
+
+                                                {(isAdmin || canAccess('menuManagement')) && (
+                                                    <>
+                                                        <div className="sidebar-sub-header">화면 관리</div>
+                                                        {renderSidebarItem('menuManagement', '📁 메뉴 및 화면 관리')}
+                                                    </>
+                                                )}
+                                            </>
+                                        ))}
+                                    </div>
                                 )}
                             </div>
-                        )}
-                    </div>
-                    )}
+                            )}
 
-                    {favorites.length > 0 && (
-                        <div className="sidebar-fav-group">
-                            <button
-                                type="button"
-                                className={`sidebar-group-header ${isFavOpen ? 'active' : ''}`}
-                                onClick={handleToggleFavOpen}
-                                style={{ padding: '10px 16px', background: 'transparent' }}
-                            >
-                                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#b45309', fontWeight: 700, fontSize: '13px' }}>
-                                    ⭐ 빠른 바로가기 ({favorites.filter(favKey => canAccess(favKey)).length})
-                                </span>
-                                <span className={`arrow ${isFavOpen ? 'open' : ''}`}>▼</span>
-                            </button>
-                            {isFavOpen && (
-                                <div className="sidebar-fav-content">
-                                    {favorites.filter(favKey => canAccess(favKey)).map(favKey => {
-                                        const pageTitle = PAGE_INFO[favKey]?.title || favKey;
-                                        const isCurrentActive = tabs.find(t => t.id === activeTabId)?.page === favKey;
-                                        return (
-                                            <div key={favKey} className="sidebar-fav-item" onClick={() => handleNavigate(favKey)}>
-                                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{pageTitle}</span>
-                                                <span
-                                                    style={{ opacity: 0.6, cursor: 'pointer', padding: '0 4px', fontSize: '11px', color: '#94a3b8' }}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleToggleFavorite(favKey);
-                                                    }}
-                                                    title="즐겨찾기 해제"
-                                                >
-                                                    ✕
-                                                </span>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
+                            {/* [동적 화면 관리] - 명칭 변경: '⚡ 동적 화면 (Notion형)' -> '⚡ 동적 화면 관리' */}
+                            {hasDynamicAccess && (
+                            <div className="sidebar-group sidebar-dynamic-group" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '4px', marginBottom: '8px' }}>
+                                <button 
+                                    className={`sidebar-group-header ${isSectionActive('dynamic') ? 'active' : ''}`} 
+                                    onClick={() => toggleSection('dynamic')}
+                                >
+                                    <span>⚡ 동적 화면 관리</span>
+                                    <span className={`arrow ${openSections.dynamic ? 'open' : ''}`}>▼</span>
+                                </button>
+                                {openSections.dynamic && (
+                                    <div className="sidebar-group-content open">
+                                        {renderDynamicSidebarSection('DYNAMIC_ROOT', () => (
+                                            <>
+                                                <div className="sidebar-sub-header">동적 메타 관리</div>
+                                                {canAccess('dynScreenProduct') && renderSidebarItem('dynScreenProduct', '📋 제품 메타 그리드')}
+                                                {canAccess('dynScreenClaim') && renderSidebarItem('dynScreenClaim', '📊 클레임 다이나믹 분석')}
+                                            </>
+                                        ))}
+
+                                        {/* 표준 대메뉴나 커스텀 대메뉴 어디에도 매핑되지 않은 화면 fallback 렌더링 */}
+                                        {(() => {
+                                            const mappedCodes = new Set();
+                                            const collectCodes = (nodes) => {
+                                                for (const n of nodes) {
+                                                    if (n.screen?.screenCode) mappedCodes.add(n.screen.screenCode);
+                                                    if (n.children?.length) collectCodes(n.children);
+                                                }
+                                            };
+                                            collectCodes(dynamicMenuTree || []);
+
+                                            return dynamicScreens
+                                                .filter(ds => ds.screenCode !== 'SCR_NOTION_PRODUCT' && ds.screenCode !== 'SCR_DYNAMIC_CLAIM' && !mappedCodes.has(ds.screenCode))
+                                                .map(ds => {
+                                                    const navKey = `dynScreen_${ds.screenCode}`;
+                                                    return renderSidebarItem(navKey, `📋 ${ds.screenName}`);
+                                                });
+                                        })()}
+                                    </div>
+                                )}
+                            </div>
                             )}
                         </div>
                     )}
 
-                    {/* [현황 모니터링] */}
-                    {hasMonitoringAccess && (
-                    <div className="sidebar-group">
-                        <button 
-                            className={`sidebar-group-header ${isSectionActive('monitoring') ? 'active' : ''}`} 
-                            onClick={() => toggleSection('monitoring')}
-                        >
-                            <span>📊 현황 모니터링</span>
-                            <span className={`arrow ${openSections.monitoring ? 'open' : ''}`}>▼</span>
-                        </button>
-                        {openSections.monitoring && (
-                            <div className="sidebar-group-content open">
-                                {canAccess('dashboard') && renderSidebarItem('dashboard', '📊 시스템 대시보드')}
-                                {canAccess('announcements') && renderSidebarItem('announcements', '📢 전체공지')}
-                                {canAccess('notifications') && renderSidebarItem('notifications', '🔔 수신 알림 확인')}
+                    {/* [사용자 메뉴 섹터] */}
+                    <div className="sidebar-section-container user-section">
+                        {isAdmin && (
+                            <div className="sidebar-section-header user">
+                                <span className="sidebar-section-badge user">USER</span>
+                                <span className="sidebar-section-title">사용자 메뉴</span>
                             </div>
                         )}
-                    </div>
-                    )}
 
-                    {/* [전자결재 관리] */}
-                    {hasApprovalAccess && (
-                    <div className="sidebar-group">
-                        <button 
-                            className={`sidebar-group-header ${isSectionActive('approval') ? 'active' : ''}`} 
-                            onClick={() => toggleSection('approval')}
-                        >
-                            <span>📋 전자결재</span>
-                            <span className={`arrow ${openSections.approval ? 'open' : ''}`}>▼</span>
-                        </button>
-                        {openSections.approval && (
-                            <div className="sidebar-group-content open">
-                                {(isAdmin || canAccess('approvalPending') || canAccess('approvals')) && 
-                                    renderSidebarItem('approvalPending', '⏳ 결재 대기함', approvalUnreadCounts.PENDING)}
-                                {(isAdmin || canAccess('approvalSubmitted') || canAccess('approvals')) && 
-                                    renderSidebarItem('approvalSubmitted', '📤 기안 문서함', approvalUnreadCounts.SUBMITTED)}
-                                {(isAdmin || canAccess('approvalInProgress') || canAccess('approvals')) && 
-                                    renderSidebarItem('approvalInProgress', '🔄 진행 중 문서', approvalUnreadCounts.IN_PROGRESS)}
-                                {(isAdmin || canAccess('approvalCompleted') || canAccess('approvals')) && 
-                                    renderSidebarItem('approvalCompleted', '✅ 결재 완료함', approvalUnreadCounts.COMPLETED)}
-                                {(isAdmin || canAccess('approvalRejected') || canAccess('approvals')) && 
-                                    renderSidebarItem('approvalRejected', '❌ 반려 문서함', approvalUnreadCounts.REJECTED)}
-                                {(isAdmin || canAccess('approvalReference') || canAccess('approvals')) && 
-                                    renderSidebarItem('approvalReference', '👀 참조 문서함', approvalUnreadCounts.REFERENCE)}
-                                {(isAdmin || canAccess('approvalHistory') || canAccess('approvals')) && 
-                                    renderSidebarItem('approvalHistory', '📜 내 결재 내역', approvalUnreadCounts.PROCESSED)}
-                                {(isAdmin || canAccess('approvalDocTypes') || canAccess('approvalTemplates') || canAccess('approvalNotificationRules')) && (
-                                    <>
-                                        <div className="sidebar-sub-header">결재선 마스터 설정</div>
-                                        {(isAdmin || canAccess('approvalDocTypes')) && renderSidebarItem('approvalDocTypes', '📑 결재 문서유형 관리')}
-                                        {(isAdmin || canAccess('approvalTemplates')) && renderSidebarItem('approvalTemplates', '📐 결재선 템플릿 빌더')}
-                                        {(isAdmin || canAccess('approvalNotificationRules')) && renderSidebarItem('approvalNotificationRules', '🔔 결재 알림 설정')}
-                                    </>
+                        {favorites.length > 0 && (
+                            <div className="sidebar-fav-group">
+                                <button
+                                    type="button"
+                                    className={`sidebar-group-header ${isFavOpen ? 'active' : ''}`}
+                                    onClick={handleToggleFavOpen}
+                                    style={{ padding: '10px 16px', background: 'transparent' }}
+                                >
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#b45309', fontWeight: 700, fontSize: '13px' }}>
+                                        ⭐ 빠른 바로가기 ({favorites.filter(favKey => canAccess(favKey)).length})
+                                    </span>
+                                    <span className={`arrow ${isFavOpen ? 'open' : ''}`}>▼</span>
+                                </button>
+                                {isFavOpen && (
+                                    <div className="sidebar-fav-content">
+                                        {favorites.filter(favKey => canAccess(favKey)).map(favKey => {
+                                            const pageTitle = PAGE_INFO[favKey]?.title || favKey;
+                                            const isCurrentActive = tabs.find(t => t.id === activeTabId)?.page === favKey;
+                                            return (
+                                                <div key={favKey} className="sidebar-fav-item" onClick={() => handleNavigate(favKey)}>
+                                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{pageTitle}</span>
+                                                    <span
+                                                        style={{ opacity: 0.6, cursor: 'pointer', padding: '0 4px', fontSize: '11px', color: '#94a3b8' }}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleToggleFavorite(favKey);
+                                                        }}
+                                                        title="즐겨찾기 해제"
+                                                    >
+                                                        ✕
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 )}
                             </div>
                         )}
-                    </div>
-                    )}
 
-
-                    {/* [품목코드 관리] */}
-                    {hasProductsAccess && (
-                    <div className="sidebar-group">
-                        <button 
-                            className={`sidebar-group-header ${isSectionActive('products') ? 'active' : ''}`} 
-                            onClick={() => toggleSection('products')}
-                        >
-                            <span>📦 품목코드 관리</span>
-                            <span className={`arrow ${openSections.products ? 'open' : ''}`}>▼</span>
-                        </button>
-                        {openSections.products && (
-                            <div className="sidebar-group-content open">
-                                {(canAccess('products') || canAccess('brands') || canAccess('ingredientCompliance') || canAccess('salesChannels')) && (
-                                    <>
-                                        <div className="sidebar-sub-header">기본 마스터</div>
-                                        {canAccess('products') && renderSidebarItem('products', '📦 제품코드 마스터')}
-                                        {renderSidebarItem('productDashboard', '📊 제품코드 대시보드')}
-                                        {canAccess('brands') && renderSidebarItem('brands', '🏷️ 브랜드 마스터 관리')}
-                                        {canAccess('salesChannels') && renderSidebarItem('salesChannels', '🌐 유통 채널 관리')}
-                                        {canAccess('ingredientCompliance') && renderSidebarItem('ingredientCompliance', '🧪 성분 안전성 검토 (Global Compliance)')}
-                                    </>
-                                )}
-
-                                {(canAccess('bomMaster') || canAccess('bomCategories')) && (
-                                    <>
-                                        <div className="sidebar-sub-header">BOM/구성품 관리</div>
-                                        {canAccess('bomMaster') && renderSidebarItem('bomMaster', '📏 구성품 BOM 마스터 관리')}
-                                        {canAccess('productBomInquiry') && renderSidebarItem('productBomInquiry', '📦 제품코드별 포장재 조회')}
-                                        {canAccess('bomCategories') && renderSidebarItem('bomCategories', '⚙️ BOM 유형 설정/관리')}
-                                    </>
-                                )}
-                            </div>
+                        {/* [현황 모니터링] */}
+                        {hasMonitoringAccess && (
+                        <div className="sidebar-group">
+                            <button 
+                                className={`sidebar-group-header ${isSectionActive('monitoring') ? 'active' : ''}`} 
+                                onClick={() => toggleSection('monitoring')}
+                            >
+                                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span>📊 현황 모니터링</span>
+                                    {unreadCount > 0 && (
+                                        <span className="sidebar-group-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
+                                    )}
+                                </span>
+                                <span className={`arrow ${openSections.monitoring ? 'open' : ''}`}>▼</span>
+                            </button>
+                            {openSections.monitoring && (
+                                <div className="sidebar-group-content open">
+                                    {renderDynamicSidebarSection('MONITORING_ROOT', () => (
+                                        <>
+                                            {canAccess('dashboard') && renderSidebarItem('dashboard', '📊 시스템 대시보드')}
+                                            {canAccess('announcements') && renderSidebarItem('announcements', '📢 전체공지')}
+                                            {canAccess('notifications') && renderSidebarItem('notifications', '🔔 수신 알림 확인', unreadCount)}
+                                        </>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                         )}
-                    </div>
-                    )}
 
-                    {/* [제조사 등록 관리] */}
-                    {hasPartnerAccess && (
-                    <div className="sidebar-group">
-                        <button 
-                            className={`sidebar-group-header ${isSectionActive('partner') ? 'active' : ''}`} 
-                            onClick={() => toggleSection('partner')}
-                        >
-                            <span>🏭 제조사 등록 관리</span>
-                            <span className={`arrow ${openSections.partner ? 'open' : ''}`}>▼</span>
-                        </button>
-                        {openSections.partner && (
-                            <div className="sidebar-group-content open">
-                                {canAccess('manufacturers') && renderSidebarItem('manufacturers', '🏭 제조사 정보 관리')}
-                                {canAccess('manufacturerCategories') && renderSidebarItem('manufacturerCategories', '📂 제조사 구분 관리')}
-                                {canAccess('manufacturerGuide') && renderSidebarItem('manufacturerGuide', '🤝 제조사 협업 가이드')}
-                            </div>
+                        {/* [전자결재 관리] */}
+                        {hasApprovalAccess && (
+                        <div className="sidebar-group">
+                            <button 
+                                className={`sidebar-group-header ${isSectionActive('approval') ? 'active' : ''}`} 
+                                onClick={() => toggleSection('approval')}
+                            >
+                                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span>📋 전자결재</span>
+                                    {totalApprovalCount > 0 && (
+                                        <span className="sidebar-group-badge">{totalApprovalCount > 99 ? '99+' : totalApprovalCount}</span>
+                                    )}
+                                </span>
+                                <span className={`arrow ${openSections.approval ? 'open' : ''}`}>▼</span>
+                            </button>
+                            {openSections.approval && (
+                                <div className="sidebar-group-content open">
+                                    {renderDynamicSidebarSection('APPROVAL_ROOT', () => (
+                                        <>
+                                            {(isAdmin || canAccess('approvalPending') || canAccess('approvals')) && 
+                                                renderSidebarItem('approvalPending', '⏳ 결재 대기함', approvalUnreadCounts.PENDING)}
+                                            {(isAdmin || canAccess('approvalSubmitted') || canAccess('approvals')) && 
+                                                renderSidebarItem('approvalSubmitted', '📤 기안 문서함', approvalUnreadCounts.SUBMITTED)}
+                                            {(isAdmin || canAccess('approvalInProgress') || canAccess('approvals')) && 
+                                                renderSidebarItem('approvalInProgress', '🔄 진행 중 문서', approvalUnreadCounts.IN_PROGRESS)}
+                                            {(isAdmin || canAccess('approvalCompleted') || canAccess('approvals')) && 
+                                                renderSidebarItem('approvalCompleted', '✅ 결재 완료함', approvalUnreadCounts.COMPLETED)}
+                                            {(isAdmin || canAccess('approvalRejected') || canAccess('approvals')) && 
+                                                renderSidebarItem('approvalRejected', '❌ 반려 문서함', approvalUnreadCounts.REJECTED)}
+                                            {(isAdmin || canAccess('approvalReference') || canAccess('approvals')) && 
+                                                renderSidebarItem('approvalReference', '👀 참조 문서함', approvalUnreadCounts.REFERENCE)}
+                                            {(isAdmin || canAccess('approvalHistory') || canAccess('approvals')) && 
+                                                renderSidebarItem('approvalHistory', '📜 내 결재 내역', approvalUnreadCounts.PROCESSED)}
+                                            {(isAdmin || canAccess('approvalDocTypes') || canAccess('approvalTemplates') || canAccess('approvalNotificationRules')) && (
+                                                <>
+                                                    <div className="sidebar-sub-header">결재선 마스터 설정</div>
+                                                    {(isAdmin || canAccess('approvalDocTypes')) && renderSidebarItem('approvalDocTypes', '📑 결재 문서유형 관리')}
+                                                    {(isAdmin || canAccess('approvalTemplates')) && renderSidebarItem('approvalTemplates', '📐 결재선 템플릿 빌더')}
+                                                    {(isAdmin || canAccess('approvalNotificationRules')) && renderSidebarItem('approvalNotificationRules', '🔔 결재 알림 설정')}
+                                                </>
+                                            )}
+                                        </>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                         )}
-                    </div>
-                    )}
 
-                    {/* [Audit 관리] */}
-                    {hasAuditAccess && (
-                    <div className="sidebar-group">
-                        <button 
-                            className={`sidebar-group-header ${isSectionActive('audit') ? 'active' : ''}`} 
-                            onClick={() => toggleSection('audit')}
-                        >
-                            <span>📝 Audit 관리</span>
-                            <span className={`arrow ${openSections.audit ? 'open' : ''}`}>▼</span>
-                        </button>
-                        {openSections.audit && (
-                            <div className="sidebar-group-content open">
-                                {canAccess('manufacturerAudits') && renderSidebarItem('manufacturerAudits', '📝 제조사 Audit 관리')}
-                                {canAccess('manufacturerAuditDashboard') && renderSidebarItem('manufacturerAuditDashboard', '📊 제조사 Audit 대시보드')}
-                                {canAccess('manufacturerAuditItems') && renderSidebarItem('manufacturerAuditItems', '📋 제조사 점검항목 관리')}
-                            </div>
+
+                        {/* [품목코드 관리] */}
+                        {hasProductsAccess && (
+                        <div className="sidebar-group">
+                            <button 
+                                className={`sidebar-group-header ${isSectionActive('products') ? 'active' : ''}`} 
+                                onClick={() => toggleSection('products')}
+                            >
+                                <span>📦 품목코드 관리</span>
+                                <span className={`arrow ${openSections.products ? 'open' : ''}`}>▼</span>
+                            </button>
+                            {openSections.products && (
+                                <div className="sidebar-group-content open">
+                                    {renderDynamicSidebarSection('PRODUCTS_ROOT', () => (
+                                        <>
+                                            {(canAccess('products') || canAccess('brands') || canAccess('ingredientCompliance') || canAccess('salesChannels')) && (
+                                                <>
+                                                    <div className="sidebar-sub-header">기본 마스터</div>
+                                                    {dynamicScreens.filter(s => s.screenCode?.includes('SCR_TEST_EXT') || s.parentMenuCode === 'PRODUCTS_ROOT').map(s => 
+                                                        renderSidebarItem(`dynScreen_${s.screenCode}`, `🔬 ${s.screenName}`)
+                                                    )}
+                                                    {canAccess('products') && renderSidebarItem('products', '📦 제품코드 마스터')}
+                                                    {renderSidebarItem('productDashboard', '📊 제품코드 대시보드')}
+                                                    {canAccess('brands') && renderSidebarItem('brands', '🏷️ 브랜드 마스터 관리')}
+                                                    {canAccess('salesChannels') && renderSidebarItem('salesChannels', '🌐 유통 채널 관리')}
+                                                    {canAccess('ingredientCompliance') && renderSidebarItem('ingredientCompliance', '🧪 성분 안전성 검토 (Global Compliance)')}
+                                                </>
+                                            )}
+
+                                            {(canAccess('bomMaster') || canAccess('bomCategories')) && (
+                                                <>
+                                                    <div className="sidebar-sub-header">BOM/구성품 관리</div>
+                                                    {canAccess('bomMaster') && renderSidebarItem('bomMaster', '📏 구성품 BOM 마스터 관리')}
+                                                    {canAccess('bomCategories') && renderSidebarItem('bomCategories', '⚙️ BOM 유형 설정/관리')}
+                                                </>
+                                            )}
+                                        </>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                         )}
-                    </div>
-                    )}
 
-                    {/* [생산감리 관리] */}
-                    {hasQualityAccess && (
-                    <div className="sidebar-group">
-                        <button 
-                            className={`sidebar-group-header ${isSectionActive('quality') ? 'active' : ''}`} 
-                            onClick={() => toggleSection('quality')}
-                        >
-                            <span>📸 생산감리 관리</span>
-                            <span className={`arrow ${openSections.quality ? 'open' : ''}`}>▼</span>
-                        </button>
-                        {openSections.quality && (
-                            <div className="sidebar-group-content open">
-                                {canAccess('qualityPhotoAudit') && renderSidebarItem('qualityPhotoAudit', '📸 신제품 생산감리 (사진감리)')}
-                                {canAccess('productionAuditDashboard') && renderSidebarItem('productionAuditDashboard', '📊 생산감리 대시보드')}
-                                {canAccess('documentRequests') && renderSidebarItem('documentRequests', '📋 필수 품질서류 관리')}
-                            </div>
+                        {/* [제조사 등록 관리] */}
+                        {hasPartnerAccess && (
+                        <div className="sidebar-group">
+                            <button 
+                                className={`sidebar-group-header ${isSectionActive('partner') ? 'active' : ''}`} 
+                                onClick={() => toggleSection('partner')}
+                            >
+                                <span>🏭 제조사 등록 관리</span>
+                                <span className={`arrow ${openSections.partner ? 'open' : ''}`}>▼</span>
+                            </button>
+                            {openSections.partner && (
+                                <div className="sidebar-group-content open">
+                                    {renderDynamicSidebarSection('PARTNER_ROOT', () => (
+                                        <>
+                                            {canAccess('manufacturers') && renderSidebarItem('manufacturers', '🏭 제조사 정보 관리')}
+                                            {canAccess('manufacturerCategories') && renderSidebarItem('manufacturerCategories', '📂 제조사 구분 관리')}
+                                            {canAccess('manufacturerGuide') && renderSidebarItem('manufacturerGuide', '🤝 제조사 협업 가이드')}
+                                        </>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                         )}
-                    </div>
-                    )}
 
-                    {/* [포장재 관리] */}
-                    {hasPackagingAccess && (
-                    <div className="sidebar-group">
-                        <button 
-                            className={`sidebar-group-header ${isSectionActive('packaging') ? 'active' : ''}`} 
-                            onClick={() => toggleSection('packaging')}
-                        >
-                            <span>📦 포장재 관리</span>
-                            <span className={`arrow ${openSections.packaging ? 'open' : ''}`}>▼</span>
-                        </button>
-                        {openSections.packaging && (
-                            <div className="sidebar-group-content open">
-                                {canAccess('packagingTemplates') && renderSidebarItem('packagingTemplates', '📋 포장공정 템플릿 관리')}
-                                {canAccess('spaceRatioCalculator') && renderSidebarItem('spaceRatioCalculator', '📐 포장공간비율 계산기')}
-                                {canAccess('outboxCalculator') && renderSidebarItem('outboxCalculator', '📦 아웃박스 규격 계산기')}
-                            </div>
+                        {/* [Audit 관리] */}
+                        {hasAuditAccess && (
+                        <div className="sidebar-group">
+                            <button 
+                                className={`sidebar-group-header ${isSectionActive('audit') ? 'active' : ''}`} 
+                                onClick={() => toggleSection('audit')}
+                            >
+                                <span>📝 Audit 관리</span>
+                                <span className={`arrow ${openSections.audit ? 'open' : ''}`}>▼</span>
+                            </button>
+                            {openSections.audit && (
+                                <div className="sidebar-group-content open">
+                                    {renderDynamicSidebarSection('AUDIT_ROOT', () => (
+                                        <>
+                                            {canAccess('manufacturerAudits') && renderSidebarItem('manufacturerAudits', '📝 제조사 Audit 관리')}
+                                            {canAccess('manufacturerAuditDashboard') && renderSidebarItem('manufacturerAuditDashboard', '📊 제조사 Audit 대시보드')}
+                                            {canAccess('manufacturerAuditItems') && renderSidebarItem('manufacturerAuditItems', '📋 제조사 점검항목 관리')}
+                                        </>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                         )}
-                    </div>
-                    )}
 
-                    {/* [입고검사 관리] */}
-                    {hasInboundAccess && (
-                    <div className="sidebar-group">
-                        <button 
-                            className={`sidebar-group-header ${isSectionActive('inbound') ? 'active' : ''}`} 
-                            onClick={() => toggleSection('inbound')}
-                        >
-                            <span>🚚 입고검사 관리</span>
-                            <span className={`arrow ${openSections.inbound ? 'open' : ''}`}>▼</span>
-                        </button>
-                        {openSections.inbound && (
-                            <div className="sidebar-group-content open">
-                                {canAccess('qualityDashboard') && renderSidebarItem('qualityDashboard', '🚚 입고 품질 검사 대시보드')}
-                                {canAccess('quality') && renderSidebarItem('quality', '📦 입고 품질 관리')}
-                                {canAccess('releaseRecord') && renderSidebarItem('releaseRecord', '📄 시장출하 적부판정 기록')}
-                            </div>
+                        {/* [생산감리 관리] */}
+                        {hasQualityAccess && (
+                        <div className="sidebar-group">
+                            <button 
+                                className={`sidebar-group-header ${isSectionActive('quality') ? 'active' : ''}`} 
+                                onClick={() => toggleSection('quality')}
+                            >
+                                <span>📸 생산감리 관리</span>
+                                <span className={`arrow ${openSections.quality ? 'open' : ''}`}>▼</span>
+                            </button>
+                            {openSections.quality && (
+                                <div className="sidebar-group-content open">
+                                    {renderDynamicSidebarSection('QUALITY_ROOT', () => (
+                                        <>
+                                            {canAccess('qualityPhotoAudit') && renderSidebarItem('qualityPhotoAudit', '📸 신제품 생산감리 (사진감리)')}
+                                            {canAccess('productionAuditDashboard') && renderSidebarItem('productionAuditDashboard', '📊 생산감리 대시보드')}
+                                            {canAccess('documentRequests') && renderSidebarItem('documentRequests', '📋 필수 품질서류 관리')}
+                                        </>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                         )}
-                    </div>
-                    )}
 
-                    {/* [CX 클레임 관리] */}
-                    {hasClaimAccess && (
-                    <div className="sidebar-group">
-                        <button 
-                            className={`sidebar-group-header ${isSectionActive('claim') ? 'active' : ''}`} 
-                            onClick={() => toggleSection('claim')}
-                        >
-                            <span>⚠️ CX 클레임 관리</span>
-                            <span className={`arrow ${openSections.claim ? 'open' : ''}`}>▼</span>
-                        </button>
-                        {openSections.claim && (
-                            <div className="sidebar-group-content open">
-                                <div className="sidebar-sub-header">클레임 운영</div>
-                                {canAccess('claims') && renderSidebarItem('claims', '🔍 클레임 조회 및 입력')}
-                                {canAccess('claimDashboard') && renderSidebarItem('claimDashboard', '📈 클레임 대시보드')}
-                                {canAccess('lotPpmDashboard') && renderSidebarItem('lotPpmDashboard', '📉 LOT PPM 분석 & 근본원인')}
-                            </div>
+                        {/* [포장재 관리] */}
+                        {hasPackagingAccess && (
+                        <div className="sidebar-group">
+                            <button 
+                                className={`sidebar-group-header ${isSectionActive('packaging') ? 'active' : ''}`} 
+                                onClick={() => toggleSection('packaging')}
+                            >
+                                <span>📦 포장재 관리</span>
+                                <span className={`arrow ${openSections.packaging ? 'open' : ''}`}>▼</span>
+                            </button>
+                            {openSections.packaging && (
+                                <div className="sidebar-group-content open">
+                                    {renderDynamicSidebarSection('PACKAGING_ROOT', () => (
+                                        <>
+                                            {canAccess('packagingTemplates') && renderSidebarItem('packagingTemplates', '📋 포장공정 템플릿 관리')}
+                                            {canAccess('spaceRatioCalculator') && renderSidebarItem('spaceRatioCalculator', '📐 포장공간비율 계산기')}
+                                            {canAccess('outboxCalculator') && renderSidebarItem('outboxCalculator', '📦 아웃박스 규격 계산기')}
+                                        </>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                         )}
-                    </div>
-                    )}
 
+                        {/* [입고검사 관리] */}
+                        {hasInboundAccess && (
+                        <div className="sidebar-group">
+                            <button 
+                                className={`sidebar-group-header ${isSectionActive('inbound') ? 'active' : ''}`} 
+                                onClick={() => toggleSection('inbound')}
+                            >
+                                <span>🚚 입고검사 관리</span>
+                                <span className={`arrow ${openSections.inbound ? 'open' : ''}`}>▼</span>
+                            </button>
+                            {openSections.inbound && (
+                                <div className="sidebar-group-content open">
+                                    {renderDynamicSidebarSection('INBOUND_ROOT', () => (
+                                        <>
+                                            {canAccess('qualityDashboard') && renderSidebarItem('qualityDashboard', '🚚 입고 품질 검사 대시보드')}
+                                            {canAccess('quality') && renderSidebarItem('quality', '📦 입고 품질 관리')}
+                                            {canAccess('releaseRecord') && renderSidebarItem('releaseRecord', '📄 시장출하 적부판정 기록')}
+                                        </>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        )}
+
+                        {/* [CX 클레임 관리] */}
+                        {hasClaimAccess && (
+                        <div className="sidebar-group">
+                            <button 
+                                className={`sidebar-group-header ${isSectionActive('claim') ? 'active' : ''}`} 
+                                onClick={() => toggleSection('claim')}
+                            >
+                                <span>⚠️ CX 클레임 관리</span>
+                                <span className={`arrow ${openSections.claim ? 'open' : ''}`}>▼</span>
+                            </button>
+                            {openSections.claim && (
+                                <div className="sidebar-group-content open">
+                                    {renderDynamicSidebarSection('CLAIM_ROOT', () => (
+                                        <>
+                                            <div className="sidebar-sub-header">클레임 운영</div>
+                                            {canAccess('claims') && renderSidebarItem('claims', '🔍 클레임 조회 및 입력')}
+                                            {canAccess('claimDashboard') && renderSidebarItem('claimDashboard', '📈 클레임 대시보드')}
+                                            {canAccess('lotPpmDashboard') && renderSidebarItem('lotPpmDashboard', '📉 LOT PPM 분석 & 근본원인')}
+                                        </>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        )}
+
+                        {/* [사용자 커스텀 대메뉴] - 사용자가 신규 생성한 최상위 대메뉴 자동 렌더링 */}
+                        {customRootMenus.map(customRoot => {
+                            const sectionKey = `custom_${customRoot.id}`;
+                            const isOpen = openSections[sectionKey] !== undefined ? openSections[sectionKey] : true;
+                            return (
+                                <div key={customRoot.id} className="sidebar-group" style={{ borderTop: '1px solid #f1f5f9' }}>
+                                    <button 
+                                        className={`sidebar-group-header ${isSectionActive(sectionKey) ? 'active' : ''}`} 
+                                        onClick={() => toggleSection(sectionKey)}
+                                    >
+                                        <span>{customRoot.icon || '📁'} {customRoot.menuName}</span>
+                                        <span className={`arrow ${isOpen ? 'open' : ''}`}>▼</span>
+                                    </button>
+                                    {isOpen && (
+                                        <div className="sidebar-group-content open">
+                                            {(customRoot.screenCode || customRoot.screen?.screenCode) && (
+                                                renderSidebarItem(`dynScreen_${customRoot.screenCode || customRoot.screen?.screenCode}`, `${customRoot.icon || '📋'} ${customRoot.menuName}`)
+                                            )}
+                                            {customRoot.children && customRoot.children.map(child => {
+                                                const childCode = child.screenCode || child.screen?.screenCode;
+                                                if (childCode) {
+                                                    return renderSidebarItem(`dynScreen_${childCode}`, `${child.icon || '📋'} ${child.menuName}`);
+                                                }
+                                                if (child.children && child.children.length > 0) {
+                                                    const validSubs = child.children.filter(s => s.isActive !== false && (s.screenCode || s.screen?.screenCode));
+                                                    if (validSubs.length === 0) return null;
+                                                    return (
+                                                        <div key={child.id} style={{ marginTop: '4px' }}>
+                                                            <div className="sidebar-sub-header" style={{ paddingLeft: '14px', fontSize: '11px', color: '#64748b' }}>
+                                                                {child.icon || '📁'} {child.menuName}
+                                                            </div>
+                                                            {validSubs.map(sub => {
+                                                                const subCode = sub.screenCode || sub.screen?.screenCode;
+                                                                return renderSidebarItem(`dynScreen_${subCode}`, `${sub.icon || '📋'} ${sub.menuName}`);
+                                                            })}
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
 
                 </nav>
 
@@ -1953,6 +2453,22 @@ const App = () => {
                                                 showAlert={showAlert} 
                                             />
                                         )}
+                                        {tab.page === 'dynScreenProduct' && (
+                                            <DynamicScreenRenderer screenCode="SCR_NOTION_PRODUCT" user={user} />
+                                        )}
+                                        {tab.page === 'dynScreenClaim' && (
+                                            <DynamicScreenRenderer screenCode="SCR_DYNAMIC_CLAIM" user={user} />
+                                        )}
+                                        {tab.page?.startsWith('dynScreen_') && (
+                                            <DynamicScreenRenderer 
+                                                screenCode={tab.data?.screenCode || tab.page.replace('dynScreen_', '')} 
+                                                user={user} 
+                                            />
+                                        )}
+                                        {!isManufacturer && (isAdmin || canAccess('menuManagement')) && (tab.page === 'menuManagement' || tab.page === 'screenPositionManagement') && (
+                                            <ScreenMenuManagementPage user={user} />
+                                        )}
+
                                     </TabErrorBoundary>
                                 </div>
                             </div>
