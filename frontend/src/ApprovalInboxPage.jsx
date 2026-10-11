@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { AgGridReact } from 'ag-grid-react';
-import { fetchApprovalInbox, markApprovalDocumentAsRead } from './api';
+import { fetchApprovalInbox, markApprovalDocumentAsRead, markApprovalDocumentsAsReadBatch, markAllApprovalDocumentsAsRead } from './api';
 import ApprovalSubmitModal from './ApprovalSubmitModal';
 
 const TAB_CONFIG = {
@@ -28,6 +28,53 @@ const ApprovalInboxPage = ({
     const [selectedDocId, setSelectedDocId] = useState(null);
     const [submitModalOpen, setSubmitModalOpen] = useState(false);
     const [unreadOnly, setUnreadOnly] = useState(false);
+    const [selectedCount, setSelectedCount] = useState(0);
+    const gridRef = React.useRef(null);
+
+    const onSelectionChanged = useCallback(() => {
+        const selected = gridRef.current?.api?.getSelectedRows() || [];
+        setSelectedCount(selected.length);
+    }, []);
+
+    const handleReadSelected = useCallback(async () => {
+        const selected = gridRef.current?.api?.getSelectedRows() || [];
+        const unreadDocs = selected.filter(d => !d.isRead);
+        if (unreadDocs.length === 0) {
+            showAlert?.("선택된 항목 중 읽지 않은 문서가 없습니다.");
+            return;
+        }
+        const ids = unreadDocs.map(d => d.id);
+        try {
+            await markApprovalDocumentsAsReadBatch(ids);
+            setRowData(prev => prev.map(item => ids.includes(item.id) ? { ...item, isRead: true } : item));
+            if (onUnreadChanged) onUnreadChanged();
+            gridRef.current?.api?.deselectAll();
+            showAlert?.(`선택한 ${ids.length}건의 문서를 읽음 처리했습니다.`);
+        } catch (e) {
+            showAlert?.("선택 항목 읽음 처리에 실패했습니다.");
+        }
+    }, [showAlert, onUnreadChanged]);
+
+    // 읽지 않은 문서 수 계산
+    const unreadCount = useMemo(() => {
+        return rowData.filter(d => !d.isRead).length;
+    }, [rowData]);
+
+    const handleReadAllCurrentBox = useCallback(async () => {
+        if (unreadCount === 0) {
+            showAlert?.("확인할 읽지 않은 문서가 없습니다.");
+            return;
+        }
+        const currentTargetTab = fixedTab || activeTab;
+        try {
+            await markAllApprovalDocumentsAsRead(currentTargetTab);
+            setRowData(prev => prev.map(item => ({ ...item, isRead: true })));
+            if (onUnreadChanged) onUnreadChanged();
+            showAlert?.("현재 결재함의 모든 문서를 읽음 처리했습니다.");
+        } catch (e) {
+            showAlert?.("전체 읽음 처리에 실패했습니다.");
+        }
+    }, [unreadCount, fixedTab, activeTab, showAlert, onUnreadChanged]);
 
     // 협력업체(제조사) 계정 여부 판별 (사내 전자결재 기안 불가)
     const isManufacturer = useMemo(() => {
@@ -72,10 +119,6 @@ const ApprovalInboxPage = ({
         loadInbox();
     }, [loadInbox]);
 
-    // 읽지 않은 문서 수 계산
-    const unreadCount = useMemo(() => {
-        return rowData.filter(d => !d.isRead).length;
-    }, [rowData]);
 
     // 필터링된 데이터
     const displayedData = useMemo(() => {
@@ -110,6 +153,15 @@ const ApprovalInboxPage = ({
     const currentTabInfo = TAB_CONFIG[fixedTab || activeTab] || { label: '📋 전자결재함', desc: '결재 문서 목록입니다.' };
 
     const columnDefs = useMemo(() => [
+        {
+            headerName: '',
+            width: 48,
+            pinned: 'left',
+            lockPosition: true,
+            headerCheckboxSelection: true,
+            checkboxSelection: true,
+            cellStyle: { display: 'flex', alignItems: 'center', justifyContent: 'center' }
+        },
         { 
             headerName: '결재 ID', 
             field: 'id', 
@@ -271,6 +323,22 @@ const ApprovalInboxPage = ({
                         <span>읽지 않은 항목만 보기 ({unreadCount})</span>
                     </label>
 
+                    {selectedCount > 0 && (
+                        <button
+                            onClick={handleReadSelected}
+                            style={{ padding: '8px 14px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                        >
+                            ✓ 선택 읽음 ({selectedCount}건)
+                        </button>
+                    )}
+                    {unreadCount > 0 && (
+                        <button
+                            onClick={handleReadAllCurrentBox}
+                            style={{ padding: '8px 14px', backgroundColor: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1', borderRadius: '6px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                        >
+                            ✓ 현재 함 전체 읽음
+                        </button>
+                    )}
                     {!isManufacturer && (
                         <button
                             onClick={() => setSubmitModalOpen(true)}
@@ -316,14 +384,21 @@ const ApprovalInboxPage = ({
             {/* 3. 그리드 */}
             <div className="ag-theme-alpine approval-inbox-grid" style={{ width: '100%', flex: 1, minHeight: '400px' }}>
                 <AgGridReact
+                    ref={gridRef}
                     theme="legacy"
                     rowData={displayedData}
                     columnDefs={columnDefs}
                     animateRows={true}
                     headerHeight={40}
                     rowHeight={46}
-                    rowSelection={{ mode: 'singleRow' }}
-                    onRowClicked={(e) => handleDocumentClick(e.data)}
+                    rowSelection={{ mode: 'multiRow' }}
+                    onSelectionChanged={onSelectionChanged}
+                    onRowClicked={(e) => {
+                        if (e.event?.target?.closest('.ag-selection-checkbox') || e.event?.target?.type === 'checkbox') {
+                            return;
+                        }
+                        handleDocumentClick(e.data);
+                    }}
                     defaultColDef={{ resizable: true, sortable: true, filter: true }}
                 />
             </div>

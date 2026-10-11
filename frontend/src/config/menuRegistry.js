@@ -196,7 +196,7 @@ export const MENU_REGISTRY = [
     {
         key: 'menuManagement',
         category: '🛠️ 시스템 관리',
-        label: '메뉴 관리',
+        label: '화면 및 메뉴 관리',
         icon: '📁',
         path: 'menuManagement',
         actions: ['VIEW', 'EDIT', 'DELETE']
@@ -423,8 +423,64 @@ export const MENU_REGISTRY = [
         path: 'lotPpmDashboard',
         actions: ['VIEW']
     },
+    {
+        key: 'dynScreenClaim',
+        category: '⚠️ CX 클레임 관리',
+        label: 'CX 클레임 관리 (동적 화면)',
+        icon: '🔍',
+        path: 'dynScreenClaim',
+        actions: ['VIEW', 'EDIT']
+    },
 
-
+    // 10. ⚙️ 추가 등록 관리
+    {
+        key: 'approvals',
+        category: '📋 전자결재 관리',
+        label: '전자결재 통합함',
+        icon: '📋',
+        path: 'approvals',
+        actions: ['VIEW', 'EDIT', 'DELETE']
+    },
+    {
+        key: 'documentTypeConfig',
+        category: '📸 생산감리 관리',
+        label: '품질서류 유형 설정',
+        icon: '📑',
+        path: 'documentTypeConfig',
+        actions: ['VIEW', 'EDIT']
+    },
+    {
+        key: 'channelNoteConfig',
+        category: '📦 품목코드 관리',
+        label: '채널별 특이사항 설정',
+        icon: '📝',
+        path: 'channelNoteConfig',
+        actions: ['VIEW', 'EDIT']
+    },
+    {
+        key: 'dynScreenProduct',
+        category: '📦 품목코드 관리',
+        label: '제품코드 관리 (동적 화면)',
+        icon: '📦',
+        path: 'dynScreenProduct',
+        actions: ['VIEW', 'EDIT']
+    },
+    {
+        key: 'systemBenchmark',
+        category: '🛠️ 시스템 관리',
+        label: '시스템 벤치마크',
+        icon: '⚡',
+        path: 'systemBenchmark',
+        actions: ['VIEW', 'EDIT']
+    },
+    {
+        key: 'screenPositionManagement',
+        category: '🛠️ 시스템 관리',
+        label: '화면 위치 관리',
+        icon: '🗂️',
+        path: 'screenPositionManagement',
+        actions: ['VIEW', 'EDIT']
+    }
 ];
 
 export default MENU_REGISTRY;

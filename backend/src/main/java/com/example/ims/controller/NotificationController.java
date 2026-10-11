@@ -92,7 +92,39 @@ public class NotificationController {
     }
 
     /**
-     * 알림 삭제 (Soft Delete)
+     * 선택된 알림 다건 일괄 읽음 처리
+     */
+    @PostMapping("/read-batch")
+    public ResponseEntity<ApiResponse<Void>> readBatchNotifications(@RequestBody Map<String, List<Long>> payload,
+                                                                   @AuthenticationPrincipal UserDetails userDetails) {
+        if (userDetails == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        List<Long> ids = payload != null ? payload.get("ids") : null;
+        if (ids != null && !ids.isEmpty()) {
+            notificationService.markAsReadBatch(ids, userDetails.getUsername());
+        }
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    /**
+     * 선택된 알림 다건 일괄 삭제 (Soft Delete)
+     */
+    @PostMapping("/delete-batch")
+    public ResponseEntity<ApiResponse<Void>> deleteBatchNotifications(@RequestBody Map<String, List<Long>> payload,
+                                                                     @AuthenticationPrincipal UserDetails userDetails) {
+        if (userDetails == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        List<Long> ids = payload != null ? payload.get("ids") : null;
+        if (ids != null && !ids.isEmpty()) {
+            notificationService.deleteNotificationsBatch(ids, userDetails.getUsername());
+        }
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    /**
+     * 알림 단건 삭제 (Soft Delete)
      */
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteNotification(@PathVariable Long id,

@@ -321,13 +321,18 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
 
             const defaultDepts = [];
             let defaultEmails = [];
-            if (loadedDeptEmails['품질팀']) {
-                defaultDepts.push('품질팀');
-                defaultEmails = [...defaultEmails, ...loadedDeptEmails['품질팀'].map(e => e.trim())];
-            }
-            if (loadedDeptEmails['영업팀']) {
-                defaultDepts.push('영업팀');
-                defaultEmails = [...defaultEmails, ...loadedDeptEmails['영업팀'].map(e => e.trim())];
+            Object.keys(loadedDeptEmails).forEach(dept => {
+                const lower = dept.toLowerCase();
+                if (lower.includes('품질') || lower.includes('qa') || lower.includes('qc') || lower.includes('영업') || lower.includes('sales')) {
+                    defaultDepts.push(dept);
+                    defaultEmails = [...defaultEmails, ...(loadedDeptEmails[dept] || []).map(e => e.trim())];
+                }
+            });
+            if (defaultDepts.length === 0) {
+                Object.keys(loadedDeptEmails).forEach(dept => {
+                    defaultDepts.push(dept);
+                    defaultEmails = [...defaultEmails, ...(loadedDeptEmails[dept] || []).map(e => e.trim())];
+                });
             }
 
             const uniqueEmails = [...new Set(defaultEmails.filter(Boolean))];

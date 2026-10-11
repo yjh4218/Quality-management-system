@@ -7,6 +7,80 @@ const BugReportPage = ({ user }) => {
     const [rowData, setRowData] = useState([]);
     const [selectedReport, setSelectedReport] = useState(null);
     const [quickFilterText, setQuickFilterText] = useState('');
+    const [selectedCount, setSelectedCount] = useState(0);
+    const gridRef = React.useRef(null);
+
+    const onSelectionChanged = () => {
+        const selected = gridRef.current?.api?.getSelectedRows() || [];
+        setSelectedCount(selected.length);
+    };
+
+    const handleBatchRead = async () => {
+        const selected = gridRef.current?.api?.getSelectedRows() || [];
+        if (selected.length === 0) return;
+        const ids = selected.map(r => r.id);
+        try {
+            // 즉시 로컬 낙관적 업데이트
+            setRowData(prev => prev.map(r => ids.includes(r.id) ? { ...r, isRead: true } : r));
+            await api.markBugReportsAsReadBatch(ids);
+            toast.success(`선택한 ${ids.length}건의 리포트를 읽음 확인 처리했습니다.`);
+            window.dispatchEvent(new CustomEvent('bug-reports-updated'));
+            await fetchReports();
+            gridRef.current?.api?.deselectAll();
+        } catch (e) {
+            toast.error("일괄 읽음 확인 실패");
+            fetchReports();
+        }
+    };
+
+    const handleBatchStatus = async (status) => {
+        const selected = gridRef.current?.api?.getSelectedRows() || [];
+        if (selected.length === 0) return;
+        const ids = selected.map(r => r.id);
+        try {
+            // 즉시 로컬 낙관적 업데이트
+            setRowData(prev => prev.map(r => ids.includes(r.id) ? { ...r, status, isRead: true } : r));
+            await api.updateBugReportsBatchStatus(ids, status);
+            toast.success(`선택한 ${ids.length}건의 상태를 ${status}로 변경했습니다.`);
+            window.dispatchEvent(new CustomEvent('bug-reports-updated'));
+            await fetchReports();
+            gridRef.current?.api?.deselectAll();
+        } catch (e) {
+            toast.error("일괄 상태 변경 실패");
+            fetchReports();
+        }
+    };
+
+    const handleReadAll = async () => {
+        try {
+            // 즉시 로컬 낙관적 업데이트
+            setRowData(prev => prev.map(r => ({ ...r, isRead: true })));
+            await api.markAllBugReportsAsRead();
+            toast.success("모든 리포트를 읽음 확인 처리했습니다.");
+            window.dispatchEvent(new CustomEvent('bug-reports-updated'));
+            await fetchReports();
+            gridRef.current?.api?.deselectAll();
+        } catch (e) {
+            toast.error("전체 읽음 처리 실패");
+            fetchReports();
+        }
+    };
+
+    const handleOpenDetail = async (report) => {
+        if (!report) return;
+        setSelectedReport(report);
+        if (report.isRead === false || report.isRead === null) {
+            // 상세 열람 시 즉시 로컬 읽음 처리
+            setRowData(prev => prev.map(r => r.id === report.id ? { ...r, isRead: true } : r));
+            setSelectedReport(prev => prev ? { ...prev, isRead: true } : prev);
+            try {
+                await api.markBugReportsAsReadBatch([report.id]);
+                window.dispatchEvent(new CustomEvent('bug-reports-updated'));
+            } catch (e) {
+                console.debug("Failed to mark bug report as read", e);
+            }
+        }
+    };
 
     useEffect(() => {
         fetchReports();
@@ -25,6 +99,7 @@ const BugReportPage = ({ user }) => {
         try {
             await api.updateBugReportStatus(id, newStatus);
             toast.success(`상태가 ${newStatus}로 변경되었습니다.`);
+            window.dispatchEvent(new CustomEvent('bug-reports-updated'));
             fetchReports();
             if (selectedReport?.id === id) {
                 setSelectedReport(prev => ({ ...prev, status: newStatus }));
@@ -61,7 +136,37 @@ ${selectedReport.serverError || '없음'}
     };
 
     const columnDefs = useMemo(() => [
-        { field: "id", headerName: "ID", width: 70 },
+        {
+            headerName: '',
+            width: 48,
+            pinned: 'left',
+            lockPosition: true,
+            headerCheckboxSelection: true,
+            checkboxSelection: true,
+            cellStyle: { display: 'flex', alignItems: 'center', justifyContent: 'center' }
+        },
+        { 
+            field: "id", 
+            headerName: "ID", 
+            width: 100,
+            cellRenderer: (p) => {
+                const isUnread = p.data && p.data.isRead === false;
+                return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {isUnread ? (
+                            <span style={{ backgroundColor: '#ef4444', color: '#fff', fontSize: '9px', fontWeight: '900', padding: '1px 5px', borderRadius: '4px', whiteSpace: 'nowrap' }}>
+                                NEW
+                            </span>
+                        ) : (
+                            <span style={{ backgroundColor: '#f1f5f9', color: '#64748b', fontSize: '9px', fontWeight: '700', padding: '1px 5px', borderRadius: '4px', whiteSpace: 'nowrap' }}>
+                                읽음
+                            </span>
+                        )}
+                        <span style={{ fontWeight: isUnread ? '900' : '600' }}>{p.value}</span>
+                    </div>
+                );
+            }
+        },
         {
             field: "status",
             headerName: "상태",
@@ -134,7 +239,7 @@ ${selectedReport.serverError || '없음'}
             headerName: "작업",
             width: 100,
             cellRenderer: (params) => (
-                <button className="btn-small outline" onClick={() => setSelectedReport(params.data)}>
+                <button className="btn-small outline" onClick={() => handleOpenDetail(params.data)}>
                     상세보기
                 </button>
             )
@@ -142,11 +247,12 @@ ${selectedReport.serverError || '없음'}
     ], []);
 
     const getRowStyle = (params) => {
-        if (params.data?.status === 'OPEN') {
+        // 관리자가 아직 열람/확인하지 않은 신규 리포트만 붉은색 강조, 확인 완료 건은 일반 스타일로 표시
+        if (params.data && params.data.isRead === false) {
             return {
                 fontWeight: 800,
                 backgroundColor: '#fff5f5',
-                color: '#0f172a'
+                color: '#991b1b'
             };
         }
         return null;
@@ -175,7 +281,41 @@ ${selectedReport.serverError || '없음'}
                         </h2>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        {selectedCount > 0 && (
+                            <>
+                                <button
+                                    onClick={handleBatchRead}
+                                    className="primary"
+                                    style={{ padding: '8px 14px', fontSize: '13px', fontWeight: 'bold', backgroundColor: '#2563eb' }}
+                                >
+                                    ✓ 선택 읽음 확인 ({selectedCount}건)
+                                </button>
+                                <select
+                                    onChange={(e) => {
+                                        if (e.target.value) {
+                                            handleBatchStatus(e.target.value);
+                                            e.target.value = '';
+                                        }
+                                    }}
+                                    defaultValue=""
+                                    style={{ padding: '8px 12px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1', fontWeight: 'bold', color: '#1e293b' }}
+                                >
+                                    <option value="" disabled>⚙️ 상태 일괄 변경...</option>
+                                    <option value="OPEN">접수(OPEN)</option>
+                                    <option value="IN_PROGRESS">처리중(IN_PROGRESS)</option>
+                                    <option value="RESOLVED">해결됨(RESOLVED)</option>
+                                    <option value="CLOSED">닫힘(CLOSED)</option>
+                                </select>
+                            </>
+                        )}
+                        <button
+                            onClick={handleReadAll}
+                            className="secondary"
+                            style={{ padding: '8px 14px', fontSize: '13px' }}
+                        >
+                            ✓ 전체 읽음 확인
+                        </button>
                         <button
                             onClick={fetchReports}
                             className="secondary"
@@ -247,14 +387,23 @@ ${selectedReport.serverError || '없음'}
             <div style={{ display: 'flex', flex: 1, gap: '20px', minHeight: 0 }}>
                 <div className="ag-theme-alpine" style={{ flex: 1, height: '100%' }}>
                     <AgGridReact
+                        ref={gridRef}
                         theme="legacy"
                         rowHeight={54}
                         rowData={rowData}
                         columnDefs={columnDefs}
                         pagination={true}
                         paginationPageSize={50}
+                        rowSelection="multiple"
+                        suppressRowClickSelection={true}
+                        onSelectionChanged={onSelectionChanged}
                         quickFilterText={quickFilterText}
-                        onRowClicked={(e) => setSelectedReport(e.data)}
+                        onRowClicked={(e) => {
+                            if (e.event?.target?.closest('.ag-selection-checkbox') || e.event?.target?.type === 'checkbox') {
+                                return;
+                            }
+                            setSelectedReport(e.data);
+                        }}
                         getRowStyle={getRowStyle}
                     />
                 </div>

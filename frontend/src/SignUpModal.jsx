@@ -199,7 +199,7 @@ const SignUpModal = ({ isOpen, onClose }) => {
                                     style={{ width: '100%', height: '45px', background: '#fff' }}
                                 >
                                     <option value="">회사를 선택하세요</option>
-                                    <option value="더파운더즈">더파운더즈 (관리자/품질팀)</option>
+                                    <option value={import.meta.env.VITE_HQ_COMPANY_NAME || "더파운더즈"}>본사 (HQ 관리자/내부팀)</option>
                                     {manufacturers.map(m => (
                                         <option key={m.id} value={m.name}>{m.name}</option>
                                     ))}

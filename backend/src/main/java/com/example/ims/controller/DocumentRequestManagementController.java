@@ -225,7 +225,9 @@ public class DocumentRequestManagementController {
     }
 
     /**
-     * 제조사 보안 링크 전용 정보 조회 API (제조사 소속 데이터 격리 반환)
+     * [보안 감사 & 격리 검증] 제조사 보안 링크 전용 정보 조회 API
+     * 외부 제조사는 QMS 내부 계정이 없으므로 permitAll()로 열려 있으나,
+     * 오직 고유 암호화 보안 토큰(UUID securityToken) 검증에 성공한 서류 요구사항에 한해서만 데이터가 엄격히 격리 반환됩니다.
      */
     @GetMapping("/vendor-portal")
     @PreAuthorize("permitAll()")
@@ -247,9 +249,8 @@ public class DocumentRequestManagementController {
         List<Product> childProducts = List.of();
         if (product != null && product.getItemCode() != null) {
             final String parentCode = product.getItemCode();
-            childProducts = productRepository.findAll().stream()
-                    .filter(p -> parentCode.equals(p.getParentItemCode()))
-                    .toList();
+            // [성능 최적화] 전체 제품(findAll) 메모리 로드 및 스트림 필터링을 제거하고 DB 레벨 인덱스 조건 검색 수행
+            childProducts = productRepository.findByParentItemCode(parentCode);
         }
 
         var histories = historyRepository.findByRequirementIdOrderByUploadedAtDesc(req.getId());
@@ -263,7 +264,8 @@ public class DocumentRequestManagementController {
     }
 
     /**
-     * 제조사 보안 포털 서류 (PDF / 이미지) 업로드 및 변경 이력 기록 API
+     * [보안 감사 & 무결성 검증] 제조사 보안 포털 서류 (PDF / 이미지) 업로드 및 변경 이력 기록 API
+     * 외부 제조사의 비인가 접근을 차단하기 위해 유효한 securityToken 일치 여부를 필수 검증합니다.
      */
     @PostMapping("/vendor-upload")
     @PreAuthorize("permitAll()")

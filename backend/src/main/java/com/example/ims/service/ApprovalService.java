@@ -616,6 +616,46 @@ public class ApprovalService {
         }
     }
 
+    @Transactional
+    public void markAsReadBatch(List<Long> documentIds, String username) {
+        if (documentIds == null || documentIds.isEmpty() || username == null) return;
+        User user = userRepository.findByUsername(username).orElse(null);
+        if (user == null) return;
+        validateNotManufacturer(user);
+
+        Set<Long> alreadyReadIds = readRepository.findReadDocumentIdsByUserIdAndDocumentIdIn(user.getId(), documentIds);
+        List<ApprovalDocumentRead> toSave = new ArrayList<>();
+        for (Long docId : documentIds) {
+            if (docId != null && !alreadyReadIds.contains(docId)) {
+                toSave.add(ApprovalDocumentRead.builder()
+                        .documentId(docId)
+                        .userId(user.getId())
+                        .build());
+            }
+        }
+        if (!toSave.isEmpty()) {
+            readRepository.saveAll(toSave);
+        }
+    }
+
+    @Transactional
+    public void markAllAsRead(String boxType, String username) {
+        if (username == null) return;
+        User user = userRepository.findByUsername(username).orElse(null);
+        if (user == null) return;
+        validateNotManufacturer(user);
+
+        Page<ApprovalDocumentSummaryDto> pagedDocs = getInbox(boxType, username, PageRequest.of(0, 1000));
+        List<Long> unreadIds = pagedDocs.getContent().stream()
+                .filter(d -> !Boolean.TRUE.equals(d.getIsRead()))
+                .map(ApprovalDocumentSummaryDto::getId)
+                .collect(Collectors.toList());
+
+        if (!unreadIds.isEmpty()) {
+            markAsReadBatch(unreadIds, username);
+        }
+    }
+
     @Transactional(readOnly = true)
     public Map<String, Long> getUnreadCounts(String username) {
         User user = userRepository.findByUsername(username)
@@ -883,11 +923,8 @@ public class ApprovalService {
 
             // 3단계 Fallback: 동일 부서 내 다른 활성 사용자 탐색 (상신자 본인 제외 우선)
             if (!deptName.isEmpty() && !compName.isEmpty()) {
-                User sameDeptUser = userRepository.findAll().stream()
-                        .filter(u -> u.isEnabled()
-                                && compName.equalsIgnoreCase(u.getCompanyName())
-                                && deptName.equalsIgnoreCase(u.getDepartment())
-                                && !u.getId().equals(submitter.getId()))
+                User sameDeptUser = userRepository.findByEnabledTrueAndCompanyNameIgnoreCaseAndDepartmentIgnoreCase(compName, deptName).stream()
+                        .filter(u -> !u.getId().equals(submitter.getId()))
                         .findFirst()
                         .orElse(null);
                 if (sameDeptUser != null) {
@@ -896,14 +933,11 @@ public class ApprovalService {
             }
 
             // 4단계 Fallback: 동일 회사 내 최고 관리자(ROLE_ADMIN) 탐색
-            User fallbackAdmin = userRepository.findAll().stream()
-                    .filter(u -> u.isEnabled()
-                            && compName.equalsIgnoreCase(u.getCompanyName())
-                            && u.getRole() != null && u.getRole().contains("ROLE_ADMIN")
-                            && !u.getId().equals(submitter.getId()))
+            User fallbackAdmin = userRepository.findActiveAdminsByCompany(compName).stream()
+                    .filter(u -> !u.getId().equals(submitter.getId()))
                     .findFirst()
-                    .orElseGet(() -> userRepository.findAll().stream()
-                            .filter(u -> u.isEnabled() && u.getRole() != null && u.getRole().contains("ROLE_ADMIN"))
+                    .orElseGet(() -> userRepository.findActiveAdmins().stream()
+                            .filter(u -> !u.getId().equals(submitter.getId()))
                             .findFirst()
                             .orElse(null));
 

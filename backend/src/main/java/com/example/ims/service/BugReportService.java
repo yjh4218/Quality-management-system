@@ -96,6 +96,8 @@ public class BugReportService {
         BugReport report = bugReportRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Bug report not found"));
         report.setStatus(status);
+        report.setRead(true);
+        report.setReadAt(LocalDateTime.now());
         report.setUpdatedAt(LocalDateTime.now());
         BugReport updated = bugReportRepository.save(report);
 
@@ -113,8 +115,56 @@ public class BugReportService {
         return updated;
     }
 
+    @Transactional
+    public void markAsReadBatch(List<Long> ids, String username) {
+        if (ids == null || ids.isEmpty()) return;
+        List<BugReport> list = bugReportRepository.findAllById(ids);
+        LocalDateTime now = LocalDateTime.now();
+        List<BugReport> toSave = new java.util.ArrayList<>();
+        for (BugReport r : list) {
+            if (!r.isRead()) {
+                r.setRead(true);
+                r.setReadAt(now);
+                toSave.add(r);
+            }
+        }
+        if (!toSave.isEmpty()) {
+            bugReportRepository.saveAll(toSave);
+            log.info("[BUG_REPORT] Batch marked {} reports as read by {}", toSave.size(), username);
+        }
+    }
+
+    @Transactional
+    public void updateStatusBatch(List<Long> ids, String status, String username) {
+        if (ids == null || ids.isEmpty() || status == null) return;
+        List<BugReport> list = bugReportRepository.findAllById(ids);
+        LocalDateTime now = LocalDateTime.now();
+        for (BugReport r : list) {
+            r.setStatus(status);
+            r.setRead(true);
+            r.setReadAt(now);
+            r.setUpdatedAt(now);
+        }
+        bugReportRepository.saveAll(list);
+        log.info("[BUG_REPORT] Batch updated status of {} reports to {} by {}", list.size(), status, username);
+    }
+
+    @Transactional
+    public void markAllAsRead(String username) {
+        List<BugReport> unreadList = bugReportRepository.findByIsReadFalse();
+        if (!unreadList.isEmpty()) {
+            LocalDateTime now = LocalDateTime.now();
+            for (BugReport r : unreadList) {
+                r.setRead(true);
+                r.setReadAt(now);
+            }
+            bugReportRepository.saveAll(unreadList);
+            log.info("[BUG_REPORT] Marked all {} unread reports as read by {}", unreadList.size(), username);
+        }
+    }
+
     @Transactional(readOnly = true)
     public long getOpenReportCount() {
-        return bugReportRepository.countByStatus("OPEN");
+        return bugReportRepository.countUnread();
     }
 }

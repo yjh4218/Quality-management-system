@@ -312,9 +312,9 @@ public class SystemInitializationService {
                     "INSERT INTO roles (role_key, display_name, description, is_system_role, allowed_menus, allowed_permissions) VALUES (?, ?, ?, ?, ?, ?)",
                     key, name, desc, true, menuJson, permsJson);
         } else {
-            // Repair: Always update roles allowed_menus and allowed_permissions to sync default values
+            // [권한 영구 보존] 사용자가 수정한 권한 설정을 강제 덮어쓰지 않고 영구 보존 (NULL 또는 빈 값인 경우에만 기본값 채움)
             jdbcTemplate.update(
-                    "UPDATE roles SET allowed_menus = ?, allowed_permissions = ? WHERE role_key = ?",
+                    "UPDATE roles SET allowed_menus = COALESCE(NULLIF(allowed_menus, ''), ?), allowed_permissions = COALESCE(NULLIF(allowed_permissions, ''), ?) WHERE role_key = ? AND (allowed_menus IS NULL OR allowed_menus = '' OR allowed_permissions IS NULL OR allowed_permissions = '')",
                     menuJson, permsJson, key);
         }
     }
@@ -2017,7 +2017,7 @@ public class SystemInitializationService {
                                 } catch (Exception ignored) {}
                             }
                             jdbcTemplate.update(
-                                "INSERT INTO department_roles (department_id, user_id, role_code, is_active, created_at) VALUES (?, ?, 'DEPT_HEAD', TRUE, CURRENT_TIMESTAMP)",
+                                "INSERT INTO department_roles (department_id, user_id, role_code, is_active, started_at, created_at) VALUES (?, ?, 'DEPT_HEAD', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                                 dId, targetUserId
                             );
                         }
@@ -2151,8 +2151,10 @@ public class SystemInitializationService {
                 org.springframework.core.io.Resource res124 = new org.springframework.core.io.ClassPathResource("db/migration/V124__update_product_search_filter_catalog_label.sql");
                 org.springframework.core.io.Resource res125 = new org.springframework.core.io.ClassPathResource("db/migration/V125__sync_dynamic_screen_product_endpoint.sql");
                 org.springframework.core.io.Resource res126 = new org.springframework.core.io.ClassPathResource("db/migration/V126__seed_product_bom_inquiry_submenu.sql");
+                org.springframework.core.io.Resource res127 = new org.springframework.core.io.ClassPathResource("db/migration/V127__reposition_and_rename_menu_management.sql");
+                org.springframework.core.io.Resource res128 = new org.springframework.core.io.ClassPathResource("db/migration/V128__rename_menu_management_to_screen_and_menu.sql");
                 org.springframework.jdbc.datasource.init.ResourceDatabasePopulator populator = 
-                    new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(res119, res120, res121, res122, res123, res124, res125, res126);
+                    new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(res119, res120, res121, res122, res123, res124, res125, res126, res127, res128);
                 populator.setContinueOnError(true);
                 populator.execute(jdbcTemplate.getDataSource());
                 log.info(">>>> [SYSTEM INIT] Dynamic screens, columns, menus, and dividers seeded/verified successfully.");

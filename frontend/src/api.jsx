@@ -938,6 +938,9 @@ export const submitBugReport = (report = {}) => {
 export const getBugReports = () => api.get('/api/bug-reports').then(res => res.data);
 export const getOpenBugReportCount = () => api.get('/api/bug-reports/open-count', { skipLoading: true, skipToast: true }).then(res => res.data?.openCount ?? 0).catch(() => 0);
 export const updateBugReportStatus = (id, status) => api.patch(`/api/bug-reports/${id}/status`, { status }).then(res => res.data);
+export const markBugReportsAsReadBatch = (ids) => api.post('/api/bug-reports/read-batch', { ids }).then(res => res.data);
+export const updateBugReportsBatchStatus = (ids, status) => api.post('/api/bug-reports/batch-status', { ids, status }).then(res => res.data);
+export const markAllBugReportsAsRead = () => api.post('/api/bug-reports/read-all').then(res => res.data);
 
 // Claim APIs
 export const getClaims = (params = {}, config = {}) => {
@@ -1180,7 +1183,9 @@ export const getMyNotifications = () => api.get('/api/notifications', { skipLoad
 export const getUnreadNotificationCount = () => api.get('/api/notifications/unread-count', { skipLoading: true, skipToast: true }).catch(() => ({ data: 0 }));
 export const readNotification = (id) => api.post(`/api/notifications/${id}/read`);
 export const readAllNotifications = () => api.post('/api/notifications/read-all');
+export const readBatchNotifications = (ids) => api.post('/api/notifications/read-batch', { ids });
 export const deleteNotification = (id) => api.delete(`/api/notifications/${id}`);
+export const deleteBatchNotifications = (ids) => api.post('/api/notifications/delete-batch', { ids });
 
 // --- Notification Settings APIs ---
 export const getNotificationSettings = () => api.get('/api/notifications/settings').then(res => res.data);
@@ -1406,6 +1411,12 @@ export const fetchApprovalStatusBySource = (docTypeCode, sourceRecordId) =>
 export const markApprovalDocumentAsRead = (id) => 
     api.post(`/api/approvals/${id}/read`, null, { skipToast: true });
 
+export const markApprovalDocumentsAsReadBatch = (documentIds) => 
+    api.post('/api/approvals/read-batch', { documentIds }, { skipToast: true });
+
+export const markAllApprovalDocumentsAsRead = (boxType) => 
+    api.post('/api/approvals/read-all', null, { params: { boxType }, skipToast: true });
+
 export const fetchApprovalUnreadCounts = () => 
     api.get('/api/approvals/unread-counts', { skipToast: true });
 
@@ -1445,5 +1456,8 @@ export const linkScreenToMenu = (screenId, data) =>
 
 export const batchReorderDynamicMenus = (items) => 
     api.put('/api/dynamic/menus/batch-reorder', items);
+
+
+
 
 

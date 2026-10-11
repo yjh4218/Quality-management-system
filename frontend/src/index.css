@@ -1059,24 +1059,24 @@ body:has(.modal-overlay) {
   padding-left: 8px !important;
 }
 
-/* AG Grid Checkbox 선명하게 (Alpine 테마용 커스텀) */
+/* AG Grid Checkbox 선명하게 (2중 겹침 방지 및 단일 박스 표준화) */
 .ag-theme-alpine .ag-checkbox-input-wrapper {
-  box-shadow: 0 0 0 1.5px #555 !important;
+  border: 1.5px solid #64748b !important;
+  box-shadow: none !important;
   background-color: #fff !important;
   border-radius: 3px;
   opacity: 1 !important;
-  /* 흐릿함 방지 */
 }
 
 .ag-theme-alpine .ag-checkbox-input-wrapper.ag-checked {
-  box-shadow: 0 0 0 1.5px #0d6efd !important;
-  background-color: #f0f7ff !important;
+  border-color: #2563eb !important;
+  background-color: #2563eb !important;
+  box-shadow: none !important;
 }
 
 .ag-theme-alpine .ag-checkbox-input-wrapper.ag-checked::after {
-  color: #0d6efd !important;
-  -webkit-text-stroke: 0.5px #0d6efd;
-  /* 체크마크 굵게 */
+  color: #ffffff !important;
+  -webkit-text-stroke: 0.5px #ffffff;
 }
 
 /* [고도화 3] 전역 프리미엄 로딩 스피너 (Glassmorphism) */

@@ -65,9 +65,9 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/uploads/**", "/uploads/*").permitAll()
                         .requestMatchers("/error", "/favicon.ico", "/assets/**", "/index.html").permitAll()
-                        .requestMatchers("/api/bug-reports", "/api/bug-reports/**").permitAll()
+                        // 버그 리포트 제출 (오프라인 큐/익명 충돌 리포트 POST만 permitAll 허용, 조회/수정/삭제는 인증 필요)
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/bug-reports", "/api/bug-reports/**").permitAll()
-                        .requestMatchers("/api/logs/access/**", "/api/logs/access/page-move").permitAll()
+                        // 접근 로그 (페이지 이동 로그 POST만 permitAll 허용)
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/logs/access/**", "/api/logs/access/page-move").permitAll()
                         // [SECURITY PATCH] 관리자 전용 시스템 경로 권한 강화
                         .requestMatchers("/api/admin/system/health").permitAll() 
@@ -79,10 +79,6 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers("/actuator/**").hasRole("ADMIN")
                         .requestMatchers("/api/auth/unlock/**", "/api/auth/reset-password/**").hasRole("ADMIN")
-                        // 로그 및 보안 관련 경로 (페이지 이동 로그는 익명/공통 접근 허용)
-                        .requestMatchers("/api/logs/access/**", "/api/logs/access/page-move").permitAll()
-                        // 버그 리포트 제출 (익명/오프라인 큐 전송 포함 무조건 허용)
-                        .requestMatchers("/api/bug-reports", "/api/bug-reports/**").permitAll()
                         .requestMatchers("/api/admin/master-data/**").authenticated()
                         
                         .requestMatchers("/api/admin/system/**").hasRole("ADMIN")

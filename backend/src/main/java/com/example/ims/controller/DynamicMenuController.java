@@ -50,18 +50,21 @@ public class DynamicMenuController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN') or hasRole('ADMIN')")
     public ResponseEntity<DynamicMenuResponse> createMenu(@RequestBody DynamicMenuRequest req) {
         log.info("[DYNAMIC MENU] Creating menu: {}", req.getMenuName());
         return ResponseEntity.ok(menuService.createMenu(req));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN') or hasRole('ADMIN')")
     public ResponseEntity<DynamicMenuResponse> updateMenu(@PathVariable Long id, @RequestBody DynamicMenuRequest req) {
         log.info("[DYNAMIC MENU] Updating menu ID: {}, name: {}", id, req.getMenuName());
         return ResponseEntity.ok(menuService.updateMenu(id, req));
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN') or hasRole('ADMIN')")
     public ResponseEntity<Void> deleteMenu(@PathVariable Long id) {
         log.info("[DYNAMIC MENU] Deleting menu ID: {}", id);
         menuService.deleteMenu(id);
@@ -74,6 +77,7 @@ public class DynamicMenuController {
     }
 
     @PutMapping("/screens/{screenId}/link")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN') or hasRole('ADMIN')")
     public ResponseEntity<ScreenMenuMappingResponse> linkScreenToMenu(
             @PathVariable Long screenId,
             @RequestBody DynamicMenuRequest req) {

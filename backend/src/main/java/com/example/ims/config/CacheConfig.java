@@ -2,6 +2,7 @@ package com.example.ims.config;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
 import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.cache.caffeine.CaffeineCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,6 +15,7 @@ import java.util.concurrent.TimeUnit;
  * 무거운 DB 반복 조회를 제거하고 응답 속도를 수십 ms 이내로 단축합니다.
  */
 @Configuration
+@EnableCaching
 public class CacheConfig {
 
     @Bean
@@ -25,6 +27,14 @@ public class CacheConfig {
                 .maximumSize(1000)
                 .expireAfterWrite(10, TimeUnit.MINUTES)
                 .recordStats());
+
+        // 동적 메뉴 트리 캐시 (메뉴 변경 시 즉시 갱신, 기본 30분)
+        cacheManager.registerCustomCache("dynamicMenusTree", Caffeine.newBuilder()
+                .initialCapacity(5)
+                .maximumSize(20)
+                .expireAfterWrite(30, TimeUnit.MINUTES)
+                .recordStats()
+                .build());
 
         // 대용량 바이너리 문서(PDF/Excel) 전용 격리 캐시 풀 (메모리 과부하 방지: 최대 50건, 30분)
         cacheManager.registerCustomCache("spec_pdf", Caffeine.newBuilder()

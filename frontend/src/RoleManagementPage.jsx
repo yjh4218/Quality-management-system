@@ -89,10 +89,11 @@ const RoleManagementPage = ({ user }) => {
         }
     };
 
-    const fetchRoles = async () => {
+    const fetchRoles = async (forceRefresh = false) => {
         try {
-            const response = await getRoles();
+            const response = await getRoles(forceRefresh);
             setRowData(response.data);
+            return response.data;
         } catch (error) {
             toast.error("권한 목록을 불러오는데 실패했습니다.");
         }
@@ -100,12 +101,13 @@ const RoleManagementPage = ({ user }) => {
 
     const handleOpenModal = (role = null) => {
         if (role) {
+            const targetRole = rowData.find(r => r.id === role.id) || role;
             setSelectedRole({
-                ...role,
-                allowedMenus: role.allowedMenus || '{}',
-                allowedPermissions: role.allowedPermissions || '[]'
+                ...targetRole,
+                allowedMenus: targetRole.allowedMenus || '{}',
+                allowedPermissions: targetRole.allowedPermissions || '[]'
             });
-            setIsInitialSystemRole(role.isSystemRole);
+            setIsInitialSystemRole(targetRole.isSystemRole);
             setIsEditMode(true);
         } else {
             setSelectedRole({
@@ -141,7 +143,7 @@ const RoleManagementPage = ({ user }) => {
                 toast.success("새로운 시스템 권한이 생성되었습니다.");
             }
             setIsModalOpen(false);
-            fetchRoles();
+            await fetchRoles(true);
         } catch (error) {
             toast.error(error.response?.data || "저장 중 오류가 발생했습니다.");
         }
@@ -165,12 +167,13 @@ const RoleManagementPage = ({ user }) => {
 
     const getParsedPermissions = (data, isArray = false) => {
         if (!data) return isArray ? [] : {};
+        if (typeof data === 'object') return data;
         try {
             let parsed = JSON.parse(data);
             if (typeof parsed === 'string') {
                 parsed = JSON.parse(parsed);
             }
-            return parsed;
+            return parsed || (isArray ? [] : {});
         } catch (e) {
             return isArray ? [] : {};
         }
@@ -179,59 +182,69 @@ const RoleManagementPage = ({ user }) => {
     const togglePermission = (menuKey, action) => {
         if (selectedRole.isSystemRole && isInitialSystemRole && !isAdmin) return;
 
-        const currentPermissions = getParsedPermissions(selectedRole.allowedMenus);
-        let menuActions = currentPermissions[menuKey] || [];
+        setSelectedRole(prev => {
+            const currentPermissions = { ...getParsedPermissions(prev.allowedMenus) };
+            let menuActions = currentPermissions[menuKey] ? [...currentPermissions[menuKey]] : [];
 
-        if (menuActions.includes(action)) {
-            menuActions = menuActions.filter(a => a !== action);
-        } else {
-            menuActions = [...menuActions, action];
-        }
+            if (menuActions.includes(action)) {
+                menuActions = menuActions.filter(a => a !== action);
+            } else {
+                menuActions = [...menuActions, action];
+            }
 
-        if (menuActions.length === 0) {
-            delete currentPermissions[menuKey];
-            const currentFuncPerms = getParsedPermissions(selectedRole.allowedPermissions, true);
-            const dependentFPKeys = Object.entries(FP_DEPENDENCIES)
-                .filter(([fpKey, depMenu]) => depMenu === menuKey)
-                .map(([fpKey]) => fpKey);
+            if (menuActions.length === 0) {
+                delete currentPermissions[menuKey];
+                const currentFuncPerms = getParsedPermissions(prev.allowedPermissions, true);
+                const dependentFPKeys = Object.entries(FP_DEPENDENCIES)
+                    .filter(([fpKey, depMenu]) => depMenu === menuKey)
+                    .map(([fpKey]) => fpKey);
 
-            const filteredFuncPerms = currentFuncPerms.filter(p => !dependentFPKeys.includes(p));
-            setSelectedRole({
-                ...selectedRole,
-                allowedMenus: JSON.stringify(currentPermissions),
-                allowedPermissions: JSON.stringify(filteredFuncPerms)
-            });
-        } else {
-            currentPermissions[menuKey] = menuActions;
-            setSelectedRole({ ...selectedRole, allowedMenus: JSON.stringify(currentPermissions) });
-        }
+                const filteredFuncPerms = currentFuncPerms.filter(p => !dependentFPKeys.includes(p));
+                return {
+                    ...prev,
+                    allowedMenus: JSON.stringify(currentPermissions),
+                    allowedPermissions: JSON.stringify(filteredFuncPerms)
+                };
+            } else {
+                currentPermissions[menuKey] = menuActions;
+                return {
+                    ...prev,
+                    allowedMenus: JSON.stringify(currentPermissions)
+                };
+            }
+        });
     };
 
     const handleBatchPermission = (category, action) => {
         if (selectedRole.isSystemRole && isInitialSystemRole && !isAdmin) return;
 
-        const currentPermissions = getParsedPermissions(selectedRole.allowedMenus);
         const categoryMenus = MENU_OPTIONS.filter(m => m.category === category && m.actions.includes(action));
         if (categoryMenus.length === 0) return;
 
-        const allChecked = categoryMenus.every(menu => (currentPermissions[menu.key] || []).includes(action));
-        const shouldCheck = !allChecked;
+        setSelectedRole(prev => {
+            const currentPermissions = { ...getParsedPermissions(prev.allowedMenus) };
+            const allChecked = categoryMenus.every(menu => (currentPermissions[menu.key] || []).includes(action));
+            const shouldCheck = !allChecked;
 
-        categoryMenus.forEach(menu => {
-            const menuPermissions = [...(currentPermissions[menu.key] || [])];
-            if (shouldCheck) {
-                if (!menuPermissions.includes(action)) {
-                    currentPermissions[menu.key] = [...menuPermissions, action];
+            categoryMenus.forEach(menu => {
+                const menuPermissions = [...(currentPermissions[menu.key] || [])];
+                if (shouldCheck) {
+                    if (!menuPermissions.includes(action)) {
+                        currentPermissions[menu.key] = [...menuPermissions, action];
+                    }
+                } else {
+                    currentPermissions[menu.key] = menuPermissions.filter(a => a !== action);
+                    if (currentPermissions[menu.key].length === 0) {
+                        delete currentPermissions[menu.key];
+                    }
                 }
-            } else {
-                currentPermissions[menu.key] = menuPermissions.filter(a => a !== action);
-                if (currentPermissions[menu.key].length === 0) {
-                    delete currentPermissions[menu.key];
-                }
-            }
+            });
+
+            return {
+                ...prev,
+                allowedMenus: JSON.stringify(currentPermissions)
+            };
         });
-
-        setSelectedRole({ ...selectedRole, allowedMenus: JSON.stringify(currentPermissions) });
     };
 
     const toggleFunctionalPermission = (permissionKey) => {
@@ -247,12 +260,17 @@ const RoleManagementPage = ({ user }) => {
             }
         }
 
-        const currentFuncPerms = getParsedPermissions(selectedRole.allowedPermissions, true);
-        let updated = currentFuncPerms.includes(permissionKey)
-            ? currentFuncPerms.filter(p => p !== permissionKey)
-            : [...currentFuncPerms, permissionKey];
+        setSelectedRole(prev => {
+            const currentFuncPerms = getParsedPermissions(prev.allowedPermissions, true);
+            const updated = currentFuncPerms.includes(permissionKey)
+                ? currentFuncPerms.filter(p => p !== permissionKey)
+                : [...currentFuncPerms, permissionKey];
 
-        setSelectedRole({ ...selectedRole, allowedPermissions: JSON.stringify(updated) });
+            return {
+                ...prev,
+                allowedPermissions: JSON.stringify(updated)
+            };
+        });
     };
 
     const handleViewHistory = async (role) => {
@@ -433,6 +451,7 @@ const RoleManagementPage = ({ user }) => {
                         theme="legacy"
                         rowHeight={54}
                         rowData={rowData}
+                        getRowId={(params) => String(params.data?.id || params.data?.roleKey)}
                         columnDefs={columnDefs}
                         pagination={true}
                         paginationPageSize={50}

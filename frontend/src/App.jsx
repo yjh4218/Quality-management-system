@@ -139,7 +139,7 @@ const PAGE_INFO = {
     approvalNotificationRules: { title: '🔔 결재 알림 설정' },
     dynScreenProduct: { title: '📋 제품 메타 그리드 (Notion형)' },
     dynScreenClaim: { title: '📊 클레임 다이나믹 분석' },
-    menuManagement: { title: '📁 메뉴 및 화면 관리' },
+    menuManagement: { title: '📁 화면 및 메뉴 관리' },
     screenPositionManagement: { title: '🧭 화면 위치 관리' }
 };
 
@@ -868,6 +868,12 @@ const App = () => {
         window.addEventListener('dynamic-menu-updated', handleDynamicMenuUpdated);
         window.addEventListener('qms_menu_updated', handleDynamicMenuUpdated);
 
+        // [버그 리포트 읽음/상태 변경 실시간 반영]
+        const handleBugReportUpdated = () => {
+            fetchOpenBugCount();
+        };
+        window.addEventListener('bug-reports-updated', handleBugReportUpdated);
+
         // 최초 1회 동적 화면 로드
         loadDynamicScreens();
 
@@ -884,6 +890,7 @@ const App = () => {
             window.removeEventListener('focus', handleWindowFocus);
             window.removeEventListener('dynamic-menu-updated', handleDynamicMenuUpdated);
             window.removeEventListener('qms_menu_updated', handleDynamicMenuUpdated);
+            window.removeEventListener('bug-reports-updated', handleBugReportUpdated);
         };
 
     }, [isLoggedIn]);
@@ -1052,6 +1059,49 @@ const App = () => {
         }
     };
 
+    const checkRole = (roleName) => user?.roles?.some(r => r.authority?.includes(roleName));
+    const isAdmin = checkRole('ADMIN');
+    const isResponsibleSales = checkRole('RESPONSIBLE_SALES');
+    const isQuality = checkRole('QUALITY');
+    const isManufacturer = checkRole('MANUFACTURER');
+    const isSales = checkRole('SALES');
+
+    const isACompany = !isManufacturer;
+    const isAQualityTeam = isQuality || (isACompany && (user?.department === 'Quality' || user?.department === '품질팀'));
+
+    const hasPermission = (menuKey, action = 'VIEW') => {
+        if (isAdmin) return true;
+        return user?.roles?.some(role => {
+            if (!role.allowedMenus) return false;
+            try {
+                const cleanData = role.allowedMenus.trim();
+                if (cleanData.startsWith('{')) {
+                    const permissions = JSON.parse(cleanData);
+                    return permissions[menuKey]?.includes(action);
+                }
+                return action === 'VIEW' && cleanData.split(',').includes(menuKey);
+            } catch (e) {
+                return false;
+            }
+        });
+    };
+
+    const canAccess = (menuKey) => {
+        if (isAdmin) return true;
+        const approvalPagesList = [
+            'approvals', 'approvalPending', 'approvalSubmitted', 'approvalInProgress',
+            'approvalCompleted', 'approvalRejected', 'approvalReference', 'approvalHistory',
+            'approvalDocTypes', 'approvalTemplates', 'approvalNotificationRules'
+        ];
+        if (isManufacturer && approvalPagesList.includes(menuKey)) return false;
+        if (menuKey === 'productBomInquiry') return isAdmin || hasPermission('bomMaster') || hasPermission('products') || hasPermission('productBomInquiry');
+        if (menuKey === 'systemBenchmark') return isAdmin || isAQualityTeam || hasPermission('logs') || hasPermission('systemBenchmark');
+        if (menuKey?.startsWith('dynScreen_') || menuKey === 'dynScreenProduct' || menuKey === 'dynScreenClaim') {
+            return !isManufacturer && (isAdmin || hasPermission(menuKey, 'VIEW') || hasPermission('dynScreenProduct') || hasPermission('dynScreenClaim'));
+        }
+        return hasPermission(menuKey, 'VIEW');
+    };
+
     const handleNavigate = (page, data = null) => {
         // [전자결재 보안 강화] 협력업체(제조사) 계정의 결재 화면 직접 진입 원천 차단
         const isUserManufacturer = user?.roles?.some(r => r.authority?.includes('MANUFACTURER')) || user?.department === '제조사';
@@ -1065,6 +1115,14 @@ const App = () => {
             toast.warning("협력업체(제조사) 계정은 사내 전자결재 기능에 접근할 수 없습니다.");
             return;
         }
+
+        // [전 화면 RBAC 사전 가드] 권한이 없는 화면으로 이동 시도 시 경고 안내 및 차단
+        if (!isAdmin && !canAccess(page)) {
+            const pageTitle = PAGE_INFO[page]?.title || page;
+            toast.warning(`'${pageTitle}' 화면에 대한 접근 권한이 없습니다.`);
+            return;
+        }
+
 
         let pageTitle = PAGE_INFO[page]?.title || data?.title;
         if (!pageTitle && page.startsWith('dynScreen_')) {
@@ -1229,41 +1287,7 @@ const App = () => {
         return <LoginPage onLoginSuccess={handleLoginSuccess} />;
     }
 
-    const checkRole = (roleName) => user?.roles?.some(r => r.authority?.includes(roleName));
-    const isAdmin = checkRole('ADMIN');
-    const isResponsibleSales = checkRole('RESPONSIBLE_SALES');
-    const isQuality = checkRole('QUALITY');
-    const isManufacturer = checkRole('MANUFACTURER');
-    const isSales = checkRole('SALES');
-
-    const isACompany = !isManufacturer;
-    const isAQualityTeam = isQuality || (isACompany && (user?.department === 'Quality' || user?.department === '품질팀'));
-
-    const hasPermission = (menuKey, action = 'VIEW') => {
-        if (isAdmin) return true;
-        
-        // Find if any role has this permission
-        return user?.roles?.some(role => {
-            if (!role.allowedMenus) return false;
-            try {
-                const cleanData = role.allowedMenus.trim();
-                if (cleanData.startsWith('{')) {
-                    const permissions = JSON.parse(cleanData);
-                    return permissions[menuKey]?.includes(action);
-                }
-                // Legacy support: CSV means VIEW permission only
-                return action === 'VIEW' && cleanData.split(',').includes(menuKey);
-            } catch (e) {
-                return false;
-            }
-        });
-    };
-
-    const canAccess = (menuKey) => {
-        if (menuKey === 'productBomInquiry') return isAdmin || hasPermission('bomMaster') || hasPermission('products') || hasPermission('productBomInquiry');
-        if (menuKey === 'systemBenchmark') return isAdmin || isAQualityTeam || hasPermission('logs') || hasPermission('systemBenchmark');
-        return hasPermission(menuKey, 'VIEW');
-    };
+// (권한 평가 함수는 컴포넌트 상단 handleNavigate 직전에 일원화됨)
 
     const hasMonitoringAccess = canAccess('dashboard') || canAccess('announcements') || canAccess('notifications');
     const hasSystemAccess = canAccess('users') || canAccess('logs') || canAccess('roles') || canAccess('guideManagement') || canAccess('dashboardMgmt') || canAccess('trashBin') || canAccess('accessLogs') || canAccess('bugReports') || canAccess('mailTemplates') || canAccess('notificationSettings') || canAccess('systemBenchmark');
@@ -1458,7 +1482,10 @@ const App = () => {
         'SYS_TRASH_BIN': { routeKey: 'trashBin', defaultLabel: '데이터 복구 (휴지통)', defaultIcon: '🗑️' },
         'SYS_MAIL_TEMPLATES': { routeKey: 'mailTemplates', defaultLabel: '제조사 전달 메일 관리', defaultIcon: '📧' },
         'SYS_NOTIFICATION_SETTINGS': { routeKey: 'notificationSettings', defaultLabel: '알림 설정 관리', defaultIcon: '🔔' },
-        'SYS_MENU_MANAGEMENT': { routeKey: 'menuManagement', defaultLabel: '메뉴 및 화면 관리', defaultIcon: '📁' },
+        'SYS_NOTI_SETTINGS': { routeKey: 'notificationSettings', defaultLabel: '알림 설정 관리', defaultIcon: '🔔' },
+        'SYS_MENU_MANAGEMENT': { routeKey: 'menuManagement', defaultLabel: '화면 및 메뉴 관리', defaultIcon: '📁' },
+        'SYS_SCREEN_MANAGEMENT': { routeKey: 'menuManagement', defaultLabel: '화면 및 메뉴 관리', defaultIcon: '📁' },
+        'SYS_SCREEN_POSITION': { routeKey: 'screenPositionManagement', defaultLabel: '화면 위치 관리', defaultIcon: '🧭' },
 
         // [동적 화면 관리]
         'SYS_DYN_SCREEN_PRODUCT': { routeKey: 'dynScreenProduct', defaultLabel: '제품 메타 그리드', defaultIcon: '📋' },
@@ -1672,7 +1699,7 @@ const App = () => {
                                                 {(isAdmin || canAccess('menuManagement')) && (
                                                     <>
                                                         <div className="sidebar-sub-header">화면 관리</div>
-                                                        {renderSidebarItem('menuManagement', '📁 메뉴 및 화면 관리')}
+                                                        {renderSidebarItem('menuManagement', '📁 화면 및 메뉴 관리')}
                                                     </>
                                                 )}
                                             </>
@@ -2314,12 +2341,12 @@ const App = () => {
                                             />
                                         )}
 
-                                        {tab.page === 'brands' && <BrandManagementPage user={user} onNavigate={handleNavigate} />}
-                                        {tab.page === 'manufacturers' && <ManufacturerManagementPage user={user} />}
-                                        {tab.page === 'salesChannels' && <SalesChannelManagement user={user} />}
-                                        {tab.page === 'channelNoteConfig' && <ChannelNoteCategoryConfigPage user={user} />}
-                                        {tab.page === 'manufacturerCategories' && <ManufacturerCategoryPage user={user} />}
-                                        {tab.page === 'products' && (
+                                        {canAccess('brands') && tab.page === 'brands' && <BrandManagementPage user={user} onNavigate={handleNavigate} />}
+                                        {canAccess('manufacturers') && tab.page === 'manufacturers' && <ManufacturerManagementPage user={user} />}
+                                        {canAccess('salesChannels') && tab.page === 'salesChannels' && <SalesChannelManagement user={user} />}
+                                        {canAccess('channelNoteConfig') && tab.page === 'channelNoteConfig' && <ChannelNoteCategoryConfigPage user={user} />}
+                                        {canAccess('manufacturerCategories') && tab.page === 'manufacturerCategories' && <ManufacturerCategoryPage user={user} />}
+                                        {canAccess('products') && tab.page === 'products' && (
                                             <ProductListPage 
                                                 user={user} 
                                                 navigationData={tab.data} 
@@ -2327,7 +2354,7 @@ const App = () => {
                                                 isActive={tab.id === activeTabId}
                                             />
                                         )}
-                                        {tab.page === 'quality' && (
+                                        {canAccess('quality') && tab.page === 'quality' && (
                                             <QualityManagementPage 
                                                 user={user} 
                                                 navigationData={tab.data} 
@@ -2345,13 +2372,13 @@ const App = () => {
                                             />
                                         )}
                                         {canAccess('ingredientCompliance') && tab.page === 'ingredientCompliance' && <IngredientCompliancePage user={user} />}
-                                        {tab.page === 'dashboard' && (
+                                        {canAccess('dashboard') && tab.page === 'dashboard' && (
                                             <DashboardPage 
                                                 user={user} 
                                                 onNavigate={handleNavigate} 
                                             />
                                         )}
-                                        {tab.page === 'claims' && (
+                                        {canAccess('claims') && tab.page === 'claims' && (
                                             <ClaimManagementPage 
                                                 user={user} 
                                                 navigationData={tab.data}
@@ -2360,43 +2387,43 @@ const App = () => {
                                                 isActive={tab.id === activeTabId}
                                             />
                                         )}
-                                        {tab.page === 'claimDashboard' && (
+                                        {canAccess('claimDashboard') && tab.page === 'claimDashboard' && (
                                             <ClaimDashboardPage 
                                                 user={user}
                                                 onNavigate={handleNavigate}
                                             />
                                         )}
-                                        {tab.page === 'lotPpmDashboard' && (
+                                        {canAccess('lotPpmDashboard') && tab.page === 'lotPpmDashboard' && (
                                             <LotPpmDashboardPage 
                                                 user={user}
                                                 onNavigate={handleNavigate}
                                             />
                                         )}
-                                        {tab.page === 'qualityDashboard' && (
+                                        {canAccess('qualityDashboard') && tab.page === 'qualityDashboard' && (
                                             <QualityDashboardPage 
                                                 user={user}
                                                 onNavigate={handleNavigate}
                                             />
                                         )}
-                                        {tab.page === 'productDashboard' && (
+                                        {canAccess('productDashboard') && tab.page === 'productDashboard' && (
                                             <ProductDashboardPage user={user} onNavigate={handleNavigate} />
                                         )}
-                                        {tab.page === 'productionAuditDashboard' && (
+                                        {canAccess('productionAuditDashboard') && tab.page === 'productionAuditDashboard' && (
                                             <ProductionAuditDashboardPage user={user} onNavigate={handleNavigate} />
                                         )}
-                                        {tab.page === 'productBomInquiry' && <ProductBomInquiryPage user={user} isActive={tab.id === activeTabId} />}
-                                        {tab.page === 'bomMaster' && <BomMasterPage user={user} />}
-                                        {tab.page === 'bomCategories' && <BomCategoryManagementPage user={user} />}
-                                        {tab.page === 'packagingTemplates' && <PackagingTemplatePage user={user} />}
+                                        {canAccess('productBomInquiry') && tab.page === 'productBomInquiry' && <ProductBomInquiryPage user={user} isActive={tab.id === activeTabId} />}
+                                        {canAccess('bomMaster') && tab.page === 'bomMaster' && <BomMasterPage user={user} />}
+                                        {canAccess('bomCategories') && tab.page === 'bomCategories' && <BomCategoryManagementPage user={user} />}
+                                        {canAccess('packagingTemplates') && tab.page === 'packagingTemplates' && <PackagingTemplatePage user={user} />}
                                         {canAccess('spaceRatioCalculator') && tab.page === 'spaceRatioCalculator' && (
                                             <PackagingSpaceRatioCalculatorPage user={user} onNavigate={handleNavigate} />
                                         )}
                                         {canAccess('outboxCalculator') && tab.page === 'outboxCalculator' && (
                                             <OutboxSpecCalculatorPage user={user} onNavigate={handleNavigate} />
                                         )}
-                                        {tab.page === 'manufacturerAuditItems' && <ManufacturerAuditItemPage user={user} />}
-                                        {tab.page === 'manufacturerAudits' && <ManufacturerAuditPage user={user} />}
-                                        {tab.page === 'manufacturerAuditDashboard' && <ManufacturerAuditDashboard user={user} onNavigate={handleNavigate} />}
+                                        {canAccess('manufacturerAuditItems') && tab.page === 'manufacturerAuditItems' && <ManufacturerAuditItemPage user={user} />}
+                                        {canAccess('manufacturerAudits') && tab.page === 'manufacturerAudits' && <ManufacturerAuditPage user={user} />}
+                                        {canAccess('manufacturerAuditDashboard') && tab.page === 'manufacturerAuditDashboard' && <ManufacturerAuditDashboard user={user} onNavigate={handleNavigate} />}
                                         {canAccess('manufacturerGuide') && tab.page === 'manufacturerGuide' && (
                                             <ManufacturerGuidePage user={user} />
                                         )}
@@ -2405,7 +2432,7 @@ const App = () => {
                                         {canAccess('bugReports') && tab.page === 'bugReports' && <BugReportPage user={user} />}
                                         {canAccess('notificationSettings') && tab.page === 'notificationSettings' && <NotificationSettingsPage user={user} />}
                                         {canAccess('systemBenchmark') && tab.page === 'systemBenchmark' && <SystemBenchmarkPage user={user} />}
-                                        {!isManufacturer && (
+                                        {!isManufacturer && (isAdmin || canAccess(tab.page) || canAccess('approvals')) && (
                                             tab.page === 'approvals' || 
                                             tab.page === 'approvalPending' || 
                                             tab.page === 'approvalSubmitted' || 
@@ -2453,13 +2480,13 @@ const App = () => {
                                                 showAlert={showAlert} 
                                             />
                                         )}
-                                        {tab.page === 'dynScreenProduct' && (
+                                        {canAccess('dynScreenProduct') && tab.page === 'dynScreenProduct' && (
                                             <DynamicScreenRenderer screenCode="SCR_NOTION_PRODUCT" user={user} />
                                         )}
-                                        {tab.page === 'dynScreenClaim' && (
+                                        {canAccess('dynScreenClaim') && tab.page === 'dynScreenClaim' && (
                                             <DynamicScreenRenderer screenCode="SCR_DYNAMIC_CLAIM" user={user} />
                                         )}
-                                        {tab.page?.startsWith('dynScreen_') && (
+                                        {canAccess(tab.page) && tab.page?.startsWith('dynScreen_') && (
                                             <DynamicScreenRenderer 
                                                 screenCode={tab.data?.screenCode || tab.page.replace('dynScreen_', '')} 
                                                 user={user} 
@@ -2467,6 +2494,10 @@ const App = () => {
                                         )}
                                         {!isManufacturer && (isAdmin || canAccess('menuManagement')) && (tab.page === 'menuManagement' || tab.page === 'screenPositionManagement') && (
                                             <ScreenMenuManagementPage user={user} />
+                                        )}
+
+                                        {!canAccess(tab.page) && (
+                                            <AccessDeniedView pageName={PAGE_INFO[tab.page]?.title || tab.page} />
                                         )}
 
                                     </TabErrorBoundary>

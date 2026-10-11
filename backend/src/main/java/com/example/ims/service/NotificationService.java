@@ -14,6 +14,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -285,6 +286,74 @@ public class NotificationService {
         if (updated) {
             notificationRepository.saveAll(unreadList);
             log.info("[NOTIFICATION] Marked all notifications as read for user: {}", username);
+        }
+    }
+
+    /**
+     * 알림 다건 일괄 읽음 처리 (선택 읽음)
+     */
+    @Transactional
+    public void markAsReadBatch(List<Long> ids, String username) {
+        if (ids == null || ids.isEmpty() || username == null) return;
+        User user = userRepository.findByUsername(username).orElse(null);
+        if (user == null) return;
+
+        List<String> roleList = getUserRoles(user);
+        boolean isAdmin = roleList.contains("ROLE_ADMIN");
+
+        List<Notification> targetList = notificationRepository.findAllById(ids);
+        LocalDateTime now = LocalDateTime.now();
+        List<Notification> toSave = new ArrayList<>();
+
+        for (Notification n : targetList) {
+            if (n.isDeleted() || n.isRead()) continue;
+            boolean isAuthorized = isAdmin
+                    || username.equals(n.getTargetUsername())
+                    || (n.getTargetRole() != null && roleList.contains(n.getTargetRole()))
+                    || (n.getTargetCompanyName() != null && n.getTargetCompanyName().equals(user.getCompanyName()));
+            if (isAuthorized) {
+                n.setRead(true);
+                n.setReadAt(now);
+                toSave.add(n);
+            }
+        }
+
+        if (!toSave.isEmpty()) {
+            notificationRepository.saveAll(toSave);
+            log.info("[NOTIFICATION] Batch marked {} notifications as read by {}", toSave.size(), username);
+        }
+    }
+
+    /**
+     * 알림 다건 일괄 삭제 (선택 삭제)
+     */
+    @Transactional
+    public void deleteNotificationsBatch(List<Long> ids, String username) {
+        if (ids == null || ids.isEmpty() || username == null) return;
+        User user = userRepository.findByUsername(username).orElse(null);
+        if (user == null) return;
+
+        List<String> roleList = getUserRoles(user);
+        boolean isAdmin = roleList.contains("ROLE_ADMIN");
+
+        List<Notification> targetList = notificationRepository.findAllById(ids);
+        List<Notification> toSave = new ArrayList<>();
+
+        for (Notification n : targetList) {
+            if (n.isDeleted()) continue;
+            boolean isAuthorized = isAdmin
+                    || username.equals(n.getTargetUsername())
+                    || (n.getTargetRole() != null && roleList.contains(n.getTargetRole()))
+                    || (n.getTargetCompanyName() != null && n.getTargetCompanyName().equals(user.getCompanyName()));
+            if (isAuthorized) {
+                n.setDeleted(true);
+                toSave.add(n);
+            }
+        }
+
+        if (!toSave.isEmpty()) {
+            notificationRepository.saveAll(toSave);
+            log.info("[NOTIFICATION] Batch soft deleted {} notifications by {}", toSave.size(), username);
         }
     }
 

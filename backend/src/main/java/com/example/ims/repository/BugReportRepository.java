@@ -23,4 +23,9 @@ public interface BugReportRepository extends JpaRepository<BugReport, Long> {
     );
 
     long countByStatus(String status);
+
+    List<BugReport> findByIsReadFalse();
+
+    @Query("SELECT COUNT(b) FROM BugReport b WHERE b.isRead = false OR b.isRead IS NULL")
+    long countUnread();
 }

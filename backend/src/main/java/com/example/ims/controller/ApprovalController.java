@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import java.security.Principal;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/approvals")
@@ -155,5 +156,33 @@ public class ApprovalController {
             Principal principal) {
         approvalService.markAsRead(id, principal.getName());
         return ResponseEntity.ok(Map.of("success", true, "documentId", id));
+    }
+
+    /**
+     * 결재 문서 다건 일괄 읽음 처리
+     */
+    @PostMapping("/read-batch")
+    public ResponseEntity<Map<String, Object>> markAsReadBatch(
+            @RequestBody Map<String, Object> body,
+            Principal principal) {
+        Object rawIds = body.get("documentIds");
+        if (rawIds instanceof List<?>) {
+            List<Long> docIds = ((List<?>) rawIds).stream()
+                    .map(o -> Long.valueOf(o.toString()))
+                    .collect(Collectors.toList());
+            approvalService.markAsReadBatch(docIds, principal.getName());
+        }
+        return ResponseEntity.ok(Map.of("success", true));
+    }
+
+    /**
+     * 현재 결재함 전체 문서 일괄 읽음 처리
+     */
+    @PostMapping("/read-all")
+    public ResponseEntity<Map<String, Object>> markAllAsRead(
+            @RequestParam(required = false, defaultValue = "PENDING") String boxType,
+            Principal principal) {
+        approvalService.markAllAsRead(boxType, principal.getName());
+        return ResponseEntity.ok(Map.of("success", true, "boxType", boxType));
     }
 }

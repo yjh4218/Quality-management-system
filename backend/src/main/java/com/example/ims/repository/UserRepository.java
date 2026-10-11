@@ -12,6 +12,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
         List<User> findByEnabledFalse();
         List<User> findByCompanyName(String companyName);
+        List<User> findByEnabledTrueAndCompanyNameIgnoreCaseAndDepartmentIgnoreCase(String companyName, String department);
+
+        @org.springframework.data.jpa.repository.Query("SELECT u FROM User u WHERE u.enabled = true AND LOWER(u.companyName) = LOWER(:companyName) AND u.role LIKE '%ROLE_ADMIN%' ORDER BY u.id ASC")
+        List<User> findActiveAdminsByCompany(@org.springframework.data.repository.query.Param("companyName") String companyName);
+
+        @org.springframework.data.jpa.repository.Query("SELECT u FROM User u WHERE u.enabled = true AND u.role LIKE '%ROLE_ADMIN%' ORDER BY u.id ASC")
+        List<User> findActiveAdmins();
 
         List<User> findByEnabledTrueAndEmailIsNotNull();
         List<User> findByEnabledTrueAndEmailIsNotNullAndCompanyName(String companyName);

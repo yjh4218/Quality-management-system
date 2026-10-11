@@ -66,6 +66,42 @@ public class BugReportController {
         return ResponseEntity.ok(bugReportService.updateStatus(id, status));
     }
 
+    @PostMapping("/read-batch")
+    @PreAuthorize("@perm.can('bugReports', 'EDIT')")
+    public ResponseEntity<java.util.Map<String, Object>> markAsReadBatch(
+            @RequestBody java.util.Map<String, java.util.List<Long>> payload,
+            Authentication authentication) {
+        java.util.List<Long> ids = payload != null ? payload.get("ids") : null;
+        String username = authentication != null ? authentication.getName() : "ADMIN";
+        bugReportService.markAsReadBatch(ids, username);
+        return ResponseEntity.ok(java.util.Map.of("success", true));
+    }
+
+    @PostMapping("/batch-status")
+    @PreAuthorize("@perm.can('bugReports', 'EDIT')")
+    public ResponseEntity<java.util.Map<String, Object>> updateStatusBatch(
+            @RequestBody java.util.Map<String, Object> payload,
+            Authentication authentication) {
+        Object rawIds = payload != null ? payload.get("ids") : null;
+        String status = payload != null && payload.get("status") != null ? payload.get("status").toString() : "IN_PROGRESS";
+        String username = authentication != null ? authentication.getName() : "ADMIN";
+        if (rawIds instanceof java.util.List<?>) {
+            java.util.List<Long> ids = ((java.util.List<?>) rawIds).stream()
+                    .map(o -> Long.valueOf(o.toString()))
+                    .collect(java.util.stream.Collectors.toList());
+            bugReportService.updateStatusBatch(ids, status, username);
+        }
+        return ResponseEntity.ok(java.util.Map.of("success", true, "status", status));
+    }
+
+    @PostMapping("/read-all")
+    @PreAuthorize("@perm.can('bugReports', 'EDIT')")
+    public ResponseEntity<java.util.Map<String, Object>> markAllAsRead(Authentication authentication) {
+        String username = authentication != null ? authentication.getName() : "ADMIN";
+        bugReportService.markAllAsRead(username);
+        return ResponseEntity.ok(java.util.Map.of("success", true));
+    }
+
     @GetMapping("/open-count")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<java.util.Map<String, Long>> getOpenCount() {

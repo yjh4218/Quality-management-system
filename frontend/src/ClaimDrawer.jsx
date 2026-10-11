@@ -459,13 +459,18 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
 
             const defaultDepts = [];
             let defaultEmails = [];
-            if (loadedDeptEmails['품질팀']) {
-                defaultDepts.push('품질팀');
-                defaultEmails = [...defaultEmails, ...loadedDeptEmails['품질팀'].map(e => e.trim())];
-            }
-            if (loadedDeptEmails['영업팀']) {
-                defaultDepts.push('영업팀');
-                defaultEmails = [...defaultEmails, ...loadedDeptEmails['영업팀'].map(e => e.trim())];
+            Object.keys(loadedDeptEmails).forEach(dept => {
+                const lower = dept.toLowerCase();
+                if (lower.includes('품질') || lower.includes('qa') || lower.includes('qc') || lower.includes('영업') || lower.includes('sales')) {
+                    defaultDepts.push(dept);
+                    defaultEmails = [...defaultEmails, ...(loadedDeptEmails[dept] || []).map(e => e.trim())];
+                }
+            });
+            if (defaultDepts.length === 0) {
+                Object.keys(loadedDeptEmails).forEach(dept => {
+                    defaultDepts.push(dept);
+                    defaultEmails = [...defaultEmails, ...(loadedDeptEmails[dept] || []).map(e => e.trim())];
+                });
             }
 
             const uniqueEmails = [...new Set(defaultEmails.filter(Boolean))];
@@ -790,15 +795,24 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
 
             const defaultDepts = [];
             let defaultEmails = [];
-            if (loadedDeptEmails['품질팀']) {
-                defaultDepts.push('품질팀');
-                defaultEmails = [...defaultEmails, ...loadedDeptEmails['품질팀'].map(e => e.trim())];
-            }
-            if (loadedDeptEmails['영업팀']) {
-                defaultDepts.push('영업팀');
-                defaultEmails = [...defaultEmails, ...loadedDeptEmails['영업팀'].map(e => e.trim())];
+            Object.keys(loadedDeptEmails).forEach(dept => {
+                const lower = dept.toLowerCase();
+                if (lower.includes('품질') || lower.includes('qa') || lower.includes('qc') || lower.includes('영업') || lower.includes('sales')) {
+                    defaultDepts.push(dept);
+                    defaultEmails = [...defaultEmails, ...(loadedDeptEmails[dept] || []).map(e => e.trim())];
+                }
+            });
+            if (defaultDepts.length === 0) {
+                Object.keys(loadedDeptEmails).forEach(dept => {
+                    defaultDepts.push(dept);
+                    defaultEmails = [...defaultEmails, ...(loadedDeptEmails[dept] || []).map(e => e.trim())];
+                });
             }
             const uniqueEmails = [...new Set(defaultEmails.filter(Boolean))];
+
+            const senderOrg = user?.companyName 
+                ? `${user.companyName} ${user?.department || '품질관리팀'}`
+                : (user?.department ? user.department : '품질관리팀');
 
             const subject = `[QMS 대책 재요청] 클레임 번호 ${claim.claimNumber}번에 대한 재발방지대책 보완 요청`;
             const body = `<html>
@@ -806,7 +820,7 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
   <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); background-color: #ffffff;">
     <h2 style="color: #0f172a; border-bottom: 2px solid #cbd5e1; padding-bottom: 10px; margin-top: 0;">통합 품질 관리 시스템 (QMS)</h2>
     <p>안녕하세요, ${companyName} 담당자님.</p>
-    <p>더파운더즈 품질팀입니다.<br/>귀사에서 제출하신 클레임에 대한 원인 분석 및 재발방지 대책이 검토 결과 미흡하여 보완(재요청)을 요청드립니다. 아래 내용을 확인 후 재발방지대책 보완 회신을 부탁드립니다.</p>
+    <p>${senderOrg}입니다.<br/>귀사에서 제출하신 클레임에 대한 원인 분석 및 재발방지 대책이 검토 결과 미흡하여 보완(재요청)을 요청드립니다. 아래 내용을 확인 후 재발방지대책 보완 회신을 부탁드립니다.</p>
     
     <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #e2e8f0;">
       <ul style="margin: 0; padding-left: 20px; color: #475569; line-height: 1.8;">

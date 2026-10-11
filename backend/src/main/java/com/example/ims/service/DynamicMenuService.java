@@ -15,6 +15,8 @@ import com.example.ims.repository.DynamicScreenRepository;
 import com.example.ims.repository.RoleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -68,12 +70,14 @@ public class DynamicMenuService {
         return buildTree(accessibleMenus, permMap, isAdmin);
     }
 
+    @Cacheable(value = "dynamicMenusTree")
     @Transactional(readOnly = true)
     public List<DynamicMenuResponse> getAllMenusTree() {
         List<DynamicMenu> allMenus = menuRepository.findByIsActiveTrueOrderByMenuOrderAsc();
         return buildTree(allMenus, Collections.emptyMap(), true);
     }
 
+    @CacheEvict(value = "dynamicMenusTree", allEntries = true)
     @Transactional
     public DynamicMenuResponse createMenu(DynamicMenuRequest req) {
         if (req.getMenuName() == null || req.getMenuName().trim().isEmpty()) {
@@ -140,6 +144,7 @@ public class DynamicMenuService {
         return toResponse(menu, true);
     }
 
+    @CacheEvict(value = "dynamicMenusTree", allEntries = true)
     @Transactional
     public DynamicMenuResponse updateMenu(Long id, DynamicMenuRequest req) {
         DynamicMenu menu = menuRepository.findById(id)
@@ -181,6 +186,7 @@ public class DynamicMenuService {
         return toResponse(menu, true);
     }
 
+    @CacheEvict(value = "dynamicMenusTree", allEntries = true)
     @Transactional
     public void deleteMenu(Long id) {
         DynamicMenu menu = menuRepository.findById(id)
@@ -204,6 +210,7 @@ public class DynamicMenuService {
         }
     }
 
+    @CacheEvict(value = "dynamicMenusTree", allEntries = true)
     @Transactional
     public void batchReorderMenus(List<DynamicMenuBatchReorderDto> items) {
         if (items == null || items.isEmpty()) {
@@ -279,6 +286,7 @@ public class DynamicMenuService {
         return result;
     }
 
+    @CacheEvict(value = "dynamicMenusTree", allEntries = true)
     @Transactional
     public ScreenMenuMappingResponse linkScreenToMenu(Long screenId, DynamicMenuRequest req) {
         DynamicScreen screen = screenRepository.findById(screenId)

@@ -52,9 +52,24 @@ public class BugReport {
     @Builder.Default
     private Integer occurrenceCount = 1;
 
+    @Builder.Default
+    @Column(name = "is_read", columnDefinition = "boolean default false")
+    private Boolean isRead = false;
+
+    @Column(name = "read_at")
+    private LocalDateTime readAt;
+
     @org.springframework.data.annotation.CreatedDate
     private LocalDateTime createdAt;
 
     @org.springframework.data.annotation.LastModifiedDate
     private LocalDateTime updatedAt;
+
+    public boolean isRead() {
+        return Boolean.TRUE.equals(this.isRead);
+    }
+
+    public void setRead(boolean read) {
+        this.isRead = read;
+    }
 }

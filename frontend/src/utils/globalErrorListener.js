@@ -6,6 +6,7 @@
  */
 
 import { submitBugReport, getFormattedReporterInfo } from '../api';
+import { toast } from 'react-toastify';
 
 const reportedErrors = new Set();
 
@@ -34,22 +35,35 @@ export const reportGlobalError = async (errorMsg, stackTrace, source = 'Global J
     reportedErrors.add(dedupeKey);
     setTimeout(() => reportedErrors.delete(dedupeKey), 5000);
 
+    const reporterInfo = getFormattedReporterInfo();
+    const isNetwork = errorMsg.includes('Load failed') || errorMsg.includes('Failed to fetch') || errorMsg.includes('Network Error');
+    const payload = {
+        screenName: window.__QMS_ACTIVE_PAGE__ || (typeof window !== 'undefined' ? window.location.pathname : '전역 감지'),
+        url: typeof window !== 'undefined' ? window.location.href : '',
+        severity: isNetwork ? 'HIGH' : 'CRITICAL',
+        errorCategory: category,
+        description: `[자동 감지] ${source}: ${errorMsg}`,
+        steps: `시스템 전역에서 비정상적인 예외가 감지되어 버그 리포트가 자동 접수되었습니다.\n\n[오류 구분]: ${category}\n[발생 원천]: ${source}\n[에러 메시지]\n${errorMsg}\n\n[Stack Trace]\n${stackTrace || 'N/A'}`,
+        reporterName: reporterInfo.name,
+        reporterUsername: reporterInfo.username
+    };
+
     try {
-        const reporterInfo = getFormattedReporterInfo();
-        const isNetwork = errorMsg.includes('Load failed') || errorMsg.includes('Failed to fetch') || errorMsg.includes('Network Error');
-        
-        await submitBugReport({
-            screenName: window.__QMS_ACTIVE_PAGE__ || (typeof window !== 'undefined' ? window.location.pathname : '전역 감지'),
-            url: typeof window !== 'undefined' ? window.location.href : '',
-            severity: isNetwork ? 'HIGH' : 'CRITICAL',
-            errorCategory: category,
-            description: `[자동 감지] ${source}: ${errorMsg}`,
-            steps: `시스템 전역에서 비정상적인 예외가 감지되어 버그 리포트가 자동 접수되었습니다.\n\n[오류 구분]: ${category}\n[발생 원천]: ${source}\n[에러 메시지]\n${errorMsg}\n\n[Stack Trace]\n${stackTrace || 'N/A'}`,
-            reporterName: reporterInfo.name,
-            reporterUsername: reporterInfo.username
-        });
+        await submitBugReport(payload);
+        // 오류 자동 접수 사용자 가시적 피드백 제공 (중복 방지 toastId 설정)
+        toast.error(
+            `🚨 시스템 오류가 감지되어 관리자에게 버그 리포트가 자동 접수되었습니다.`,
+            { autoClose: 5000, toastId: dedupeKey }
+        );
     } catch (err) {
-        console.warn('[QMS-ErrorListener] Failed to automatically dispatch bug report:', err);
+        console.warn('[QMS-ErrorListener] Failed to automatically dispatch bug report, storing in offline queue:', err);
+        try {
+            const queue = JSON.parse(localStorage.getItem('qms_pending_bug_reports') || '[]');
+            queue.push({ ...payload, queuedAt: new Date().toISOString() });
+            localStorage.setItem('qms_pending_bug_reports', JSON.stringify(queue.slice(-50)));
+        } catch (lsErr) {
+            // ignore
+        }
     }
 };
 
