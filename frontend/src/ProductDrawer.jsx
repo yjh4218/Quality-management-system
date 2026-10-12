@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
     createProduct,
     updateProduct,
@@ -259,8 +259,27 @@ const ProductDrawer = ({ product, onClose, user }) => {
             };
             const res = await evaluateIngredientPrecautions(payload);
             setPrecautionResults(res.data);
+
+            // '성분 안정성 검토' 자료와 연동하여 전성분 행별 정보(배합한도 분류, INCI 등) 동기화
+            if (res.data?.ingredientUpdates && res.data.ingredientUpdates.length > 0) {
+                const updates = res.data.ingredientUpdates;
+                const updatedList = list.map((item, idx) => {
+                    const u = updates[idx];
+                    if (!u) return item;
+                    return {
+                        ...item,
+                        limitClass: u.limitClass || item.limitClass,
+                        inciName: item.inciName || u.matchedInciName || item.inciName,
+                        regStatus: u.krStatus,
+                        regLimit: u.krLimit
+                    };
+                });
+                setFormData(prev => ({ ...prev, productIngredients: updatedList }));
+                toast.success(`함량별 주의사항 및 성분 안전성 검토 분석 완료 (${res.data.matchedPrecautionCount || 0}건 주의사항, ${updates.length}건 성분 동기화)`);
+            }
         } catch (err) {
             console.error("주의사항 자동 평가 오류:", err);
+            toast.error("주의사항 및 성분 안전성 재분석 중 오류가 발생했습니다.");
         } finally {
             setPrecautionLoading(false);
         }
@@ -303,6 +322,97 @@ const ProductDrawer = ({ product, onClose, user }) => {
             setComplianceLoading(false);
         }
     };
+
+    // 한국 화장품법 기준 표시용량별 전성분 및 함량 표시기준 가이드 및 제품명 기재 성분 자동 감지 엔진
+    const cosmeticLabelGuide = useMemo(() => {
+        const rawCap = String(formData.capacity || formData.weight || '').trim();
+        const numMatch = rawCap.match(/([\d.]+)/);
+        const parsedVolume = numMatch ? parseFloat(numMatch[1]) : null;
+
+        let tier = 'UNKNOWN';
+        let tierLabel = '용량 미입력 (표시 기준 확인 필요)';
+        let tierDesc = '제품 사양의 용량(mL/g)을 입력하시면 법정 표시 기준이 자동으로 적용됩니다.';
+        let badgeColor = '#64748b';
+        let badgeBg = '#f1f5f9';
+
+        if (parsedVolume !== null) {
+            if (parsedVolume < 10) {
+                tier = 'UNDER_10';
+                tierLabel = '10mL(g) 미만: 전성분 기재 생략 가능';
+                tierDesc = '화장품법 제10조 및 시행규칙 제19조에 따라 전성분 기재 생략이 가능합니다. (단, 타르색소, 금박, 보존제, 기능성화장품 주성분 등 법정 필수성분은 표기 필요)';
+                badgeColor = '#b91c1c';
+                badgeBg = '#fee2e2';
+            } else if (parsedVolume < 50) {
+                tier = 'BETWEEN_10_50';
+                tierLabel = '10mL(g) ~ 50mL(g) 미만: 기능성·표시·배합한도 성분 및 제품명 성분 함량 필수';
+                tierDesc = '기능성화장품 유효성분, 배합한도 성분, 보존제, 타르색소 등 법정 성분을 기재하며, [제품명에 기재된 전성분]은 반드시 명칭과 함량(%)을 기재해야 합니다.';
+                badgeColor = '#b45309';
+                badgeBg = '#fef3c7';
+            } else {
+                tier = 'OVER_50';
+                tierLabel = '50mL(g) 이상: 전성분 전체 표시 및 제품명 성분 함량 필수';
+                tierDesc = '화장품에 사용된 모든 성분을 함량순(내림차순)으로 전체 표시해야 하며, [제품명에 기재된 전성분]은 반드시 명칭과 함량(%)을 기재해야 합니다.';
+                badgeColor = '#15803d';
+                badgeBg = '#dcfce7';
+            }
+        }
+
+        const prodName = String(formData.productName || formData.name || '').toLowerCase();
+        const ingredients = formData.productIngredients || [];
+        const matchedNameIngredients = [];
+
+        if (prodName && ingredients.length > 0) {
+            ingredients.forEach((ing, index) => {
+                const kor = String(ing.korName || '').trim();
+                const eng = String(ing.engName || '').trim();
+                const inci = String(ing.inciName || '').trim();
+
+                let isMatched = false;
+                let matchKeyword = '';
+
+                if (kor.length >= 2 && prodName.includes(kor.toLowerCase())) {
+                    isMatched = true;
+                    matchKeyword = kor;
+                } else if (eng.length >= 3 && prodName.includes(eng.toLowerCase())) {
+                    isMatched = true;
+                    matchKeyword = eng;
+                } else if (inci.length >= 3 && prodName.includes(inci.toLowerCase())) {
+                    isMatched = true;
+                    matchKeyword = inci;
+                } else if (kor.length >= 3) {
+                    const cleanKor = kor.replace(/(추출물|오일|수|씨오일|꽃수|발효여과물|발효물|가루|엑스)$/g, '').trim();
+                    if (cleanKor.length >= 2 && prodName.includes(cleanKor.toLowerCase())) {
+                        isMatched = true;
+                        matchKeyword = cleanKor;
+                    }
+                }
+
+                if (isMatched) {
+                    const hasContent = ing.contentPercent !== undefined && ing.contentPercent !== null && String(ing.contentPercent).trim() !== '';
+                    matchedNameIngredients.push({
+                        index,
+                        korName: kor || matchKeyword,
+                        engName: eng,
+                        keyword: matchKeyword,
+                        contentPercent: ing.contentPercent,
+                        hasContent
+                    });
+                }
+            });
+        }
+
+        return {
+            rawCapacity: rawCap,
+            parsedVolume,
+            tier,
+            tierLabel,
+            tierDesc,
+            badgeColor,
+            badgeBg,
+            matchedNameIngredients,
+            hasMissingContentWarning: matchedNameIngredients.some(m => !m.hasContent)
+        };
+    }, [formData.capacity, formData.weight, formData.productName, formData.name, formData.productIngredients]);
 
     // 1차 본체 용기 제원 상태 (공간비율 정밀 산출용)
     const [primaryContainer, setPrimaryContainer] = useState({
@@ -4481,6 +4591,92 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                         </div>
                                     </div>
 
+                                    {/* 📜 한국 화장품법 기준 표시용량별 전성분 & 함량 표시 가이드 카드 */}
+                                    <div style={{
+                                        marginBottom: '16px',
+                                        padding: '16px',
+                                        borderRadius: '10px',
+                                        background: '#f8fafc',
+                                        border: '1.5px solid #cbd5e1',
+                                        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.04)'
+                                    }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <span style={{ fontSize: '18px' }}>📜</span>
+                                                <strong style={{ fontSize: '14px', color: '#1e293b' }}>
+                                                    한국 화장품법 표시용량별 전성분 & 함량 표시기준 가이드
+                                                </strong>
+                                                <span style={{ fontSize: '11px', color: '#64748b' }}>
+                                                    (화장품법 제10조 및 시행규칙 제19조 [별표 4])
+                                                </span>
+                                            </div>
+                                            <span style={{
+                                                fontSize: '12px',
+                                                padding: '3px 10px',
+                                                borderRadius: '12px',
+                                                fontWeight: '800',
+                                                background: cosmeticLabelGuide.badgeBg,
+                                                color: cosmeticLabelGuide.badgeColor,
+                                                border: `1px solid ${cosmeticLabelGuide.badgeColor}40`
+                                            }}>
+                                                현재 제품 용량: {cosmeticLabelGuide.rawCapacity || '미입력'} ({cosmeticLabelGuide.tierLabel})
+                                            </span>
+                                        </div>
+
+                                        <p style={{ margin: '0 0 10px 0', fontSize: '12.5px', color: '#475569', lineHeight: '1.5' }}>
+                                            {cosmeticLabelGuide.tierDesc}
+                                        </p>
+
+                                        {/* 제품명 기재 전성분 자동 감지 결과 */}
+                                        <div style={{
+                                            padding: '10px 12px',
+                                            borderRadius: '8px',
+                                            background: '#ffffff',
+                                            border: cosmeticLabelGuide.matchedNameIngredients.length > 0 ? '1.5px solid #93c5fd' : '1px solid #e2e8f0',
+                                            fontSize: '12px'
+                                        }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                                <span style={{ fontWeight: '700', color: '#1e40af', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    🏷️ 제품명 기재 성분 자동 감지: 
+                                                    {cosmeticLabelGuide.matchedNameIngredients.length > 0 ? (
+                                                        <span style={{ color: '#2563eb' }}>총 {cosmeticLabelGuide.matchedNameIngredients.length}개 감지됨 (의무 함량 기재 대상)</span>
+                                                    ) : (
+                                                        <span style={{ color: '#64748b', fontWeight: 'normal' }}>제품명과 일치하는 성분 없음 (일반 표시기준 적용)</span>
+                                                    )}
+                                                </span>
+                                                {cosmeticLabelGuide.hasMissingContentWarning && (
+                                                    <span style={{ fontSize: '11px', color: '#dc2626', fontWeight: 'bold' }}>
+                                                        ⚠️ 제품명에 포함된 성분의 함량(%)이 미기재되었습니다!
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            {cosmeticLabelGuide.matchedNameIngredients.length > 0 && (
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+                                                    {cosmeticLabelGuide.matchedNameIngredients.map((m, mIdx) => (
+                                                        <span key={mIdx} style={{
+                                                            padding: '2px 8px',
+                                                            borderRadius: '6px',
+                                                            fontSize: '11px',
+                                                            fontWeight: '600',
+                                                            background: m.hasContent ? '#dbeafe' : '#fee2e2',
+                                                            color: m.hasContent ? '#1e40af' : '#991b1b',
+                                                            border: `1px solid ${m.hasContent ? '#bfdbfe' : '#fecaca'}`,
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px'
+                                                        }}>
+                                                            <span>{m.korName}</span>
+                                                            <strong style={{ color: m.hasContent ? '#1d4ed8' : '#b91c1c' }}>
+                                                                {m.hasContent ? `(${m.contentPercent}%)` : '(함량 미입력 ⚠️)'}
+                                                            </strong>
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
                                     {/* ⚠️ 법적 의무 기재 주의사항 안내 섹션 */}
                                     {precautionResults && precautionResults.matchedPrecautionCount > 0 && (
                                         <div style={{
@@ -4589,14 +4785,34 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                         </td>
                                                     </tr>
                                                 ) : (
-                                                    formData.productIngredients.map((ing, idx) => (
-                                                        <tr key={idx} style={{ borderBottom: '1px solid #e9ecef', ':hover': { background: '#f8f9fa' } }}>
-                                                            <td style={{ padding: '4px 8px' }}>
-                                                                <input value={ing.korName || ''} onChange={(e) => updateIngredient(idx, 'korName', e.target.value)} disabled={!canEdit} style={{ width: '100%', border: 'none', background: 'transparent' }} />
-                                                            </td>
-                                                            <td style={{ padding: '4px 8px' }}>
-                                                                <input value={ing.engName || ''} onChange={(e) => updateIngredient(idx, 'engName', e.target.value)} disabled={!canEdit} style={{ width: '100%', border: 'none', background: 'transparent' }} />
-                                                            </td>
+                                                    formData.productIngredients.map((ing, idx) => {
+                                                        const isNameMatched = cosmeticLabelGuide.matchedNameIngredients.some(m => m.index === idx);
+                                                        return (
+                                                            <tr key={idx} style={{ 
+                                                                borderBottom: '1px solid #e9ecef', 
+                                                                background: isNameMatched ? '#eff6ff' : 'transparent' 
+                                                            }}>
+                                                                <td style={{ padding: '4px 8px' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                        <input value={ing.korName || ''} onChange={(e) => updateIngredient(idx, 'korName', e.target.value)} disabled={!canEdit} style={{ width: '100%', border: 'none', background: 'transparent', fontWeight: isNameMatched ? '700' : 'normal' }} />
+                                                                        {isNameMatched && (
+                                                                            <span title="화장품법 제10조: 제품명에 사용된 성분명은 반드시 함량(%)을 기재해야 합니다." style={{
+                                                                                fontSize: '10px',
+                                                                                padding: '1px 5px',
+                                                                                borderRadius: '4px',
+                                                                                background: '#2563eb',
+                                                                                color: '#ffffff',
+                                                                                fontWeight: '700',
+                                                                                whiteSpace: 'nowrap'
+                                                                            }}>
+                                                                                ⭐제품명(함량의무)
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </td>
+                                                                <td style={{ padding: '4px 8px' }}>
+                                                                    <input value={ing.engName || ''} onChange={(e) => updateIngredient(idx, 'engName', e.target.value)} disabled={!canEdit} style={{ width: '100%', border: 'none', background: 'transparent' }} />
+                                                                </td>
                                                             <td style={{ padding: '4px 8px' }}>
                                                                 <input
                                                                     type="text"
@@ -4648,7 +4864,8 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                 </td>
                                                             )}
                                                         </tr>
-                                                    ))
+                                                        );
+                                                    })
                                                 )}
                                             </tbody>
                                         </table>
@@ -8530,9 +8747,9 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                     : '#ffffff'
                                             }}>
                                                 <td style={{ padding: '10px 8px', fontWeight: '600', color: '#1e293b' }}>
-                                                    <div>{item.ingredientName || item.korName || item.inciName}</div>
-                                                    {item.inciName && item.inciName !== item.ingredientName && (
-                                                        <div style={{ fontSize: '11px', color: '#64748b', fontWeight: '400' }}>INCI: {item.inciName}</div>
+                                                    <div>{item.matchedKoreanName || item.inputName || item.ingredientName || item.korName || item.matchedInciName || item.inciName}</div>
+                                                    {(item.matchedInciName || item.inciName) && (item.matchedInciName !== (item.matchedKoreanName || item.inputName) || item.inciName !== item.ingredientName) && (
+                                                        <div style={{ fontSize: '11px', color: '#64748b', fontWeight: '400' }}>INCI: {item.matchedInciName || item.inciName}</div>
                                                     )}
                                                 </td>
                                                 <td style={{ padding: '10px 8px', textAlign: 'center' }}>
@@ -8564,10 +8781,10 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                     </span>
                                                 </td>
                                                 <td style={{ padding: '10px 8px', textAlign: 'center', fontWeight: '700', color: '#b91c1c' }}>
-                                                    {item.maxLimitPercent !== undefined && item.maxLimitPercent !== null ? `${item.maxLimitPercent}%` : '-'}
+                                                    {item.limitPercentage !== undefined && item.limitPercentage !== null ? `${item.limitPercentage}%` : (item.maxLimitPercent !== undefined && item.maxLimitPercent !== null ? `${item.maxLimitPercent}%` : '-')}
                                                 </td>
-                                                <td style={{ padding: '10px 8px', color: '#475569', lineHeight: '1.4' }}>
-                                                    {item.description || item.reason || item.notes || '배합 한도 및 규제 조건을 확인하십시오.'}
+                                                <td style={{ padding: '10px 89px' ? '10px 8px' : '10px 8px', color: '#475569', lineHeight: '1.4' }}>
+                                                    {item.conditionText || item.description || item.reason || item.notes || '배합 한도 및 규제 조건을 확인하십시오.'}
                                                 </td>
                                             </tr>
                                         ))}

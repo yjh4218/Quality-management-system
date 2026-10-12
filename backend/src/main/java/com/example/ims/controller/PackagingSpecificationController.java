@@ -46,12 +46,23 @@ public class PackagingSpecificationController {
     @GetMapping("/product-bom-summary")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MENU_PRODUCTS_VIEW') or hasAuthority('MENU_PACKAGING_VIEW')")
     public ResponseEntity<List<ProductBomSummaryDto>> getProductBomSummaries(
-            @RequestParam(required = false) Long productId,
+            @RequestParam(required = false) String productId,
             @RequestParam(required = false) String itemCode,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String bomType,
             @RequestParam(required = false, defaultValue = "true") Boolean latestOnly) {
-        return ResponseEntity.ok(specService.getProductBomSummaries(productId, itemCode, keyword, bomType, latestOnly));
+        Long pId = null;
+        if (productId != null && !productId.trim().isEmpty() && !"null".equalsIgnoreCase(productId.trim()) && !"undefined".equalsIgnoreCase(productId.trim())) {
+            try {
+                pId = Long.parseLong(productId.trim());
+            } catch (NumberFormatException ignored) {}
+        }
+        try {
+            return ResponseEntity.ok(specService.getProductBomSummaries(pId, itemCode, keyword, bomType, latestOnly));
+        } catch (Exception e) {
+            log.error("Failed to fetch product BOM summaries: {}", e.getMessage(), e);
+            return ResponseEntity.ok(java.util.Collections.emptyList());
+        }
     }
 
     @PostMapping

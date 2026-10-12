@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 public class IngredientPrecautionService {
 
     private final IngredientPrecautionRuleRepository ruleRepository;
+    private final com.example.ims.repository.RegulatoryIngredientRepository regulatoryIngredientRepository;
 
     @Transactional(readOnly = true)
     public IngredientPrecautionDto.EvaluateResponse evaluatePrecautions(IngredientPrecautionDto.EvaluateRequest request) {
@@ -125,11 +126,88 @@ public class IngredientPrecautionService {
                     .stream()
                     .collect(Collectors.toList());
 
+            // 3. '성분 안정성 검토' (RegulatoryIngredient) 기준정보 일괄 매칭 및 DTO 생성
+            List<IngredientPrecautionDto.IngredientUpdateItem> updateItems = new ArrayList<>();
+            List<String> namesToQuery = new ArrayList<>();
+            for (IngredientPrecautionDto.IngredientInput ing : ingredients) {
+                if (ing.getKorName() != null && !ing.getKorName().trim().isEmpty()) {
+                    namesToQuery.add(ing.getKorName().trim().toLowerCase());
+                }
+                if (ing.getInciName() != null && !ing.getInciName().trim().isEmpty()) {
+                    namesToQuery.add(ing.getInciName().trim().toLowerCase());
+                }
+                if (ing.getEngName() != null && !ing.getEngName().trim().isEmpty()) {
+                    namesToQuery.add(ing.getEngName().trim().toLowerCase());
+                }
+            }
+
+            Map<String, com.example.ims.entity.RegulatoryIngredient> regMap = new HashMap<>();
+            if (!namesToQuery.isEmpty()) {
+                List<com.example.ims.entity.RegulatoryIngredient> matchedRegs = regulatoryIngredientRepository.findByNames(namesToQuery);
+                for (com.example.ims.entity.RegulatoryIngredient reg : matchedRegs) {
+                    if (reg.getKoreanName() != null) {
+                        regMap.put(reg.getKoreanName().trim().toLowerCase(), reg);
+                    }
+                    if (reg.getInciName() != null) {
+                        regMap.put(reg.getInciName().trim().toLowerCase(), reg);
+                    }
+                }
+            }
+
+            for (IngredientPrecautionDto.IngredientInput ing : ingredients) {
+                String kor = ing.getKorName() != null ? ing.getKorName().trim().toLowerCase() : "";
+                String inci = ing.getInciName() != null ? ing.getInciName().trim().toLowerCase() : "";
+                String eng = ing.getEngName() != null ? ing.getEngName().trim().toLowerCase() : "";
+
+                com.example.ims.entity.RegulatoryIngredient reg = regMap.get(kor);
+                if (reg == null && !inci.isEmpty()) reg = regMap.get(inci);
+                if (reg == null && !eng.isEmpty()) reg = regMap.get(eng);
+
+                String limitClass = "정상 (배합가능)";
+                String krStatus = "ALLOWED";
+                Double krLimit = null;
+                String matchedKor = null;
+                String matchedInci = null;
+                String cas = null;
+                String remarks = null;
+
+                if (reg != null) {
+                    matchedKor = reg.getKoreanName();
+                    matchedInci = reg.getInciName();
+                    cas = reg.getCasNumber();
+                    krStatus = reg.getKrStatus() != null ? reg.getKrStatus() : "ALLOWED";
+                    krLimit = reg.getKrLimit();
+                    remarks = reg.getRemarks();
+
+                    if ("PROHIBITED".equalsIgnoreCase(krStatus)) {
+                        limitClass = "배합금지";
+                    } else if ("RESTRICTED".equalsIgnoreCase(krStatus) || krLimit != null) {
+                        limitClass = krLimit != null ? "배합한도 (" + krLimit + "%)" : "배합한도 제한";
+                    } else if (reg.getLimitDetails() != null && !reg.getLimitDetails().isEmpty()) {
+                        limitClass = "배합한도 성분";
+                    }
+                }
+
+                updateItems.add(IngredientPrecautionDto.IngredientUpdateItem.builder()
+                        .inputKorName(ing.getKorName())
+                        .inputEngName(ing.getEngName())
+                        .inputInciName(ing.getInciName())
+                        .matchedKoreanName(matchedKor)
+                        .matchedInciName(matchedInci)
+                        .casNumber(cas)
+                        .krStatus(krStatus)
+                        .krLimit(krLimit)
+                        .limitClass(limitClass)
+                        .remarks(remarks)
+                        .build());
+            }
+
             return IngredientPrecautionDto.EvaluateResponse.builder()
                     .totalIngredients(ingredients.size())
                     .matchedPrecautionCount(distinctItems.size())
                     .hasMandatoryWarnings(hasMandatory)
                     .precautions(distinctItems)
+                    .ingredientUpdates(updateItems)
                     .build();
 
         } catch (Exception e) {
@@ -139,6 +217,7 @@ public class IngredientPrecautionService {
                     .matchedPrecautionCount(0)
                     .hasMandatoryWarnings(false)
                     .precautions(Collections.emptyList())
+                    .ingredientUpdates(Collections.emptyList())
                     .build();
         }
     }

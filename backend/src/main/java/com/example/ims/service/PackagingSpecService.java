@@ -1002,13 +1002,54 @@ public class PackagingSpecService {
     public List<ProductBomSummaryDto> getProductBomSummaries(Long productId, String itemCode, String keyword, String bomType, Boolean latestOnly) {
         List<ProductBomSummaryDto> result = new java.util.ArrayList<>();
 
-        // 1. PackagingSpecBomItem 경로 조회
-        List<PackagingSpecBomItem> items = bomItemRepository.searchBomItemsWithProduct(
-                productId,
-                (itemCode != null && !itemCode.trim().isEmpty()) ? itemCode.trim() : null,
-                (keyword != null && !keyword.trim().isEmpty()) ? keyword.trim() : null,
-                (bomType != null && !bomType.trim().isEmpty()) ? bomType.trim() : null
-        );
+        // 1. PackagingSpecBomItem 경로 조회 (PostgreSQL/H2 상호 호환 페치 및 필터링)
+        List<PackagingSpecBomItem> items = (productId != null)
+                ? bomItemRepository.findAllByProductIdWithProduct(productId)
+                : bomItemRepository.findAllWithProduct();
+
+        if (items == null) {
+            items = java.util.Collections.emptyList();
+        }
+
+        // 제품코드 조건 필터링
+        if (itemCode != null && !itemCode.trim().isEmpty()) {
+            String ic = itemCode.trim().toLowerCase();
+            items = items.stream()
+                    .filter(b -> {
+                        PackagingSpecification s = b.getPackagingSpec();
+                        Product p = s != null ? s.getProduct() : null;
+                        return p != null && p.getItemCode() != null && p.getItemCode().toLowerCase().contains(ic);
+                    })
+                    .collect(Collectors.toList());
+        }
+
+        // BOM 유형 조건 필터링
+        if (bomType != null && !bomType.trim().isEmpty()) {
+            String bt = bomType.trim();
+            items = items.stream()
+                    .filter(b -> b.getMasterMaterial() != null && b.getMasterMaterial().getType() != null &&
+                            b.getMasterMaterial().getType().equalsIgnoreCase(bt))
+                    .collect(Collectors.toList());
+        }
+
+        // 키워드 조건 필터링
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            String kw = keyword.trim().toLowerCase();
+            items = items.stream()
+                    .filter(b -> {
+                        PackagingSpecification s = b.getPackagingSpec();
+                        Product p = s != null ? s.getProduct() : null;
+                        MasterPackagingMaterial mm = b.getMasterMaterial();
+                        return (p != null && p.getItemCode() != null && p.getItemCode().toLowerCase().contains(kw))
+                                || (p != null && p.getProductName() != null && p.getProductName().toLowerCase().contains(kw))
+                                || (p != null && p.getBrand() != null && p.getBrand().getName() != null && p.getBrand().getName().toLowerCase().contains(kw))
+                                || (mm != null && mm.getBomCode() != null && mm.getBomCode().toLowerCase().contains(kw))
+                                || (mm != null && mm.getComponentName() != null && mm.getComponentName().toLowerCase().contains(kw))
+                                || (mm != null && mm.getType() != null && mm.getType().toLowerCase().contains(kw))
+                                || (mm != null && mm.getMaterial() != null && mm.getMaterial().toLowerCase().contains(kw));
+                    })
+                    .collect(Collectors.toList());
+        }
 
         if (Boolean.TRUE.equals(latestOnly)) {
             // 제품별 최신 packagingSpec의 version 구하기

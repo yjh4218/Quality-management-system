@@ -67,10 +67,10 @@ const ProductBomInquiryPage = ({ user, isActive = true }) => {
         setLoading(true);
         try {
             const params = {
-                itemCode: targetFilters.itemCode || undefined,
-                keyword: targetFilters.keyword || undefined,
-                bomType: targetFilters.bomType || undefined,
-                latestOnly: targetFilters.latestOnly
+                itemCode: targetFilters.itemCode ? targetFilters.itemCode.trim() : undefined,
+                keyword: targetFilters.keyword ? targetFilters.keyword.trim() : undefined,
+                bomType: targetFilters.bomType ? targetFilters.bomType.trim() : undefined,
+                latestOnly: targetFilters.latestOnly !== false
             };
 
             const res = await api.getProductBomSummaries(params);

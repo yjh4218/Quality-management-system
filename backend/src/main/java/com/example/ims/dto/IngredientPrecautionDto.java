@@ -54,10 +54,29 @@ public class IngredientPrecautionDto {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
+    public static class IngredientUpdateItem {
+        private String inputKorName;
+        private String inputEngName;
+        private String inputInciName;
+        private String matchedKoreanName;
+        private String matchedInciName;
+        private String casNumber;
+        private String krStatus;
+        private Double krLimit;
+        private String limitClass;
+        private String remarks;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
     public static class EvaluateResponse {
         private int totalIngredients;
         private int matchedPrecautionCount;
         private boolean hasMandatoryWarnings;
         private List<PrecautionItem> precautions;
+        private List<IngredientUpdateItem> ingredientUpdates;
     }
 }

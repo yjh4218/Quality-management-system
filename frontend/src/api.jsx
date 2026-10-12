@@ -814,7 +814,8 @@ export const getProductBomSummaries = (params = {}) => {
     if (params.keyword) query.append('keyword', params.keyword);
     if (params.bomType) query.append('bomType', params.bomType);
     if (params.latestOnly !== undefined) query.append('latestOnly', params.latestOnly);
-    return api.get(`/api/packaging-specs/product-bom-summary?${query.toString()}`);
+    const qs = query.toString();
+    return api.get(`/api/packaging-specs/product-bom-summary${qs ? `?${qs}` : ''}`);
 };
 
 
