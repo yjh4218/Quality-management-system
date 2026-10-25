@@ -10,6 +10,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -62,6 +65,16 @@ public class FileServingController {
         if (relativePath.contains("..")) {
             log.warn("[SECURITY] Path traversal blocked: {}", relativePath);
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        // [D-2 해결] 기밀 품질 서류/성적서/사양서/클레임 보고서 익명 열람 원천 차단
+        if (isSensitiveDocument(relativePath)) {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            boolean isAuthenticated = auth != null && auth.isAuthenticated() && !(auth instanceof AnonymousAuthenticationToken);
+            if (!isAuthenticated) {
+                log.warn("[SECURITY] Unauthenticated attempt to access sensitive quality document: {}", relativePath);
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            }
         }
 
         Resource resource = fileStorageService.loadResourceOrRestore(relativePath);
@@ -136,5 +149,24 @@ public class FileServingController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> getStorageStats() {
         return ResponseEntity.ok(fileStorageService.getStorageStats());
+    }
+
+    /**
+     * [D-2] 기밀 품질 문서/성적서/클레임 보고서 식별 로직
+     */
+    private boolean isSensitiveDocument(String path) {
+        if (path == null) return false;
+        String lower = path.toLowerCase();
+
+        // 1. 기밀 문서 확장자 (PDF, Excel, Word 등)
+        if (lower.endsWith(".pdf") || lower.endsWith(".xlsx") || lower.endsWith(".xls") ||
+            lower.endsWith(".docx") || lower.endsWith(".doc") || lower.endsWith(".zip") || lower.endsWith(".csv")) {
+            return true;
+        }
+
+        // 2. 기밀 품질 도메인 디렉토리 (COA 성적서, 사양서 문서, 클레임 보고서, 감사 보고서, DMS 문서 등)
+        return lower.contains("/coa/") || lower.contains("/claims/") ||
+               lower.contains("/specs/") || lower.contains("/documents/") ||
+               lower.contains("/audits/") || lower.contains("/reports/") || lower.contains("/dms/");
     }
 }

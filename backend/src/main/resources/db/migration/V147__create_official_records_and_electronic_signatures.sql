@@ -1,0 +1,121 @@
+-- =========================================================================
+-- V147: 공식 원본 및 전자서명 정책 (Official Records & 21 CFR Part 11 Electronic Signatures)
+-- DEC-01 (하이브리드/전자기록 공식 원본 정책) 및 21 CFR Part 11 / EU Annex 11 규제 준수
+-- =========================================================================
+
+-- 1. 전자서명 감사대장 (Electronic Signatures Table)
+CREATE TABLE IF NOT EXISTS electronic_signatures (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    signature_number VARCHAR(50) NOT NULL UNIQUE,
+    document_type VARCHAR(50) NOT NULL,
+    target_id BIGINT NOT NULL,
+    target_number VARCHAR(100),
+    target_title VARCHAR(300),
+    signer_username VARCHAR(100) NOT NULL,
+    signer_full_name VARCHAR(100) NOT NULL,
+    signer_department VARCHAR(100),
+    signer_role VARCHAR(100),
+    signature_meaning VARCHAR(50) NOT NULL,
+    signature_reason VARCHAR(500),
+    signed_at TIMESTAMP NOT NULL,
+    ip_address VARCHAR(100),
+    user_agent VARCHAR(500),
+    reauth_method VARCHAR(50) NOT NULL,
+    signature_hash VARCHAR(64) NOT NULL,
+    manifest_json TEXT,
+    is_revoked BOOLEAN NOT NULL DEFAULT FALSE,
+    revoked_at TIMESTAMP,
+    revoked_by VARCHAR(100),
+    revocation_reason VARCHAR(500),
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_esign_doc_target ON electronic_signatures(document_type, target_id);
+CREATE INDEX IF NOT EXISTS idx_esign_signer ON electronic_signatures(signer_username);
+CREATE INDEX IF NOT EXISTS idx_esign_signed_at ON electronic_signatures(signed_at);
+CREATE INDEX IF NOT EXISTS idx_esign_meaning ON electronic_signatures(signature_meaning);
+
+-- 2. 21 CFR Part 11 적합성 자가평가 항목 (Part 11 Assessment Items Table)
+CREATE TABLE IF NOT EXISTS part11_assessment_items (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    section_code VARCHAR(50) NOT NULL,
+    requirement_title VARCHAR(200) NOT NULL,
+    regulatory_standard VARCHAR(100) DEFAULT '21 CFR Part 11 / EU Annex 11',
+    requirement_details TEXT,
+    compliance_status VARCHAR(50) NOT NULL,
+    implementation_summary TEXT,
+    evidence_document VARCHAR(300),
+    assessed_by VARCHAR(100),
+    assessed_date DATE,
+    verified_by VARCHAR(100),
+    display_order INT NOT NULL DEFAULT 1,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_part11_sec_code ON part11_assessment_items(section_code);
+CREATE INDEX IF NOT EXISTS idx_part11_status ON part11_assessment_items(compliance_status);
+
+-- 3. 공식 원본 및 보존 관리 정책 원장 (Official Record Policies Table - DEC-01)
+CREATE TABLE IF NOT EXISTS official_record_policies (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    policy_code VARCHAR(50) NOT NULL UNIQUE,
+    policy_title VARCHAR(200) NOT NULL,
+    record_category VARCHAR(50) NOT NULL,
+    official_original_type VARCHAR(50) NOT NULL,
+    storage_format VARCHAR(200),
+    retention_period_years INT NOT NULL,
+    retention_period_criteria VARCHAR(300),
+    legal_basis VARCHAR(300),
+    disposal_procedure TEXT,
+    is_hybrid_signed_paper_required BOOLEAN NOT NULL DEFAULT FALSE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    effective_date DATE,
+    approved_by VARCHAR(100),
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_pol_code ON official_record_policies(policy_code);
+CREATE INDEX IF NOT EXISTS idx_pol_category ON official_record_policies(record_category);
+CREATE INDEX IF NOT EXISTS idx_pol_type ON official_record_policies(official_original_type);
+
+-- 4. 보안 권한 등록 (Permissions)
+INSERT INTO permissions (name, description, category, created_at, updated_at)
+SELECT 'POLICY_VIEW', '공식 원본 및 전자서명 감사대장 조회 권한', 'COMPLIANCE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE name = 'POLICY_VIEW');
+
+INSERT INTO permissions (name, description, category, created_at, updated_at)
+SELECT 'POLICY_MANAGE', '공식 원본 정책 및 21 CFR Part 11 적합성 관리 권한', 'COMPLIANCE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE name = 'POLICY_MANAGE');
+
+-- 5. 동적 대메뉴 등록 (Screen Menu)
+INSERT INTO screen_menus (menu_code, menu_name, menu_path, parent_code, display_order, icon_name, is_active, required_permission, created_at, updated_at)
+SELECT 'SYS_OFFICIAL_RECORDS', '공식 원본·전자서명', '/official-records', NULL, 23, 'fingerprint', TRUE, 'POLICY_VIEW', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+WHERE NOT EXISTS (SELECT 1 FROM screen_menus WHERE menu_code = 'SYS_OFFICIAL_RECORDS');
+
+-- 6. 시드 데이터: 21 CFR Part 11 핵심 자가평가 항목 8건 등록
+INSERT INTO part11_assessment_items (section_code, requirement_title, regulatory_standard, requirement_details, compliance_status, implementation_summary, evidence_document, assessed_by, assessed_date, verified_by, display_order)
+VALUES
+('§11.10(a)', '컴퓨터화 시스템 밸리데이션(CSV)', '21 CFR Part 11', '정확성, 신뢰성, 일관된 성능을 보장하기 위한 시스템 검증 수행 의무', 'COMPLIANT', '소프트웨어 수명주기 전 단계에 걸친 IQ/OQ/PQ 프로토콜 검증 및 통합 회귀 테스트 프레임워크 운영 (39건 100% 통과)', 'SOP-CSV-01, V131~V146 회귀 테스트', 'admin', '2026-10-25', '대표이사 홍길동', 1),
+('§11.10(b)', '기록 사본 생성 및 가독성 보장', '21 CFR Part 11', '규제기관 조사관의 검토 및 검사를 위해 정확하고 완전한 기록 사본을 인쇄 및 화면 조회할 수 있어야 함', 'COMPLIANT', '화면 뷰어 및 CSV 내보내기 기능 전 모듈 기본 제공, 하이브리드 인쇄용 21 CFR §11.50 서명 매니페스트 블록 자동 출력', 'SOP-DEC-01 §5.2, Manifest Viewer', 'admin', '2026-10-25', '품질책임자 김품질', 2),
+('§11.10(c)', '시간 스탬프 감사추적(Audit Trail)', '21 CFR Part 11', '작업자의 기록 생성, 수정, 삭제 일시를 컴퓨터 생성 시간 스탬프로 독립적이고 안전하게 추적 기록', 'COMPLIANT', 'Spring Transaction 동기 커밋 기반 audit_logs 테이블 운영 (유실률 0%), SHA-256 record_hash 무결성 검증, 물리 삭제 원천 금지', 'V132 감사추적, AuditTrailService', 'admin', '2026-10-25', '대표이사 홍길동', 3),
+('§11.10(d)', '시스템 접근 통제(Access Control)', '21 CFR Part 11', '인가된 개인으로 시스템 접근을 제한하기 위한 권한별 보안 통제', 'COMPLIANT', 'Spring Security RBAC 기반 역할/권한(Role/Permission) 2계층 인가, OriginRefererGuardFilter(DEC-08) 비인가 접근 차단', 'DEC-08, SecurityConfig, DynamicRBAC', 'admin', '2026-10-25', '품질책임자 김품질', 4),
+('§11.10(e)', '감사추적의 독립성 및 보존', '21 CFR Part 11', '감사추적 기록은 기존 기록을 덮어쓰지 않고 영구 보존되어야 하며 작업자가 수정할 수 없어야 함', 'COMPLIANT', '감사추적 테이블에 대한 UPDATE/DELETE 쿼리 차단, DB 레벨 감사추적 10년 법정보존 파티셔닝 정책 적용', 'V131 Flyway 보존정책, DEC-06', 'admin', '2026-10-25', '대표이사 홍길동', 5),
+('§11.50', '전자서명 매니페스트(Signature Manifestations)', '21 CFR Part 11', '인쇄본 및 화면 표시에 서명자 성명, 서명 일시, 서명 사유/의미(작성, 검토, 승인 등)가 명확히 결합 표기되어야 함', 'COMPLIANT', '전자서명 발행 시 JSON 서명 매니페스트 생성 및 화면/인쇄 시 서명자/일시/의도(Author/Reviewer/Approver)/해시 강제 표기', 'ElectronicSignature, SOP-DEC-01', 'admin', '2026-10-25', '품질책임자 김품질', 6),
+('§11.70', '전자서명 결합(Signature Linking)', '21 CFR Part 11', '전자서명은 해당 전자기록과 분리 불가능하게 결합되어 위조, 복사, 전용되지 않아야 함', 'COMPLIANT', '대상 레코드 ID 및 본문 속성과 타임스탬프를 Salt로 결합한 SHA-256 무결성 해시를 서명 원장에 동기 저장', 'OfficialRecordPolicyService.createSignature', 'admin', '2026-10-25', '대표이사 홍길동', 7),
+('§11.200', '전자서명 제어 및 2차 재인증', '21 CFR Part 11', '서명 시마다 사용자 인증(아이디 + 비밀번호 재인증)을 요구하여 타인에 의한 부정 서명 방지', 'COMPLIANT', '전자서명 생성 모달에서 계정 비밀번호 재입력 강제 및 BCryptPasswordEncoder 일치 여부 실시간 가드 검증', 'validateReauthenticationGuard, Modal', 'admin', '2026-10-25', '품질책임자 김품질', 8);
+
+-- 7. 시드 데이터: 공식 원본 및 보존 정책 6건 등록 (DEC-01 하이브리드 반영)
+INSERT INTO official_record_policies (policy_code, policy_title, record_category, official_original_type, storage_format, retention_period_years, retention_period_criteria, legal_basis, disposal_procedure, is_hybrid_signed_paper_required, is_active, effective_date, approved_by)
+VALUES
+('POL-REC-01', '완제품 출하승인서 공식 원본 및 보존 규정', 'RELEASE_RECORD', 'HYBRID', 'eQMS 전자기록 원장 + 품질책임자 수기 서명 완료 인쇄본 바인더', 10, '제조일로부터 10년 (의료기기 유효기간 + 2년 이상 보존)', '의료기기법 제6조, ISO 13485 §4.2.5, DEC-01', '품질책임자 승인 하에 분쇄 폐기 및 폐기확인서 3년 보존', TRUE, TRUE, '2026-01-01', '대표이사 홍길동'),
+('POL-REC-02', '시정 및 예방조치(CAPA) 보고서 공식 원본 규정', 'CAPA_RECORD', 'ELECTRONIC_ONLY', 'eQMS 암호화 전자 데이터베이스 + PDF/A 디지털 서명 아카이브', 10, 'CAPA 종결 승인일로부터 10년 보존', '21 CFR 820.100, ISO 13485 §8.5.2', '보존 기한 만료 후 품질경영위원회 심의를 거쳐 영구 아카이브 이전', FALSE, TRUE, '2026-01-01', '품질책임자 김품질'),
+('POL-REC-03', '내부심사 및 경영검토 회의록 보존 규정', 'AUDIT_RECORD', 'HYBRID', 'eQMS 전자기록 + 최고경영자 날인 서명 회의록 원본', 10, '심사/검토 완료 보고일로부터 10년 보존', 'ISO 13485 §5.6, §8.2.4 / 21 CFR 820.20', '10년 경과 시 폐기 목록 작성 후 최고경영자 승인 하에 소각/파기', TRUE, TRUE, '2026-01-01', '대표이사 홍길동'),
+('POL-REC-04', '부적합품(NCR) 및 특채/폐기 보고서 규정', 'NCR_RECORD', 'ELECTRONIC_ONLY', 'eQMS 전자 원장 + 첨부 시험성적서 일체', 5, '해당 제품 로트 최종 유효기간 만료 후 2년 (최소 5년)', 'ISO 13485 §8.3, 21 CFR 820.90', '전자기록 보존 연한 만료 시 읽기 전용 콜드 스토리지 이전', FALSE, TRUE, '2026-01-01', '품질책임자 김품질'),
+('POL-REC-05', '설비 적격성평가(IQ/OQ/PQ) 및 교정 성적서 규정', 'FACILITY_RECORD', 'HYBRID', 'eQMS 설비 원장 + 국가공인 교정기관 원본 성적서', 10, '해당 설비 가동 기간 전체 + 설비 폐기 후 3년 보존', 'ISO 13485 §6.3, §7.6 / ISO 22716 §4, §5', '설비 불용 처리 및 폐기 심의 의결 후 일괄 폐기', TRUE, TRUE, '2026-01-01', '생산이사 박생산'),
+('POL-REC-06', '고객 불만 및 규제기관 이상사례 보고서 규정', 'COMPLAINT_RECORD', 'ELECTRONIC_ONLY', 'eQMS 이상사례 원장 + 식약처/FDA 접수증 디지털 파일', 10, '불만 접수 및 종결일로부터 10년 보존', '21 CFR 820.198, 화장품법 제5조의2, EU MDR Art.87', '품질 및 안전성 데이터 장기 분석을 위해 영구 전자 보존 권고', FALSE, TRUE, '2026-01-01', '품질책임자 김품질');

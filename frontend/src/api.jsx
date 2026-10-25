@@ -42,6 +42,9 @@ export const extractDomainPrefix = (url) => {
         if (clean.startsWith('/api/departments')) return '/api/departments';
         if (clean.startsWith('/api/admin/departments')) return '/api/admin/departments';
         if (clean.startsWith('/api/approvals')) return '/api/approvals';
+        if (clean.startsWith('/api/training')) return '/api/training';
+        if (clean.startsWith('/api/quality/risks')) return '/api/quality/risks';
+        if (clean.startsWith('/api/traceability')) return '/api/traceability';
         return `/${parts[0]}/${parts[1]}`;
     }
     return clean;
@@ -345,7 +348,7 @@ api.interceptors.response.use(
             }
 
             const isNetworkError = !error.response;
-            const isApi404 = error.response?.status === 404 && error.config?.url?.includes('/api/');
+            const isApi404 = error.response?.status === 404 && error.config?.url?.includes('/api/') && !error.config?.url?.includes('/api/guides');
             const isSystem400 = (error.response?.status === 400 || error.response?.status === 409) && (
                 typeof errorMsg === 'string' && (
                     errorMsg.includes('Failed to convert') ||
@@ -1054,7 +1057,7 @@ export const deleteDashboardLayout = (id) => api.delete(`/api/dashboard-layouts/
 
 // Page Guide Management
 export const getPageGuides = () => api.get('/api/guides').then(res => res.data);
-export const getPageGuide = (pageKey) => api.get(`/api/guides/${pageKey}`).then(res => res.data);
+export const getPageGuide = (pageKey) => api.get(`/api/guides/${pageKey}`, { skipToast: true }).then(res => res.data);
 export const savePageGuide = (data) => api.post('/api/guides', data).then(res => res.data);
 export const deletePageGuide = (id) => api.delete(`/api/guides/${id}`);
 
@@ -1422,8 +1425,8 @@ export const fetchApprovalUnreadCounts = () =>
     api.get('/api/approvals/unread-counts', { skipToast: true });
 
 // [동적 화면 빌더 API]
-export const fetchDynamicScreens = () => 
-    api.get('/api/dynamic/screens', { skipToast: true });
+export const fetchDynamicScreens = (config = {}) => 
+    api.get('/api/dynamic/screens', { skipToast: true, silentAuthCheck: true, ...config });
 
 export const createDynamicScreen = (data) => 
     api.post('/api/dynamic/screens', data);
@@ -1437,8 +1440,8 @@ export const fetchDynamicSearchCatalogs = () =>
 export const fetchDynamicMasterDataSources = () => 
     api.get('/api/dynamic/screens/data-sources');
 
-export const fetchDynamicMenusTree = () => 
-    api.get('/api/dynamic/menus/tree');
+export const fetchDynamicMenusTree = (config = {}) => 
+    api.get('/api/dynamic/menus/tree', { skipToast: true, silentAuthCheck: true, ...config });
 
 export const createDynamicMenu = (data) => 
     api.post('/api/dynamic/menus', data);
@@ -1457,6 +1460,823 @@ export const linkScreenToMenu = (screenId, data) =>
 
 export const batchReorderDynamicMenus = (items) => 
     api.put('/api/dynamic/menus/batch-reorder', items);
+
+// [의료기기 품목 마스터 API - Step 06 & ISO 13485]
+export const fetchMedicalDevices = (params) =>
+    api.get('/api/medical-devices', { params });
+
+export const fetchMedicalDeviceById = (id) =>
+    api.get(`/api/medical-devices/${id}`).then(res => res.data);
+
+export const checkMedicalDeviceDuplicate = (itemCode) =>
+    api.get(`/api/medical-devices/check-duplicate/${encodeURIComponent(itemCode)}`).then(res => res.data);
+
+export const fetchMedicalDeviceMetrics = () =>
+    api.get('/api/medical-devices/metrics').then(res => res.data);
+
+export const createMedicalDevice = (data) =>
+    api.post('/api/medical-devices', data).then(res => res.data);
+
+export const updateMedicalDevice = (id, data) =>
+    api.put(`/api/medical-devices/${id}`, data).then(res => res.data);
+
+export const deleteMedicalDevice = (id) =>
+    api.delete(`/api/medical-devices/${id}`).then(res => res.data);
+
+// [통제문서 및 개정관리(DMS) API - Step 07 & ISO 13485 / ISO 22716]
+export const fetchControlledDocuments = (params) =>
+    api.get('/api/controlled-documents', { params });
+
+export const fetchControlledDocumentById = (id) =>
+    api.get(`/api/controlled-documents/${id}`).then(res => res.data);
+
+export const fetchControlledDocumentRevisionHistory = (docNo) =>
+    api.get(`/api/controlled-documents/history/${encodeURIComponent(docNo)}`).then(res => res.data);
+
+export const fetchControlledDocumentMetrics = () =>
+    api.get('/api/controlled-documents/metrics').then(res => res.data);
+
+export const createControlledDocument = (data) =>
+    api.post('/api/controlled-documents', data).then(res => res.data);
+
+export const updateControlledDocument = (id, data) =>
+    api.put(`/api/controlled-documents/${id}`, data).then(res => res.data);
+
+export const createControlledDocumentRevision = (id, data) =>
+    api.post(`/api/controlled-documents/${id}/revision`, data).then(res => res.data);
+
+export const updateControlledDocumentStatus = (id, data) =>
+    api.patch(`/api/controlled-documents/${id}/status`, data).then(res => res.data);
+
+export const deleteControlledDocument = (id) =>
+    api.delete(`/api/controlled-documents/${id}`);
+
+// =============================================================================
+// [교육훈련 및 자격관리(Training & Competence) API - Step 08 & ISO 13485 / ISO 22716]
+// =============================================================================
+
+// 1. 교육과정 마스터 (Training Courses)
+export const fetchTrainingCourses = (params) =>
+    api.get('/api/training/courses', { params });
+
+export const fetchTrainingCourseById = (id) =>
+    api.get(`/api/training/courses/${id}`).then(res => res.data);
+
+export const createTrainingCourse = (data) =>
+    api.post('/api/training/courses', data).then(res => res.data);
+
+export const updateTrainingCourse = (id, data) =>
+    api.put(`/api/training/courses/${id}`, data).then(res => res.data);
+
+export const deleteTrainingCourse = (id) =>
+    api.delete(`/api/training/courses/${id}`);
+
+// 2. 교육이수 및 평가 기록 (Training Records)
+export const fetchTrainingRecords = (params) =>
+    api.get('/api/training/records', { params });
+
+export const fetchTrainingRecordById = (id) =>
+    api.get(`/api/training/records/${id}`).then(res => res.data);
+
+export const createTrainingRecord = (data) =>
+    api.post('/api/training/records', data).then(res => res.data);
+
+export const updateTrainingRecord = (id, data) =>
+    api.put(`/api/training/records/${id}`, data).then(res => res.data);
+
+export const deleteTrainingRecord = (id) =>
+    api.delete(`/api/training/records/${id}`);
+
+// 3. 직무 자격 적격성 매트릭스 (User Qualifications)
+export const fetchUserQualifications = (params) =>
+    api.get('/api/training/qualifications', { params });
+
+export const fetchUserQualificationById = (id) =>
+    api.get(`/api/training/qualifications/${id}`).then(res => res.data);
+
+export const createUserQualification = (data) =>
+    api.post('/api/training/qualifications', data).then(res => res.data);
+
+export const updateUserQualification = (id, data) =>
+    api.put(`/api/training/qualifications/${id}`, data).then(res => res.data);
+
+export const deleteUserQualification = (id) =>
+    api.delete(`/api/training/qualifications/${id}`);
+
+// 4. 대시보드 KPI 서머리 통계
+export const fetchTrainingMetrics = () =>
+    api.get('/api/training/metrics').then(res => res.data);
+
+// =========================================================================
+// [위험관리 (ISO 14971:2019) API - Step 09]
+// =========================================================================
+
+// 1. 위험성 평가 문서 (Risk Assessments)
+export const fetchRiskAssessments = (params) =>
+    api.get('/api/quality/risks', { params });
+
+export const fetchRiskAssessmentById = (id) =>
+    api.get(`/api/quality/risks/${id}`).then(res => res.data);
+
+export const createRiskAssessment = (data) =>
+    api.post('/api/quality/risks', data).then(res => res.data);
+
+export const updateRiskAssessment = (id, data) =>
+    api.put(`/api/quality/risks/${id}`, data).then(res => res.data);
+
+export const deleteRiskAssessment = (id) =>
+    api.delete(`/api/quality/risks/${id}`);
+
+export const approveRiskAssessment = (id, approver) =>
+    api.post(`/api/quality/risks/${id}/approve`, null, { params: { approver } }).then(res => res.data);
+
+// 2. 위해요인 및 FMEA 위험 통제 조치 (Hazard Items)
+export const fetchRiskHazardItems = (assessmentId) =>
+    api.get(`/api/quality/risks/${assessmentId}/hazards`).then(res => res.data);
+
+export const createRiskHazardItem = (assessmentId, data) =>
+    api.post(`/api/quality/risks/${assessmentId}/hazards`, data).then(res => res.data);
+
+export const updateRiskHazardItem = (assessmentId, hazardId, data) =>
+    api.put(`/api/quality/risks/${assessmentId}/hazards/${hazardId}`, data).then(res => res.data);
+
+export const deleteRiskHazardItem = (assessmentId, hazardId) =>
+    api.delete(`/api/quality/risks/${assessmentId}/hazards/${hazardId}`);
+
+// 3. 종합 KPI 지표 및 5x5 FMEA 매트릭스 집계
+export const fetchRiskKpiMetrics = () =>
+    api.get('/api/quality/risks/kpi').then(res => res.data);
+
+// =========================================================================
+// [설계개발 및 DHF (ISO 13485:2016 §7.3 / 21 CFR 820.30) API - Step 10]
+// =========================================================================
+
+// 1. 설계개발 프로젝트 마스터 (Design Projects)
+export const fetchDesignProjects = (params) =>
+    api.get('/api/quality/design-controls/projects', { params });
+
+export const fetchDesignProjectById = (id) =>
+    api.get(`/api/quality/design-controls/projects/${id}`).then(res => res.data);
+
+export const createDesignProject = (data) =>
+    api.post('/api/quality/design-controls/projects', data).then(res => res.data);
+
+export const updateDesignProject = (id, data) =>
+    api.put(`/api/quality/design-controls/projects/${id}`, data).then(res => res.data);
+
+export const deleteDesignProject = (id) =>
+    api.delete(`/api/quality/design-controls/projects/${id}`);
+
+export const advanceDesignProjectPhase = (id, nextPhase) =>
+    api.post(`/api/quality/design-controls/projects/${id}/phase`, null, { params: { nextPhase } }).then(res => res.data);
+
+export const updateDesignProjectDhfStatus = (id, dhfStatus) =>
+    api.post(`/api/quality/design-controls/projects/${id}/dhf-status`, null, { params: { dhfStatus } }).then(res => res.data);
+
+// 2. 설계통제 항목 및 추적성 (Control Items)
+export const fetchDesignControlItems = (projectId) =>
+    api.get(`/api/quality/design-controls/projects/${projectId}/items`).then(res => res.data);
+
+export const createDesignControlItem = (projectId, data) =>
+    api.post(`/api/quality/design-controls/projects/${projectId}/items`, data).then(res => res.data);
+
+export const updateDesignControlItem = (projectId, itemId, data) =>
+    api.put(`/api/quality/design-controls/projects/${projectId}/items/${itemId}`, data).then(res => res.data);
+
+export const deleteDesignControlItem = (projectId, itemId) =>
+    api.delete(`/api/quality/design-controls/projects/${projectId}/items/${itemId}`);
+
+// 3. 설계 심의 및 단계 게이트 (Reviews)
+export const fetchDesignReviewRecords = (projectId) =>
+    api.get(`/api/quality/design-controls/projects/${projectId}/reviews`).then(res => res.data);
+
+export const createDesignReviewRecord = (projectId, data) =>
+    api.post(`/api/quality/design-controls/projects/${projectId}/reviews`, data).then(res => res.data);
+
+export const updateDesignReviewRecord = (projectId, recordId, data) =>
+    api.put(`/api/quality/design-controls/projects/${projectId}/reviews/${recordId}`, data).then(res => res.data);
+
+export const deleteDesignReviewRecord = (projectId, recordId) =>
+    api.delete(`/api/quality/design-controls/projects/${projectId}/reviews/${recordId}`);
+
+// 4. 요구사항 추적성 매트릭스 (RTM) & KPI
+export const fetchDesignTraceabilityMatrix = (projectId) =>
+    api.get(`/api/quality/design-controls/projects/${projectId}/traceability-matrix`).then(res => res.data);
+
+export const fetchDesignKpiMetrics = () =>
+    api.get('/api/quality/design-controls/kpi').then(res => res.data);
+
+// =========================================================================
+// 🔄 Step 11: 변경관리 (Change Control - ISO 13485 §7.3.9 / ISO 22716 §11)
+// =========================================================================
+
+// 1. 변경요청서 (Change Requests)
+export const fetchChangeRequests = (params) =>
+    api.get('/api/quality/change-controls/requests', { params });
+
+export const fetchChangeRequestById = (id) =>
+    api.get(`/api/quality/change-controls/requests/${id}`).then(res => res.data);
+
+export const createChangeRequest = (data) =>
+    api.post('/api/quality/change-controls/requests', data).then(res => res.data);
+
+export const updateChangeRequest = (id, data) =>
+    api.put(`/api/quality/change-controls/requests/${id}`, data).then(res => res.data);
+
+export const deleteChangeRequest = (id) =>
+    api.delete(`/api/quality/change-controls/requests/${id}`);
+
+export const transitionChangeStatus = (id, nextStatus) =>
+    api.post(`/api/quality/change-controls/requests/${id}/transition`, null, { params: { nextStatus } }).then(res => res.data);
+
+// 2. CCB 심의 및 효과성 평가
+export const reviewCcbChange = (id, data) =>
+    api.post(`/api/quality/change-controls/requests/${id}/ccb-review`, data).then(res => res.data);
+
+export const evaluateChangeEffectiveness = (id, data) =>
+    api.post(`/api/quality/change-controls/requests/${id}/effectiveness`, data).then(res => res.data);
+
+// 3. 실행 조치과제 (Change Action Items)
+export const fetchChangeActionItems = (changeRequestId) =>
+    api.get(`/api/quality/change-controls/requests/${changeRequestId}/action-items`).then(res => res.data);
+
+export const createChangeActionItem = (changeRequestId, data) =>
+    api.post(`/api/quality/change-controls/requests/${changeRequestId}/action-items`, data).then(res => res.data);
+
+export const updateChangeActionItem = (changeRequestId, itemId, data) =>
+    api.put(`/api/quality/change-controls/requests/${changeRequestId}/action-items/${itemId}`, data).then(res => res.data);
+
+export const deleteChangeActionItem = (changeRequestId, itemId) =>
+    api.delete(`/api/quality/change-controls/requests/${changeRequestId}/action-items/${itemId}`);
+
+// 4. 6대 KPI 통계
+export const fetchChangeControlKpi = () =>
+    api.get('/api/quality/change-controls/kpi').then(res => res.data);
+
+// =========================================================================
+// [Step 12] 공급업체 및 위탁제조 관리 (Supplier & Contract Manufacturer Management)
+// ISO 13485:2016 §4.1.5, §7.4 / ISO 22716:2007 §12 / 21 CFR 820.50
+// =========================================================================
+
+// 1. 공급업체 품질 적격성 마스터 (ASL)
+export const fetchSupplierQualifications = (params = {}) =>
+    api.get('/api/quality/suppliers/qualifications', { params }).then(res => res.data);
+
+export const fetchSupplierQualificationById = (id) =>
+    api.get(`/api/quality/suppliers/qualifications/${id}`).then(res => res.data);
+
+export const createSupplierQualification = (data) =>
+    api.post('/api/quality/suppliers/qualifications', data).then(res => res.data);
+
+export const updateSupplierQualification = (id, data) =>
+    api.put(`/api/quality/suppliers/qualifications/${id}`, data).then(res => res.data);
+
+export const deleteSupplierQualification = (id) =>
+    api.delete(`/api/quality/suppliers/qualifications/${id}`);
+
+export const transitionSupplierStatus = (id, status, approvedBy = '') =>
+    api.post(`/api/quality/suppliers/qualifications/${id}/status`, null, {
+        params: { status, approvedBy }
+    }).then(res => res.data);
+
+// 2. 공급업체 정기 종합평가
+export const fetchSupplierEvaluations = (params = {}) =>
+    api.get('/api/quality/suppliers/evaluations', { params }).then(res => res.data);
+
+export const fetchSupplierEvaluationsByQualification = (qualificationId) =>
+    api.get(`/api/quality/suppliers/qualifications/${qualificationId}/evaluations`).then(res => res.data);
+
+export const createSupplierEvaluation = (data) =>
+    api.post('/api/quality/suppliers/evaluations', data).then(res => res.data);
+
+export const updateSupplierEvaluation = (id, data) =>
+    api.put(`/api/quality/suppliers/evaluations/${id}`, data).then(res => res.data);
+
+export const deleteSupplierEvaluation = (id) =>
+    api.delete(`/api/quality/suppliers/evaluations/${id}`);
+
+// 3. 품질협약서 (Quality Assurance Agreement - QAA)
+export const fetchQualityAgreements = (params = {}) =>
+    api.get('/api/quality/suppliers/agreements', { params }).then(res => res.data);
+
+export const fetchQualityAgreementById = (id) =>
+    api.get(`/api/quality/suppliers/agreements/${id}`).then(res => res.data);
+
+export const createQualityAgreement = (data) =>
+    api.post('/api/quality/suppliers/agreements', data).then(res => res.data);
+
+export const updateQualityAgreement = (id, data) =>
+    api.put(`/api/quality/suppliers/agreements/${id}`, data).then(res => res.data);
+
+export const deleteQualityAgreement = (id) =>
+    api.delete(`/api/quality/suppliers/agreements/${id}`);
+
+// 4. 공급업체 6대 핵심 KPI 통계
+export const fetchSupplierKpi = () =>
+    api.get('/api/quality/suppliers/kpi').then(res => res.data);
+
+// =========================================================================
+// [Step 13] 외부연계 및 양방향 추적성 관리 API (Traceability)
+// ISO 13485:2016 §7.5.8 / ISO 22716:2007 §8.3 / DEC-02
+// =========================================================================
+
+export const fetchTraceabilityKpis = () =>
+    api.get('/api/traceability/kpis').then(res => res.data);
+
+export const fetchTraceabilityBatches = (params = {}) =>
+    api.get('/api/traceability/batches', { params }).then(res => res.data);
+
+export const fetchTraceabilityBatchById = (id) =>
+    api.get(`/api/traceability/batches/${id}`).then(res => res.data);
+
+export const fetchTraceabilityBatchByNumber = (batchNumber) =>
+    api.get(`/api/traceability/batches/number/${encodeURIComponent(batchNumber)}`).then(res => res.data);
+
+export const createTraceabilityBatch = (data) =>
+    api.post('/api/traceability/batches', data).then(res => res.data);
+
+export const updateTraceabilityBatch = (id, data) =>
+    api.put(`/api/traceability/batches/${id}`, data).then(res => res.data);
+
+export const deleteTraceabilityBatch = (id) =>
+    api.delete(`/api/traceability/batches/${id}`);
+
+export const fetchTraceabilityLinks = (batchNumber) =>
+    api.get('/api/traceability/links', { params: { batchNumber } }).then(res => res.data);
+
+export const createTraceabilityLink = (data) =>
+    api.post('/api/traceability/links', data).then(res => res.data);
+
+export const deleteTraceabilityLink = (id) =>
+    api.delete(`/api/traceability/links/${id}`);
+
+export const fetchBidirectionalTraceability = (batchNumber, direction = 'BOTH') =>
+    api.get('/api/traceability/matrix', { params: { batchNumber, direction } }).then(res => res.data);
+
+export const fetchExternalIntegrationLogs = (params = {}) =>
+    api.get('/api/traceability/integrations', { params }).then(res => res.data);
+
+export const createExternalIntegrationLog = (data) =>
+    api.post('/api/traceability/integrations', data).then(res => res.data);
+
+export const reconcileIntegrationLog = (id, data) =>
+    api.post(`/api/traceability/integrations/${id}/reconcile`, data).then(res => res.data);
+
+export const fetchBarcodeRecords = (params = {}) =>
+    api.get('/api/traceability/barcodes', { params }).then(res => res.data);
+
+export const issueBarcodeRecord = (data) =>
+    api.post('/api/traceability/barcodes', data).then(res => res.data);
+
+export const incrementBarcodePrint = (id) =>
+    api.post(`/api/traceability/barcodes/${id}/print`).then(res => res.data);
+
+// =========================================================================
+// [14단계] 부적합품 관리 및 출하승인 (NCR & Release Controls) API
+// ISO 13485:2016 §8.3 / ISO 22716:2007 §8.4 / 21 CFR 820.90
+// =========================================================================
+
+export const fetchNcrKpis = () =>
+    api.get('/api/ncr/kpis').then(res => res.data);
+
+export const fetchNcrs = (params = {}) =>
+    api.get('/api/ncr', { params }).then(res => res.data);
+
+export const fetchNcrById = (id) =>
+    api.get(`/api/ncr/${id}`).then(res => res.data);
+
+export const fetchNcrByNumber = (ncrNumber) =>
+    api.get(`/api/ncr/by-number/${encodeURIComponent(ncrNumber)}`).then(res => res.data);
+
+export const createNcr = (data) =>
+    api.post('/api/ncr', data).then(res => res.data);
+
+export const createNcrFromInbound = (inboundId) =>
+    api.post(`/api/ncr/from-inbound/${inboundId}`).then(res => res.data);
+
+export const updateNcr = (id, data) =>
+    api.put(`/api/ncr/${id}`, data).then(res => res.data);
+
+export const submitNcrInvestigation = (id, data) =>
+    api.patch(`/api/ncr/${id}/investigation`, data).then(res => res.data);
+
+export const decideNcrDisposition = (id, data) =>
+    api.post(`/api/ncr/${id}/disposition`, data).then(res => res.data);
+
+export const updateNcrQuarantine = (id, data) =>
+    api.patch(`/api/ncr/${id}/quarantine`, data).then(res => res.data);
+
+export const closeNcr = (id, data) =>
+    api.post(`/api/ncr/${id}/close`, data).then(res => res.data);
+
+export const checkReleaseEligibility = (params = {}) =>
+    api.get('/api/ncr/check-release-eligibility', { params }).then(res => res.data);
+
+export const addNcrActionItem = (id, data) =>
+    api.post(`/api/ncr/${id}/actions`, data).then(res => res.data);
+
+export const completeNcrActionItem = (actionId) =>
+    api.patch(`/api/ncr/actions/${actionId}/complete`).then(res => res.data);
+
+export const verifyNcrActionItem = (actionId, result, notes = '') =>
+    api.patch(`/api/ncr/actions/${actionId}/verify`, null, { params: { result, notes } }).then(res => res.data);
+
+export const deleteNcrActionItem = (actionId) =>
+    api.delete(`/api/ncr/actions/${actionId}`);
+
+// =========================================================================
+// [고객 불만 및 시판 후 이상사례 평가 (ISO 13485:2016 §8.2.2 / ISO 22716:2007 §10) API - Step 15]
+// Defect Resolution: D-9 해소 (LOT 미상 접수 허용 및 안전성 평가 연계)
+// =========================================================================
+
+export const fetchComplaintSafetyKpis = () =>
+    api.get('/api/complaints/safety/kpis').then(res => res.data);
+
+export const fetchComplaintSafetyEvaluations = (params = {}) =>
+    api.get('/api/complaints/safety', { params }).then(res => res.data);
+
+export const fetchComplaintSafetyEvaluationById = (id) =>
+    api.get(`/api/complaints/safety/${id}`).then(res => res.data);
+
+export const createComplaintSafetyEvaluation = (data) =>
+    api.post('/api/complaints/safety', data).then(res => res.data);
+
+export const createComplaintSafetyFromClaim = (claimId) =>
+    api.post(`/api/complaints/safety/from-claim/${claimId}`).then(res => res.data);
+
+export const evaluateComplaintCausality = (id, data) =>
+    api.put(`/api/complaints/safety/${id}/causality`, data).then(res => res.data);
+
+export const submitComplaintRegulatoryReport = (id, data) =>
+    api.put(`/api/complaints/safety/${id}/regulatory-report`, data).then(res => res.data);
+
+export const recordComplaintInvestigation = (id, data) =>
+    api.put(`/api/complaints/safety/${id}/investigation`, data).then(res => res.data);
+
+export const closeComplaintSafetyEvaluation = (id, data) =>
+    api.put(`/api/complaints/safety/${id}/close`, data).then(res => res.data);
+
+export const addComplaintActionItem = (id, data) =>
+    api.post(`/api/complaints/safety/${id}/actions`, data).then(res => res.data);
+
+export const updateComplaintActionItem = (itemId, data) =>
+    api.put(`/api/complaints/safety/actions/${itemId}`, data).then(res => res.data);
+
+export const verifyComplaintActionItem = (itemId, verifiedBy, result) =>
+    api.put(`/api/complaints/safety/actions/${itemId}/verify`, null, { params: { verifiedBy, result } }).then(res => res.data);
+
+export const deleteComplaintActionItem = (itemId) =>
+    api.delete(`/api/complaints/safety/actions/${itemId}`);
+
+// =========================================================================
+// 16. 시정 및 예방조치 (CAPA - Corrective & Preventive Action) API
+// =========================================================================
+
+export const fetchCapaKpis = () =>
+    api.get('/api/capa/kpis').then(res => res.data);
+
+export const fetchCapas = (params = {}) =>
+    api.get('/api/capa', { params }).then(res => res.data);
+
+export const fetchCapaById = (id) =>
+    api.get(`/api/capa/${id}`).then(res => res.data);
+
+export const createCapa = (data) =>
+    api.post('/api/capa', data).then(res => res.data);
+
+export const recordCapaRootCause = (id, data) =>
+    api.put(`/api/capa/${id}/root-cause`, data).then(res => res.data);
+
+export const addCapaActionItem = (id, data) =>
+    api.post(`/api/capa/${id}/actions`, data).then(res => res.data);
+
+export const updateCapaActionItem = (itemId, data) =>
+    api.put(`/api/capa/actions/${itemId}`, data).then(res => res.data);
+
+export const verifyCapaActionItem = (itemId, verifiedBy, notes) =>
+    api.put(`/api/capa/actions/${itemId}/verify`, null, { params: { verifiedBy, notes } }).then(res => res.data);
+
+export const deleteCapaActionItem = (itemId) =>
+    api.delete(`/api/capa/actions/${itemId}`);
+
+export const evaluateCapaEffectiveness = (id, data) =>
+    api.put(`/api/capa/${id}/effectiveness`, data).then(res => res.data);
+
+export const closeCapa = (id, data) =>
+    api.put(`/api/capa/${id}/close`, data).then(res => res.data);
+
+export const voidCapa = (id, reason) =>
+    api.put(`/api/capa/${id}/void`, null, { params: { reason } }).then(res => res.data);
+
+// =========================================================================
+// 17. 규제보고 (Vigilance & MDR) 및 제품 회수 (Product Recall) API
+// =========================================================================
+
+export const fetchVigilanceRecallKpis = () =>
+    api.get('/api/vigilance-recall/kpi').then(res => res.data);
+
+export const fetchVigilanceReports = () =>
+    api.get('/api/vigilance').then(res => res.data);
+
+export const fetchVigilanceReportById = (id) =>
+    api.get(`/api/vigilance/${id}`).then(res => res.data);
+
+export const createVigilanceReport = (data) =>
+    api.post('/api/vigilance', data).then(res => res.data);
+
+export const updateVigilanceReport = (id, data) =>
+    api.put(`/api/vigilance/${id}`, data).then(res => res.data);
+
+export const submitVigilanceReport = (id, authoritySubmissionNumber, submissionDate) =>
+    api.post(`/api/vigilance/${id}/submit`, { authoritySubmissionNumber, submissionDate }).then(res => res.data);
+
+export const transitionVigilanceStatus = (id, status) =>
+    api.post(`/api/vigilance/${id}/status`, { status }).then(res => res.data);
+
+export const deleteVigilanceReport = (id) =>
+    api.delete(`/api/vigilance/${id}`);
+
+export const fetchProductRecalls = () =>
+    api.get('/api/recalls').then(res => res.data);
+
+export const fetchProductRecallById = (id) =>
+    api.get(`/api/recalls/${id}`).then(res => res.data);
+
+export const createProductRecall = (data) =>
+    api.post('/api/recalls', data).then(res => res.data);
+
+export const updateProductRecall = (id, data) =>
+    api.put(`/api/recalls/${id}`, data).then(res => res.data);
+
+export const updateRecallReconciliation = (id, data) =>
+    api.put(`/api/recalls/${id}/reconciliation`, data).then(res => res.data);
+
+export const transitionProductRecallStatus = (id, status, closureSummary) =>
+    api.post(`/api/recalls/${id}/status`, { status, closureSummary }).then(res => res.data);
+
+export const deleteProductRecall = (id) =>
+    api.delete(`/api/recalls/${id}`);
+
+// =========================================================================
+// 18. 시설·설비, 교정 및 유지보수, 환경모니터링 API (ISO 13485 §6.3, §6.4, §7.6 / 21 CFR 820.70, 820.72)
+// =========================================================================
+
+export const fetchFacilityKpi = () =>
+    api.get('/api/facilities/kpi').then(res => res.data);
+
+export const fetchEquipments = () =>
+    api.get('/api/facilities/equipments').then(res => res.data);
+
+export const fetchEquipmentById = (id) =>
+    api.get(`/api/facilities/equipments/${id}`).then(res => res.data);
+
+export const createEquipment = (data) =>
+    api.post('/api/facilities/equipments', data).then(res => res.data);
+
+export const updateEquipment = (id, data) =>
+    api.put(`/api/facilities/equipments/${id}`, data).then(res => res.data);
+
+export const deleteEquipment = (id) =>
+    api.delete(`/api/facilities/equipments/${id}`).then(res => res.data);
+
+export const fetchCalibrationRecords = () =>
+    api.get('/api/facilities/calibrations').then(res => res.data);
+
+export const fetchCalibrationRecordById = (id) =>
+    api.get(`/api/facilities/calibrations/${id}`).then(res => res.data);
+
+export const fetchCalibrationRecordsByEquipment = (equipmentId) =>
+    api.get(`/api/facilities/equipments/${equipmentId}/calibrations`).then(res => res.data);
+
+export const createCalibrationRecord = (data) =>
+    api.post('/api/facilities/calibrations', data).then(res => res.data);
+
+export const updateCalibrationRecord = (id, data) =>
+    api.put(`/api/facilities/calibrations/${id}`, data).then(res => res.data);
+
+export const deleteCalibrationRecord = (id) =>
+    api.delete(`/api/facilities/calibrations/${id}`).then(res => res.data);
+
+export const fetchMaintenanceRecords = () =>
+    api.get('/api/facilities/maintenances').then(res => res.data);
+
+export const fetchMaintenanceRecordById = (id) =>
+    api.get(`/api/facilities/maintenances/${id}`).then(res => res.data);
+
+export const fetchMaintenanceRecordsByEquipment = (equipmentId) =>
+    api.get(`/api/facilities/equipments/${equipmentId}/maintenances`).then(res => res.data);
+
+export const createMaintenanceRecord = (data) =>
+    api.post('/api/facilities/maintenances', data).then(res => res.data);
+
+export const updateMaintenanceRecord = (id, data) =>
+    api.put(`/api/facilities/maintenances/${id}`, data).then(res => res.data);
+
+export const deleteMaintenanceRecord = (id) =>
+    api.delete(`/api/facilities/maintenances/${id}`).then(res => res.data);
+
+export const fetchEnvironmentalMonitorings = (area) =>
+    api.get('/api/facilities/environments', { params: area ? { area } : {} }).then(res => res.data);
+
+export const fetchEnvironmentalMonitoringById = (id) =>
+    api.get(`/api/facilities/environments/${id}`).then(res => res.data);
+
+export const createEnvironmentalMonitoring = (data) =>
+    api.post('/api/facilities/environments', data).then(res => res.data);
+
+export const updateEnvironmentalMonitoring = (id, data) =>
+    api.put(`/api/facilities/environments/${id}`, data).then(res => res.data);
+
+export const deleteEnvironmentalMonitoring = (id) =>
+    api.delete(`/api/facilities/environments/${id}`).then(res => res.data);
+
+// =========================================================================
+// [19단계] 내부심사·자체점검·경영검토 (Internal Audit & Management Review)
+// 규제 표준: ISO 13485:2016 §8.2.4/§5.6, ISO 22716:2007 §13, ISO 19011:2018
+// =========================================================================
+
+// KPI
+export const fetchInternalAuditKpi = () =>
+    api.get('/api/internal-audits/kpi').then(res => res.data);
+
+// 1. 내부심사 계획 및 관리
+export const fetchInternalAudits = () =>
+    api.get('/api/internal-audits').then(res => res.data);
+
+export const fetchInternalAuditById = (id) =>
+    api.get(`/api/internal-audits/${id}`).then(res => res.data);
+
+export const createInternalAudit = (data) =>
+    api.post('/api/internal-audits', data).then(res => res.data);
+
+export const updateInternalAudit = (id, data) =>
+    api.put(`/api/internal-audits/${id}`, data).then(res => res.data);
+
+export const deleteInternalAudit = (id) =>
+    api.delete(`/api/internal-audits/${id}`).then(res => res.data);
+
+// 2. 심사 체크리스트
+export const fetchAuditChecklists = (auditId) =>
+    api.get(`/api/internal-audits/${auditId}/checklists`).then(res => res.data);
+
+export const createAuditChecklist = (data) =>
+    api.post('/api/internal-audits/checklists', data).then(res => res.data);
+
+export const updateAuditChecklist = (id, data) =>
+    api.put(`/api/internal-audits/checklists/${id}`, data).then(res => res.data);
+
+export const deleteAuditChecklist = (id) =>
+    api.delete(`/api/internal-audits/checklists/${id}`).then(res => res.data);
+
+// 3. 심사 지적사항 (Findings)
+export const fetchAllAuditFindings = () =>
+    api.get('/api/internal-audits/findings').then(res => res.data);
+
+export const fetchAuditFindings = (auditId) =>
+    api.get(`/api/internal-audits/${auditId}/findings`).then(res => res.data);
+
+export const createAuditFinding = (data) =>
+    api.post('/api/internal-audits/findings', data).then(res => res.data);
+
+export const updateAuditFinding = (id, data) =>
+    api.put(`/api/internal-audits/findings/${id}`, data).then(res => res.data);
+
+export const deleteAuditFinding = (id) =>
+    api.delete(`/api/internal-audits/findings/${id}`).then(res => res.data);
+
+// 4. 경영검토 (Management Review)
+export const fetchAllManagementReviews = () =>
+    api.get('/api/internal-audits/management-reviews').then(res => res.data);
+
+export const fetchManagementReviewById = (id) =>
+    api.get(`/api/internal-audits/management-reviews/${id}`).then(res => res.data);
+
+export const createManagementReview = (data) =>
+    api.post('/api/internal-audits/management-reviews', data).then(res => res.data);
+
+export const updateManagementReview = (id, data) =>
+    api.put(`/api/internal-audits/management-reviews/${id}`, data).then(res => res.data);
+
+export const deleteManagementReview = (id) =>
+    api.delete(`/api/internal-audits/management-reviews/${id}`).then(res => res.data);
+
+// =========================================================================
+// [Step 20] 공식 원본 및 전자서명 정책 (Official Records & 21 CFR Part 11 Electronic Signatures)
+// =========================================================================
+
+// 0. KPI 요약
+export const fetchOfficialRecordsKpi = () =>
+    api.get('/api/official-records/kpi').then(res => res.data);
+
+// 1. 전자서명 & 감사대장 (Electronic Signatures)
+export const fetchElectronicSignatures = () =>
+    api.get('/api/official-records/signatures').then(res => res.data);
+
+export const fetchSignatureById = (id) =>
+    api.get(`/api/official-records/signatures/${id}`).then(res => res.data);
+
+export const fetchSignaturesByTarget = (documentType, targetId) =>
+    api.get(`/api/official-records/signatures/by-target?documentType=${documentType}&targetId=${targetId}`).then(res => res.data);
+
+export const createElectronicSignature = (data) =>
+    api.post('/api/official-records/signatures', data).then(res => res.data);
+
+export const revokeElectronicSignature = (id, reason) =>
+    api.post(`/api/official-records/signatures/${id}/revoke`, { reason }).then(res => res.data);
+
+// 2. 21 CFR Part 11 자가평가 매트릭스
+export const fetchPart11Assessments = () =>
+    api.get('/api/official-records/part11-assessments').then(res => res.data);
+
+export const createPart11Assessment = (data) =>
+    api.post('/api/official-records/part11-assessments', data).then(res => res.data);
+
+export const updatePart11Assessment = (id, data) =>
+    api.put(`/api/official-records/part11-assessments/${id}`, data).then(res => res.data);
+
+export const deletePart11Assessment = (id) =>
+    api.delete(`/api/official-records/part11-assessments/${id}`).then(res => res.data);
+
+// 3. 공식 원본 및 보존 정책 (DEC-01)
+export const fetchOfficialRecordPolicies = () =>
+    api.get('/api/official-records/policies').then(res => res.data);
+
+export const createOfficialRecordPolicy = (data) =>
+    api.post('/api/official-records/policies', data).then(res => res.data);
+
+export const updateOfficialRecordPolicy = (id, data) =>
+    api.put(`/api/official-records/policies/${id}`, data).then(res => res.data);
+
+export const deleteOfficialRecordPolicy = (id) =>
+    api.delete(`/api/official-records/policies/${id}`).then(res => res.data);
+
+// ============================================================================
+// 21단계: CSV 밸리데이션 및 운영 승인 (GAMP 5, 21 CFR Part 11, ISO 13485 §4.1.6)
+// ============================================================================
+
+// 0. KPI 지표
+export const fetchCsvKpi = () =>
+    api.get('/api/csv-validation/kpi').then(res => res.data);
+
+// 1. CSV 프로젝트
+export const fetchCsvProjects = () =>
+    api.get('/api/csv-validation/projects').then(res => res.data);
+
+export const fetchCsvProject = (id) =>
+    api.get(`/api/csv-validation/projects/${id}`).then(res => res.data);
+
+export const createCsvProject = (data) =>
+    api.post('/api/csv-validation/projects', data).then(res => res.data);
+
+export const updateCsvProject = (id, data) =>
+    api.put(`/api/csv-validation/projects/${id}`, data).then(res => res.data);
+
+export const deleteCsvProject = (id) =>
+    api.delete(`/api/csv-validation/projects/${id}`).then(res => res.data);
+
+// 2. IQ / OQ / PQ 테스트 프로토콜
+export const fetchCsvProtocols = (projectId) =>
+    api.get(`/api/csv-validation/projects/${projectId}/protocols`).then(res => res.data);
+
+export const createCsvProtocol = (data) =>
+    api.post('/api/csv-validation/protocols', data).then(res => res.data);
+
+export const updateCsvProtocol = (id, data) =>
+    api.put(`/api/csv-validation/protocols/${id}`, data).then(res => res.data);
+
+export const deleteCsvProtocol = (id) =>
+    api.delete(`/api/csv-validation/protocols/${id}`).then(res => res.data);
+
+// 3. 결함 및 잔여 리스크 관리
+export const fetchCsvDefects = (projectId) =>
+    api.get(`/api/csv-validation/projects/${projectId}/defects`).then(res => res.data);
+
+export const createCsvDefect = (data) =>
+    api.post('/api/csv-validation/defects', data).then(res => res.data);
+
+export const updateCsvDefect = (id, data) =>
+    api.put(`/api/csv-validation/defects/${id}`, data).then(res => res.data);
+
+export const deleteCsvDefect = (id) =>
+    api.delete(`/api/csv-validation/defects/${id}`).then(res => res.data);
+
+// 4. Go-Live 최종 운영 승인 헌장
+export const fetchCsvGoLive = (projectId) =>
+    api.get(`/api/csv-validation/projects/${projectId}/go-live`).then(res => res.data);
+
+export const createOrUpdateCsvGoLive = (data) =>
+    api.post('/api/csv-validation/go-live', data).then(res => res.data);
+
+
+
+
+
+
+
+
+
+
+
 
 
 

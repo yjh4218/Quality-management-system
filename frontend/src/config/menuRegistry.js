@@ -480,6 +480,144 @@ export const MENU_REGISTRY = [
         icon: '🗂️',
         path: 'screenPositionManagement',
         actions: ['VIEW', 'EDIT']
+    },
+
+    // 11. 📖 표준 업무 매뉴얼 (SOP)
+    {
+        key: 'sopManual',
+        category: '📖 표준 업무 매뉴얼 (SOP)',
+        label: '표준 품질경영 매뉴얼 (SOP)',
+        icon: '📑',
+        path: 'sopManual',
+        actions: ['VIEW', 'EDIT', 'DELETE']
+    },
+    {
+        key: 'regulatoryGuide',
+        category: '📖 표준 업무 매뉴얼 (SOP)',
+        label: '규제 표준 가이드 (ISO 13485/22716)',
+        icon: '⚖️',
+        path: 'regulatoryGuide',
+        actions: ['VIEW', 'EDIT']
+    },
+    {
+        key: 'controlledDocuments',
+        category: '📖 표준 업무 매뉴얼 (SOP)',
+        label: '통제문서 및 개정관리 (DMS)',
+        icon: '📂',
+        path: 'controlledDocuments',
+        actions: ['VIEW', 'EDIT', 'DELETE']
+    },
+    {
+        key: 'trainingManagement',
+        category: '📖 표준 업무 매뉴얼 (SOP)',
+        label: '교육훈련 및 자격관리',
+        icon: '🎓',
+        path: 'trainingManagement',
+        actions: ['VIEW', 'EDIT', 'DELETE']
+    },
+    {
+        key: 'riskManagement',
+        category: '📖 표준 업무 매뉴얼 (SOP)',
+        label: '위험관리 (ISO 14971)',
+        icon: '⚠️',
+        path: 'riskManagement',
+        actions: ['VIEW', 'EDIT', 'DELETE']
+    },
+    {
+        key: 'designControls',
+        category: '📖 표준 업무 매뉴얼 (SOP)',
+        label: '설계개발 및 DHF (ISO 13485)',
+        icon: '📐',
+        path: 'designControls',
+        actions: ['VIEW', 'EDIT', 'DELETE']
+    },
+    {
+        key: 'changeControl',
+        category: '📖 표준 업무 매뉴얼 (SOP)',
+        label: '변경관리 (ISO 13485/22716)',
+        icon: '🔄',
+        path: 'changeControl',
+        actions: ['VIEW', 'EDIT', 'DELETE']
+    },
+    {
+        key: 'supplierManagement',
+        category: '📖 표준 업무 매뉴얼 (SOP)',
+        label: '공급업체·위탁제조 관리 (ISO 13485/22716)',
+        icon: '🏭',
+        path: 'supplierManagement',
+        actions: ['VIEW', 'EDIT', 'DELETE']
+    },
+    {
+        key: 'traceabilityManagement',
+        category: '📖 표준 업무 매뉴얼 (SOP)',
+        label: '외부연계 및 추적성 (ISO 13485/22716)',
+        icon: '🌐',
+        path: 'traceabilityManagement',
+        actions: ['VIEW', 'EDIT', 'DELETE']
+    },
+    {
+        key: 'ncrManagement',
+        category: '📖 표준 업무 매뉴얼 (SOP)',
+        label: '부적합품 관리 및 출하승인 (NCR)',
+        icon: '⚠️',
+        path: 'ncrManagement',
+        actions: ['VIEW', 'EDIT', 'DELETE']
+    },
+    {
+        key: 'complaintSafetyManagement',
+        category: '📖 표준 업무 매뉴얼 (SOP)',
+        label: '불만·이상사례 평가 (ISO 13485/식약처)',
+        icon: '🩺',
+        path: 'complaintSafetyManagement',
+        actions: ['VIEW', 'EDIT', 'DELETE']
+    },
+    {
+        key: 'capaManagement',
+        category: '📖 표준 업무 매뉴얼 (SOP)',
+        label: '시정 및 예방조치 (CAPA)',
+        icon: '🛡️',
+        path: 'capaManagement',
+        actions: ['VIEW', 'EDIT', 'DELETE']
+    },
+    {
+        key: 'vigilanceRecallManagement',
+        category: '📖 표준 업무 매뉴얼 (SOP)',
+        label: '규제보고 및 회수 (Vigilance/Recall)',
+        icon: '🚨',
+        path: 'vigilanceRecallManagement',
+        actions: ['VIEW', 'EDIT', 'DELETE']
+    },
+    {
+        key: 'facilityManagement',
+        category: '📖 표준 업무 매뉴얼 (SOP)',
+        label: '시설·교정·유지보수 (ISO 13485/22716)',
+        icon: '🛠️',
+        path: 'facilityManagement',
+        actions: ['VIEW', 'EDIT', 'DELETE']
+    },
+    {
+        key: 'internalAuditManagement',
+        category: '📖 표준 업무 매뉴얼 (SOP)',
+        label: '내부심사·경영검토 (ISO 13485/22716)',
+        icon: '📋',
+        path: 'internalAuditManagement',
+        actions: ['VIEW', 'EDIT', 'DELETE']
+    },
+    {
+        key: 'officialRecords',
+        category: '📖 표준 업무 매뉴얼 (SOP)',
+        label: '공식 원본·전자서명 (DEC-01/Part 11)',
+        icon: '📜',
+        path: 'officialRecords',
+        actions: ['VIEW', 'EDIT', 'DELETE']
+    },
+    {
+        key: 'csvValidation',
+        category: '📖 표준 업무 매뉴얼 (SOP)',
+        label: 'CSV 밸리데이션·Go-Live (GAMP 5)',
+        icon: '🛡️',
+        path: 'csvValidation',
+        actions: ['VIEW', 'EDIT', 'DELETE']
     }
 ];
 

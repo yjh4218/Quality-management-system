@@ -4,7 +4,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
 import { GlobalErrorBoundary } from './components/common/GlobalErrorBoundary.jsx';
-import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community';
+import { ModuleRegistry, AllCommunityModule, provideGlobalGridOptions } from 'ag-grid-community';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
 
@@ -19,6 +19,9 @@ import 'react-toastify/dist/ReactToastify.css';
 
 // Register AG Grid modules
 ModuleRegistry.registerModules([AllCommunityModule]);
+provideGlobalGridOptions({
+  theme: 'legacy',
+});
 
 const theme = createTheme({
   palette: {

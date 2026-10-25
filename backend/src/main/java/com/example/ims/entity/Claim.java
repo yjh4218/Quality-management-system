@@ -65,8 +65,25 @@ public class Claim {
     @jakarta.validation.constraints.NotBlank(message = "제품명은 필수입니다.")
     private String productName;
 
-    @jakarta.validation.constraints.NotBlank(message = "LOT 번호는 필수입니다.")
+    @Column(name = "lot_number")
     private String lotNumber;
+
+    @Builder.Default
+    @Column(name = "is_lot_unknown")
+    private Boolean isLotUnknown = false;
+
+    @Column(name = "complaint_category")
+    private String complaintCategory; // QUALITY_DEFECT, ADVERSE_EVENT, SERVICE_LOGISTICS, LABELING_PACKAGING, OTHER
+
+    @Column(name = "product_type")
+    private String productType; // COSMETIC, MEDICAL_DEVICE, GENERAL
+
+    @Builder.Default
+    @Column(name = "safety_eval_required")
+    private Boolean safetyEvalRequired = false;
+
+    @Column(name = "safety_evaluation_id")
+    private Long safetyEvaluationId;
 
     @jakarta.validation.constraints.NotBlank(message = "제조사는 필수입니다.")
     private String manufacturer;

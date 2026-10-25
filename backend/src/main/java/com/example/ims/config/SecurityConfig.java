@@ -46,6 +46,43 @@ public class SecurityConfig {
                                 "/actuator/**"
                         )
                 )
+                // [DEC-08 / D-1 해결] HF 배포 무영향 Origin/Referer 무결성 가드 필터
+                // Cross-Origin 환경에서 403 장애를 유발하는 CSRF 토큰 강제 적용 대신,
+                // 허용되지 않은 외부 사이트로부터의 위조된 상태 변경(POST/PUT/DELETE/PATCH) 요청을 원천 차단
+                .addFilterBefore(new org.springframework.web.filter.OncePerRequestFilter() {
+                    @Override
+                    protected void doFilterInternal(jakarta.servlet.http.HttpServletRequest request,
+                                                    jakarta.servlet.http.HttpServletResponse response,
+                                                    jakarta.servlet.FilterChain filterChain)
+                            throws jakarta.servlet.ServletException, java.io.IOException {
+                        String method = request.getMethod();
+                        String uri = request.getRequestURI();
+
+                        if (("POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method) ||
+                             "DELETE".equalsIgnoreCase(method) || "PATCH".equalsIgnoreCase(method)) &&
+                             uri.startsWith("/api/")) {
+
+                            // 비인가 익명 허용 공개 API는 검증 예외
+                            if (!uri.startsWith("/api/auth/login") && !uri.startsWith("/api/auth/register") &&
+                                !uri.startsWith("/api/auth/find-password") && !uri.startsWith("/api/auth/verify-email") &&
+                                !uri.startsWith("/api/bug-reports") && !uri.startsWith("/api/logs/access") &&
+                                !uri.startsWith("/api/vendor-upload")) {
+
+                                String origin = request.getHeader("Origin");
+                                String referer = request.getHeader("Referer");
+                                String targetOrigin = (origin != null && !origin.isBlank()) ? origin : extractOrigin(referer);
+
+                                if (targetOrigin != null && !isOriginAllowed(targetOrigin)) {
+                                    response.setStatus(jakarta.servlet.http.HttpServletResponse.SC_FORBIDDEN);
+                                    response.setContentType("application/json;charset=UTF-8");
+                                    response.getWriter().write("{\"error\": \"Forbidden\", \"message\": \"허용되지 않은 출처(Origin)로부터의 요청입니다.\"}");
+                                    return;
+                                }
+                            }
+                        }
+                        filterChain.doFilter(request, response);
+                    }
+                }, org.springframework.security.web.csrf.CsrfFilter.class)
                 .addFilterAfter(new org.springframework.web.filter.OncePerRequestFilter() {
                     @Override
                     protected void doFilterInternal(jakarta.servlet.http.HttpServletRequest request,
@@ -69,6 +106,8 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/bug-reports", "/api/bug-reports/**").permitAll()
                         // 접근 로그 (페이지 이동 로그 POST만 permitAll 허용)
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/logs/access/**", "/api/logs/access/page-move").permitAll()
+                        // 시스템 페이지 가이드 조회 (GET 요청은 비인가/인증 사용자 모두 화면 가이드 열람 허용, 수정/삭제는 권한 필요)
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/guides", "/api/guides/**").permitAll()
                         // [SECURITY PATCH] 관리자 전용 시스템 경로 권한 강화
                         .requestMatchers("/api/admin/system/health").permitAll() 
                         .requestMatchers("/api/debug/**").hasRole("ADMIN")
@@ -171,5 +210,36 @@ public class SecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    private String extractOrigin(String referer) {
+        if (referer == null || referer.isBlank()) return null;
+        try {
+            java.net.URI uri = new java.net.URI(referer);
+            return uri.getScheme() + "://" + uri.getAuthority();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private boolean isOriginAllowed(String origin) {
+        if (origin == null || origin.isBlank()) return true;
+        String lower = origin.toLowerCase();
+        if (lower.contains("localhost") || lower.contains("127.0.0.1")) return true;
+        if (lower.endsWith(".kro.kr") || lower.equals("https://qms-test.kro.kr")) return true;
+        if (lower.endsWith(".pages.dev") || lower.endsWith(".hf.space")) return true;
+
+        List<String> originsList = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList());
+        for (String allowed : originsList) {
+            if (allowed.equals("*") || allowed.equalsIgnoreCase(origin)) return true;
+            if (allowed.startsWith("https://*.") && origin.startsWith("https://")) {
+                String domain = allowed.substring("https://*.".length());
+                if (origin.substring("https://".length()).endsWith(domain)) return true;
+            }
+        }
+        return false;
     }
 }

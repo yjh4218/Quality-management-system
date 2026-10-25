@@ -513,5 +513,323 @@ export const pageGuides = {
                 content: "각 서류별 유효기간 검증 규칙과 필수 제출 여부를 사내 규정에 맞게 유연하게 설정합니다."
             }
         ]
+    },
+    medicalDevices: {
+        title: "🩺 의료기기 품목 마스터 및 UDI 관리 가이드",
+        sections: [
+            {
+                subtitle: "의료기기 품목 분류 및 등급 체계",
+                content: "의료기기법 및 ISO 13485에 따라 1등급(신고), 2등급(인증), 3~4등급(허가)으로 구분 관리하며, 품목허가번호와 사용목적/적응증을 체계적으로 등록합니다."
+            },
+            {
+                subtitle: "고유기기식별코드(UDI) 및 멸균/SW 관리",
+                content: "기기식별자(UDI-DI)와 생산식별자(UDI-PI: LOT/유효기한/일련번호) 체계를 준수하고, 멸균 방식 및 SaMD/SiMD 소프트웨어 버전을 추적 관리합니다."
+            }
+        ]
+    },
+    sopManual: {
+        title: "📖 표준 품질경영 매뉴얼 (SOP) 가이드",
+        sections: [
+            {
+                subtitle: "ISO 13485 & ISO 22716 표준 업무 절차서 통합",
+                content: "화장품 우수제조기준(ISO 22716)과 의료기기 품질경영시스템(ISO 13485)에 따른 표준 운영 절차서(SOP) 전문을 분야별로 열람하고 최신 개정 이력을 확인합니다."
+            },
+            {
+                subtitle: "부서별 업무 지침 및 양식 연계",
+                content: "품질보증, 생산관리, 시험검사, 변경관리, 부적합 및 시정조치(CAPA)에 대한 표준 지침을 전자화하여 즉시 검색하고 실무에 적용할 수 있습니다."
+            }
+        ]
+    },
+    regulatoryGuide: {
+        title: "⚖️ 규제 표준 및 인허가 가이드",
+        sections: [
+            {
+                subtitle: "국내외 규제 요건 비교 및 해설",
+                content: "대한민국 식약처(MFDS), 미국 FDA, 유럽 MDR 등 글로벌 주요 규제 기관의 인허가 및 사후관리 요건을 상세히 안내합니다."
+            },
+            {
+                subtitle: "품질책임자 및 관리자 법정 의무",
+                content: "화장품 책임판매관리자 및 의료기기 품질책임자의 법정 직무 범위와 안전관리 조치 의무사항을 일목요연하게 제공합니다."
+            }
+        ]
+    },
+    controlledDocuments: {
+        title: "📂 통제문서 및 개정관리(DMS) 가이드",
+        sections: [
+            {
+                subtitle: "통제문서 라이프사이클 및 개정 추적성",
+                content: "ISO 13485 §4.2.4 및 ISO 22716 §17에 부합하도록 초안(DRAFT) 작성부터 검토, 결재 승인, 배포(EFFECTIVE), 구버전 개정대체(SUPERSEDED), 폐기(OBSOLETE)까지 전 수명주기를 완벽히 추적합니다."
+            },
+            {
+                subtitle: "문서화 계층 체계 및 표준 서식",
+                content: "Level 1(품질매뉴얼), Level 2(SOP/DHF/DMR), Level 3(작업지침서/VR), Level 4(양식/서식/대외규격) 4단계 문서 체계로 품질 문서를 분류하고 변경 사유와 이력을 체계적으로 관리합니다."
+            }
+        ]
+    },
+    trainingManagement: {
+        title: "🎓 교육훈련 및 자격관리(Training & Competence) 가이드",
+        sections: [
+            {
+                subtitle: "인적자원 역량 및 교육훈련 체계 (ISO 13485 §6.2 / ISO 22716 §3)",
+                content: "품질에 영향을 미치는 모든 인원에 대해 필요한 역량을 결정하고, 표준 교육과정(GMP, 의료기기, 품질일반, 보안, 안전)을 주기적으로 이수하도록 계획 및 실행합니다."
+            },
+            {
+                subtitle: "교육 이수 평가 및 유효성/효과성 평가",
+                content: "필기시험, 실기평가, 보고서 평가 등 표준화된 평가 방식으로 합격 여부(Passing Score)를 자동 판정하며, 교육 실시 후 현업 적용 효과성(EFFECTIVE, NEEDS_RETRAINING)을 책임자가 평가하여 교육의 유효성을 입증합니다."
+            },
+            {
+                subtitle: "법정 및 사내 품질 전문 직무 자격 매트릭스 (Competence Matrix)",
+                content: "화장품 책임판매관리자, 의료기기 품질책임자, ISO 내부심사원, 출하승인권자 등 필수 전문 자격의 취득·부여·유효기한 및 갱신 현황을 체계적으로 추적하고 만료 도래 시 사전에 알림을 제공합니다."
+            }
+        ]
+    },
+    riskManagement: {
+        title: "⚠️ 위험관리 (ISO 14971:2019) 프로세스 가이드",
+        sections: [
+            {
+                subtitle: "위해요인 3계층 모델 (Hazard - Hazardous Situation - Harm)",
+                content: "ISO 14971:2019 및 ISO 13485:2016 §7.1 규정에 따라 의료기기 설계, 제조공정, 사용자 인터페이스(사용적합성 IEC 62366-1) 전반에 존재하는 잠재적 위해요인을 식별하고 노출 상황과 최종 초래되는 신체적 상해/건강 피해를 3단계 계층 구조로 구조화하여 분석합니다."
+            },
+            {
+                subtitle: "위험 통제 조치 우선순위 및 5x5 FMEA 매트릭스 (Risk Control Hierarchy)",
+                content: "위험 점수(심각도 S1~S5 × 발생확률 P1~P5)를 5x5 매트릭스로 평가하여 1~4점(수용가능 ACCEPTABLE), 5~9점(실행가능최저 ALARP), 10~25점(수용불가 UNACCEPTABLE)으로 분류합니다. 통제 조치는 1순위: 설계적 본질안전, 2순위: 기기/공정보호수단, 3순위: 안전정보 라벨링 순서로 강구합니다."
+            },
+            {
+                subtitle: "잔여위험 평가 및 종합 이익-위험 분석 (Benefit-Risk Analysis)",
+                content: "통제 조치 적용 후 잔여 심각도와 잔여 발생확률을 재평가하여 모든 위험이 허용 기준 이하로 저감되었는지 검증하고, 불가피하게 ALARP 영역에 잔류하는 위험에 대해 환자에게 제공되는 임상적/의료적 유효성과 이익-위험을 종합 평가하여 승인합니다."
+            }
+        ]
+    },
+    designControls: {
+        title: "📐 ISO 13485 / 21 CFR 820 설계개발 및 DHF 통제 가이드",
+        sections: [
+            {
+                subtitle: "설계개발 6단계 라이프사이클 (Design Phase)",
+                content: "ISO 13485:2016 §7.3에 따라 1. 계획수립(Planning) -> 2. 설계입력(Input) -> 3. 설계출력(Output) -> 4. 설계검증(Verification) -> 5. 설계유효성확인(Validation) -> 6. 설계이관(Transfer)의 전 과정을 단계별 공식 심의(Design Review) 및 Stage-Gate 승인을 거쳐 전이합니다."
+            },
+            {
+                subtitle: "설계이력파일 (Design History File - DHF) 구성 및 불변 보존",
+                content: "21 CFR 820.30(j)에 부합하도록 프로젝트별 승인된 설계계획서에 따라 개발되었음을 입증하는 모든 산출물(도면, 회로도, BOM, 검증성적서, 유효성평가서, 심의록, 변경이력)을 DHF로 통합 인덱싱하여 편철하고 임의 훼손 없이 영구 보존합니다."
+            },
+            {
+                subtitle: "요구사항 추적성 매트릭스 (Requirements Traceability Matrix - RTM)",
+                content: "사용자 및 규제 요구사항(설계입력 DI)이 어떤 설계출력(DO)으로 구현되었고, 어떤 시험검증(DV) 및 임상/사용성 유효성확인(VAL)을 거쳤으며, ISO 14971 위해요인(Hazard)과 어떻게 통제 연계되었는지 전 구간 5단 양방향 역추적성을 보장합니다."
+            }
+        ]
+    },
+    changeControl: {
+        title: "🔄 ISO 13485 / ISO 22716 통합 변경관리(Change Control) 표준 가이드",
+        sections: [
+            {
+                subtitle: "변경관리 8단계 표준 수명주기 (Change Lifecycle)",
+                content: "ISO 13485:2016 §7.3.9 및 ISO 22716:2007 §11 규정에 따라 1. 변경요청(DRAFT) -> 2. 제출(SUBMITTED) -> 3. 영향평가(IMPACT_ASSESSING) -> 4. CCB 심의(CCB_REVIEW) -> 5. 승인(APPROVED) -> 6. 실행(IN_PROGRESS) -> 7. 효과성 검증(EFFECTIVENESS_CHECK) -> 8. 최종 종결(CLOSED)의 엄격한 변경 통제 라이프사이클을 준수합니다."
+            },
+            {
+                subtitle: "다차원 변경 영향평가 (Change Impact Assessment)",
+                content: "원자재, 제품 사양, 제조 공정, 설비, 소프트웨어 등 변경 발생 시 인허가/규제 영향(식약처/FDA/CE 변경신고), 제품 품질/안전, 공정 밸리데이션(IQ/OQ/PQ), 위험관리(ISO 14971 RMF 재평가), 통제문서(DMS 개정), 설계이력파일(DHF)에 미치는 파급 효과를 다각도로 평가합니다."
+            },
+            {
+                subtitle: "변경관리위원회(CCB) 및 효과성 확인 (Effectiveness Review)",
+                content: "품질, 생산, 연구, 규제 부서장이 참여하는 CCB의 승인을 득해야 변경이 발효되며, 변경 실행 완료 후 규정된 기간(30/60/90일 또는 초도 3배치) 동안 불량률, 재현성, 품질 안정성을 모니터링하여 변경의 효과성을 공식 검증한 후 종결합니다."
+            }
+        ]
+    },
+    supplierManagement: {
+        title: "🏭 ISO 13485 / ISO 22716 공급업체·위탁제조 관리(Supplier Management) 표준 가이드",
+        sections: [
+            {
+                subtitle: "공급업체 승인 및 적격성 평가 (Approved Supplier List - ASL)",
+                content: "ISO 13485:2016 §7.4.1 및 ISO 22716:2007 §12에 의거, 품질에 직접 영향을 미치는 원자재, 포장재, 위탁제조, 시험검사 및 멸균 서비스 공급업체는 사전 적격성 심사를 거쳐 승인(APPROVED)된 공급업체 목록(ASL)에 등재된 업체만을 거래 대상으로 엄격히 통제합니다."
+            },
+            {
+                subtitle: "정기 공급업체 성과 재평가 (Supplier Performance Evaluation)",
+                content: "품질(수입검사 합격률/불량률, 40점), 납기(정시납품률, 25점), 규제/서류 적합성(COA/성적서 적시성, 20점), 서비스/협력(15점)의 4개 영역 100점 만점으로 정기 평가를 실시하며, 평가 결과에 따라 A(우수), B(양호), C(주의/조건부), D(부적격) 등급을 차등 부여하고 C/D 등급 업체는 CAPA 시정조치 또는 거래 정지를 집행합니다."
+            },
+            {
+                subtitle: "품질협약서(QAA) 체결 및 법정 보존 기한 준수",
+                content: "위탁제조 및 주요 공급업체와 변경 사전통보 의무(변경 30일/60일 전 통지), 현장 실사권 보장, 결함 발생 시 책임 소재를 명시한 품질보증협약(QAA)을 의무 체결하며, ISO 13485 제품 수명종료 후 5년 / ISO 22716 화장품 유통기한 후 3년 원칙에 따른 보존 기한을 엄격히 추적 관리합니다."
+            }
+        ]
+    },
+    traceabilityManagement: {
+        title: "🌐 ISO 13485 / ISO 22716 외부연계 및 양방향 추적성(Traceability) 표준 가이드",
+        sections: [
+            {
+                subtitle: "식별 및 양방향 추적성 (Identification & Bidirectional Traceability)",
+                content: "ISO 13485:2016 §7.5.8 및 ISO 22716:2007 §8.3에 의거, 원자재 및 포장재 입고 시 부여된 고유 LOT 번호부터 벌크 조제, 충진포장 완제품, 최종 유통 출하까지 전공정에 걸쳐 정방향(Forward: 원자재 ➔ 완제품 ➔ 출하처) 및 역방향(Backward: 완제품/클레임 ➔ 벌크 ➔ 원자재/공급사) 양방향 계층 구조 추적성을 100% 보증합니다."
+            },
+            {
+                subtitle: "외부 시스템(ERP/WMS) 연동 및 수기 대사 (System Reconciliation - DEC-02)",
+                content: "ERP(전사자원관리), WMS(물류창고) 시스템과의 인터페이스를 통해 입고, 조제, 충진, 출하 데이터를 연동하며, 시스템 간 수량 및 상태 불일치(Discrepancy)가 발생할 경우 품질 책임자의 검토 및 수기 대사(Manual Reconciliation) 승인 워크플로우를 거쳐 데이터 무결성을 유지합니다."
+            },
+            {
+                subtitle: "GS1 UDI 바코드 및 식별 체계 (Medical Device & Cosmetics UDI)",
+                content: "21 CFR 820.65 / 820.120 규격에 부합하는 GS1-128 및 DataMatrix UDI 표준 코드 [(01)GTIN, (10)LOT번호, (17)유효기한, (21)일련번호]를 자동 생성하고 인쇄 이력(Print Count)을 실시간 추적하여 위변조 및 중복 사용을 방지합니다."
+            }
+        ]
+    },
+    ncrManagement: {
+        title: "⚠️ ISO 13485 / ISO 22716 부적합품 관리 및 출하승인 통제 표준 가이드",
+        sections: [
+            {
+                subtitle: "식별, 문서화 및 즉각 물리적 격리 (Identification & Quarantine)",
+                content: "ISO 13485:2016 §8.3 및 ISO 22716:2007 §8.4에 의거, 원자재 입고검사, 제조공정, 완제품 검사 및 보관 중 규격 기준을 벗어난 부적합품이 발견된 즉시 품목, LOT, 수량을 식별하고 식별 라벨을 부착하여 지정된 격리 보관소(Quarantine Area)로 이동시킴으로써 오용 및 무단 출하를 원천 차단합니다."
+            },
+            {
+                subtitle: "다차원 원인조사 및 처리(Disposition) 승인 권한",
+                content: "5-Why 및 어골도 기법으로 근본 원인을 규명하고 폐기(Scrap), 공급사 반품(Return), 재작업(Rework), 특채/양보(Concession) 등 처리 방안을 심의합니다. 특채 판정 시 안전성 및 유효성에 영향이 없음을 증명하는 타당성 사유서 작성이 법적으로 의무화되며, 재작업 판정 시 승인된 SOP 작업지침과 재검사 기준에 따라 품질부서 승인 하에 실행됩니다."
+            },
+            {
+                subtitle: "시정조치(CAPA) 연계 및 출하 승인 게이트 (Market Release Gate)",
+                content: "치명(Critical) 부적합 또는 주요(Major) 부적합이 반복되는 경우 시정 및 예방조치(CAPA) 발행이 의무화되며, 해결되지 않은 부적합 보고서(NCR)가 존재하는 LOT는 최종 출하 승인(MARKET_RELEASE)이 시스템적으로 자동 차단(Lock/Hold)되어 미검사/부적합 제품의 시장 유통을 방지합니다."
+            }
+        ]
+    },
+    complaintSafetyManagement: {
+        title: "🛡️ ISO 13485 / ISO 22716 고객 불만 및 시판 후 이상사례 평가 표준 가이드",
+        sections: [
+            {
+                subtitle: "LOT 미상 접수 보장 및 고객 불만 전수 수집 (D-9 해소 / ISO 13485 §8.2.2)",
+                content: "소비자가 포장재를 분실하였거나 튜브 끝단 번호가 마모되어 LOT 번호를 확인할 수 없는 경우에도 불만 접수가 누락되지 않도록 'LOT 번호 미상' 접수를 전면 허용하며, 구매 영수증 및 판매 채널 역추적을 통해 잠재적 위험 로트를 탐색합니다."
+            },
+            {
+                subtitle: "의학적 인과관계 평가 (WHO-UMC / 식약처 6단계 표준)",
+                content: "인입된 유해사례에 대해 사용 시점과 증상 발현 간의 시간적 선후관계, 기저 질환, 대체 원인 배제 여부를 평가하여 확실(Certain), 가능성 높음(Probable), 가능함(Possible), 관련성 적음(Unlikely), 조건부(Conditional), 평가불가(Unassessable) 6단계로 판정하고 의학적 소견을 기록합니다."
+            },
+            {
+                subtitle: "규제기관 신속보고 (화장품 15일 이내 / 21 CFR 820.198 MDR) 및 CAPA 연계",
+                content: "사망, 장애, 입원 등 중대한 유해사례 발생 시 인지일로부터 15일 이내 식약처에 신속보고를 완료해야 하며, 원인 규명 및 재발 방지를 위한 시정 및 예방조치(CAPA)를 즉시 개시합니다. 21 CFR 820.198(b)에 따라 조사를 실시하지 않는 경우 명확한 법적 정당화 사유를 문서화해야 합니다."
+            }
+        ]
+    },
+    capaManagement: {
+        title: "🛡️ ISO 13485 / ISO 22716 / 21 CFR 820.100 시정 및 예방조치 (CAPA) 표준 업무 가이드",
+        sections: [
+            {
+                subtitle: "5대 품질 소스 통합 발의 및 임시 봉쇄조치 (Source Integration & Containment)",
+                content: "고객 불만 및 이상사례(15단계), 부적합품 보고서 NCR(14단계), 변경관리(11단계), 공급업체 감사(12단계), 내부심사 및 공정 일탈 등 5대 소스로부터 CAPA를 연계 발의합니다. 발의 즉시 해당 제품/LOT의 격리(HOLD), 출하 중단 및 유통 재고 확인 등 임시 봉쇄조치를 신속히 취하여 위험 확산을 방지합니다."
+            },
+            {
+                subtitle: "5-Why & Fishbone 다차원 근본원인 규명 (Root Cause Analysis)",
+                content: "단순한 증상 처치에 그치지 않고, 5-Why 질문 기법과 6M(Man, Machine, Material, Method, Measurement, Environment) 특성요인도(Fishbone)를 활용하여 오류가 발생할 수밖에 없었던 프로세스 및 시스템적 근본 원인을 과학적으로 도출합니다."
+            },
+            {
+                subtitle: "시정조치(재발 방지)와 예방조치(수평 전개)의 체계적 실행",
+                content: "직접적인 부적합 원인을 제거하는 시정조치(Corrective Action)뿐 아니라, 유사 설비, 동일 배합비 품목 및 타 생산 라인으로 확장 적용하는 수평전개 예방조치(Preventive Action) 과제를 편성하고, 담당자 및 명확한 목표일자를 지정하여 이행을 추적합니다."
+            },
+            {
+                subtitle: "사후 객관적 데이터 기반 효과성 검증 (Effectiveness Review) 및 종결 가드",
+                content: "조치 완료 후 일정 기간(예: 30일/60일 또는 후속 N개 제조배치) 동안 실제 재발 여부, 불량률 추이, 통계적 지표를 모니터링하여 객관적 증거를 기반으로 효과성(EFFECTIVE)을 판정합니다. 모든 조치과제가 완료되고 효과성이 입증되기 전에는 최종 종결이 시스템적으로 엄격히 통제됩니다."
+            }
+        ]
+    },
+    vigilanceRecall: {
+        title: "🚨 ISO 13485 / 21 CFR 803 / EU MDR 규제보고(Vigilance) 및 제품 회수(Recall) 관리 가이드",
+        sections: [
+            {
+                subtitle: "국가별 이상사례 법정 기한 자동 산정 (Statutory Vigilance Reporting)",
+                content: "식약처 사망/생명위협(7일 이내), 식약처 중대 유해사례(15일 이내), 식약처 통상 부작용(30일 이내), 미국 FDA 5-Day/30-Day MDR, 유럽 EU MDR 즉시(2일)/사망(10일)/중대사고(15일) 등 국가별 법정 보고 기한을 인지일(Awareness Date) 기준으로 실시간 자동 계산하고 D-Day 알림을 제공합니다."
+            },
+            {
+                subtitle: "제품 회수(Product Recall) 등급 분류 및 신속 공표",
+                content: "완제품의 위해도에 따라 1등급(사망·영구적 장애 위험), 2등급(일시적·가역적 손상), 3등급(경미한 위반)으로 구분하여 회수계획서를 작성하고, 식약처 및 관련 규제당국에 신속히 보고한 후 거래처 및 소비자 대상 회수 공표를 진행합니다."
+            },
+            {
+                subtitle: "출고 수량 100% 대사(Quantity Reconciliation) 및 종결 가드",
+                content: "21 CFR Part 7 및 의료기기법 제34조에 따라, 대상 LOT의 총 출고량(Shipped)은 [회수 수량 + 격리 수량 + 폐기 수량 + 미회수/소진 수량]의 합계와 100% 일치해야 합니다. 오차가 발생할 경우 최종 회수 종결이 시스템적으로 자동 차단(Lock)됩니다."
+            },
+            {
+                subtitle: "시정조치(CAPA) 연계 및 안전성 모니터링",
+                content: "중대 이상사례 및 제품 회수 발생 시 즉시 원인규명 및 재발방지를 위한 CAPA(16단계)가 필수 연계되며, 제품 회수 완료 후에도 후속 로트의 유통 안전성을 지속 모니터링합니다."
+            }
+        ]
+    },
+    facilityManagement: {
+        title: "🛠️ ISO 13485 / ISO 22716 / 21 CFR 820 시설·설비, 교정 및 청정환경 관리 가이드",
+        sections: [
+            {
+                subtitle: "장비/계측기/설비 마스터 원장 관리 (Equipment Master)",
+                content: "제조설비, 시험/계측장비, 유틸리티 및 보관설비의 고유 관리코드(EQ-), 모델명, 시리얼, 설치장소, 관리부서, 중요도(중점/일반/보조)를 원장으로 관리하고 가동 상태를 실시간 추적합니다."
+            },
+            {
+                subtitle: "국가표준 소급성 교정 주기 관리 및 불합격 가드 (Calibration Controls)",
+                content: "국가공인(KOLAS) 등 공인기관 성적서 번호 및 성적서 파일을 등록하며, 교정 주기(6/12/24개월)에 따른 차기 예정일을 자동 산출합니다. 특히 교정 판정이 불합격(FAIL)인 경우 해당 장비는 즉시 [사용 중지] 상태로 강제 전환되며, 과거 생산/시험 로트에 대한 소급 품질 영향평가가 의무화됩니다."
+            },
+            {
+                subtitle: "예방보전(PM) 스케줄 및 고장 수리 이력 추적 (Maintenance & Repairs)",
+                content: "정기 예방보전(PM) 계획에 따른 소모품 교체, 설비 다운타임(Downtime), 비용을 기록하며, PM 완료 시 차기 예정일이 자동 갱신됩니다. 수리/점검 중인 설비는 작업 완료 시까지 가동 상태가 제한됩니다."
+            },
+            {
+                subtitle: "청정실(Cleanroom) 및 작업환경 온·습도·차압·미립자 모니터링 (Environmental Monitoring)",
+                content: "Grade C/D 청정실, 원료 칭량실, 포장실, 보관소의 온도(℃), 습도(%), 차압(Pa), 부유 미립자(0.5μm/5.0μm), 미생물 낙하균(CFU)을 실시간 기록합니다. 기준 이탈(OOS) 발생 시 즉시 조치과제(환기율 상향, 공조 점검 등)가 요구됩니다."
+            }
+        ]
+    },
+    internalAudit: {
+        title: "📋 ISO 13485 / ISO 22716 / ISO 19011 내부심사·자체점검 및 경영검토 가이드",
+        sections: [
+            {
+                subtitle: "내부심사 프로그램 수립 및 심사원 독립성 원칙 (Auditor Independence)",
+                content: "ISO 13485:2016 §8.2.4 및 ISO 19011에 따라 연간 심사 프로그램을 수립하고 정기/수시 심사를 운영합니다. 심사의 객관성과 공정성을 확보하기 위해 심사원은 자신의 소속 부서나 직접 수행하는 업무를 심사할 수 없으며, 독립된 적격 심사원이 지정되어야 합니다."
+            },
+            {
+                subtitle: "현장 체크리스트(Checklist) 및 객관적 사실 기반 판정",
+                content: "규격 조항별 체크포인트에 따라 문서 검토, 현장 실사, 작업자 인터뷰, 샘플링 검사를 수행하고 확인된 증빙과 관찰 사실을 기록하여 적합(CONFORMING), 부적합(NON_CONFORMING), 해당없음(N/A)을 엄격히 판정합니다."
+            },
+            {
+                subtitle: "지적사항(Finding) 분류 및 중대/주요 부적합 CAPA 연계 가드",
+                content: "발견된 부적합은 중대(Critical), 주요(Major), 경미(Minor), 권고(Observation)로 분류되며, 중대 또는 주요 부적합의 경우 원인 분석 및 재발 방지를 위한 시정 및 예방조치(16단계 CAPA) 연계 및 조치 완료 검증 없이는 종결(CLOSED)할 수 없도록 시스템적으로 가드가 작동합니다."
+            },
+            {
+                subtitle: "최고경영자 주관 경영검토 (Management Review - 12대 입력 & 3대 출력)",
+                content: "ISO 13485 §5.6 및 21 CFR 820.20(c)에 따라 최고경영자가 참석하는 공식 경영검토 회의를 주관합니다. 내부/외부 심사결과, 고객불만, 공정/제품 적합성, CAPA 상태 등 12대 필수 입력요소를 평가하고, QMS 개선, 제품 개선, 필요 자원(인력/설비/예산) 배분의 3대 출력을 공식 의결하여 회의록으로 관리합니다."
+            }
+        ]
+    },
+    officialRecords: {
+        title: "📜 공식 원본 및 21 CFR Part 11 전자서명 정책 가이드",
+        sections: [
+            {
+                subtitle: "의사결정대장 DEC-01 준수: 하이브리드 & 전자기록 공식 원본 체계",
+                content: "DEC-01 정책에 의거하여 기본적으로 eQMS 내의 암호화된 전자기록과 21 CFR Part 11 전자서명을 법적 공식 원본으로 관리하되, 규제기관 실사 및 감사 제출 시 서명 매니페스트 블록이 포함된 인쇄본에 서명자가 수기 날인/서명하여 보관하는 하이브리드(Hybrid) 보존 체계를 공식 지원합니다."
+            },
+            {
+                subtitle: "21 CFR Part 11 §11.50 서명 매니페스트 및 §11.70 결합성 보장",
+                content: "모든 전자서명은 서명자 성명, 서명 일시(타임스탬프), 서명 의미(작성자/검토자/승인자/품질책임자 인가), 서명 사유가 인쇄물과 화면에 명확히 표기되어야 하며, 대상 레코드와 SHA-256 무결성 해시로 암호학적으로 결합되어 위조, 분리, 무단 전용이 불가능합니다."
+            },
+            {
+                subtitle: "21 CFR Part 11 §11.200 서명 시 비밀번호 2차 재인증 (대리 서명 방지)",
+                content: "로그인된 세션 상태라 하더라도 전자서명(승인, 인가, 검토)을 수행할 때는 반드시 계정 비밀번호를 재입력하도록 강제합니다. 서버 사이드에서 실시간 BCrypt 일치 여부를 검증하여 본인이 아닌 대리 서명을 원천 차단합니다."
+            },
+            {
+                subtitle: "21 CFR Part 11 자가평가 매트릭스 및 법정보존 기한 관리",
+                content: "FDA 21 CFR Part 11의 15대 핵심 조항(시스템 검증, 사본 생성, 감사추적, 접근통제, 서명 제어 등)에 대한 eQMS 기능 정합성을 자가평가하고 증빙을 관리하며, 품질기록 카테고리별(출하승인서, CAPA, 제조기록서 등) 법정 보존 연한(5년~10년/영구) 및 폐기 심의 절차를 체계적으로 통제합니다."
+            }
+        ]
+    },
+    csvValidation: {
+        title: "🛡️ GAMP 5 / 21 CFR Part 11 컴퓨터화 시스템 밸리데이션(CSV) & Go-Live 가이드",
+        sections: [
+            {
+                subtitle: "GAMP 5 V-모델 수명주기 및 카테고리 4/5 밸리데이션 전략 (Validation Lifecycle)",
+                content: "GAMP 5 (Good Automated Manufacturing Practice 5) V-모델에 따라 사용자 요구사항 규격(URS), 기능 및 설계 규격(FS/DS), 적격성평가(IQ/OQ/PQ), 종합 보고서(VSR)로 이어지는 수명주기 전 단계를 검증합니다. 설정 가능 소프트웨어(Category 4) 및 자체 개발 품질 로직(Category 5)의 복합 시스템 특성에 맞춘 리스크 기반 밸리데이션을 수행합니다."
+            },
+            {
+                subtitle: "IQ / OQ / PQ 적격성평가 실행 및 URS 추적성 매트릭스 (Qualification Protocols)",
+                content: "설치 적격성(IQ: 서버/DB/보안필터/스토리지), 운전 적격성(OQ: 21 CFR Part 11 전자서명 재인증, 출하승인 게이트, CAPA 가드 등 6대 핵심 비즈니스 통제), 성능 적격성(PQ: 100 동시 사용자 부하, 1만건 그리드 렌더링, 세션 복원성) 시험을 수행하며 각 항목은 URS 요구사항과 100% 추적 연계(Traceability)됩니다."
+            },
+            {
+                subtitle: "결함(Defect) 심각도 분류 및 잔여 리스크 수용 통제 (Defect & Risk Management)",
+                content: "시험 중 발견된 결함은 치명적(Critical), 중대(Major), 경미(Minor)로 분류되며, 미해결된 Critical/Major 결함이 존재하는 경우 시스템적인 Go-Live 차단 가드가 발동합니다. 경미한 결함이나 환경적 차이에 대해서는 품질보증부서(QA)의 공식 심의를 거쳐 잔여 리스크 수용(ACCEPTED_RISK) 정당화 사유를 문서화해야 합니다."
+            },
+            {
+                subtitle: "최종 Go-Live 운영 승인 헌장 및 3자 필수 전자서명 가드 (Go-Live Release Charter)",
+                content: "모든 IQ/OQ/PQ 프로토콜의 적합(PASS) 판정과 결함 조치 완료 후, 시스템 관리자(System Owner), 품질관리 책임자(QA Lead), 최고경영자(Executive Sponsor) 3인의 필수 전자서명이 결합된 운영 승인 헌장(Go-Live Charter)을 발행하여 시스템을 정식 가동(OPERATIONAL) 상태로 공식 인가합니다."
+            }
+        ]
     }
 };
+
+
+
+

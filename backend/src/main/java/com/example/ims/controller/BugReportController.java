@@ -67,7 +67,7 @@ public class BugReportController {
     }
 
     @PostMapping("/read-batch")
-    @PreAuthorize("@perm.can('bugReports', 'EDIT')")
+    @PreAuthorize("@perm.can('bugReports', 'VIEW') or @perm.can('bugReports', 'EDIT')")
     public ResponseEntity<java.util.Map<String, Object>> markAsReadBatch(
             @RequestBody java.util.Map<String, java.util.List<Long>> payload,
             Authentication authentication) {

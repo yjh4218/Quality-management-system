@@ -28,7 +28,16 @@ public class SystemGuideController {
     public ResponseEntity<SystemPageGuide> getGuideByKey(@PathVariable String pageKey) {
         return systemPageGuideRepository.findByPageKey(pageKey)
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElseGet(() -> {
+                    SystemPageGuide defaultGuide = SystemPageGuide.builder()
+                            .pageKey(pageKey)
+                            .title(pageKey)
+                            .content("시스템 표준 운영 가이드입니다.")
+                            .sectionsJson("[]")
+                            .updatedBy("SYSTEM_DEFAULT")
+                            .build();
+                    return ResponseEntity.ok(defaultGuide);
+                });
     }
 
     @PostMapping

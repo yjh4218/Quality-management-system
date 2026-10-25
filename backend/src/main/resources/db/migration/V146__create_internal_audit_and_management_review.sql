@@ -1,0 +1,264 @@
+-- =========================================================================
+-- V146: 내부심사·자체점검·경영검토 (Internal Audit, Self-Inspection & Management Review)
+-- 규제 표준: ISO 13485:2016 §8.2.4 / §5.6, ISO 22716:2007 §13, ISO 19011:2018, 21 CFR 820.20/820.22
+-- =========================================================================
+
+-- 1. 내부심사 계획 및 관리 원장 (internal_audits)
+CREATE TABLE IF NOT EXISTS internal_audits (
+    id BIGSERIAL PRIMARY KEY,
+    audit_number VARCHAR(50) NOT NULL UNIQUE,
+    title VARCHAR(200) NOT NULL,
+    audit_type VARCHAR(50) NOT NULL,
+    audit_scope VARCHAR(50) NOT NULL,
+    criteria VARCHAR(300),
+    planned_start_date DATE NOT NULL,
+    planned_end_date DATE NOT NULL,
+    actual_start_date DATE,
+    actual_end_date DATE,
+    auditee_department VARCHAR(100) NOT NULL,
+    auditee_lead_name VARCHAR(100) NOT NULL,
+    lead_auditor_name VARCHAR(100) NOT NULL,
+    lead_auditor_department VARCHAR(100) NOT NULL,
+    audit_team_members VARCHAR(300),
+    status VARCHAR(50) NOT NULL DEFAULT 'PLANNED',
+    summary_conclusion TEXT,
+    approved_by VARCHAR(100),
+    approved_date DATE,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(50),
+    last_modified_by VARCHAR(50)
+);
+
+CREATE INDEX IF NOT EXISTS idx_internal_audit_number ON internal_audits(audit_number);
+CREATE INDEX IF NOT EXISTS idx_internal_audit_status ON internal_audits(status);
+CREATE INDEX IF NOT EXISTS idx_internal_audit_planned_date ON internal_audits(planned_start_date);
+CREATE INDEX IF NOT EXISTS idx_internal_audit_dept ON internal_audits(auditee_department);
+
+-- 2. 심사 체크리스트 (audit_checklists)
+CREATE TABLE IF NOT EXISTS audit_checklists (
+    id BIGSERIAL PRIMARY KEY,
+    internal_audit_id BIGINT NOT NULL REFERENCES internal_audits(id) ON DELETE CASCADE,
+    clause_number VARCHAR(100) NOT NULL,
+    checkpoint TEXT NOT NULL,
+    audit_method VARCHAR(100),
+    evidence_notes TEXT,
+    result VARCHAR(50) NOT NULL DEFAULT 'CONFORMING',
+    audited_by VARCHAR(100),
+    audited_date DATE,
+    remarks TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(50),
+    last_modified_by VARCHAR(50)
+);
+
+CREATE INDEX IF NOT EXISTS idx_checklist_audit_id ON audit_checklists(internal_audit_id);
+CREATE INDEX IF NOT EXISTS idx_checklist_result ON audit_checklists(result);
+
+-- 3. 심사 지적사항 원장 (audit_findings)
+CREATE TABLE IF NOT EXISTS audit_findings (
+    id BIGSERIAL PRIMARY KEY,
+    finding_number VARCHAR(50) NOT NULL UNIQUE,
+    internal_audit_id BIGINT NOT NULL REFERENCES internal_audits(id) ON DELETE CASCADE,
+    audit_checklist_id BIGINT REFERENCES audit_checklists(id) ON DELETE SET NULL,
+    clause_number VARCHAR(100) NOT NULL,
+    classification VARCHAR(50) NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'OPEN',
+    finding_details TEXT NOT NULL,
+    requirement_criteria TEXT,
+    auditee_action_plan TEXT,
+    action_due_date DATE,
+    action_completed_date DATE,
+    capa_number VARCHAR(50),
+    verified_by VARCHAR(100),
+    verified_date DATE,
+    verification_notes TEXT,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(50),
+    last_modified_by VARCHAR(50)
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_finding_number ON audit_findings(finding_number);
+CREATE INDEX IF NOT EXISTS idx_audit_finding_audit_id ON audit_findings(internal_audit_id);
+CREATE INDEX IF NOT EXISTS idx_audit_finding_classification ON audit_findings(classification);
+CREATE INDEX IF NOT EXISTS idx_audit_finding_status ON audit_findings(status);
+CREATE INDEX IF NOT EXISTS idx_audit_finding_capa ON audit_findings(capa_number);
+
+-- 4. 경영검토 회의체 원장 (management_reviews)
+CREATE TABLE IF NOT EXISTS management_reviews (
+    id BIGSERIAL PRIMARY KEY,
+    review_number VARCHAR(50) NOT NULL UNIQUE,
+    title VARCHAR(200) NOT NULL,
+    review_type VARCHAR(50) NOT NULL,
+    review_date DATE NOT NULL,
+    chairperson_name VARCHAR(100) NOT NULL,
+    attendees VARCHAR(500) NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'SCHEDULED',
+    audit_results_summary TEXT,
+    customer_feedback_summary TEXT,
+    process_performance_summary TEXT,
+    capa_status_summary TEXT,
+    previous_follow_up_summary TEXT,
+    regulatory_changes_summary TEXT,
+    recommendations_summary TEXT,
+    qms_improvement_decisions TEXT,
+    product_improvement_decisions TEXT,
+    resource_allocation_decisions TEXT,
+    next_review_due_date DATE,
+    approved_by VARCHAR(100),
+    approved_date DATE,
+    minutes_file_url VARCHAR(500),
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(50),
+    last_modified_by VARCHAR(50)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mr_number ON management_reviews(review_number);
+CREATE INDEX IF NOT EXISTS idx_mr_status ON management_reviews(status);
+CREATE INDEX IF NOT EXISTS idx_mr_review_date ON management_reviews(review_date);
+
+-- 5. 권한 부여 (ROLE_ADMIN, ROLE_QUALITY 등)
+INSERT INTO role_permissions (role_key, permission_key)
+SELECT r.role_key, p.permission_key
+FROM (SELECT 'ROLE_ADMIN' AS role_key UNION SELECT 'ROLE_QUALITY' UNION SELECT 'ROLE_QUALITY_TEAM') r
+CROSS JOIN (
+    SELECT 'AUDIT_VIEW' AS permission_key UNION
+    SELECT 'AUDIT_MANAGE'
+) p
+WHERE NOT EXISTS (
+    SELECT 1 FROM role_permissions rp
+    WHERE rp.role_key = r.role_key AND rp.permission_key = p.permission_key
+);
+
+-- 6. 동적 메뉴 등록 (MANUAL_ROOT 직속 자식 메뉴)
+INSERT INTO system_menus (menu_code, menu_name, menu_url, parent_id, menu_order, icon, is_active, created_at, updated_at)
+SELECT 'SYS_INTERNAL_AUDIT', '내부심사·자체점검·경영검토 (ISO 13485/22716)', '/internal-audit', id, 15, '📋', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+FROM system_menus
+WHERE menu_code = 'MANUAL_ROOT'
+AND NOT EXISTS (SELECT 1 FROM system_menus WHERE menu_code = 'SYS_INTERNAL_AUDIT');
+
+-- 7. 화면 사용자 가이드 시드
+INSERT INTO system_page_guides (page_key, title, content, created_at, updated_at)
+SELECT 'internalAudit', '내부심사·자체점검 및 경영검토 운영 표준 가이드',
+'# 내부심사, 화장품 자체점검 및 경영검토 표준 절차서 (SOP-IA-01)
+
+### 1. 개요 및 목적
+본 지침은 ISO 13485:2016 §8.2.4(내부심사), §5.6(경영검토), ISO 22716:2007 §13(자체점검), ISO 19011:2018 및 21 CFR 820.20/820.22 규정을 준수하여, 당사 품질경영시스템(QMS)의 적합성 및 효과성을 독립적·체계적으로 심사하고 최고경영자의 주기적 검토를 수행함을 목적으로 합니다.
+
+### 2. 심사원 독립성 원칙 (Auditor Independence)
+- 심사원은 객관성과 공정성을 보장하기 위해 자신의 업무 또는 소속 부서를 직접 심사할 수 없습니다.
+- 시스템은 선임 심사원 소속 부서와 피심사 부서가 동일한 경우 계획 등록 및 심사원 배정을 원천 차단합니다.
+
+### 3. 지적사항 분류 및 시정조치(CAPA) 연계
+1. **중대 부적합 (Critical)**: 안전성/유효성 치명적 영향 또는 법적 규제 위반. 즉시 CAPA 발행 및 격리.
+2. **주요 부적합 (Major)**: 품질시스템 핵심 요건 결여 또는 반복적 결함. CAPA 연계 의무(미연계 시 종결 차단).
+3. **경미 부적합 (Minor)**: 일회성/경미한 절차 불이행. 원인 분석 및 자체 시정조치 완료.
+4. **권고/관찰사항 (Observation)**: 개선 기회 제안.
+
+### 4. 경영검토 12대 필수 입력 및 3대 필수 출력
+- **12대 필수 입력**: 심사결과, 고객불만 동향, 프로세스/제품 적합성, CAPA 상태, 이전 후속조치, 규제 변경사항 등.
+- **3대 필수 출력**: 1) QMS 효과성 개선 조치, 2) 규제/품질 제품 개선, 3) 인력/설비/예산 자원 배분 결정.',
+CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+WHERE NOT EXISTS (SELECT 1 FROM system_page_guides WHERE page_key = 'internalAudit');
+
+-- 8. 초기 마스터 시드 데이터 등록
+-- 8-1. 내부심사 2건
+INSERT INTO internal_audits (
+    audit_number, title, audit_type, audit_scope, criteria,
+    planned_start_date, planned_end_date, actual_start_date, actual_end_date,
+    auditee_department, auditee_lead_name, lead_auditor_name, lead_auditor_department, audit_team_members,
+    status, summary_conclusion, approved_by, approved_date, created_by, last_modified_by
+) VALUES
+(
+    'IA-20261020-001', '2026년 하반기 생산/품질관리 정기 내부심사', 'REGULAR_INTERNAL', 'MANUFACTURING_PROCESS',
+    'ISO 13485:2016 §7.5/§8.2.4, ISO 22716:2007 §5/§8, 의료기기 제조및품질관리기준',
+    '2026-10-20', '2026-10-22', '2026-10-20', '2026-10-22',
+    '제조공정관리팀', '박생산 부장', '김품질 팀장', '품질보증팀', '이규제 대리, 정심사 연구원',
+    'APPROVED', '전반적인 제조 위생 및 공정관리는 양호하나, 원료 칭량실 차압 기록 주기 및 칭량 오차 관리 기준 명확화 필요 (지적 2건 발행).',
+    '강대표 대표이사', '2026-10-23', 'admin', 'admin'
+),
+(
+    'IA-20261110-001', '2026년 4분기 의료기기 설계개발 & DHF 수시 내부심사', 'SPECIAL_INTERNAL', 'DESIGN_DEVELOPMENT',
+    'ISO 13485:2016 §7.3, 21 CFR 820.30, 의료기기 기준규격',
+    '2026-11-10', '2026-11-12', NULL, NULL,
+    '연구개발본부 (R&D Lab)', '최연구 상무', '김품질 팀장', '품질보증팀', '박규제 과장',
+    'PLANNED', NULL, NULL, NULL, 'admin', 'admin'
+);
+
+-- 8-2. 체크리스트 4건
+INSERT INTO audit_checklists (
+    internal_audit_id, clause_number, checkpoint, audit_method, evidence_notes, result, audited_by, audited_date, remarks, created_by, last_modified_by
+) VALUES
+(
+    1, 'ISO 13485 §7.5.1 / ISO 22716 §5.3', '제조 설비(유화기, 교반조) 일일 점검표 작성 및 청소·소독 상태 확인',
+    '현장실사 및 일일점검표 표본 10부 확인', '유화기 1~3호기 세척 및 소독 일지 누락 없이 적합 기록됨', 'CONFORMING',
+    '김품질 팀장', '2026-10-20', '양호', 'admin', 'admin'
+),
+(
+    1, 'ISO 13485 §6.4.1 / ISO 22716 §4.3', '청정실(Grade C/D) 차압 및 온습도 관리기준 만족 여부',
+    '차압계 육안 확인 및 공조 일지 대조', 'Grade C 조제실 차압(+22Pa) 정상 유지 확인', 'CONFORMING',
+    '김품질 팀장', '2026-10-20', '양호', 'admin', 'admin'
+),
+(
+    1, 'ISO 13485 §7.5.8 / ISO 22716 §8.2', '원료 칭량 시 칭량 전용 스쿠프 교차사용 방지 및 원료 식별 라벨 부착 여부',
+    '칭량 작업 현장 모니터링 및 인터뷰', '기능성 주성분 원료 칭량 시 전용 스쿠프 식별 번호 미부착 상태로 칭량 작업 진행 확인', 'NON_CONFORMING',
+    '김품질 팀장', '2026-10-21', '부적합 발행 (FND-20261020-001)', 'admin', 'admin'
+),
+(
+    1, 'ISO 13485 §7.6 / ISO 22716 §5.4', '제조현장 저울 및 계측기 검교정 필증 유효기간 준수 여부',
+    '정밀전자저울 5대 교정필증 대조', '정밀저울 1대(SN-BL-004) 교정필증 기재일과 교정대장 기록 1일 오기 확인', 'NON_CONFORMING',
+    '김품질 팀장', '2026-10-21', '경미 부적합 발행 (FND-20261020-002)', 'admin', 'admin'
+);
+
+-- 8-3. 심사 지적사항 2건
+INSERT INTO audit_findings (
+    finding_number, internal_audit_id, audit_checklist_id, clause_number, classification, status,
+    finding_details, requirement_criteria, auditee_action_plan, action_due_date, action_completed_date,
+    capa_number, verified_by, verified_date, verification_notes, created_by, last_modified_by
+) VALUES
+(
+    'FND-20261020-001', 1, 3, 'ISO 13485 §7.5.8 / ISO 22716 §8.2', 'MAJOR', 'CAPA_LINKED',
+    '원료 칭량실 내 고위험 기능성 원료 칭량 시 품목 전용 스쿠프 식별 관리 미흡으로 교차오염 위험 발견.',
+    'SOP-MFG-02 원료 칭량 지침: 원료 품목별 전용 칭량 도구를 지정하고 식별 태그를 부착하여 교차오염을 방지해야 함.',
+    '전용 스쿠프 품번 각인 및 원료 칭량실 거치대 개선, 칭량 작업자 전원 재교육 실시.',
+    '2026-11-15', NULL, 'CAPA-202610-001', '김품질 팀장', NULL,
+    'CAPA-202610-001 발행 연계 완료되어 시정조치 진행 중.', 'admin', 'admin'
+),
+(
+    'FND-20261020-002', 1, 4, 'ISO 13485 §7.6', 'MINOR', 'CLOSED',
+    '정밀전자저울(SN-BL-004) 현장 부착 교정필증 만료일 오기재 (2026-10-25 -> 2026-10-24 오타).',
+    '계측기 관리 절차서: 교정 성적서와 현장 부착 필증 일치 필수.',
+    '교정필증 재발행 및 즉시 재부착 조치 완료.',
+    '2026-10-23', '2026-10-22', NULL, '김품질 팀장', '2026-10-22',
+    '현장 필증 교체 및 일치 확인 완료되어 즉시 종결.', 'admin', 'admin'
+);
+
+-- 8-4. 경영검토 1건
+INSERT INTO management_reviews (
+    review_number, title, review_type, review_date, chairperson_name, attendees, status,
+    audit_results_summary, customer_feedback_summary, process_performance_summary, capa_status_summary,
+    previous_follow_up_summary, regulatory_changes_summary, recommendations_summary,
+    qms_improvement_decisions, product_improvement_decisions, resource_allocation_decisions,
+    next_review_due_date, approved_by, approved_date, created_by, last_modified_by
+) VALUES
+(
+    'MR-20261015-001', '2026년도 하반기 정기 품질경영시스템(QMS) 경영검토 회의', 'REGULAR_ANNUAL', '2026-10-15',
+    '강대표 대표이사', '강대표 대표이사, 김품질 이사, 박생산 부장, 최연구 소장, 정영업 상무, 이규제 팀장', 'APPROVED',
+    '2026년 내부심사 계획 6건 중 5건 완료(실시율 83.3%), 부적합 지적 8건 중 7건 시정조치 완료, 주요 부적합 1건 CAPA 진행 중.',
+    '2026년 3분기 누적 고객 불만율 0.12%로 전년 동기 대비 25% 감소, 중대 이상사례 발생 0건.',
+    '제조 공정 합격률 99.4% 달성, 공급업체 정기 감사 결과 15개사 중 14개사 우수 등급 유지.',
+    '연간 총 6건의 CAPA 발행, 5건 조치 완료 및 유효성 검증 완료, 1건 진행 중.',
+    '2026년 상반기 경영검토 의결사항(포장 라인 자동화 센서 도입) 100% 실행 완료.',
+    'EU MDR 2017/745 갱신 심사 준비 및 화장품 안전성 평가자 자격 요건 강화 대응 필요.',
+    '클린룸 환경 모니터링 주기 주 2회에서 일일 점검으로 강화 권고.',
+    '통제문서 관리 시스템(DMS) 고도화 및 교정 불합격 시 자동 출하 격리 인터록 시스템 승인.',
+    '의료기기 2등급 라인 신규 멸균 검증 프로토콜 도입 및 포장 씰링 강도 규격 상향.',
+    '품질보증팀 RA 규제 전문인력 1명 충원 승인 및 청정실 공조기(AHU) 헤파필터 전면 교체 예산 3,000만원 배정.',
+    '2027-04-15', '강대표 대표이사', '2026-10-16', 'admin', 'admin'
+);

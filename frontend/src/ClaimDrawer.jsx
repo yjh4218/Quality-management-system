@@ -19,6 +19,9 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
         itemCode: '',
         productName: '',
         lotNumber: '',
+        isLotUnknown: false,
+        safetyEvalRequired: false,
+        safetyEvaluationId: null,
         manufacturer: '',
         occurrenceQty: 1,
         primaryCategory: '',
@@ -321,6 +324,9 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                 itemCode: claim.itemCode || '',
                 productName: claim.productName || '',
                 lotNumber: claim.lotNumber || '',
+                isLotUnknown: claim.isLotUnknown || false,
+                safetyEvalRequired: claim.safetyEvalRequired || false,
+                safetyEvaluationId: claim.safetyEvaluationId || null,
                 manufacturer: claim.manufacturer || '',
                 occurrenceQty: claim.occurrenceQty || 1,
                 primaryCategory: claim.primaryCategory || '',
@@ -1067,9 +1073,28 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                     </div>
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '20px' }}>
                                         <div className="form-group" style={{ marginBottom: 0 }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <label style={{ margin: 0 }}>로트(LOT)</label>
-                                                {formData.lotNumber && (
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                                <label style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    로트(LOT)
+                                                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#b91c1c', cursor: 'pointer', margin: 0, fontWeight: 'normal' }}>
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={Boolean(formData.isLotUnknown)} 
+                                                            onChange={e => {
+                                                                const checked = e.target.checked;
+                                                                setFormData(prev => ({
+                                                                    ...prev,
+                                                                    isLotUnknown: checked,
+                                                                    lotNumber: checked ? 'LOT-미상' : ''
+                                                                }));
+                                                            }}
+                                                            disabled={!canEditCs}
+                                                            style={{ margin: 0, width: '13px', height: '13px' }}
+                                                        />
+                                                        LOT 미상
+                                                    </label>
+                                                </label>
+                                                {formData.lotNumber && !formData.isLotUnknown && (
                                                     <button 
                                                         type="button" 
                                                         onClick={handleTraceLot} 
@@ -1081,7 +1106,15 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                                     </button>
                                                 )}
                                             </div>
-                                            <input type="text" name="lotNumber" value={formData.lotNumber} onChange={handleChange} disabled={!canEditCs} placeholder="예: 24A01 또는 LOT-202608..." />
+                                            <input 
+                                                type="text" 
+                                                name="lotNumber" 
+                                                value={formData.lotNumber} 
+                                                onChange={handleChange} 
+                                                disabled={!canEditCs || formData.isLotUnknown} 
+                                                placeholder={formData.isLotUnknown ? '소비자 용기/라벨 분실로 LOT 미상 접수' : '예: 24A01 또는 LOT-202608...'} 
+                                                style={formData.isLotUnknown ? { background: '#fef2f2', color: '#b91c1c', borderColor: '#fca5a5' } : {}}
+                                            />
                                         </div>
                                         <div className="form-group" style={{ marginBottom: 0 }}>
                                             <label>발생수량</label>

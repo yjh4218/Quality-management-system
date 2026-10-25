@@ -68,11 +68,14 @@ const BugReportPage = ({ user }) => {
 
     const handleOpenDetail = async (report) => {
         if (!report) return;
-        setSelectedReport(report);
-        if (report.isRead === false || report.isRead === null) {
-            // 상세 열람 시 즉시 로컬 읽음 처리
-            setRowData(prev => prev.map(r => r.id === report.id ? { ...r, isRead: true } : r));
-            setSelectedReport(prev => prev ? { ...prev, isRead: true } : prev);
+        const willMarkAsRead = !report.isRead;
+        const updatedReport = willMarkAsRead ? { ...report, isRead: true, readAt: new Date().toISOString() } : report;
+        
+        setSelectedReport(updatedReport);
+
+        if (willMarkAsRead) {
+            // 상세 열람 시 즉시 로컬 읽음 처리 (낙관적 UI 반영)
+            setRowData(prev => prev.map(r => r.id === report.id ? { ...r, isRead: true, readAt: updatedReport.readAt } : r));
             try {
                 await api.markBugReportsAsReadBatch([report.id]);
                 window.dispatchEvent(new CustomEvent('bug-reports-updated'));
@@ -402,7 +405,7 @@ ${selectedReport.serverError || '없음'}
                             if (e.event?.target?.closest('.ag-selection-checkbox') || e.event?.target?.type === 'checkbox') {
                                 return;
                             }
-                            setSelectedReport(e.data);
+                            handleOpenDetail(e.data);
                         }}
                         getRowStyle={getRowStyle}
                     />
@@ -411,7 +414,34 @@ ${selectedReport.serverError || '없음'}
                 {selectedReport && (
                     <div style={{ width: '500px', minWidth: '500px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #dee2e6', padding: '20px', overflowY: 'auto' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                            <h3 style={{ margin: 0 }}>Report Detail</h3>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <h3 style={{ margin: 0 }}>Report Detail</h3>
+                                {selectedReport.isRead ? (
+                                    <span style={{
+                                        backgroundColor: '#ecfdf5',
+                                        color: '#047857',
+                                        fontSize: '11px',
+                                        fontWeight: '700',
+                                        padding: '2px 8px',
+                                        borderRadius: '12px',
+                                        border: '1px solid #a7f3d0'
+                                    }}>
+                                        ✓ 읽음
+                                    </span>
+                                ) : (
+                                    <span style={{
+                                        backgroundColor: '#fef2f2',
+                                        color: '#b91c1c',
+                                        fontSize: '11px',
+                                        fontWeight: '700',
+                                        padding: '2px 8px',
+                                        borderRadius: '12px',
+                                        border: '1px solid #fecaca'
+                                    }}>
+                                        NEW 미확인
+                                    </span>
+                                )}
+                            </div>
                             <div style={{ display: 'flex', gap: '8px' }}>
                                 <button 
                                     className="btn-small outline" 
@@ -508,6 +538,12 @@ ${selectedReport.serverError || '없음'}
                                 <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
                                     최초 신고: {new Date(selectedReport.createdAt).toLocaleString()} <br />
                                     최근 발생: {selectedReport.updatedAt ? new Date(selectedReport.updatedAt).toLocaleString() : '최초 1회 발생'}
+                                    {selectedReport.readAt && (
+                                        <>
+                                            <br />
+                                            읽음 확인: {new Date(selectedReport.readAt).toLocaleString()} {selectedReport.readBy ? `(${selectedReport.readBy})` : ''}
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         </div>

@@ -1392,14 +1392,26 @@ body {
   font-size: var(--qms-tab-font-size, 12.5px);
   font-weight: 500;
   color: #4b5563;
-  white-space: nowrap;
-  min-width: 90px;
-  max-width: 220px;
+  min-width: 110px;
+  max-width: 280px;
   flex-shrink: 0;
   user-select: none;
   transition: all 0.15s ease;
   height: var(--qms-tab-item-height, 34px);
   align-self: flex-end;
+  position: relative;
+  overflow: hidden; /* 글자가 탭 밖으로 삐져나가 인접 탭을 침범하는 것 원천 차단 */
+}
+
+/* 탭 텍스트 라벨 (말줄임표 및 삐져나옴 방지) */
+.tab-title {
+  flex: 1 1 auto;
+  min-width: 0; /* flexbox 자식의 text-overflow: ellipsis 작동을 위해 필수 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none; /* 부모 .tab-item이 클릭을 전담하여 다른 탭 오작동 방지 */
+  line-height: 1.2;
 }
 
 [data-density="compact"] .tab-item,
@@ -1408,8 +1420,8 @@ body {
     padding: 3px 8px;
     height: 28px;
     font-size: 11.5px;
-    min-width: 75px;
-    max-width: 180px;
+    min-width: 85px;
+    max-width: 220px;
   }
 }
 
@@ -1426,18 +1438,20 @@ body {
   height: 35px;
   margin-bottom: -1px;
   z-index: 2;
+  max-width: 350px; /* 활성 탭은 제목을 더 넓고 시원하게 표시 */
 }
 
 [data-density="compact"] .tab-item.active,
 @media (max-width: 1440px) {
   .tab-item.active {
     height: 29px;
+    max-width: 260px;
   }
 }
 
 .tab-close {
-  margin-left: 2px;
-  font-size: 13px;
+  margin-left: 4px;
+  font-size: 14px;
   width: 18px;
   height: 18px;
   display: flex;
@@ -1447,10 +1461,11 @@ body {
   transition: all 0.2s;
   color: #9ca3af;
   flex-shrink: 0;
+  z-index: 1;
 }
 
 .tab-close:hover {
-  background: rgba(239, 68, 68, 0.1);
+  background: rgba(239, 68, 68, 0.15);
   color: #ef4444;
 }
 

@@ -39,6 +39,8 @@ public class ApprovalService {
     private final ProductionAuditRepository productionAuditRepository;
     private final ManufacturerAuditRepository manufacturerAuditRepository;
     private final ApprovalDocumentReadRepository readRepository;
+    private final ControlledDocumentRepository controlledDocumentRepository;
+    private final NonConformanceReportRepository ncrRepository;
 
     // ═══════════════════════════════════════════
     // 1. Submit (상신)
@@ -55,6 +57,32 @@ public class ApprovalService {
 
         if (Boolean.FALSE.equals(docType.getIsActive())) {
             throw new IllegalStateException("해당 결재 문서 유형('" + docType.getName() + "')은 현재 비활성화(중지) 상태이므로 상신할 수 없습니다.");
+        }
+
+        // 0단계 사전 품질 검사 및 부적합(NCR) 유효성 검증 (D-3 & Step 14: 부적합 및 미해결 NCR 건 결재 상신 우회 차단)
+        if (dto.getSourceRecordId() != null && "MARKET_RELEASE".equalsIgnoreCase(dto.getDocTypeCode())) {
+            wmsInboundRepository.findById(dto.getSourceRecordId()).ifPresent(inbound -> {
+                if ("부적합".equalsIgnoreCase(inbound.getFinalInspectionResult())
+                        || "부적합".equalsIgnoreCase(inbound.getInboundInspectionResult())) {
+                    throw new IllegalStateException("품질 검사 결과가 '부적합'인 입고 건은 출하 승인(MARKET_RELEASE)을 상신할 수 없습니다. (입고 ID: " + dto.getSourceRecordId() + ")");
+                }
+                if (ncrRepository != null) {
+                    List<NcrStatus> blockingStatuses = List.of(
+                            NcrStatus.SUBMITTED, NcrStatus.UNDER_INVESTIGATION,
+                            NcrStatus.DISPOSITION_PENDING, NcrStatus.REWORK_IN_PROGRESS
+                    );
+                    boolean hasBlocking = false;
+                    if (inbound.getLotNumber() != null && !inbound.getLotNumber().isBlank()) {
+                        hasBlocking = !ncrRepository.findByLotNumberAndStatusIn(inbound.getLotNumber(), blockingStatuses).isEmpty();
+                    }
+                    if (!hasBlocking) {
+                        hasBlocking = !ncrRepository.findBySourceRecordIdAndStatusIn(inbound.getId(), blockingStatuses).isEmpty();
+                    }
+                    if (hasBlocking) {
+                        throw new IllegalStateException("해당 입고/LOT 건에 대해 미해결 부적합 보고서(NCR)가 존재하여 출하 승인(MARKET_RELEASE)을 상신할 수 없습니다. (입고 ID: " + dto.getSourceRecordId() + ")");
+                    }
+                }
+            });
         }
 
         ApprovalTemplate template = templateRepository.findByDocTypeCodeAndIsCurrentTrue(dto.getDocTypeCode())
@@ -93,6 +121,15 @@ public class ApprovalService {
                 .build();
 
         ApprovalDocument savedDoc = documentRepository.save(doc);
+
+        // 통제문서(DMS) 상신 연동: 검토중(UNDER_REVIEW) 상태 전이 및 결재문서 ID 연결
+        if (docType != null && "CONTROLLED_DOC".equalsIgnoreCase(docType.getCode()) && dto.getSourceRecordId() != null) {
+            controlledDocumentRepository.findById(dto.getSourceRecordId()).ifPresent(cd -> {
+                cd.setStatus(ControlledDocStatus.UNDER_REVIEW);
+                cd.setApprovalDocId(savedDoc.getId());
+                controlledDocumentRepository.save(cd);
+            });
+        }
 
         // 2. 결재선 인스턴스 생성 및 저장
         List<ApprovalStepInstance> instances = createStepInstances(savedDoc, template, dto, submitter);
@@ -244,25 +281,71 @@ public class ApprovalService {
 
         try {
             if ("MARKET_RELEASE".equalsIgnoreCase(docTypeCode)) {
-                wmsInboundRepository.findById(sourceId).ifPresent(inbound -> {
-                    inbound.setOverallStatus(WmsInbound.OverallStatus.STEP5_FINAL_COMPLETE);
-                    inbound.setFinalInspectionResult("적합");
-                    if (inbound.getQualityDecisionDate() == null || inbound.getQualityDecisionDate().trim().isEmpty()) {
-                        inbound.setQualityDecisionDate(java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE));
+                WmsInbound inbound = wmsInboundRepository.findById(sourceId)
+                        .orElseThrow(() -> new IllegalStateException("출하 승인 대상 입고 건을 찾을 수 없습니다. (입고 ID: " + sourceId + ")"));
+
+                if (inbound.isDeleted()) {
+                    throw new IllegalStateException("삭제된 입고 건은 출하 승인할 수 없습니다. (입고 ID: " + sourceId + ")");
+                }
+
+                // D-3 & Step 14: 완제품 검사 결과 또는 입고 검사 결과가 '부적합'이거나 미해결 NCR이 존재하는 경우 출하 승인 차단
+                if ("부적합".equalsIgnoreCase(inbound.getFinalInspectionResult())
+                        || "부적합".equalsIgnoreCase(inbound.getInboundInspectionResult())) {
+                    throw new IllegalStateException("품질 검사 결과가 '부적합'인 입고 건은 최종 출하 승인 처리할 수 없습니다. (입고 ID: " + sourceId + ")");
+                }
+                if (ncrRepository != null) {
+                    List<NcrStatus> blockingStatuses = List.of(
+                            NcrStatus.SUBMITTED, NcrStatus.UNDER_INVESTIGATION,
+                            NcrStatus.DISPOSITION_PENDING, NcrStatus.REWORK_IN_PROGRESS
+                    );
+                    boolean hasBlocking = false;
+                    if (inbound.getLotNumber() != null && !inbound.getLotNumber().isBlank()) {
+                        hasBlocking = !ncrRepository.findByLotNumberAndStatusIn(inbound.getLotNumber(), blockingStatuses).isEmpty();
                     }
-                    inbound.setLastModifiedBy(doc.getSubmittedBy() != null ? doc.getSubmittedBy().getName() : "전자결재 시스템");
-                    wmsInboundRepository.save(inbound);
-                    log.info("[Approval Hook] MARKET_RELEASE 결재 승인 연동 완료: 입고 ID {}, 상태 5. 최종 검사 완료 전환", sourceId);
-                });
+                    if (!hasBlocking) {
+                        hasBlocking = !ncrRepository.findBySourceRecordIdAndStatusIn(inbound.getId(), blockingStatuses).isEmpty();
+                    }
+                    if (hasBlocking) {
+                        throw new IllegalStateException("해당 입고/LOT 건에 대해 미해결 부적합 보고서(NCR)가 존재하여 최종 출하 승인 처리할 수 없습니다. (입고 ID: " + sourceId + ")");
+                    }
+                }
+
+                inbound.setOverallStatus(WmsInbound.OverallStatus.STEP5_FINAL_COMPLETE);
+                inbound.setFinalInspectionResult("적합");
+                if (inbound.getQualityDecisionDate() == null || inbound.getQualityDecisionDate().trim().isEmpty()) {
+                    inbound.setQualityDecisionDate(java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE));
+                }
+                inbound.setLastModifiedBy(doc.getSubmittedBy() != null ? doc.getSubmittedBy().getName() : "전자결재 시스템");
+                wmsInboundRepository.save(inbound);
+                log.info("[Approval Hook] MARKET_RELEASE 결재 승인 연동 완료: 입고 ID {}, 상태 5. 최종 검사 완료 전환", sourceId);
+
             } else if ("CLAIM_REPORT".equalsIgnoreCase(docTypeCode)) {
-                claimRepository.findById(sourceId).ifPresent(claim -> {
-                    claim.setQualityStatus("5단계 (종결)");
-                    if (claim.getTerminationDate() == null) {
-                        claim.setTerminationDate(java.time.LocalDate.now());
-                    }
-                    claimRepository.save(claim);
-                    log.info("[Approval Hook] CLAIM_REPORT 결재 승인 연동 완료: 클레임 ID {}, 5단계 종결 전환", sourceId);
-                });
+                Claim claim = claimRepository.findById(sourceId)
+                        .orElseThrow(() -> new IllegalStateException("대책보고서 승인 대상 클레임을 찾을 수 없습니다. (클레임 ID: " + sourceId + ")"));
+
+                if (claim.isDeleted()) {
+                    throw new IllegalStateException("삭제된 클레임 건은 대책보고서 승인으로 종결할 수 없습니다. (클레임 ID: " + sourceId + ")");
+                }
+
+                // D-4: 원인 분석 및 재발방지 대책 수립 여부 검증 (조사 미완료 건 강제 종결 차단)
+                boolean hasRootCause = (claim.getRootCauseAnalysis() != null && !claim.getRootCauseAnalysis().trim().isEmpty())
+                        || (claim.getMfrRootCauseAnalysis() != null && !claim.getMfrRootCauseAnalysis().trim().isEmpty());
+                boolean hasPreventative = (claim.getPreventativeAction() != null && !claim.getPreventativeAction().trim().isEmpty())
+                        || (claim.getMfrPreventativeAction() != null && !claim.getMfrPreventativeAction().trim().isEmpty());
+                boolean isAlreadyInResolvingStage = claim.getQualityStatus() != null &&
+                        (claim.getQualityStatus().contains("대책") || claim.getQualityStatus().contains("원인") || claim.getQualityStatus().contains("종결"));
+
+                if (!isAlreadyInResolvingStage && !hasRootCause && !hasPreventative) {
+                    throw new IllegalStateException("원인 분석 및 대책 수립이 완료되지 않은 클레임은 대책보고서 승인으로 종결할 수 없습니다. (클레임 ID: " + sourceId + ")");
+                }
+
+                claim.setQualityStatus("5단계 (종결)");
+                if (claim.getTerminationDate() == null) {
+                    claim.setTerminationDate(java.time.LocalDate.now());
+                }
+                claimRepository.save(claim);
+                log.info("[Approval Hook] CLAIM_REPORT 결재 승인 연동 완료: 클레임 ID {}, 5단계 종결 전환", sourceId);
+
             } else if ("PROD_AUDIT".equalsIgnoreCase(docTypeCode)) {
                 productionAuditRepository.findById(sourceId).ifPresent(audit -> {
                     audit.setStatus("APPROVED");
@@ -275,9 +358,43 @@ public class ApprovalService {
                     manufacturerAuditRepository.save(audit);
                     log.info("[Approval Hook] MFR_AUDIT 결재 승인 연동 완료: 제조사Audit ID {}, 승인완료 기록", sourceId);
                 });
+            } else if ("CONTROLLED_DOC".equalsIgnoreCase(docTypeCode)) {
+                controlledDocumentRepository.findById(sourceId).ifPresent(cd -> {
+                    controlledDocumentRepository.findFirstByDocNoAndStatusAndIsDeletedFalse(cd.getDocNo(), ControlledDocStatus.EFFECTIVE)
+                            .ifPresent(existingEffective -> {
+                                if (!existingEffective.getId().equals(cd.getId())) {
+                                    existingEffective.setStatus(ControlledDocStatus.SUPERSEDED);
+                                    existingEffective.setUpdatedBy("전자결재 최종승인");
+                                    controlledDocumentRepository.save(existingEffective);
+                                }
+                            });
+                    cd.setStatus(ControlledDocStatus.EFFECTIVE);
+                    if (cd.getEffectiveDate() == null) {
+                        cd.setEffectiveDate(java.time.LocalDate.now());
+                    }
+                    cd.setApprovalDocId(doc.getId());
+                    cd.setUpdatedBy("전자결재 시스템");
+                    controlledDocumentRepository.save(cd);
+                    log.info("[Approval Hook] CONTROLLED_DOC 결재 승인 연동 완료: 통제문서 ID {}, 배포(EFFECTIVE) 전환", sourceId);
+                });
             }
         } catch (Exception ex) {
+            // D-5: 연동 실패 시 예외를 삼키지 않고 감사로그 기록 후 예외를 전파하여 트랜잭션 롤백 보장
             log.error("[Approval Hook] 사후 연동 처리 중 오류 발생 (문서 ID: {}, 유형: {}): {}", doc.getId(), docTypeCode, ex.getMessage(), ex);
+            try {
+                auditLogService.logAction(
+                        doc.getSubmittedBy() != null ? doc.getSubmittedBy().getUsername() : "system",
+                        "APPROVAL_HOOK_ERROR",
+                        String.format("결재 승인 사후 연동 실패 (문서 ID: %d, 유형: %s, 원천 ID: %d)", doc.getId(), docTypeCode, sourceId),
+                        ex.getMessage() != null ? ex.getMessage() : "Unknown error"
+                );
+            } catch (Exception logEx) {
+                log.warn("[Approval Hook] 감사로그 기록 실패: {}", logEx.getMessage());
+            }
+            if (ex instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw new IllegalStateException("결재 승인 사후 연동 처리 중 오류가 발생하여 승인이 롤백되었습니다: " + ex.getMessage(), ex);
         }
     }
 
@@ -353,6 +470,14 @@ public class ApprovalService {
                 "결재 반려: " + doc.getTitle(),
                 String.format("상신하신 결재 문서 '%s'가 %s님에 의해 반려되었습니다. (사유: %s)",
                         doc.getTitle(), approver.getName(), dto.getComment().trim()));
+
+        // 통제문서(DMS) 반려 연동: 반려 시 작성중(DRAFT) 상태로 환원
+        if (doc.getDocType() != null && "CONTROLLED_DOC".equalsIgnoreCase(doc.getDocType().getCode()) && doc.getSourceRecordId() != null) {
+            controlledDocumentRepository.findById(doc.getSourceRecordId()).ifPresent(cd -> {
+                cd.setStatus(ControlledDocStatus.DRAFT);
+                controlledDocumentRepository.save(cd);
+            });
+        }
 
         return getDocumentDetail(documentId, username);
     }

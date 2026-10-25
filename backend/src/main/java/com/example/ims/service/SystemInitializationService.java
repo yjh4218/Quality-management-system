@@ -266,6 +266,16 @@ public class SystemInitializationService {
         String allActions = "[\"VIEW\",\"EDIT\",\"DELETE\"]";
         String viewOnly = "[\"VIEW\"]";
 
+        String eqmsAll = ",\"sopManual\":" + allActions + ",\"regulatoryGuide\":" + allActions 
+                + ",\"controlledDocuments\":" + allActions + ",\"trainingManagement\":" + allActions 
+                + ",\"riskManagement\":" + allActions + ",\"designControls\":" + allActions 
+                + ",\"changeControl\":" + allActions + ",\"supplierManagement\":" + allActions 
+                + ",\"traceabilityManagement\":" + allActions + ",\"ncrManagement\":" + allActions 
+                + ",\"complaintSafetyManagement\":" + allActions + ",\"capaManagement\":" + allActions 
+                + ",\"vigilanceRecallManagement\":" + allActions + ",\"facilityManagement\":" + allActions 
+                + ",\"internalAuditManagement\":" + allActions + ",\"officialRecords\":" + allActions 
+                + ",\"csvValidation\":" + allActions;
+
         String adminJson = "{\"dashboard\":" + viewOnly + ",\"users\":" + allActions + ",\"logs\":" + viewOnly
                 + ",\"roles\":" + allActions + ",\"brands\":" + allActions + ",\"manufacturers\":" + allActions
                 + ",\"salesChannels\":" + allActions + ",\"products\":" + allActions + ",\"bomMaster\":" + allActions
@@ -273,12 +283,12 @@ public class SystemInitializationService {
                 + ",\"quality\":" + allActions + ",\"releaseRecord\":" + allActions + ",\"claims\":"
                 + allActions + ",\"claimDashboard\":" + viewOnly + ",\"ingredientCompliance\":" + allActions 
                 + ",\"qualityPhotoAudit\":" + allActions + ",\"announcements\":" + allActions + ",\"announcementCategories\":" + allActions 
-                + ",\"notifications\":" + allActions + "}";
+                + ",\"notifications\":" + allActions + eqmsAll + "}";
         String qualityJson = "{\"dashboard\":" + viewOnly + ",\"products\":" + viewOnly + ",\"quality\":" + allActions
                 + ",\"releaseRecord\":" + allActions + ",\"claims\":" + allActions + ",\"claimDashboard\":" + viewOnly
                 + ",\"ingredientCompliance\":" + allActions + ",\"qualityPhotoAudit\":" + allActions 
                 + ",\"announcements\":" + viewOnly + ",\"announcementCategories\":" + viewOnly 
-                + ",\"notifications\":" + allActions + "}";
+                + ",\"notifications\":" + allActions + eqmsAll + "}";
         String salesJson = "{\"dashboard\":" + viewOnly + ",\"products\":" + viewOnly + ",\"quality\":" + viewOnly
                 + ",\"claims\":" + viewOnly + ",\"claimDashboard\":" + viewOnly + ",\"announcements\":" + viewOnly 
                 + ",\"notifications\":" + viewOnly + "}";
@@ -290,7 +300,7 @@ public class SystemInitializationService {
                 + allActions + ",\"quality\":" + allActions + ",\"releaseRecord\":" + allActions + ",\"claims\":"
                 + allActions + ",\"claimDashboard\":" + viewOnly + ",\"qualityPhotoAudit\":" + allActions 
                 + ",\"announcements\":" + allActions + ",\"announcementCategories\":" + allActions 
-                + ",\"notifications\":" + allActions + "}";
+                + ",\"notifications\":" + allActions + eqmsAll + "}";
 
         String adminPerms = "[\"AUDIT_DISCLOSE_MANAGE\",\"PRODUCT_DISCLOSE_MANAGE\",\"PRODUCT_MASTER_MANAGE\",\"DASHBOARD_QUALITY_VIEW\",\"DASHBOARD_SALES_VIEW\",\"SENSITIVE_DATA_VIEW\",\"PRODUCT_PACKAGING_VIEW\",\"INGREDIENT_SAFETY_VIEW\",\"ANNOUNCEMENT_ALL_VIEW\"]";
         String qualityPerms = "[\"AUDIT_DISCLOSE_MANAGE\",\"PRODUCT_DISCLOSE_MANAGE\",\"PRODUCT_MASTER_MANAGE\",\"DASHBOARD_QUALITY_VIEW\",\"SENSITIVE_DATA_VIEW\",\"PRODUCT_PACKAGING_VIEW\",\"INGREDIENT_SAFETY_VIEW\",\"ANNOUNCEMENT_ALL_VIEW\"]";
@@ -482,6 +492,18 @@ public class SystemInitializationService {
         // 8. 제조사 전용 메뉴
         insertOrUpdateGuide("manufacturerGuide", "📖 제조사 담당자 전용 업무 설명서",
                 "[{\"subtitle\":\"생산감리 사진 실시간 제출 필수\", \"content\":\"제조 공장 담당자는 신제품 생산 가동 즉시, 생산감리 화면에서 공정별 현장 증빙 사진(원료 칭량, 제조 가마, 최종 완제품 등)을 시스템에 직접 촬영/업로드하여 본사의 검토 승인을 득해야 합니다.\"}, {\"subtitle\":\"수입 검사 시험성적서(COA) 첨부 필수\", \"content\":\"원부자재 및 벌크 입고 예정 건에 대해서, 공장 검사실에서 발행된 자체 시험성적서(COA) 원본 PDF 파일을 제품 입고 전에 QMS 시스템에 반드시 등록해야 본사 창고로 정상 입고 입고 처리가 허용됩니다.\"}, {\"subtitle\":\"품질 불량 클레임 피드백 의무\", \"content\":\"본사로부터 품질 불량에 따른 클레임 대응 통보를 수신하면, 24시간 이내에 본 시스템의 클레임 상세 페이지 내에서 공장 측 1차 원인 규명서 및 시정 조치 답변안을 성실히 작성하여 전송할 의무가 있습니다.\"}]");
+
+        // 9. 표준 업무 매뉴얼 및 규제 표준 가이드 (DEC-03, DEC-10)
+        insertOrUpdateGuide("medicalDevices", "🩺 의료기기 품목 마스터 및 UDI 관리 가이드",
+                "[{\"subtitle\":\"의료기기 품목 분류 및 등급 체계\", \"content\":\"의료기기법 및 ISO 13485에 따라 1등급(신고), 2등급(인증), 3~4등급(허가)으로 구분 관리하며, 품목허가번호와 사용목적/적응증을 체계적으로 등록합니다.\"}, {\"subtitle\":\"고유기기식별코드(UDI) 및 멸균/SW 관리\", \"content\":\"기기식별자(UDI-DI)와 생산식별자(UDI-PI: LOT/유효기한/일련번호) 체계를 준수하고, 멸균 방식 및 SaMD/SiMD 소프트웨어 버전을 추적 관리합니다.\"}]");
+        insertOrUpdateGuide("sopManual", "📖 표준 품질경영 매뉴얼 (SOP) 가이드",
+                "[{\"subtitle\":\"ISO 13485 & ISO 22716 표준 업무 절차서 통합\", \"content\":\"화장품 우수제조기준(ISO 22716)과 의료기기 품질경영시스템(ISO 13485)에 따른 표준 운영 절차서(SOP) 전문을 분야별로 열람하고 최신 개정 이력을 확인합니다.\"}, {\"subtitle\":\"부서별 업무 지침 및 양식 연계\", \"content\":\"품질보증, 생산관리, 시험검사, 변경관리, 부적합 및 시정조치(CAPA)에 대한 표준 지침을 전자화하여 즉시 검색하고 실무에 적용할 수 있습니다.\"}]");
+        insertOrUpdateGuide("regulatoryGuide", "⚖️ 규제 표준 및 인허가 가이드",
+                "[{\"subtitle\":\"국내외 규제 요건 비교 및 해설\", \"content\":\"대한민국 식약처(MFDS), 미국 FDA, 유럽 MDR 등 글로벌 주요 규제 기관의 인허가 및 사후관리 요건을 상세히 안내합니다.\"}, {\"subtitle\":\"품질책임자 및 관리자 법정 의무\", \"content\":\"화장품 책임판매관리자 및 의료기기 품질책임자의 법정 직무 범위와 안전관리 조치 의무사항을 일목요연하게 제공합니다.\"}]");
+        insertOrUpdateGuide("controlledDocuments", "📂 통제문서 및 개정관리(DMS) 가이드",
+                "[{\"subtitle\":\"통제문서 라이프사이클 및 개정 추적성\", \"content\":\"ISO 13485 §4.2.4 및 ISO 22716 §17에 부합하도록 초안(DRAFT) 작성부터 검토, 결재 승인, 배포(EFFECTIVE), 구버전 개정대체(SUPERSEDED), 폐기(OBSOLETE)까지 전 수명주기를 완벽히 추적합니다.\"}, {\"subtitle\":\"문서화 계층 체계 및 표준 서식\", \"content\":\"Level 1(품질매뉴얼), Level 2(SOP/DHF/DMR), Level 3(작업지침서/VR), Level 4(양식/서식/대외규격) 4단계 문서 체계로 품질 문서를 분류하고 변경 사유와 이력을 체계적으로 관리합니다.\"}]");
+        insertOrUpdateGuide("riskManagement", "⚠️ ISO 14971 의료기기 위험관리 가이드",
+                "[{\"subtitle\":\"위해요인 3계층 모델 (Hazard-Hazardous Situation-Harm)\", \"content\":\"ISO 14971:2019 규정에 따라 잠재적 위해요인(근원)을 식별하고, 인체나 환경이 위해요인에 노출되는 위해상황 및 최종 초래되는 신체적 상해/피해(Harm)를 3계층 구조로 체계적 분석합니다.\"}, {\"subtitle\":\"위험 통제 조치의 우선순위 (Risk Control Priority)\", \"content\":\"1순위: 설계에 의한 본질적 안전(Inherent Safety) -> 2순위: 기기 자체 또는 제조공정의 보호 수단(Protective Measures) -> 3순위: 안전을 위한 정보제공(Information for Safety/라벨·매뉴얼) 순으로 통제 조치를 강구합니다.\"}, {\"subtitle\":\"잔여위험 평가 및 종합 수용성 판정\", \"content\":\"통제 조치 적용 후 잔여 심각도와 발생확률을 재평가하여 5x5 위험 매트릭스상 모든 잔여위험이 수용 가능한 영역(ACCEPTABLE/ALARP)으로 저감되었는지 입증하고, 필요 시 이익-위험 분석(Benefit-Risk Analysis)을 수행합니다.\"}]");
     }
 
     private void insertOrUpdateGuide(String key, String title, String sectionsJson) {
@@ -2153,8 +2175,20 @@ public class SystemInitializationService {
                 org.springframework.core.io.Resource res126 = new org.springframework.core.io.ClassPathResource("db/migration/V126__seed_product_bom_inquiry_submenu.sql");
                 org.springframework.core.io.Resource res127 = new org.springframework.core.io.ClassPathResource("db/migration/V127__reposition_and_rename_menu_management.sql");
                 org.springframework.core.io.Resource res128 = new org.springframework.core.io.ClassPathResource("db/migration/V128__rename_menu_management_to_screen_and_menu.sql");
+                org.springframework.core.io.Resource res133 = new org.springframework.core.io.ClassPathResource("db/migration/V133__create_medical_device_products_and_manual_menus.sql");
+                org.springframework.core.io.Resource res134 = new org.springframework.core.io.ClassPathResource("db/migration/V134__create_controlled_documents_and_dms_menus.sql");
+                org.springframework.core.io.Resource res135 = new org.springframework.core.io.ClassPathResource("db/migration/V135__create_training_and_competence_management.sql");
+                org.springframework.core.io.Resource res136 = new org.springframework.core.io.ClassPathResource("db/migration/V136__create_risk_management_iso14971.sql");
+                org.springframework.core.io.Resource res137 = new org.springframework.core.io.ClassPathResource("db/migration/V137__create_design_controls_dhf.sql");
+                org.springframework.core.io.Resource res138 = new org.springframework.core.io.ClassPathResource("db/migration/V138__create_change_control_management.sql");
+                org.springframework.core.io.Resource res139 = new org.springframework.core.io.ClassPathResource("db/migration/V139__create_supplier_management.sql");
+                org.springframework.core.io.Resource res140 = new org.springframework.core.io.ClassPathResource("db/migration/V140__create_traceability_and_external_integration.sql");
+                org.springframework.core.io.Resource res141 = new org.springframework.core.io.ClassPathResource("db/migration/V141__create_non_conformance_and_release_controls.sql");
+                org.springframework.core.io.Resource res142 = new org.springframework.core.io.ClassPathResource("db/migration/V142__create_complaint_and_adverse_event_management.sql");
+                org.springframework.core.io.Resource res143 = new org.springframework.core.io.ClassPathResource("db/migration/V143__create_capa_management.sql");
+                org.springframework.core.io.Resource res144 = new org.springframework.core.io.ClassPathResource("db/migration/V144__create_vigilance_and_recall_management.sql");
                 org.springframework.jdbc.datasource.init.ResourceDatabasePopulator populator = 
-                    new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(res119, res120, res121, res122, res123, res124, res125, res126, res127, res128);
+                    new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(res119, res120, res121, res122, res123, res124, res125, res126, res127, res128, res133, res134, res135, res136, res137, res138, res139, res140, res141, res142, res143, res144);
                 populator.setContinueOnError(true);
                 populator.execute(jdbcTemplate.getDataSource());
                 log.info(">>>> [SYSTEM INIT] Dynamic screens, columns, menus, and dividers seeded/verified successfully.");

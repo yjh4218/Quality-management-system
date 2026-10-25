@@ -392,8 +392,12 @@ const gridOptions = {
 
 | 금지 | 이유 |
 |------|------|
-| `window.alert()` / `window.confirm()` 직접 사용 | 커스텀 Dialog 컴포넌트 사용 |
-| 인라인 스타일 (`style={{}}`) 남용 | Tailwind 클래스로 대체 |
-| API 호출을 컴포넌트 내 직접 작성 | 반드시 `services/` 레이어 분리 |
+| `window.alert()` / `window.confirm()` 직접 사용 | `react-toastify` 또는 커스텀 Dialog 컴포넌트 사용 |
+| 미컴파일 Tailwind 클래스 (`grid-cols-*`, `bg-white` 등) 단독 사용 | 현재 Vite 빌드 환경에 Tailwind 미탑재로 스타일 100% 무시됨. `ControlledDocumentManagementPage.jsx`와 같이 표준 인라인 스타일(`style={{}}`) 및 `index.css` 토큰 사용 |
+| AG Grid `rowHeight` 임의 축소 / 미지정 | `rowHeight={54}`, `headerHeight={48}`, `theme="legacy"` 필수 준수 |
+| 검색바 [초기화] / [조회] 배치 역전 | `[♻️ 초기화]` outline 버튼이 항상 왼쪽, `[🔍 조회]` Primary 버튼이 항상 우측 끝 |
+| 팝업 하단 버튼 배치 역전 | `[취소]` outline 버튼이 항상 왼쪽, `[저장/등록/확인]` Primary 버튼이 항상 우측 끝 |
+| API 호출을 컴포넌트 내 직접 작성 | 반드시 `api.js` 레이어 분리 |
 | 상태 관리 없는 폼 | `useState` 또는 `react-hook-form` 사용 |
 | Loading/Toast 없는 비동기 처리 | UX 표준 위반 |
+

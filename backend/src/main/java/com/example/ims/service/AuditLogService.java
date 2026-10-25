@@ -38,7 +38,7 @@ public class AuditLogService {
     // 순환 참조 방지를 위해 서비스 대신 레포지토리 직접 사용 또는 이벤트 핸들링만 수행
     // productService, claimService, wmsService는 더 이상 직접 참조하지 않음
 
-    @org.springframework.scheduling.annotation.Async("auditExecutor")
+    // [D-6 해결] 비동기 분기 유실 방지: 트랜잭션 커밋 완료 후 동기 실행하여 큐 포화 유실 0% 달성
     @org.springframework.transaction.event.TransactionalEventListener(phase = org.springframework.transaction.event.TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void handleEntityChangeEvent(EntityChangeEvent event) {
         log.debug("[AUDIT] Event received: {} on {} (ID: {})", event.getAction(), event.getEntityType(), event.getEntityId());
@@ -93,6 +93,9 @@ public class AuditLogService {
     public void log(String entityType, Long entityId, String action, String modifier, 
             Long modifierId, String modifierUsername, String modifierName, String modifierCompany,
             String description, String oldValue, String newValue, String changeDetail) {
+        LocalDateTime now = LocalDateTime.now();
+        String hash = AuditLog.calculateHash(entityType, entityId, action, modifier, now, description);
+
         AuditLog auditLog = AuditLog.builder()
                 .entityType(entityType != null ? entityType : "GENERAL")
                 .entityId(entityId != null ? entityId : 0L)
@@ -106,7 +109,8 @@ public class AuditLogService {
                 .oldValue(oldValue)
                 .newValue(newValue)
                 .changeDetail(changeDetail)
-                .modifiedAt(LocalDateTime.now())
+                .modifiedAt(now)
+                .recordHash(hash)
                 .build();
         auditLogRepository.save(auditLog);
     }
@@ -125,7 +129,6 @@ public class AuditLogService {
     /**
      * [추가] 간편 액션 로그 기록용 헬퍼 메서드 (SecurityContext 자동 추출 포함)
      */
-    @org.springframework.scheduling.annotation.Async("auditExecutor")
     @Transactional
     public void logAction(String modifier, String action, String description, String changeDetail) {
         String effectiveModifier = modifier;
@@ -145,7 +148,6 @@ public class AuditLogService {
         log(action, null, action, effectiveModifier, null, effectiveModifier, effectiveModifier, null, description, null, null, changeDetail);
     }
 
-    @org.springframework.scheduling.annotation.Async("auditExecutor")
     @Transactional
     public void logEntityChange(String entityType, Long entityId, String action, String modifier,
             Long modifierId, String modifierUsername, String modifierName, String modifierCompany,
@@ -224,63 +226,16 @@ public class AuditLogService {
         return auditLogRepository.searchDataLogs(processedType, processedSearch, start, end, pageable);
     }
 
+    /**
+     * [D-7 해결] 의료기기 GMP 및 21 CFR Part 11 데이터 무결성 요건에 따라
+     * 불완전한 JSON 스냅샷으로 기존 엔티티를 직접 덮어쓰는 행위는 금지됩니다.
+     * 모든 데이터 정정은 승인된 변경관리(Change Control) 및 개정(Revision) 이력 추적을 통해 이루어져야 합니다.
+     */
+    @Deprecated
     @Transactional
     public void restoreFromLog(Long logId, String modifier) {
-        AuditLog logEntry = auditLogRepository.findById(logId)
-                .orElseThrow(() -> new RuntimeException("Log entry not found"));
-        
-        String json = logEntry.getOldValue();
-        if (json == null || "-".equals(json) || json.startsWith("SNAPSHOT_")) {
-            throw new RuntimeException("Data for this entry is not restorable or is only a snapshot reference.");
-        }
-
-        try {
-            Long entityId = logEntry.getEntityId();
-            if ("PRODUCT".equals(logEntry.getEntityType())) {
-                Product existing = productRepository.findById(entityId).orElseThrow(() -> new RuntimeException("Product not found"));
-                Product snapshot = objectMapper.readValue(json, Product.class);
-                snapshot.setId(entityId);
-                // Preserve non-serialized binary/file and relationship references
-                if (snapshot.getImagePath() == null) snapshot.setImagePath(existing.getImagePath());
-                if (snapshot.getCertMsds() == null) snapshot.setCertMsds(existing.getCertMsds());
-                if (snapshot.getCertStandard() == null) snapshot.setCertStandard(existing.getCertStandard());
-                if (snapshot.getCertFunction() == null) snapshot.setCertFunction(existing.getCertFunction());
-                if (snapshot.getCertExpiry() == null) snapshot.setCertExpiry(existing.getCertExpiry());
-                if (snapshot.getIngredients() == null || snapshot.getIngredients().isEmpty()) snapshot.setIngredients(existing.getIngredients());
-                if (snapshot.getManufacturerInfo() == null) snapshot.setManufacturerInfo(existing.getManufacturerInfo());
-                if (snapshot.getChannels() == null || snapshot.getChannels().isEmpty()) snapshot.setChannels(existing.getChannels());
-                productRepository.save(snapshot);
-            } else if ("CLAIM".equals(logEntry.getEntityType())) {
-                Claim existing = claimRepository.findById(entityId).orElseThrow(() -> new RuntimeException("Claim not found"));
-                Claim snapshot = objectMapper.readValue(json, Claim.class);
-                snapshot.setId(entityId);
-                if (snapshot.getClaimPhotos() == null || snapshot.getClaimPhotos().isEmpty()) snapshot.setClaimPhotos(existing.getClaimPhotos());
-                if (snapshot.getManufacturerResponsePdf() == null) snapshot.setManufacturerResponsePdf(existing.getManufacturerResponsePdf());
-                claimRepository.save(snapshot);
-            } else if ("WMS_INBOUND".equals(logEntry.getEntityType())) {
-                if (!wmsInboundRepository.existsById(entityId)) {
-                    throw new RuntimeException("WMS Inbound not found");
-                }
-                com.example.ims.entity.WmsInbound snapshot = objectMapper.readValue(json, com.example.ims.entity.WmsInbound.class);
-                snapshot.setId(entityId);
-                wmsInboundRepository.save(snapshot);
-            } else if ("PRODUCTION_AUDIT".equals(logEntry.getEntityType())) {
-                if (!productionAuditRepository.existsById(entityId)) {
-                    throw new RuntimeException("Production Audit not found");
-                }
-                com.example.ims.entity.ProductionAudit snapshot = objectMapper.readValue(json, com.example.ims.entity.ProductionAudit.class);
-                snapshot.setId(entityId);
-                productionAuditRepository.save(snapshot);
-            }
-
-            log(logEntry.getEntityType(), entityId, "RESTORE", modifier, 
-                null, modifier, null, null,
-                "Restored from Log ID: " + logId, "-", "Restored to previous state", null);
-            
-        } catch (Exception e) {
-            log.error("Restore failed: {}", e.getMessage());
-            throw new RuntimeException("Restore failed: " + e.getMessage());
-        }
+        throw new UnsupportedOperationException(
+                "의료기기 GMP 데이터 무결성 규정(ISO 13485 / 21 CFR Part 11)에 따라 스냅샷 직접 덮어쓰기 복원은 지원되지 않으며, 정식 변경관리 및 개정 승인 절차를 통해 수행해야 합니다.");
     }
 
     @Transactional(readOnly = true)
@@ -311,7 +266,8 @@ public class AuditLogService {
     }
 
     /**
-     * 6개월 이상 된 오래된 로그를 별도 테이블로 이전하고 삭제합니다.
+     * 6개월 이상 된 오래된 로그를 별도 아카이브 테이블로 안전하게 복제 보존합니다.
+     * (ISO 13485 / ISO 22716 감사추적 영구 보존 규정에 따라 메인 테이블 물리 삭제는 전면 폐지 - 결함 D-8 해결)
      */
     @Transactional
     public void archiveOldLogs() {
@@ -320,12 +276,7 @@ public class AuditLogService {
         
         try {
             int archivedCount = auditLogRepository.archiveOldLogs(cutOffDate);
-            log.info("[ARCHIVE] Successfully moved {} logs to archive table.", archivedCount);
-            
-            if (archivedCount > 0) {
-                int deletedCount = auditLogRepository.deleteArchivedLogs(cutOffDate);
-                log.info("[ARCHIVE] Successfully deleted {} logs from main table.", deletedCount);
-            }
+            log.info("[ARCHIVE] Successfully copied {} logs to archive table (retaining originals in main table for regulatory audit trail).", archivedCount);
         } catch (Exception e) {
             log.error("[ARCHIVE] Archival process failed: {}", e.getMessage());
             throw e;

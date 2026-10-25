@@ -75,6 +75,14 @@ public class Product {
     private ProductType productType;
 
     /**
+     * 제품군 분류 (기본값 COSMETICS - 기존 화장품 호환성 100% 보존)
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "product_family", length = 30)
+    @Builder.Default
+    private ProductFamily productFamily = ProductFamily.COSMETICS;
+
+    /**
      * Reference to the Brand entity.
      * 브랜드 정보와 연관 관계 매핑
      */

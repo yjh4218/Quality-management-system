@@ -45,9 +45,9 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
     List<AuditLog> findTop50ByModifiedAtAfterOrderByModifiedAtDesc(LocalDateTime modifiedAt);
 
     @org.springframework.data.jpa.repository.Modifying
-    @org.springframework.data.jpa.repository.Query(value = "INSERT INTO audit_logs_archive (id, entity_type, entity_id, action, modifier, modified_at, description, old_value, new_value) " +
-            "SELECT id, entity_type, entity_id, action, modifier, modified_at, description, old_value, new_value FROM audit_logs " +
-            "WHERE modified_at < :cutOffDate", nativeQuery = true)
+    @org.springframework.data.jpa.repository.Query(value = "INSERT INTO audit_logs_archive (id, entity_type, entity_id, action, modifier, modifier_id, modifier_username, modifier_name, modifier_company, modified_at, description, old_value, new_value, change_detail, record_hash) " +
+            "SELECT a.id, a.entity_type, a.entity_id, a.action, a.modifier, a.modifier_id, a.modifier_username, a.modifier_name, a.modifier_company, a.modified_at, a.description, a.old_value, a.new_value, a.change_detail, a.record_hash FROM audit_logs a " +
+            "WHERE a.modified_at < :cutOffDate AND NOT EXISTS (SELECT 1 FROM audit_logs_archive arch WHERE arch.id = a.id)", nativeQuery = true)
     int archiveOldLogs(@org.springframework.data.repository.query.Param("cutOffDate") LocalDateTime cutOffDate);
 
     @org.springframework.data.jpa.repository.Modifying

@@ -55,6 +55,24 @@ const SystemBenchmarkPage = lazyRetry(() => import('./SystemBenchmarkPage.jsx'))
 const ProductBomInquiryPage = lazyRetry(() => import('./ProductBomInquiryPage.jsx'));
 const DynamicScreenRenderer = lazyRetry(() => import('./DynamicScreenRenderer.jsx'));
 const ScreenMenuManagementPage = lazyRetry(() => import('./ScreenMenuManagementPage.jsx'));
+const MedicalDeviceManagementPage = lazyRetry(() => import('./MedicalDeviceManagementPage.jsx'));
+const SopManualPage = lazyRetry(() => import('./SopManualPage.jsx'));
+const RegulatoryGuidePage = lazyRetry(() => import('./RegulatoryGuidePage.jsx'));
+const ControlledDocumentManagementPage = lazyRetry(() => import('./ControlledDocumentManagementPage.jsx'));
+const TrainingManagementPage = lazyRetry(() => import('./TrainingManagementPage.jsx'));
+const RiskManagementPage = lazyRetry(() => import('./RiskManagementPage.jsx'));
+const DesignControlManagementPage = lazyRetry(() => import('./DesignControlManagementPage.jsx'));
+const ChangeControlManagementPage = lazyRetry(() => import('./ChangeControlManagementPage.jsx'));
+const SupplierManagementPage = lazyRetry(() => import('./SupplierManagementPage.jsx'));
+const TraceabilityManagementPage = lazyRetry(() => import('./TraceabilityManagementPage.jsx'));
+const NonConformanceManagementPage = lazyRetry(() => import('./NonConformanceManagementPage.jsx'));
+const ComplaintSafetyManagementPage = lazyRetry(() => import('./ComplaintSafetyManagementPage.jsx'));
+const CapaManagementPage = lazyRetry(() => import('./CapaManagementPage.jsx'));
+const VigilanceRecallManagementPage = lazyRetry(() => import('./VigilanceRecallManagementPage.jsx'));
+const FacilityManagementPage = lazyRetry(() => import('./FacilityManagementPage.jsx'));
+const InternalAuditManagementPage = lazyRetry(() => import('./InternalAuditManagementPage.jsx'));
+const OfficialRecordPolicyPage = lazyRetry(() => import('./OfficialRecordPolicyPage.jsx'));
+const CsvValidationPage = lazyRetry(() => import('./CsvValidationPage.jsx'));
 
 import BomCategoryManagementPage from './BomCategoryManagementPage.jsx';
 import PackagingTemplatePage from './PackagingTemplatePage.jsx';
@@ -140,7 +158,25 @@ const PAGE_INFO = {
     dynScreenProduct: { title: '📋 제품 메타 그리드 (Notion형)' },
     dynScreenClaim: { title: '📊 클레임 다이나믹 분석' },
     menuManagement: { title: '📁 화면 및 메뉴 관리' },
-    screenPositionManagement: { title: '🧭 화면 위치 관리' }
+    screenPositionManagement: { title: '🧭 화면 위치 관리' },
+    medicalDevices: { title: '🩺 의료기기 품목 마스터' },
+    sopManual: { title: '📖 표준 품질경영 매뉴얼 (SOP)' },
+    regulatoryGuide: { title: '⚖️ 규제 표준 가이드' },
+    controlledDocuments: { title: '📂 통제문서 및 개정관리 (DMS)' },
+    trainingManagement: { title: '🎓 교육훈련 및 자격관리' },
+    riskManagement: { title: '⚠️ 위험관리 (ISO 14971)' },
+    designControls: { title: '📐 의료기기 설계개발 & DHF (Design Controls)' },
+    changeControl: { title: '🔄 변경관리 (Change Control - ISO 13485/22716)' },
+    supplierManagement: { title: '🏭 공급업체 및 위탁제조 관리 (Supplier Management)' },
+    traceabilityManagement: { title: '🌐 외부연계 및 추적성 (Traceability)' },
+    ncrManagement: { title: '⚠️ 부적합품 관리 및 출하승인 (ISO 13485/22716 NCR)' },
+    complaintSafetyManagement: { title: '🩺 고객 불만 및 시판 후 이상사례 평가 (ISO 13485/22716/식약처)' },
+    capaManagement: { title: '🛡️ 시정 및 예방조치 (CAPA - ISO 13485/22716/FDA)' },
+    vigilanceRecallManagement: { title: '🚨 규제보고 및 회수 관리 (Vigilance & Recall)' },
+    facilityManagement: { title: '🛠️ 시설·설비, 교정 및 청정환경 (ISO 13485/22716)' },
+    internalAuditManagement: { title: '📋 내부심사·자체점검·경영검토 (ISO 13485/22716/19011)' },
+    officialRecords: { title: '📜 공식 원본 및 전자서명 정책 (DEC-01 / 21 CFR Part 11)' },
+    csvValidation: { title: '🛡️ 컴퓨터화 시스템 밸리데이션(CSV) & Go-Live (GAMP 5 / 21 CFR Part 11)' }
 };
 
 class ErrorBoundary extends React.Component {
@@ -341,6 +377,7 @@ const App = () => {
     const [dynamicMenuTree, setDynamicMenuTree] = useState([]);
 
     const loadDynamicScreens = async () => {
+        if (!isLoggedIn) return;
         try {
             const [screenRes, menuRes] = await Promise.allSettled([
                 fetchDynamicScreens(),
@@ -364,12 +401,16 @@ const App = () => {
         }
     };
 
-    // [동적 메뉴 트리 전역 상시 동기화] 마운트 즉시 1회 로드 및 관리 센터 업데이트 이벤트 수신
+    // [동적 메뉴 트리 전역 상시 동기화] 로그인 상태일 때만 동기화 및 관리 센터 업데이트 이벤트 수신
     useEffect(() => {
+        if (!isLoggedIn) return;
+
         loadDynamicScreens();
 
         const handleMenuSyncEvent = () => {
-            loadDynamicScreens();
+            if (isLoggedIn) {
+                loadDynamicScreens();
+            }
         };
 
         window.addEventListener('dynamic-menu-updated', handleMenuSyncEvent);
@@ -381,12 +422,6 @@ const App = () => {
             window.removeEventListener('qms_menu_updated', handleMenuSyncEvent);
             window.removeEventListener('focus', handleMenuSyncEvent);
         };
-    }, []);
-
-    useEffect(() => {
-        if (isLoggedIn) {
-            loadDynamicScreens();
-        }
     }, [isLoggedIn]);
 
     // [전역 Data-Density 시스템: 해상도 자동 감지 + 수동 토글]
@@ -547,6 +582,7 @@ const App = () => {
         inbound: false,
         claim: false,
         approval: false,
+        manual: false,
         dynamic: false
     });
     const tabBarRef = React.useRef(null);
@@ -1095,6 +1131,17 @@ const App = () => {
         ];
         if (isManufacturer && approvalPagesList.includes(menuKey)) return false;
         if (menuKey === 'productBomInquiry') return isAdmin || hasPermission('bomMaster') || hasPermission('products') || hasPermission('productBomInquiry');
+        if (menuKey === 'medicalDevices') return isAdmin || hasPermission('products') || hasPermission('medicalDevices');
+        const eqmsManualPages = [
+            'sopManual', 'regulatoryGuide', 'controlledDocuments', 'trainingManagement',
+            'riskManagement', 'designControls', 'changeControl', 'supplierManagement',
+            'traceabilityManagement', 'ncrManagement', 'complaintSafetyManagement', 'capaManagement',
+            'vigilanceRecallManagement', 'facilityManagement', 'internalAuditManagement', 'officialRecords', 'csvValidation'
+        ];
+        if (eqmsManualPages.includes(menuKey)) {
+            if (isManufacturer) return false;
+            return isAdmin || hasPermission(menuKey, 'VIEW');
+        }
         if (menuKey === 'systemBenchmark') return isAdmin || isAQualityTeam || hasPermission('logs') || hasPermission('systemBenchmark');
         if (menuKey?.startsWith('dynScreen_') || menuKey === 'dynScreenProduct' || menuKey === 'dynScreenClaim') {
             return !isManufacturer && (isAdmin || hasPermission(menuKey, 'VIEW') || hasPermission('dynScreenProduct') || hasPermission('dynScreenClaim'));
@@ -1291,13 +1338,14 @@ const App = () => {
 
     const hasMonitoringAccess = canAccess('dashboard') || canAccess('announcements') || canAccess('notifications');
     const hasSystemAccess = canAccess('users') || canAccess('logs') || canAccess('roles') || canAccess('guideManagement') || canAccess('dashboardMgmt') || canAccess('trashBin') || canAccess('accessLogs') || canAccess('bugReports') || canAccess('mailTemplates') || canAccess('notificationSettings') || canAccess('systemBenchmark');
-    const hasProductsAccess = canAccess('products') || canAccess('brands') || canAccess('ingredientCompliance') || canAccess('bomMaster') || canAccess('bomCategories') || canAccess('salesChannels') || canAccess('productDashboard');
+    const hasProductsAccess = canAccess('products') || canAccess('medicalDevices') || canAccess('brands') || canAccess('ingredientCompliance') || canAccess('bomMaster') || canAccess('bomCategories') || canAccess('salesChannels') || canAccess('productDashboard');
     const hasPartnerAccess = canAccess('manufacturers') || canAccess('manufacturerCategories') || canAccess('manufacturerGuide');
+    const hasManualAccess = canAccess('sopManual') || canAccess('regulatoryGuide') || canAccess('controlledDocuments') || canAccess('trainingManagement') || canAccess('riskManagement') || canAccess('designControls') || canAccess('changeControl') || canAccess('supplierManagement') || canAccess('traceabilityManagement') || canAccess('ncrManagement') || canAccess('complaintSafetyManagement') || canAccess('capaManagement') || canAccess('vigilanceRecallManagement') || canAccess('facilityManagement') || canAccess('internalAuditManagement') || canAccess('officialRecords') || canAccess('csvValidation');
     const hasAuditAccess = canAccess('manufacturerAudits') || canAccess('manufacturerAuditDashboard') || canAccess('manufacturerAuditItems');
     const hasQualityAccess = canAccess('qualityPhotoAudit') || canAccess('productionAuditDashboard');
     const hasPackagingAccess = canAccess('packagingTemplates') || canAccess('spaceRatioCalculator') || canAccess('outboxCalculator');
     const hasInboundAccess = canAccess('quality') || canAccess('releaseRecord') || canAccess('qualityDashboard');
-    const hasClaimAccess = canAccess('claims') || canAccess('claimDashboard') || canAccess('lotPpmDashboard');
+    const hasClaimAccess = canAccess('claims') || canAccess('claimDashboard') || canAccess('lotPpmDashboard') || canAccess('complaintSafetyManagement');
     // [전자결재 RBAC 권한 제어]
     const hasApprovalAccess = !isManufacturer && (
         isAdmin || 
@@ -1323,7 +1371,8 @@ const App = () => {
         'PACKAGING_ROOT': 'packaging',
         'DYNAMIC_ROOT': 'dynamic',
         'INBOUND_ROOT': 'inbound',
-        'CLAIM_ROOT': 'claim'
+        'CLAIM_ROOT': 'claim',
+        'MANUAL_ROOT': 'manual'
     };
 
     // [고도화 5] 현재 활성화된 섹션 판단 로직
@@ -1348,13 +1397,14 @@ const App = () => {
         switch(section) {
             case 'monitoring': return ['dashboard', 'announcements', 'notifications'].includes(activePage);
             case 'system': return ['users', 'logs', 'roles', 'guideManagement', 'dashboardMgmt', 'trashBin', 'accessLogs', 'bugReports', 'mailTemplates', 'notificationSettings', 'systemBenchmark', 'menuManagement'].includes(activePage);
-            case 'products': return ['products', 'productBomInquiry', 'brands', 'ingredientCompliance', 'bomMaster', 'bomCategories', 'salesChannels', 'productDashboard'].includes(activePage);
+            case 'products': return ['products', 'medicalDevices', 'productBomInquiry', 'brands', 'ingredientCompliance', 'bomMaster', 'bomCategories', 'salesChannels', 'productDashboard'].includes(activePage);
             case 'partner': return ['manufacturers', 'manufacturerCategories', 'manufacturerGuide'].includes(activePage);
             case 'audit': return ['manufacturerAudits', 'manufacturerAuditDashboard', 'manufacturerAuditItems'].includes(activePage);
             case 'quality': return ['qualityPhotoAudit', 'productionAuditDashboard'].includes(activePage);
             case 'packaging': return ['packagingTemplates', 'spaceRatioCalculator', 'outboxCalculator'].includes(activePage);
             case 'inbound': return ['qualityDashboard', 'quality', 'releaseRecord'].includes(activePage);
-            case 'claim': return ['claims', 'claimDashboard', 'lotPpmDashboard'].includes(activePage);
+            case 'claim': return ['claims', 'claimDashboard', 'lotPpmDashboard', 'complaintSafetyManagement'].includes(activePage);
+            case 'manual': return ['sopManual', 'regulatoryGuide', 'controlledDocuments', 'trainingManagement', 'riskManagement', 'designControls', 'changeControl', 'supplierManagement', 'traceabilityManagement', 'ncrManagement', 'complaintSafetyManagement', 'capaManagement', 'vigilanceRecallManagement', 'facilityManagement', 'internalAuditManagement', 'officialRecords', 'csvValidation'].includes(activePage);
             case 'dynamic': return ['dynScreenProduct', 'dynScreenClaim'].includes(activePage) || (activePage && activePage.startsWith('dynScreen_'));
             case 'approval': return [
                 'approvals', 
@@ -1432,6 +1482,7 @@ const App = () => {
 
         // [품목코드 관리]
         'SYS_PRODUCTS': { routeKey: 'products', defaultLabel: '제품코드 마스터', defaultIcon: '📦' },
+        'SYS_MEDICAL_DEVICE_PRODUCTS': { routeKey: 'medicalDevices', defaultLabel: '의료기기 품목 마스터', defaultIcon: '🩺' },
         'SYS_PRODUCT_BOM_INQUIRY': { routeKey: 'productBomInquiry', defaultLabel: '제품코드별 포장재 조회', defaultIcon: '📦' },
         'SYS_PRODUCT_DASHBOARD': { routeKey: 'productDashboard', defaultLabel: '제품코드 대시보드', defaultIcon: '📊' },
         'SYS_BRANDS': { routeKey: 'brands', defaultLabel: '브랜드 마스터 관리', defaultIcon: '🏷️' },
@@ -1486,6 +1537,25 @@ const App = () => {
         'SYS_MENU_MANAGEMENT': { routeKey: 'menuManagement', defaultLabel: '화면 및 메뉴 관리', defaultIcon: '📁' },
         'SYS_SCREEN_MANAGEMENT': { routeKey: 'menuManagement', defaultLabel: '화면 및 메뉴 관리', defaultIcon: '📁' },
         'SYS_SCREEN_POSITION': { routeKey: 'screenPositionManagement', defaultLabel: '화면 위치 관리', defaultIcon: '🧭' },
+
+        // [표준 업무 매뉴얼 - DEC-10]
+        'SYS_SOP_MANUAL': { routeKey: 'sopManual', defaultLabel: '표준 품질경영 매뉴얼 (SOP)', defaultIcon: '📑' },
+        'SYS_REGULATORY_GUIDE': { routeKey: 'regulatoryGuide', defaultLabel: '규제 표준 가이드 (ISO 13485/22716)', defaultIcon: '⚖️' },
+        'SYS_CONTROLLED_DOCS': { routeKey: 'controlledDocuments', defaultLabel: '통제문서 및 개정관리 (DMS)', defaultIcon: '📂' },
+        'SYS_TRAINING_MGMT': { routeKey: 'trainingManagement', defaultLabel: '교육훈련 및 자격관리', defaultIcon: '🎓' },
+        'SYS_RISK_MGMT': { routeKey: 'riskManagement', defaultLabel: '위험관리 (ISO 14971)', defaultIcon: '⚠️' },
+        'SYS_DESIGN_CONTROLS': { routeKey: 'designControls', defaultLabel: '설계개발 및 DHF (ISO 13485)', defaultIcon: '📐' },
+        'SYS_CHANGE_CONTROL': { routeKey: 'changeControl', defaultLabel: '변경관리 (ISO 13485/22716)', defaultIcon: '🔄' },
+        'SYS_SUPPLIER_MGMT': { routeKey: 'supplierManagement', defaultLabel: '공급업체·위탁제조 관리 (ISO 13485/22716)', defaultIcon: '🏭' },
+        'SYS_TRACEABILITY': { routeKey: 'traceabilityManagement', defaultLabel: '외부연계 및 추적성 (ISO 13485/22716)', defaultIcon: '🌐' },
+        'SYS_NCR_MGMT': { routeKey: 'ncrManagement', defaultLabel: '부적합품 관리 및 출하승인 (ISO 13485/22716 NCR)', defaultIcon: '⚠️' },
+        'SYS_COMPLAINT_SAFETY': { routeKey: 'complaintSafetyManagement', defaultLabel: '불만·이상사례 평가 (ISO 13485/식약처)', defaultIcon: '🩺' },
+        'SYS_CAPA_MGMT': { routeKey: 'capaManagement', defaultLabel: '시정 및 예방조치 (CAPA)', defaultIcon: '🛡️' },
+        'SYS_VIGILANCE_RECALL': { routeKey: 'vigilanceRecallManagement', defaultLabel: '규제보고 및 회수 (Vigilance & Recall)', defaultIcon: '🚨' },
+        'SYS_FACILITY_MGMT': { routeKey: 'facilityManagement', defaultLabel: '시설·교정·유지보수 (ISO 13485/22716)', defaultIcon: '🛠️' },
+        'SYS_INTERNAL_AUDIT': { routeKey: 'internalAuditManagement', defaultLabel: '내부심사·자체점검·경영검토 (ISO 13485/22716)', defaultIcon: '📋' },
+        'SYS_OFFICIAL_RECORDS': { routeKey: 'officialRecords', defaultLabel: '공식 원본·전자서명 (DEC-01/Part 11)', defaultIcon: '📜' },
+        'SYS_CSV_VALIDATION': { routeKey: 'csvValidation', defaultLabel: 'CSV 밸리데이션·운영승인 (GAMP 5)', defaultIcon: '🛡️' },
 
         // [동적 화면 관리]
         'SYS_DYN_SCREEN_PRODUCT': { routeKey: 'dynScreenProduct', defaultLabel: '제품 메타 그리드', defaultIcon: '📋' },
@@ -1901,6 +1971,7 @@ const App = () => {
                                                         renderSidebarItem(`dynScreen_${s.screenCode}`, `🔬 ${s.screenName}`)
                                                     )}
                                                     {canAccess('products') && renderSidebarItem('products', '📦 제품코드 마스터')}
+                                                    {canAccess('medicalDevices') && renderSidebarItem('medicalDevices', '🩺 의료기기 품목 마스터')}
                                                     {renderSidebarItem('productDashboard', '📊 제품코드 대시보드')}
                                                     {canAccess('brands') && renderSidebarItem('brands', '🏷️ 브랜드 마스터 관리')}
                                                     {canAccess('salesChannels') && renderSidebarItem('salesChannels', '🌐 유통 채널 관리')}
@@ -2060,6 +2131,46 @@ const App = () => {
                                             {canAccess('claims') && renderSidebarItem('claims', '🔍 클레임 조회 및 입력')}
                                             {canAccess('claimDashboard') && renderSidebarItem('claimDashboard', '📈 클레임 대시보드')}
                                             {canAccess('lotPpmDashboard') && renderSidebarItem('lotPpmDashboard', '📉 LOT PPM 분석 & 근본원인')}
+                                            {canAccess('complaintSafetyManagement') && renderSidebarItem('complaintSafetyManagement', '🩺 불만·이상사례 평가 (ISO 13485/식약처)')}
+                                        </>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        )}
+
+                        {/* [표준 업무 매뉴얼 - DEC-10] */}
+                        {hasManualAccess && (
+                        <div className="sidebar-group">
+                            <button 
+                                className={`sidebar-group-header ${isSectionActive('manual') ? 'active' : ''}`} 
+                                onClick={() => toggleSection('manual')}
+                            >
+                                <span>📖 표준 업무 매뉴얼</span>
+                                <span className={`arrow ${openSections.manual ? 'open' : ''}`}>▼</span>
+                            </button>
+                            {openSections.manual && (
+                                <div className="sidebar-group-content open">
+                                    {renderDynamicSidebarSection('MANUAL_ROOT', () => (
+                                        <>
+                                            <div className="sidebar-sub-header">표준 프로세스 & SOP</div>
+                                            {canAccess('sopManual') && renderSidebarItem('sopManual', '📑 표준 품질경영 매뉴얼 (SOP)')}
+                                            {canAccess('regulatoryGuide') && renderSidebarItem('regulatoryGuide', '⚖️ 규제 표준 가이드 (ISO 13485/22716)')}
+                                            {canAccess('controlledDocuments') && renderSidebarItem('controlledDocuments', '📂 통제문서 및 개정관리 (DMS)')}
+                                            {canAccess('trainingManagement') && renderSidebarItem('trainingManagement', '🎓 교육훈련 및 자격관리')}
+                                            {canAccess('riskManagement') && renderSidebarItem('riskManagement', '⚠️ 위험관리 (ISO 14971)')}
+                                            {canAccess('designControls') && renderSidebarItem('designControls', '📐 설계개발 및 DHF (ISO 13485)')}
+                                            {canAccess('changeControl') && renderSidebarItem('changeControl', '🔄 변경관리 (ISO 13485/22716)')}
+                                            {canAccess('supplierManagement') && renderSidebarItem('supplierManagement', '🏭 공급업체·위탁제조 관리 (ISO 13485/22716)')}
+                                            {canAccess('traceabilityManagement') && renderSidebarItem('traceabilityManagement', '🌐 외부연계 및 추적성 (ISO 13485/22716)')}
+                                            {canAccess('ncrManagement') && renderSidebarItem('ncrManagement', '⚠️ 부적합품 관리 및 출하승인 (ISO 13485/22716)')}
+                                            {canAccess('complaintSafetyManagement') && renderSidebarItem('complaintSafetyManagement', '🩺 불만·이상사례 평가 (ISO 13485/식약처)')}
+                                            {canAccess('capaManagement') && renderSidebarItem('capaManagement', '🛡️ 시정 및 예방조치 (CAPA)')}
+                                            {canAccess('vigilanceRecallManagement') && renderSidebarItem('vigilanceRecallManagement', '🚨 규제보고 및 회수 (Vigilance/Recall)')}
+                                            {canAccess('facilityManagement') && renderSidebarItem('facilityManagement', '🛠️ 시설·교정·유지보수 (ISO 13485/22716)')}
+                                            {canAccess('internalAuditManagement') && renderSidebarItem('internalAuditManagement', '📋 내부심사·경영검토 (ISO 13485/22716)')}
+                                            {canAccess('officialRecords') && renderSidebarItem('officialRecords', '📜 공식 원본·전자서명 (DEC-01/Part 11)')}
+                                            {canAccess('csvValidation') && renderSidebarItem('csvValidation', '🛡️ CSV 밸리데이션·Go-Live (GAMP 5)')}
                                         </>
                                     ))}
                                 </div>
@@ -2156,11 +2267,20 @@ const App = () => {
                                 className={`tab-item ${tab.id === activeTabId ? 'active' : ''}`}
                                 onClick={() => handleTabSelect(tab.id)}
                                 onContextMenu={(e) => handleTabContextMenu(e, tab.id)}
-                                title="우클릭 시 탭 정리 메뉴"
+                                title={`${tab.title} (우클릭: 탭 정리)`}
                             >
                                 <span className="tab-title">{tab.title}</span>
                                 {tabs.length > 1 && (
-                                    <span className="tab-close" onClick={(e) => handleCloseTab(tab.id, e)}>&times;</span>
+                                    <span 
+                                        className="tab-close" 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleCloseTab(tab.id, e);
+                                        }}
+                                        title="탭 닫기"
+                                    >
+                                        &times;
+                                    </span>
                                 )}
                             </div>
                         ))}
@@ -2352,6 +2472,114 @@ const App = () => {
                                                 navigationData={tab.data} 
                                                 onNavigated={() => {}} 
                                                 isActive={tab.id === activeTabId}
+                                            />
+                                        )}
+                                        {canAccess('medicalDevices') && tab.page === 'medicalDevices' && (
+                                            <MedicalDeviceManagementPage 
+                                                user={user} 
+                                                onNavigate={handleNavigate} 
+                                            />
+                                        )}
+                                        {canAccess('sopManual') && tab.page === 'sopManual' && (
+                                            <SopManualPage 
+                                                user={user} 
+                                                onNavigate={handleNavigate} 
+                                            />
+                                        )}
+                                        {canAccess('regulatoryGuide') && tab.page === 'regulatoryGuide' && (
+                                            <RegulatoryGuidePage 
+                                                user={user} 
+                                                onNavigate={handleNavigate} 
+                                            />
+                                        )}
+                                        {canAccess('controlledDocuments') && tab.page === 'controlledDocuments' && (
+                                            <ControlledDocumentManagementPage 
+                                                user={user} 
+                                                onNavigate={handleNavigate} 
+                                            />
+                                        )}
+                                        {canAccess('trainingManagement') && tab.page === 'trainingManagement' && (
+                                            <TrainingManagementPage 
+                                                user={user} 
+                                                onNavigate={handleNavigate} 
+                                            />
+                                        )}
+                                        {canAccess('riskManagement') && tab.page === 'riskManagement' && (
+                                            <RiskManagementPage 
+                                                user={user} 
+                                                onNavigate={handleNavigate} 
+                                            />
+                                        )}
+                                        {canAccess('designControls') && tab.page === 'designControls' && (
+                                            <DesignControlManagementPage 
+                                                user={user} 
+                                                onNavigate={handleNavigate} 
+                                            />
+                                        )}
+                                        {canAccess('changeControl') && tab.page === 'changeControl' && (
+                                            <ChangeControlManagementPage 
+                                                user={user} 
+                                                onNavigate={handleNavigate} 
+                                            />
+                                        )}
+                                        {canAccess('supplierManagement') && tab.page === 'supplierManagement' && (
+                                            <SupplierManagementPage 
+                                                user={user} 
+                                                onNavigate={handleNavigate} 
+                                            />
+                                        )}
+                                        {canAccess('traceabilityManagement') && tab.page === 'traceabilityManagement' && (
+                                            <TraceabilityManagementPage 
+                                                user={user} 
+                                                onNavigate={handleNavigate} 
+                                            />
+                                        )}
+                                        {canAccess('ncrManagement') && tab.page === 'ncrManagement' && (
+                                            <NonConformanceManagementPage 
+                                                user={user} 
+                                                onNavigate={handleNavigate} 
+                                            />
+                                        )}
+                                        {canAccess('complaintSafetyManagement') && tab.page === 'complaintSafetyManagement' && (
+                                            <ComplaintSafetyManagementPage 
+                                                user={user} 
+                                                onNavigate={handleNavigate} 
+                                            />
+                                        )}
+                                        {canAccess('capaManagement') && tab.page === 'capaManagement' && (
+                                            <CapaManagementPage 
+                                                user={user} 
+                                                onNavigate={handleNavigate} 
+                                            />
+                                        )}
+                                        {canAccess('vigilanceRecallManagement') && tab.page === 'vigilanceRecallManagement' && (
+                                            <VigilanceRecallManagementPage 
+                                                user={user} 
+                                                onNavigate={handleNavigate} 
+                                            />
+                                        )}
+                                        {canAccess('facilityManagement') && tab.page === 'facilityManagement' && (
+                                            <FacilityManagementPage 
+                                                user={user} 
+                                                onNavigate={handleNavigate} 
+                                            />
+                                        )}
+                                        {canAccess('internalAuditManagement') && tab.page === 'internalAuditManagement' && (
+                                            <InternalAuditManagementPage 
+                                                user={user} 
+                                                onNavigate={handleNavigate} 
+                                            />
+                                        )}
+                                        {canAccess('officialRecords') && tab.page === 'officialRecords' && (
+                                            <OfficialRecordPolicyPage 
+                                                user={user} 
+                                                onNavigate={handleNavigate} 
+                                            />
+                                        )}
+                                        {canAccess('csvValidation') && tab.page === 'csvValidation' && (
+                                            <CsvValidationPage 
+                                                user={user} 
+                                                onNavigate={handleNavigate} 
                                             />
                                         )}
                                         {canAccess('quality') && tab.page === 'quality' && (

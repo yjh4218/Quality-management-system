@@ -6,9 +6,7 @@
 
 ## 1. 확인된 결함 (Confirmed Defects in Code)
 
-| 번호 | 결함 항목 | 실제 코드 위치 | 분석 내용 및 규제 위배 영향 |
-| :---: | :--- | :--- | :--- |
-| **D-1** | **API CSRF 보호 비활성화** | `SecurityConfig.java:45` | `.ignoringRequestMatchers("/api/**")`로 인해 쿠키 기반 세션 인증 환경에서 CSRF 공격에 노출됨. |
+| **D-1** | **API CSRF 보호 비활성화** | `SecurityConfig.java:45` | `.ignoringRequestMatchers("/api/**")` 상태.<br>• *과거 이력*: Cross-Origin(Pages↔HF) 환경에서 CSRF 활성화 시 403 Forbidden 대규모 장애 발생하여 긴급 예외 처리됨(`4a45386`, `fa64fed`).<br>• *개선 방향*: **HF 배포 환경 무영향 보장 (CSRF 강제 활성화 전면 배제 및 현행 ignoring 100% 유지)**. 배포에 영향 없는 Origin/Referer 및 Custom Header 검증으로 대체하고, 완전한 CSRF 토큰은 향후 별도 단일 도메인 전용 환경에서만 격리 검토(`DEC-08`). |
 | **D-2** | **첨부파일 익명 전체 공개** | `SecurityConfig.java:66`, `FileServingController.java:36` | `.requestMatchers("/uploads/**").permitAll()`로 인해 시험성적서, 사양서, 클레임 사진 등 품질 서류가 비인가자에게 공개됨. |
 | **D-3** | **출하승인 결재 시 무조건 적합 처리** | `ApprovalService.java:246-256` | `MARKET_RELEASE` 결재 최종 승인 시 실제 검사 결과 여부와 관계없이 `finalInspectionResult = "적합"`으로 덮어씀. |
 | **D-4** | **클레임 대책보고서 승인 시 강제 종결** | `ApprovalService.java:257-265` | `CLAIM_REPORT` 승인 시 조사 완료/안전성 평가 미완료 상태에서도 `qualityStatus = "5단계 (종결)"`로 강제 처리. |

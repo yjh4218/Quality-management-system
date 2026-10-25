@@ -1,0 +1,128 @@
+-- =========================================================================
+-- V148: 컴퓨터화 시스템 밸리데이션(CSV) 및 운영 승인(Go-Live) 관리
+-- GAMP 5, FDA 21 CFR Part 11, ISO 13485:2016 §4.1.6 규제 준수
+-- =========================================================================
+
+-- 1. CSV 밸리데이션 프로젝트 마스터 (Validation Projects Table)
+CREATE TABLE IF NOT EXISTS csv_validation_projects (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_code VARCHAR(50) NOT NULL UNIQUE,
+    project_name VARCHAR(200) NOT NULL,
+    system_version VARCHAR(50) NOT NULL,
+    gamp_category VARCHAR(50) NOT NULL,
+    system_description TEXT,
+    validation_lead VARCHAR(100) NOT NULL,
+    qa_manager VARCHAR(100) NOT NULL,
+    executive_sponsor VARCHAR(100),
+    planned_start_date DATE,
+    planned_end_date DATE,
+    actual_completion_date DATE,
+    project_status VARCHAR(50) NOT NULL,
+    overall_conclusion TEXT,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_csv_proj_code ON csv_validation_projects(project_code);
+CREATE INDEX IF NOT EXISTS idx_csv_proj_status ON csv_validation_projects(project_status);
+CREATE INDEX IF NOT EXISTS idx_csv_proj_gamp ON csv_validation_projects(gamp_category);
+
+-- 2. IQ / OQ / PQ 테스트 프로토콜 실행 원장 (Test Protocols Table)
+CREATE TABLE IF NOT EXISTS csv_test_protocols (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    protocol_number VARCHAR(50) NOT NULL,
+    test_phase VARCHAR(20) NOT NULL,
+    test_title VARCHAR(255) NOT NULL,
+    requirement_mapping VARCHAR(200),
+    preconditions TEXT,
+    execution_steps TEXT,
+    expected_result TEXT,
+    actual_result TEXT,
+    result_status VARCHAR(30) NOT NULL DEFAULT 'PENDING',
+    executed_by VARCHAR(100),
+    executed_at TIMESTAMP,
+    verified_by VARCHAR(100),
+    verified_at TIMESTAMP,
+    deviation_notes TEXT,
+    display_order INT NOT NULL DEFAULT 1,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_csv_proto_proj FOREIGN KEY (project_id) REFERENCES csv_validation_projects(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_csv_proto_proj ON csv_test_protocols(project_id);
+CREATE INDEX IF NOT EXISTS idx_csv_proto_phase ON csv_test_protocols(test_phase);
+CREATE INDEX IF NOT EXISTS idx_csv_proto_status ON csv_test_protocols(result_status);
+CREATE INDEX IF NOT EXISTS idx_csv_proto_num ON csv_test_protocols(protocol_number);
+
+-- 3. 결함 및 잔여 리스크 관리 원장 (Defect Records Table)
+CREATE TABLE IF NOT EXISTS csv_defect_records (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    defect_number VARCHAR(50) NOT NULL,
+    defect_title VARCHAR(255) NOT NULL,
+    severity VARCHAR(30) NOT NULL,
+    test_protocol_number VARCHAR(50),
+    description TEXT NOT NULL,
+    root_cause TEXT,
+    corrective_action TEXT,
+    status VARCHAR(30) NOT NULL DEFAULT 'OPEN',
+    reported_by VARCHAR(100) NOT NULL,
+    reported_at TIMESTAMP NOT NULL,
+    resolved_by VARCHAR(100),
+    resolved_at TIMESTAMP,
+    risk_acceptance_justification TEXT,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_csv_defect_proj FOREIGN KEY (project_id) REFERENCES csv_validation_projects(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_csv_defect_proj ON csv_defect_records(project_id);
+CREATE INDEX IF NOT EXISTS idx_csv_defect_severity ON csv_defect_records(severity);
+CREATE INDEX IF NOT EXISTS idx_csv_defect_status ON csv_defect_records(status);
+
+-- 4. Go-Live 최종 운영 승인 헌장 (Go-Live Approvals Table)
+CREATE TABLE IF NOT EXISTS csv_go_live_approvals (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL UNIQUE,
+    release_version VARCHAR(50) NOT NULL,
+    approval_title VARCHAR(255) NOT NULL,
+    system_owner_name VARCHAR(100) NOT NULL,
+    system_owner_signed_at TIMESTAMP,
+    system_owner_signature_number VARCHAR(50),
+    qa_lead_name VARCHAR(100) NOT NULL,
+    qa_lead_signed_at TIMESTAMP,
+    qa_lead_signature_number VARCHAR(50),
+    executive_name VARCHAR(100) NOT NULL,
+    executive_signed_at TIMESTAMP,
+    executive_signature_number VARCHAR(50),
+    final_approval_status VARCHAR(30) NOT NULL DEFAULT 'APPROVED',
+    go_live_date DATE NOT NULL,
+    contingency_plan TEXT,
+    authorized_notes TEXT,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_csv_golive_proj FOREIGN KEY (project_id) REFERENCES csv_validation_projects(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_csv_golive_proj ON csv_go_live_approvals(project_id);
+CREATE INDEX IF NOT EXISTS idx_csv_golive_status ON csv_go_live_approvals(final_approval_status);
+
+-- 5. 보안 권한 등록 (Permissions)
+INSERT INTO permissions (name, description, category, created_at, updated_at)
+SELECT 'CSV_VIEW', 'CSV 밸리데이션 및 Go-Live 헌장 조회 권한', 'COMPLIANCE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE name = 'CSV_VIEW');
+
+INSERT INTO permissions (name, description, category, created_at, updated_at)
+SELECT 'CSV_MANAGE', 'CSV 밸리데이션 프로토콜, 결함 관리 및 Go-Live 승인 권한', 'COMPLIANCE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE name = 'CSV_MANAGE');
+
+-- 6. 동적 대메뉴 등록 (Screen Menu)
+INSERT INTO screen_menus (menu_code, menu_name, menu_path, parent_code, display_order, icon_name, is_active, required_permission, created_at, updated_at)
+SELECT 'SYS_CSV_VALIDATION', 'CSV 밸리데이션·운영승인', '/csv-validation', NULL, 24, 'verified', TRUE, 'CSV_VIEW', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+WHERE NOT EXISTS (SELECT 1 FROM screen_menus WHERE menu_code = 'SYS_CSV_VALIDATION');

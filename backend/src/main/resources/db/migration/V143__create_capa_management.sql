@@ -1,0 +1,280 @@
+-- V143: 시정 및 예방조치 (Corrective and Preventive Action - CAPA) 독립 모듈 및 5대 품질 소스 연계 신설
+-- 표준 규격: ISO 13485:2016 §8.5.2/§8.5.3, ISO 22716:2007 §10, 21 CFR 820.100
+
+-- 1. CAPA 마스터 테이블 생성
+CREATE TABLE IF NOT EXISTS capa_records (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    capa_number VARCHAR(50) NOT NULL UNIQUE,
+    title VARCHAR(200) NOT NULL,
+    source_type VARCHAR(50) NOT NULL,
+    source_id BIGINT,
+    source_number VARCHAR(50),
+    source_description TEXT,
+    category VARCHAR(50) NOT NULL,
+    risk_level VARCHAR(30) NOT NULL,
+    status VARCHAR(30) NOT NULL,
+
+    -- 문제 설명 및 임시 봉쇄조치 (Containment)
+    problem_description TEXT NOT NULL,
+    containment_action TEXT,
+    containment_date DATE,
+    containment_responsible VARCHAR(100),
+
+    -- 근본원인 분석 (5-Why & Fishbone)
+    root_cause_analysis TEXT,
+    why1 VARCHAR(255),
+    why2 VARCHAR(255),
+    why3 VARCHAR(255),
+    why4 VARCHAR(255),
+    why5 VARCHAR(255),
+    fishbone_man TEXT,
+    fishbone_machine TEXT,
+    fishbone_material TEXT,
+    fishbone_method TEXT,
+    fishbone_measurement TEXT,
+    fishbone_environment TEXT,
+
+    -- 대상 품목 및 LOT (선택적)
+    item_code VARCHAR(100),
+    product_name VARCHAR(200),
+    lot_number VARCHAR(100),
+    is_lot_unknown BOOLEAN DEFAULT FALSE,
+
+    -- 일정 및 담당자
+    assigned_to VARCHAR(100) NOT NULL,
+    target_completion_date DATE NOT NULL,
+    actual_completion_date DATE,
+
+    -- 효과성 검증 (Effectiveness Review)
+    effectiveness_criteria TEXT,
+    effectiveness_target_date DATE,
+    effectiveness_reviewed_date DATE,
+    effectiveness_reviewed_by VARCHAR(100),
+    effectiveness_result VARCHAR(30) DEFAULT 'NOT_EVALUATED',
+    effectiveness_evidence TEXT,
+    follow_up_action_required BOOLEAN DEFAULT FALSE,
+
+    -- 종결 정보
+    closure_comment TEXT,
+    closed_by VARCHAR(100),
+    closed_date DATE,
+
+    -- 감사추적
+    created_by VARCHAR(100) NOT NULL,
+    updated_by VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT DEFAULT 0
+);
+
+-- 2. CAPA 조치과제(Action Items) 테이블 생성
+CREATE TABLE IF NOT EXISTS capa_action_items (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    capa_id BIGINT NOT NULL,
+    action_type VARCHAR(30) NOT NULL, -- CORRECTIVE, PREVENTIVE, CONTAINMENT, DOCUMENT_REVISION, TRAINING
+    title VARCHAR(200) NOT NULL,
+    description TEXT NOT NULL,
+    assigned_to VARCHAR(100) NOT NULL,
+    target_date DATE NOT NULL,
+    completion_date DATE,
+    status VARCHAR(30) NOT NULL DEFAULT 'PENDING', -- PENDING, IN_PROGRESS, COMPLETED, CANCELLED
+    completion_notes TEXT,
+    verification_notes TEXT,
+    verified_by VARCHAR(100),
+    verified_at TIMESTAMP,
+    created_by VARCHAR(100) NOT NULL,
+    updated_by VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_capa_action_record FOREIGN KEY (capa_id) REFERENCES capa_records(id) ON DELETE CASCADE
+);
+
+-- 3. 고성능 인덱스 생성 (11종)
+CREATE INDEX IF NOT EXISTS idx_capa_number ON capa_records(capa_number);
+CREATE INDEX IF NOT EXISTS idx_capa_source ON capa_records(source_type, source_id);
+CREATE INDEX IF NOT EXISTS idx_capa_source_num ON capa_records(source_number);
+CREATE INDEX IF NOT EXISTS idx_capa_status ON capa_records(status);
+CREATE INDEX IF NOT EXISTS idx_capa_category ON capa_records(category);
+CREATE INDEX IF NOT EXISTS idx_capa_risk ON capa_records(risk_level);
+CREATE INDEX IF NOT EXISTS idx_capa_assigned ON capa_records(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_capa_target_date ON capa_records(target_completion_date);
+CREATE INDEX IF NOT EXISTS idx_capa_eff_result ON capa_records(effectiveness_result);
+CREATE INDEX IF NOT EXISTS idx_cai_capa_id ON capa_action_items(capa_id);
+CREATE INDEX IF NOT EXISTS idx_cai_status ON capa_action_items(status);
+
+-- 4. 동적 메뉴 및 시스템 권한 등록
+INSERT INTO screen_menus (
+    menu_code, menu_name, menu_path, icon_name, parent_menu_code,
+    sort_order, is_active, required_role, created_at, updated_at
+) VALUES (
+    'SYS_CAPA_MGMT', '시정 및 예방조치 (CAPA)', '/capa', 'ShieldCheck', 'QUALITY_ROOT',
+    66, true, 'ROLE_USER', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+) ON CONFLICT (menu_code) DO UPDATE SET
+    menu_name = EXCLUDED.menu_name,
+    menu_path = EXCLUDED.menu_path,
+    icon_name = EXCLUDED.icon_name,
+    sort_order = EXCLUDED.sort_order,
+    is_active = true,
+    updated_at = CURRENT_TIMESTAMP;
+
+INSERT INTO system_permissions (
+    permission_code, permission_name, description, category, created_at, updated_at
+) VALUES 
+('VIEW_CAPA', 'CAPA 조회', '시정 및 예방조치(CAPA) 현황 및 이력을 조회할 수 있는 권한', 'QUALITY', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('MANAGE_CAPA', 'CAPA 관리', 'CAPA 기안, 근본원인 분석, 조치계획 수립, 효과성 검증 및 종결할 수 있는 권한', 'QUALITY', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT (permission_code) DO NOTHING;
+
+-- 5. 규제 표준 가이드(Regulatory Guide) 등록
+INSERT INTO system_guides (
+    guide_key, title, subtitle, standard_code, category,
+    compliance_summary, audit_point, practical_tips, created_at, updated_at
+) VALUES (
+    'capaManagement',
+    '시정 및 예방조치 (CAPA) 관리 규정',
+    'ISO 13485:2016 §8.5.2/§8.5.3, ISO 22716:2007 §10, 21 CFR 820.100 품질 시스템 표준 규정',
+    'ISO 13485:2016 §8.5.2, §8.5.3 / 21 CFR 820.100',
+    'QUALITY',
+    '조직은 부적합의 원인을 제거하고 재발을 방지하기 위한 시정조치와 잠재적 부적합 발생을 예방하기 위한 예방조치 절차를 문서화하여 운영해야 합니다. 5대 품질 소스(불만, 부적합, 심사지적, 공정일탈, 변경관리)로부터 CAPA를 발의하고, 5-Why 및 어골도 분석을 통해 근본원인을 규명하며, 조치 이행 후 객관적 증거를 기반으로 효과성(Effectiveness)을 사후 검증해야 합니다.',
+    '① 부적합 또는 고객 불만이 발생했음에도 CAPA 착수 여부를 정당한 사유 없이 누락하지 않았는가?
+② 근본원인(Root Cause) 조사가 단순 증상 봉쇄에 그치지 않고 5-Why 또는 특성요인도를 통해 규명되었는가?
+③ 시정조치뿐만 아니라 유사 라인/제품군으로의 수평전개(예방조치)가 계획되었는가?
+④ 조치 완료 후 일정 기간 경과 후 동일 결함 재발 여부를 객관적 데이터로 효과성 검증하였는가?',
+    'CAPA 번호는 "CAPA-YYYYMM-001" 형식으로 유일하게 채번되며, 효과성 검증 결과 "EFFECTIVE" 판정 시에만 최종 종결이 승인됩니다. 만약 효과성이 미흡하거나 재발 시 즉시 재조사 또는 후속 CAPA가 발의되어야 합니다.',
+    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+) ON CONFLICT (guide_key) DO UPDATE SET
+    title = EXCLUDED.title,
+    subtitle = EXCLUDED.subtitle,
+    compliance_summary = EXCLUDED.compliance_summary,
+    audit_point = EXCLUDED.audit_point,
+    practical_tips = EXCLUDED.practical_tips,
+    updated_at = CURRENT_TIMESTAMP;
+
+-- 6. 초기 시드 데이터 등록 (4건)
+-- Case 1: 불만/이상사례 연계 (15단계 연동 사례)
+INSERT INTO capa_records (
+    capa_number, title, source_type, source_id, source_number, source_description,
+    category, risk_level, status, problem_description, containment_action, containment_date, containment_responsible,
+    root_cause_analysis, why1, why2, why3, why4, why5,
+    fishbone_man, fishbone_machine, fishbone_material, fishbone_method, fishbone_measurement, fishbone_environment,
+    item_code, product_name, lot_number, is_lot_unknown, assigned_to, target_completion_date,
+    effectiveness_criteria, effectiveness_target_date, effectiveness_result, created_by, updated_by
+) VALUES (
+    'CAPA-202610-001',
+    '시카 크림 피부 국소 발진 이상사례 관련 보존제 함량 편차 근본원인 시정조치',
+    'COMPLAINT_SAFETY', 1, 'SAFE-202610-001', '고객 불만 이상사례 WHO-UMC Certain 판정 및 중대 부작용 신속보고 건',
+    'PRODUCT_QUALITY', 'CRITICAL', 'IMPLEMENTATION',
+    '시카 리페어 수분 진정 크림 도포 후 알레르기 및 발진 발생. 성분 분석 결과 특정 제조 배치의 페녹시에탄올 투입 편차 확인됨.',
+    '해당 LOT 및 인접 2개 LOT 시장 출하 즉시 보류(HOLD) 및 유통 재고 전수 성분 함량 검사 실시', '2026-10-24', '품질보증팀 김책임',
+    '원액 배합 시 자동 디스펜서 노즐 스케일링 오차 및 작업자 교반 시간 미준수로 인한 국소 농축 발생',
+    '왜 보존제 농도가 국소적으로 높았는가? -> 교반조 내 분산이 불균일했음',
+    '왜 분산이 불균일했는가? -> 정격 교반 시간(45분)보다 15분 일찍 토출됨',
+    '왜 일찍 토출되었는가? -> 작업자가 타이머 알람 없이 육안으로 완료 판단함',
+    '왜 타이머 연동이 없었는가? -> 수동 조작 스위치만 구비되어 있었음',
+    '왜 인터락이 없었는가? -> 설비 교체 시 교반 인터락 옵션 검증 누락',
+    '작업자 표준작업지침 미준수 및 타이머 무시',
+    '교반기 인터락 미연동 및 토출 밸브 수동 제어',
+    '페녹시에탄올 원료 점도 규격 편차',
+    '교반 시간 검증 절차서 구체적 시간 미기재',
+    '분산도 측정 센서 미설치',
+    '조제실 온도 상승으로 인한 분산 속도 저하',
+    'ITM-CS-001', '시카 리페어 수분 진정 크림', 'LOT-20261015-01', false, '공정품질팀 박과장', '2026-11-15',
+    '시정조치 적용 후 생산되는 연속 3개 LOT 전수 분산도 및 보존제 함량 RSD 3.0% 이내 만족 및 클레임 0건', '2026-12-15', 'NOT_EVALUATED', 'admin', 'admin'
+) ON CONFLICT (capa_number) DO NOTHING;
+
+-- Case 2: 부적합품 보고서 NCR 연계 (14단계 연동 사례)
+INSERT INTO capa_records (
+    capa_number, title, source_type, source_id, source_number, source_description,
+    category, risk_level, status, problem_description, containment_action, containment_date, containment_responsible,
+    root_cause_analysis, why1, why2, why3, why4, why5,
+    item_code, product_name, lot_number, is_lot_unknown, assigned_to, target_completion_date,
+    effectiveness_criteria, effectiveness_target_date, effectiveness_result, created_by, updated_by
+) VALUES (
+    'CAPA-202610-002',
+    '하이드라 앰플 알루미늄 오버캡 압착 불량 및 누액 다발 NCR 시정예방조치',
+    'NCR', 1, 'NCR-202610-001', '입고검사 실링 불량률 4.2% 검출 및 격리 조치 건',
+    'PACKAGING', 'HIGH', 'ACTION_PLANNING',
+    '자동 캡핑 라인 지그 마모 및 토크 센서 오작동으로 인해 앰플 오버캡 누액 및 기밀 불량 다발 발생.',
+    '불량 로트 전량 격리(HOLD) 구역 보관 및 납품처 입고 검사 기준 강화 (AQL 0.65 적용)', '2026-10-22', '자재품질팀 이대리',
+    '캡핑 헤드 지그의 교체 주기(10만회) 초과 사용 및 토크 캘리브레이션 누락',
+    '왜 캡핑 토크가 부족했는가? -> 모터 토크 센서 출력 저하',
+    '왜 센서 출력이 저하되었는가? -> 정기 교정 주기(6개월) 2주 초과',
+    '왜 교정 주기가 초과되었는가? -> 장비 예방보전(PM) 대장에 교정 알림 누락',
+    '왜 알림이 누락되었는가? -> 교정 주기를 수기 엑셀로 관리함',
+    '왜 시스템 등록이 안 되었는가? -> 캡핑 장비 교정 모듈 미연동',
+    'ITM-AMP-002', '하이드라 카밍 앰플', 'LOT-20261020-02', false, '생산기술팀 정수석', '2026-11-20',
+    '캡핑 설비 개선 후 생산 5개 LOT 누액 불량률 0.1% 이하 및 토크 CPK 1.33 이상 확보', '2026-12-20', 'NOT_EVALUATED', 'admin', 'admin'
+) ON CONFLICT (capa_number) DO NOTHING;
+
+-- Case 3: 공급업체 Audit 지적 연계 (12단계 연동 사례)
+INSERT INTO capa_records (
+    capa_number, title, source_type, source_id, source_number, source_description,
+    category, risk_level, status, problem_description, containment_action, containment_date, containment_responsible,
+    root_cause_analysis, item_code, product_name, assigned_to, target_completion_date,
+    effectiveness_criteria, effectiveness_target_date, effectiveness_result, created_by, updated_by
+) VALUES (
+    'CAPA-202610-003',
+    '원료 협력사 코스맥스 미생물 한도시험 시험일지 작성 지연 및 적합성 예방조치',
+    'SUPPLIER_AUDIT', 1, 'AUDIT-2026-003', '2026년 정기 공급업체 평가 현장 심사 Major 지적사항',
+    'COMPLIANCE', 'MEDIUM', 'EFFECTIVENESS_REVIEW',
+    '협력사 미생물 한도시험 완료 전 원료 선출하 위험 및 원본 시험 성적서 배포 지연 적발.',
+    '미생물 시험 미완료 원료 출하 금지 전자 락 설정 및 해당 제조사 원료 입고 시 COA 대조 전수 검증', '2026-10-10', '구매품질팀 최과장',
+    '협력사 QC 인력 부족으로 시험 기록 전산 입력 지연 및 LIMS 연동 미비',
+    'RAW-EXT-003', '병풀추출물 100%', '협력업체관리팀 손선임', '2026-10-25',
+    '3개월간 입고된 원료의 COA 및 미생물 시험 성적서 납기 내 100% 수령 및 이상 없음', '2026-11-10', 'NOT_EVALUATED', 'admin', 'admin'
+) ON CONFLICT (capa_number) DO NOTHING;
+
+-- Case 4: 자체발굴 / 변경관리 연계 완료 및 효과성 검증 종결 (CLOSED 사례)
+INSERT INTO capa_records (
+    capa_number, title, source_type, source_number, source_description,
+    category, risk_level, status, problem_description, containment_action, containment_date, containment_responsible,
+    root_cause_analysis, assigned_to, target_completion_date, actual_completion_date,
+    effectiveness_criteria, effectiveness_target_date, effectiveness_reviewed_date, effectiveness_reviewed_by,
+    effectiveness_result, effectiveness_evidence, closure_comment, closed_by, closed_date, created_by, updated_by
+) VALUES (
+    'CAPA-202609-001',
+    '선스크린 SPF 차단지수 시험방법 국제 표준(ISO 24444) 개정에 따른 시험 밸리데이션',
+    'INTERNAL_AUDIT', 'CHG-202609-004', '내부 품질 감사 및 ISO 24444:2019 표준 변경 반영 과제',
+    'PROCESS_CONTROL', 'LOW', 'CLOSED',
+    '자외선차단지수(SPF) 임상시험 가이드라인 개정에 따라 기존 구 시험법 데이터와의 상관성 검증 및 재시험 필요.',
+    '개정 표준 시험 프로토콜 마련 전까지 구 규격 기반 신규 품목 승인 잠정 보류', '2026-09-05', '임상연구소 오책임',
+    '국제 표준 규격 개정에 따른 시험실 SOP 미개정 및 시험자 숙련도 재평가 미실시',
+    'R&D연구소 한수석', '2026-09-30', '2026-09-28',
+    '신규 공인 시험기관 교차 검증 데이터 오차율 5% 이내 및 식약처 변경 승인 완료', '2026-10-15', '2026-10-14', '품질경영본부장 강상무',
+    'EFFECTIVE', '외부 공인기관 KTR 시험 성적서 교차 검증 결과 표준편차 2.1%로 유효성 확인 완료.',
+    'ISO 24444:2019 시험 밸리데이션 및 식약처 기능성 변경보고 완료되어 CAPA 정상 종결함.', '품질경영본부장 강상무', '2026-10-15', 'admin', 'admin'
+) ON CONFLICT (capa_number) DO NOTHING;
+
+-- 7. CAPA 조치과제(Action Items) 초기 시딩
+-- CAPA 1 조치과제 (3건)
+INSERT INTO capa_action_items (capa_id, action_type, title, description, assigned_to, target_date, status, created_by, updated_by)
+SELECT id, 'CORRECTIVE', '교반조 자동 타이머 및 인터락 밸브 개조 설치', '교반 완료 시간 이전 토출 방지용 자동 인터락 제어반 구축', '설비팀 강주임', '2026-11-05', 'IN_PROGRESS', 'admin', 'admin'
+FROM capa_records WHERE capa_number = 'CAPA-202610-001'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO capa_action_items (capa_id, action_type, title, description, assigned_to, target_date, status, created_by, updated_by)
+SELECT id, 'DOCUMENT_REVISION', '조제 표준작업지침서(SOP-MFG-04) 교반 시간 및 분산도 검사 기준 개정', '교반 시간 45분 엄수 및 분산도 현장 샘플링 검사 절차 신설', '제조품질팀 박과장', '2026-11-08', 'PENDING', 'admin', 'admin'
+FROM capa_records WHERE capa_number = 'CAPA-202610-001'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO capa_action_items (capa_id, action_type, title, description, assigned_to, target_date, status, created_by, updated_by)
+SELECT id, 'PREVENTIVE', '전 생산 라인 자동 디스펜서 노즐 일일 점검 체크시트 도입', '동일 유형 타 라인 4개소에 분산 노즐 막힘 및 오차 일일 점검 수평전개', '공정품질팀 이대리', '2026-11-12', 'PENDING', 'admin', 'admin'
+FROM capa_records WHERE capa_number = 'CAPA-202610-001'
+ON CONFLICT DO NOTHING;
+
+-- CAPA 2 조치과제 (2건)
+INSERT INTO capa_action_items (capa_id, action_type, title, description, assigned_to, target_date, status, created_by, updated_by)
+SELECT id, 'CORRECTIVE', '앰플 캡핑 지그 헤드 전면 교체 및 토크 센서 교정', '신규 내마모성 초경 지그 장착 및 공인 교정기관 성적서 획득', '생산기술팀 정수석', '2026-11-02', 'PENDING', 'admin', 'admin'
+FROM capa_records WHERE capa_number = 'CAPA-202610-002'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO capa_action_items (capa_id, action_type, title, description, assigned_to, target_date, status, created_by, updated_by)
+SELECT id, 'TRAINING', '캡핑 설비 오퍼레이터 토크 한도 관리 및 일일 점검 교육', '캡핑 토크 규격 관리 기준 및 이상 발생 시 조치 요령 교육훈련', '공정품질팀 박과장', '2026-11-07', 'PENDING', 'admin', 'admin'
+FROM capa_records WHERE capa_number = 'CAPA-202610-002'
+ON CONFLICT DO NOTHING;
+
+-- CAPA 4 조치과제 (1건 완료 상태)
+INSERT INTO capa_action_items (capa_id, action_type, title, description, assigned_to, target_date, completion_date, status, completion_notes, verified_by, verified_at, created_by, updated_by)
+SELECT id, 'CORRECTIVE', 'ISO 24444 프로토콜 시험 검증 보고서 발행', '신규 규격 기반 표준 프로토콜 작성 및 밸리데이션 완료', 'R&D연구소 한수석', '2026-09-25', '2026-09-24', 'COMPLETED', '식약처 승인 완료 및 보고서 첨부', '품질경영본부장 강상무', CURRENT_TIMESTAMP, 'admin', 'admin'
+FROM capa_records WHERE capa_number = 'CAPA-202609-001'
+ON CONFLICT DO NOTHING;
