@@ -97,82 +97,39 @@ CREATE INDEX IF NOT EXISTS idx_ncr_action_status ON ncr_action_items(status);
 CREATE INDEX IF NOT EXISTS idx_ncr_action_deleted ON ncr_action_items(is_deleted);
 
 -- 동적 메뉴 등록 (DEC-10): MANUAL_ROOT 하위 메뉴
-INSERT INTO dynamic_menu (
-    menu_code, menu_name, parent_menu_code, route_url, icon, 
-    menu_order, is_active, is_visible, permission_code, created_by, updated_by
-)
+INSERT INTO dynamic_menu (parent_id, menu_name, menu_code, menu_order, icon, is_active, menu_type)
 SELECT 
-    'SYS_NCR_MGMT', 
+    p.id, 
     '부적합품 관리 및 출하승인 (ISO 13485/22716 NCR)', 
-    'MANUAL_ROOT', 
-    '/ncr', 
+    'SYS_NCR_MGMT', 
+    100, 
     '⚠️', 
-    10, 
     true, 
-    true, 
-    'VIEW_NCR', 
-    'SYSTEM_INIT', 
-    'SYSTEM_INIT'
-WHERE NOT EXISTS (SELECT 1 FROM dynamic_menu WHERE menu_code = 'SYS_NCR_MGMT');
+    'SYSTEM'
+FROM dynamic_menu p 
+WHERE p.menu_code = 'MANUAL_ROOT'
+  AND NOT EXISTS (SELECT 1 FROM dynamic_menu WHERE menu_code = 'SYS_NCR_MGMT');
 
--- 시스템 권한 마스터 등록
-INSERT INTO permission_master (
-    permission_code, permission_name, description, category, created_by, updated_by
-)
-SELECT 
-    'VIEW_NCR', 
-    '부적합품 관리 열람', 
-    '부적합 보고서(NCR), 격리 보관 현황, 처리방안 및 출하 승인 게이트 열람 권한', 
-    '품질관리', 
-    'SYSTEM_INIT', 
-    'SYSTEM_INIT'
-WHERE NOT EXISTS (SELECT 1 FROM permission_master WHERE permission_code = 'VIEW_NCR');
-
-INSERT INTO permission_master (
-    permission_code, permission_name, description, category, created_by, updated_by
-)
-SELECT 
-    'MANAGE_NCR', 
-    '부적합품 관리 및 처리 승인', 
-    '부적합 보고서 등록/수정, 격리 해제, 폐기/재작업/특채 판정 승인 및 CAPA 연계 권한', 
-    '품질관리', 
-    'SYSTEM_INIT', 
-    'SYSTEM_INIT'
-WHERE NOT EXISTS (SELECT 1 FROM permission_master WHERE permission_code = 'MANAGE_NCR');
-
--- 관리자 역할에 권한 부여
-INSERT INTO role_permissions (role, permission_code)
-SELECT 'ROLE_ADMIN', 'VIEW_NCR'
-WHERE NOT EXISTS (SELECT 1 FROM role_permissions WHERE role = 'ROLE_ADMIN' AND permission_code = 'VIEW_NCR');
-
-INSERT INTO role_permissions (role, permission_code)
-SELECT 'ROLE_ADMIN', 'MANAGE_NCR'
-WHERE NOT EXISTS (SELECT 1 FROM role_permissions WHERE role = 'ROLE_ADMIN' AND permission_code = 'MANAGE_NCR');
+-- 동적 메뉴 권한 매핑 (ROLE_ADMIN)
+INSERT INTO dynamic_menu_permission (menu_id, role_id, can_view, can_create, can_edit, can_delete)
+SELECT m.id, r.id, true, true, true, true
+FROM dynamic_menu m, roles r
+WHERE m.menu_code = 'SYS_NCR_MGMT'
+  AND r.role_key IN ('ROLE_ADMIN', 'ADMIN')
+  AND NOT EXISTS (
+    SELECT 1 FROM dynamic_menu_permission dmp 
+    WHERE dmp.menu_id = m.id AND dmp.role_id = r.id
+  );
 
 -- 페이지 가이드 등록
-INSERT INTO system_page_guides (
-    page_key, page_title, regulatory_standard, summary_description, detailed_guide_markdown,
-    target_roles, is_active, created_by, updated_by
-)
+INSERT INTO system_page_guides (page_key, title, content, updated_by, created_at, updated_at)
 SELECT 
     'ncrManagement', 
-    '부적합품 관리 및 출하승인 통제 가이드', 
-    'ISO 13485:2016 §8.3 / ISO 22716:2007 §8.4 / 21 CFR 820.90', 
-    '원자재 입고부터 제조공정, 완제품 출하까지 모든 부적합품의 식별, 물리적 격리(Quarantine), 원인조사, 처리판정(폐기/반품/재작업/특채), CAPA 연계 및 출하승인 통제를 보증합니다.', 
-    '### ISO 13485 / ISO 22716 부적합품 관리 및 출하승인 통제 지침
-1. **식별 및 즉각 격리 (Identification & Quarantine)**: 부적합이 발견된 즉시 품목, 수량, LOT 번호를 식별하고 노란색/적색 식별 라벨을 부착한 후 지정된 격리 보관구역(Quarantine Area)으로 이동하여 임의 사용을 방지합니다.
-2. **원인 조사 및 평가 (Cause Investigation)**: 발생 원인을 다각도로 분석(5-Why, 어골도)하고 위험도(Critical/Major/Minor)를 평가하여 재발 가능성을 판정합니다.
-3. **처리 방안 심의 및 승인 (Disposition Review & Authority)**:
-   - **폐기 (Scrap)**: 안전성/기능 복구 불가능 시 전량 폐기 후 입회 확인.
-   - **공급사 반품 (Return to Supplier)**: 입고 규격 불합격 원자재의 공급사 반품 및 클레임 제기.
-   - **재작업 (Rework)**: 정식 승인된 재작업 지침서에 의거하여 수행하고, 재작업 후 전수 재검사 실시.
-   - **특채/양보 (Concession)**: 의도된 사용에 대한 안전성 및 유효성에 유해한 영향이 없음을 문서화된 타당성 근거로 입증하고 품질책임자가 최종 승인한 경우에 한함.
-4. **시정 및 예방조치 (CAPA) 연계**: 치명(Critical) 부적합 또는 주요(Major) 부적합이 반복되는 경우 시정조치(CAPA) 발행을 필수로 연계합니다.
-5. **출하 승인 게이트 (Market Release Gate)**: 미해결 부적합 보고서(NCR)가 존재하는 LOT는 최종 출하 승인이 시스템적으로 자동 차단(Lock/Hold)됩니다.', 
-    'ROLE_ADMIN,ROLE_USER', 
-    true, 
+    '⚠️ ISO 13485 / ISO 22716 부적합품 관리 및 출하승인 통제 표준 가이드', 
+    '원자재 입고부터 제조공정, 완제품 출하까지 모든 부적합품의 식별, 물리적 격리(Quarantine), 원인조사, 처리판정(폐기/반품/재작업/특채), CAPA 연계 및 출하승인 통제를 보증합니다. | ISO 13485 §8.3 / ISO 22716 §8.4 / 21 CFR 820.90 준수', 
     'SYSTEM_INIT', 
-    'SYSTEM_INIT'
+    CURRENT_TIMESTAMP, 
+    CURRENT_TIMESTAMP
 WHERE NOT EXISTS (SELECT 1 FROM system_page_guides WHERE page_key = 'ncrManagement');
 
 -- 기초 시드 데이터 등록: NCR 보고서 4건

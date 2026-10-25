@@ -34,7 +34,6 @@ public class Part11AssessmentItem {
     @Column(name = "regulatory_standard", length = 100)
     private String regulatoryStandard;
 
-    @Lob
     @Column(name = "requirement_details", columnDefinition = "TEXT")
     private String requirementDetails;
 
@@ -42,7 +41,6 @@ public class Part11AssessmentItem {
     @Column(name = "compliance_status", nullable = false, length = 50)
     private Part11ComplianceStatus complianceStatus;
 
-    @Lob
     @Column(name = "implementation_summary", columnDefinition = "TEXT")
     private String implementationSummary;
 

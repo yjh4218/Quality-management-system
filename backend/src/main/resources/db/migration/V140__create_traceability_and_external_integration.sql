@@ -131,77 +131,39 @@ CREATE INDEX IF NOT EXISTS idx_barcode_batch ON barcode_records(batch_number);
 CREATE INDEX IF NOT EXISTS idx_barcode_status ON barcode_records(status);
 
 -- 동적 메뉴 등록 (DEC-10): MANUAL_ROOT 하위 메뉴
-INSERT INTO dynamic_menu (
-    menu_code, menu_name, parent_menu_code, route_url, icon, 
-    menu_order, is_active, is_visible, permission_code, created_by, updated_by
-)
+INSERT INTO dynamic_menu (parent_id, menu_name, menu_code, menu_order, icon, is_active, menu_type)
 SELECT 
-    'SYS_TRACEABILITY', 
+    p.id, 
     '외부연계 및 추적성 (ISO 13485/22716)', 
-    'MANUAL_ROOT', 
-    '/traceability', 
+    'SYS_TRACEABILITY', 
+    90, 
     '🌐', 
-    9, 
     true, 
-    true, 
-    'VIEW_TRACEABILITY', 
-    'SYSTEM_INIT', 
-    'SYSTEM_INIT'
-WHERE NOT EXISTS (SELECT 1 FROM dynamic_menu WHERE menu_code = 'SYS_TRACEABILITY');
+    'SYSTEM'
+FROM dynamic_menu p 
+WHERE p.menu_code = 'MANUAL_ROOT'
+  AND NOT EXISTS (SELECT 1 FROM dynamic_menu WHERE menu_code = 'SYS_TRACEABILITY');
 
--- 시스템 권한 마스터 등록
-INSERT INTO permission_master (
-    permission_code, permission_name, description, category, created_by, updated_by
-)
-SELECT 
-    'VIEW_TRACEABILITY', 
-    '외부연계 및 추적성 열람', 
-    'LOT 양방향 추적성 매트릭스, 외부 시스템(ERP/WMS) 연동 및 바코드 식별 관리 화면 열람 권한', 
-    '품질관리', 
-    'SYSTEM_INIT', 
-    'SYSTEM_INIT'
-WHERE NOT EXISTS (SELECT 1 FROM permission_master WHERE permission_code = 'VIEW_TRACEABILITY');
-
-INSERT INTO permission_master (
-    permission_code, permission_name, description, category, created_by, updated_by
-)
-SELECT 
-    'MANAGE_TRACEABILITY', 
-    '외부연계 및 추적성 관리', 
-    'LOT/배치 등록, 투입 관계 편성, 수기 대사 승인 및 바코드 라벨 발행 권한', 
-    '품질관리', 
-    'SYSTEM_INIT', 
-    'SYSTEM_INIT'
-WHERE NOT EXISTS (SELECT 1 FROM permission_master WHERE permission_code = 'MANAGE_TRACEABILITY');
-
--- 관리자 역할에 권한 부여
-INSERT INTO role_permissions (role, permission_code)
-SELECT 'ROLE_ADMIN', 'VIEW_TRACEABILITY'
-WHERE NOT EXISTS (SELECT 1 FROM role_permissions WHERE role = 'ROLE_ADMIN' AND permission_code = 'VIEW_TRACEABILITY');
-
-INSERT INTO role_permissions (role, permission_code)
-SELECT 'ROLE_ADMIN', 'MANAGE_TRACEABILITY'
-WHERE NOT EXISTS (SELECT 1 FROM role_permissions WHERE role = 'ROLE_ADMIN' AND permission_code = 'MANAGE_TRACEABILITY');
+-- 동적 메뉴 권한 매핑 (ROLE_ADMIN)
+INSERT INTO dynamic_menu_permission (menu_id, role_id, can_view, can_create, can_edit, can_delete)
+SELECT m.id, r.id, true, true, true, true
+FROM dynamic_menu m, roles r
+WHERE m.menu_code = 'SYS_TRACEABILITY'
+  AND r.role_key IN ('ROLE_ADMIN', 'ADMIN')
+  AND NOT EXISTS (
+    SELECT 1 FROM dynamic_menu_permission dmp 
+    WHERE dmp.menu_id = m.id AND dmp.role_id = r.id
+  );
 
 -- 페이지 가이드 등록
-INSERT INTO system_page_guides (
-    page_key, page_title, regulatory_standard, summary_description, detailed_guide_markdown,
-    target_roles, is_active, created_by, updated_by
-)
+INSERT INTO system_page_guides (page_key, title, content, updated_by, created_at, updated_at)
 SELECT 
     'traceabilityManagement', 
-    '외부연계 및 추적성 관리 가이드', 
-    'ISO 13485:2016 §7.5.8 / ISO 22716:2007 §8.3 / 21 CFR 820.65 / 820.120', 
-    '원자재/부자재 입고부터 벌크 조제, 충진포장 완제품 및 유통 출하까지 전공정 LOT 양방향 추적성 및 외부 ERP/WMS 수기 대사, GS1 UDI 바코드 식별을 보증합니다.', 
-    '### ISO 13485 / 22716 전공정 LOT 양방향 추적성 및 외부 시스템 연계 지침
-1. **정방향 추적성 (Forward Traceability)**: 원료(Raw Material) 및 포장재 LOT를 기준으로 벌크 배치 및 최종 완제품, 출하 유통처까지의 파급 경로를 단 1회의 조회로 전수 파악합니다.
-2. **역방향 추적성 (Backward Traceability)**: 고객 클레임, 이상사례, 부적합 발생 시 완제품 LOT 번호로부터 투입된 벌크 조제 배치 및 원자재 공급업체(ASL)까지 거꾸로 추적하여 근본 원인을 규명합니다.
-3. **외부 시스템(ERP/WMS) 연동 및 수기 대사 (DEC-02)**: 실시간 API 또는 CSV 배치 연동 시 재고 수량 불일치(Discrepancy)를 검출하고, 품질 책임자의 수기 승인 대사(Reconciliation)를 통해 기록 무결성을 확보합니다.
-4. **GS1 UDI 바코드 및 QR 식별**: (01)GTIN, (10)LOT번호, (17)유효기한, (21)일련번호를 포함하는 국제 표준 UDI 라벨을 생성하고 실시간 검증합니다.', 
-    'ROLE_ADMIN,ROLE_USER', 
-    true, 
+    '🌐 ISO 13485 / ISO 22716 외부연계 및 추적성 관리 표준 가이드', 
+    '원자재/부자재 입고부터 벌크 조제, 충진포장 완제품 및 유통 출하까지 전공정 LOT 양방향 추적성 및 외부 ERP/WMS 수기 대사, GS1 UDI 바코드 식별을 보증합니다. | ISO 13485 §7.5.8 / ISO 22716 §8.3 / 21 CFR 820.65 준수', 
     'SYSTEM_INIT', 
-    'SYSTEM_INIT'
+    CURRENT_TIMESTAMP, 
+    CURRENT_TIMESTAMP
 WHERE NOT EXISTS (SELECT 1 FROM system_page_guides WHERE page_key = 'traceabilityManagement');
 
 -- 기초 시드 데이터 등록: 배치 마스터 6건

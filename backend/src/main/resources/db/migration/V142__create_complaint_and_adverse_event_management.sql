@@ -130,48 +130,40 @@ CREATE INDEX IF NOT EXISTS idx_cse_status ON complaint_safety_evaluations(evalua
 CREATE INDEX IF NOT EXISTS idx_cai_eval_id ON complaint_action_items(evaluation_id);
 
 -- 4. 동적 메뉴 및 시스템 권한 등록
-INSERT INTO screen_menus (
-    menu_code, menu_name, menu_path, icon_name, parent_menu_code,
-    sort_order, is_active, required_role, created_at, updated_at
-) VALUES (
-    'SYS_COMPLAINT_SAFETY', '불만·이상사례 관리', '/complaints-safety', 'ShieldAlert', 'QUALITY_ROOT',
-    65, true, 'ROLE_USER', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-) ON CONFLICT (menu_code) DO UPDATE SET
-    menu_name = EXCLUDED.menu_name,
-    menu_path = EXCLUDED.menu_path,
-    icon_name = EXCLUDED.icon_name,
-    sort_order = EXCLUDED.sort_order,
-    is_active = true,
-    updated_at = CURRENT_TIMESTAMP;
+INSERT INTO dynamic_menu (parent_id, menu_name, menu_code, menu_order, icon, is_active, menu_type)
+SELECT 
+    p.id, 
+    '고객불만 및 시판후이상사례 (ISO 13485/22716)', 
+    'SYS_COMPLAINT_SAFETY', 
+    110, 
+    '🛡️', 
+    true, 
+    'SYSTEM'
+FROM dynamic_menu p 
+WHERE p.menu_code = 'MANUAL_ROOT'
+  AND NOT EXISTS (SELECT 1 FROM dynamic_menu WHERE menu_code = 'SYS_COMPLAINT_SAFETY');
 
-INSERT INTO system_permissions (
-    permission_code, permission_name, description, category, created_at, updated_at
-) VALUES 
-('VIEW_COMPLAINT_SAFETY', '불만·이상사례 조회', '고객 불만 및 이상사례 안전성 평가 현황을 조회할 수 있는 권한', 'QUALITY', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('MANAGE_COMPLAINT_SAFETY', '불만·이상사례 관리', '불만 접수, 인과관계 평가, 식약처 보고 및 CAPA 연계를 관리할 수 있는 권한', 'QUALITY', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-ON CONFLICT (permission_code) DO NOTHING;
+-- 동적 메뉴 권한 매핑 (ROLE_ADMIN)
+INSERT INTO dynamic_menu_permission (menu_id, role_id, can_view, can_create, can_edit, can_delete)
+SELECT m.id, r.id, true, true, true, true
+FROM dynamic_menu m, roles r
+WHERE m.menu_code = 'SYS_COMPLAINT_SAFETY'
+  AND r.role_key IN ('ROLE_ADMIN', 'ADMIN')
+  AND NOT EXISTS (
+    SELECT 1 FROM dynamic_menu_permission dmp 
+    WHERE dmp.menu_id = m.id AND dmp.role_id = r.id
+  );
 
--- 5. 시스템 규제 가이드(Regulatory Guide) 등록
-INSERT INTO system_guides (
-    guide_key, title, subtitle, standard_code, category,
-    compliance_summary, audit_point, practical_tips, created_at, updated_at
-) VALUES (
-    'complaintSafetyManagement',
-    '고객 불만 및 시판 후 이상사례 평가 관리 규정',
-    'ISO 13485:2016 §8.2.2 / ISO 22716:2007 §10 / 21 CFR 820.198 / 화장품 안전성 정보 보고',
-    'ISO 13485 §8.2.2 | 21 CFR 820.198 | 화장품법 제5조의2',
-    'POST_MARKET_SURVEILLANCE',
-    '소비자 및 의료기관으로부터 인입되는 모든 고객 불만과 이상사례(부작용)를 중앙 집중 접수하고, LOT 미상 여부와 관계없이 의학적 인과관계(WHO-UMC) 및 규제기관(식약처 15일 이내 신속보고 / FDA MDR) 보고 대상 여부를 엄격히 평가하여 중대 품질 리스크를 사전에 통제합니다.',
-    '① 소비자가 용기나 라벨을 분실한 경우에도 LOT 미상으로 불만을 누락 없이 접수하였는가? (D-9 해소) ② 중대한 이상사례(사망, 입원 등) 발생 시 인지일로부터 15일 이내 식약처에 신속보고하였는가? ③ 21 CFR 820.198(b)에 따라 조사를 실시하지 않은 경우 명확한 정당화 사유를 문서화하였는가? ④ 중대 불만 건에 대해 CAPA(16단계)가 적시에 개시되었는가?',
-    '경미한 사용감 불만과 의학적 이상반응(홍반, 접촉성피부염 등)을 즉시 구분하고, 화장품 이상사례는 인과관계 6단계(Certain, Probable, Possible, Unlikely, Conditional, Unassessable)로 정밀 평가하십시오.',
-    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-) ON CONFLICT (guide_key) DO UPDATE SET
-    title = EXCLUDED.title,
-    subtitle = EXCLUDED.subtitle,
-    compliance_summary = EXCLUDED.compliance_summary,
-    audit_point = EXCLUDED.audit_point,
-    practical_tips = EXCLUDED.practical_tips,
-    updated_at = CURRENT_TIMESTAMP;
+-- 5. 시스템 규제 가이드 등록
+INSERT INTO system_page_guides (page_key, title, content, updated_by, created_at, updated_at)
+SELECT 
+    'complaintSafetyManagement', 
+    '🛡️ ISO 13485 / ISO 22716 고객 불만 및 시판 후 이상사례 평가 관리 표준 규정', 
+    '소비자 및 의료기관으로부터 인입되는 모든 고객 불만과 이상사례를 접수하고, LOT 미상 여부와 무관하게 인과관계(WHO-UMC) 및 규제기관 보고 대상 여부를 엄격히 평가합니다. | ISO 13485 §8.2.2 / 21 CFR 820.198 / 화장품법 제5조의2 준수', 
+    'SYSTEM_INIT', 
+    CURRENT_TIMESTAMP, 
+    CURRENT_TIMESTAMP
+WHERE NOT EXISTS (SELECT 1 FROM system_page_guides WHERE page_key = 'complaintSafetyManagement');
 
 -- 6. 초기 시드 데이터 등록 (화장품 이상사례 2건, 의료기기 불만 2건, 조치과제 5건)
 -- Seed 1: 화장품 접촉성 피부염 이상사례 (중대 유해사례, 식약처 신속보고 완료)

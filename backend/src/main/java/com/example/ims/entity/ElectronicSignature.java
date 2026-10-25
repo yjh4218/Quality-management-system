@@ -74,7 +74,6 @@ public class ElectronicSignature {
     @Column(name = "signature_hash", nullable = false, length = 64)
     private String signatureHash;
 
-    @Lob
     @Column(name = "manifest_json", columnDefinition = "TEXT")
     private String manifestJson;
 

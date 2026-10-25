@@ -51,7 +51,6 @@ public class OfficialRecordPolicy {
     @Column(name = "legal_basis", length = 300)
     private String legalBasis;
 
-    @Lob
     @Column(name = "disposal_procedure", columnDefinition = "TEXT")
     private String disposalProcedure;
 
