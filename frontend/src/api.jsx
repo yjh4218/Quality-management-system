@@ -704,6 +704,12 @@ export const verifyEmail = (token) => api.get(`/api/auth/verify-email?token=${en
 export const findPassword = (data) => api.post('/api/auth/find-password', data);
 export const changePassword = (data) => api.post('/api/auth/change-password', data);
 
+// Password Reset Verification (2-Way 인증 및 신규 비밀번호 직접 재설정)
+export const checkUserForPasswordReset = (username) => api.post('/api/auth/password-reset/check-user', { username });
+export const sendPasswordResetCode = (username, method) => api.post('/api/auth/password-reset/send-code', { username, method });
+export const verifyPasswordResetCode = (username, code) => api.post('/api/auth/password-reset/verify-code', { username, code });
+export const confirmPasswordReset = (username, resetToken, newPassword) => api.post('/api/auth/password-reset/confirm', { username, resetToken, newPassword });
+
 // System Settings
 export const getSystemSettings = (forceRefresh = false) => 
     api.get('/api/system-settings', { skipCache: forceRefresh }).then(res => res.data);

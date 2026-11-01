@@ -66,4 +66,28 @@ public class MailService {
             }
         }
     }
+
+    /**
+     * 본인인증 6자리 인증번호를 이메일로 발송합니다.
+     */
+    public void sendVerificationCode(String toEmail, String name, String code) {
+        log.info("[MAIL] Sending Verification Code to: {} (Code: [{}])", toEmail, code);
+        
+        if (mailEnabled && mailSender != null) {
+            try {
+                org.springframework.mail.SimpleMailMessage message = new org.springframework.mail.SimpleMailMessage();
+                message.setFrom(fromEmail);
+                message.setTo(toEmail);
+                message.setSubject("[TND 관리자 시스템] 본인확인 인증번호 안내");
+                message.setText("안녕하세요, " + (name != null ? name : "회원") + "님.\n\n" +
+                                "요청하신 본인확인 인증번호는 다음과 같습니다.\n\n" +
+                                "인증번호: " + code + "\n\n" +
+                                "본 인증번호는 3분간 유효합니다. 화면에 입력해 주세요.\n\n" +
+                                "감사합니다.");
+                mailSender.send(message);
+            } catch (Exception e) {
+                log.error("[MAIL] Failed to send verification code email: {}", e.getMessage());
+            }
+        }
+    }
 }

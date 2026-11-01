@@ -7,6 +7,8 @@ import com.example.ims.entity.User;
 import com.example.ims.repository.UserRepository;
 import com.example.ims.repository.RoleRepository;
 import com.example.ims.service.AuthService;
+import com.example.ims.service.PasswordResetService;
+import com.example.ims.dto.PasswordResetDto;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +36,7 @@ public class AuthController {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final AuthService authService;
+    private final PasswordResetService passwordResetService;
 
     /**
      * 사용자 아이디 중복 여부를 확인합니다.
@@ -80,6 +83,50 @@ public class AuthController {
     /**
      * 비밀번호 분실 시 임시 비밀번호 발급 절차를 진행합니다.
      */
+
+    /**
+     * 비밀번호 재설정 1단계: 사용자 계정 확인 및 마스킹된 연락처 정보 반환
+     */
+    @PostMapping("/password-reset/check-user")
+    public ResponseEntity<ApiResponse<PasswordResetDto.CheckUserResponse>> checkUserForPasswordReset(
+            @Valid @RequestBody PasswordResetDto.CheckUserRequest request) {
+        var response = passwordResetService.checkUser(request.username());
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    /**
+     * 비밀번호 재설정 2단계-1: 6자리 본인확인 인증번호 발송 (이메일 또는 휴대폰)
+     */
+    @PostMapping("/password-reset/send-code")
+    public ResponseEntity<ApiResponse<Map<String, String>>> sendPasswordResetCode(
+            @Valid @RequestBody PasswordResetDto.SendCodeRequest request) {
+        passwordResetService.sendVerificationCode(request.username(), request.method());
+        String msg = "EMAIL".equalsIgnoreCase(request.method()) 
+                ? "등록된 이메일로 6자리 인증번호가 발송되었습니다." 
+                : "등록된 휴대폰 번호로 6자리 인증번호가 발송되었습니다.";
+        return ResponseEntity.ok(ApiResponse.success(msg, Map.of("method", request.method())));
+    }
+
+    /**
+     * 비밀번호 재설정 2단계-2: 6자리 인증번호 일치 확인 및 1회용 resetToken 발급
+     */
+    @PostMapping("/password-reset/verify-code")
+    public ResponseEntity<ApiResponse<PasswordResetDto.VerifyCodeResponse>> verifyPasswordResetCode(
+            @Valid @RequestBody PasswordResetDto.VerifyCodeRequest request) {
+        var response = passwordResetService.verifyCode(request.username(), request.code());
+        return ResponseEntity.ok(ApiResponse.success("본인인증이 완료되었습니다.", response));
+    }
+
+    /**
+     * 비밀번호 재설정 3단계: 새 비밀번호 설정 및 계정 잠금 해제
+     */
+    @PostMapping("/password-reset/confirm")
+    public ResponseEntity<ApiResponse<Map<String, String>>> confirmPasswordReset(
+            @Valid @RequestBody PasswordResetDto.ConfirmResetRequest request) {
+        passwordResetService.confirmReset(request.username(), request.resetToken(), request.newPassword());
+        return ResponseEntity.ok(ApiResponse.success("비밀번호가 성공적으로 변경되었습니다. 새 비밀번호로 로그인해주세요.", Map.of("status", "SUCCESS")));
+    }
+
     @PostMapping("/find-password")
     public ResponseEntity<ApiResponse<Map<String, String>>> findPassword(@Valid @RequestBody com.example.ims.dto.FindPasswordRequestDto body) {
         String username = body.username();
