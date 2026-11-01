@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import * as api from './api';
 import { toast } from 'react-toastify';
 import TemplateRegistrationDrawer from './TemplateRegistrationDrawer';
 import { usePermissions } from './usePermissions';
+import useGridTabRecovery from './hooks/useGridTabRecovery';
 
 const PRODUCT_TYPE_LABELS = {
     'PET_REGULAR': 'PET병 - 막캡',
@@ -17,7 +18,9 @@ const PRODUCT_TYPE_LABELS = {
     'ETC': '기타'
 };
 
-const PackagingTemplatePage = ({ user }) => {
+const PackagingTemplatePage = ({ user, isActive = true }) => {
+    const gridRef = useRef(null);
+    useGridTabRecovery(gridRef, isActive);
     const { canEdit: canEditFn } = usePermissions(user);
     const canManageBatch = canEditFn('packagingTemplates');
     
@@ -191,6 +194,7 @@ const PackagingTemplatePage = ({ user }) => {
                 </div>
                 <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
                     <AgGridReact theme="legacy"
+                        ref={gridRef}
                         rowData={templates} 
                         columnDefs={colDefs} 
                         rowHeight={54}

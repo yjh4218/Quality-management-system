@@ -162,7 +162,7 @@ export default function ControlSampleLabelModal({ isOpen, onClose, inboundId }) 
             </div>
 
             {/* 6대 필수 정보 그리드 테이블 */}
-            <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] border border-black p-1 bg-slate-50/50">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: '8px', rowGap: '2px', fontSize: '10px', border: '1px solid black', padding: '4px', background: '#f8fafc' }}>
                 <div className="flex">
                     <span className="font-bold text-slate-700 w-14 shrink-0">품목코드:</span>
                     <span className="font-mono font-bold truncate">{labelData.itemCode || '-'}</span>
@@ -221,7 +221,7 @@ export default function ControlSampleLabelModal({ isOpen, onClose, inboundId }) 
                 </div>
 
                 {/* 본문 (설정 패널 + 실시간 프리뷰) */}
-                <div className="flex-1 overflow-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50">
+                <div style={{ flex: 1, overflow: 'auto', padding: '24px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '24px', background: '#f8fafc' }}>
                     {/* 좌측: 라벨 정보 및 인쇄 규격 설정 */}
                     <div className="space-y-4 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
                         <h3 className="text-sm font-bold text-slate-800 border-b border-slate-200 pb-2 flex items-center gap-1.5">
@@ -245,7 +245,7 @@ export default function ControlSampleLabelModal({ isOpen, onClose, inboundId }) 
 
                         {/* 규격 직접 입력 (Custom일 때 활성화) */}
                         {isCustomPreset && (
-                            <div className="grid grid-cols-2 gap-3 p-3 bg-indigo-50/50 rounded-lg border border-indigo-100">
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', padding: '12px', background: '#eef2ff', borderRadius: '8px', border: '1px solid #e0e7ff' }}>
                                 <div>
                                     <label className="block text-[11px] font-semibold text-indigo-900 mb-1">가로 너비 (mm)</label>
                                     <input
@@ -293,7 +293,7 @@ export default function ControlSampleLabelModal({ isOpen, onClose, inboundId }) 
                         </h3>
 
                         {/* 채널명 & 버전 정보 */}
-                        <div className="grid grid-cols-2 gap-3">
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                             <div>
                                 <label className="block text-xs font-semibold text-slate-600 mb-1">채널명</label>
                                 <input
@@ -323,7 +323,7 @@ export default function ControlSampleLabelModal({ isOpen, onClose, inboundId }) 
                         </div>
 
                         {/* LOT 번호 & 제조일자 */}
-                        <div className="grid grid-cols-2 gap-3">
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                             <div>
                                 <label className="block text-xs font-semibold text-slate-600 mb-1">LOT 번호</label>
                                 <input
@@ -345,7 +345,7 @@ export default function ControlSampleLabelModal({ isOpen, onClose, inboundId }) 
                         </div>
 
                         {/* 사용기한 & 품목코드 */}
-                        <div className="grid grid-cols-2 gap-3">
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                             <div>
                                 <label className="block text-xs font-semibold text-slate-600 mb-1">사용기한</label>
                                 <input

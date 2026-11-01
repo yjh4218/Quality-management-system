@@ -10,6 +10,12 @@ import { usePermissions } from './usePermissions';
  * [디자인 표준화] 제품코드 마스터의 20px 여백 및 표준 그리드 레이아웃을 적용했습니다.
  * [UX 개선] 기존 카드 형태에서 Ag-Grid 기반의 데이터 중심 레이아웃으로 전환하여 대량의 유통 채널 정보를 효율적으로 관리합니다.
  */
+const isKppOrAjuPallet = (palletStr) => {
+    if (!palletStr) return false;
+    const s = String(palletStr).toLowerCase().replace(/[\s_\-]/g, '');
+    return s.includes('kpp') || s.includes('아주') || s.includes('aju') || s.includes('한국파렛') || s.includes('한국팔렛');
+};
+
 const SalesChannelManagement = ({ user }) => {
     const { canEdit: checkEdit, canDelete: checkDelete } = usePermissions(user);
     const canEdit = checkEdit('salesChannels');
@@ -596,9 +602,15 @@ const SalesChannelManagement = ({ user }) => {
                                             >
                                                 <option value="">선택 안 함</option>
                                                 <option value="아주팔레트">아주팔레트</option>
+                                                <option value="KPP 팔레트">KPP 팔레트</option>
                                                 <option value="수출용 검은색 일회용 팔레트">수출용 검은색 일회용 팔레트</option>
                                                 <option value="수출용 목재 팔렛트">수출용 목재 팔렛트</option>
                                             </select>
+                                            {formData.palletType && !isKppOrAjuPallet(formData.palletType) && (
+                                                <div style={{ fontSize: '11px', color: '#b45309', marginTop: '4px', fontWeight: '600', background: '#fef3c7', padding: '4px 8px', borderRadius: '4px', border: '1px solid #fde68a' }}>
+                                                    💡 KPP, 아주팔레트 외 규격 팔레트는 포장사양서에 <strong>'모서리 각대 사용'</strong>이 자동 적용됩니다.
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="form-group" style={{ flex: 1.5 }}>
                                             <label style={{ fontWeight: '700', fontSize: '13px', marginBottom: '8px', display: 'block', color: '#475569' }}>팔레트 치수/훈증 스펙</label>

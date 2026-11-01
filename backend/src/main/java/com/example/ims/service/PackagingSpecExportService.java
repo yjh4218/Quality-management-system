@@ -60,6 +60,12 @@ public class PackagingSpecExportService {
     private final com.example.ims.repository.ChannelSpecialNoteRepository specialNoteRepository;
     private final com.example.ims.service.FileStorageService fileStorageService;
 
+    private boolean isKppOrAjuPallet(String palletStr) {
+        if (palletStr == null || palletStr.isBlank()) return false;
+        String clean = palletStr.toLowerCase().replaceAll("[\\s_\\-]", "");
+        return clean.contains("kpp") || clean.contains("아주") || clean.contains("aju") || clean.contains("한국파렛") || clean.contains("한국팔렛");
+    }
+
     /**
      * Generates a comprehensive and professional Excel export for the given product's packaging specs.
      * Dynamic generation without external template dependency.
@@ -533,6 +539,10 @@ public class PackagingSpecExportService {
             String effOutboxMat = (spec.getOutboxMaterial() != null && !spec.getOutboxMaterial().isBlank()) ? spec.getOutboxMaterial() : "KLB.S.S.K.K";
 
             String effPalletType = (spec.getPalletTypeStr() != null && !spec.getPalletTypeStr().isBlank()) ? spec.getPalletTypeStr() : "-";
+            boolean isNonKppAju = !"-".equals(effPalletType) && !isKppOrAjuPallet(effPalletType);
+            String displayPalletType = isNonKppAju && !effPalletType.contains("모서리 각대") 
+                ? (effPalletType + " [모서리 각대 사용]") 
+                : effPalletType;
             String effStackMethod = (spec.getPalletStackingMethod() != null && !spec.getPalletStackingMethod().isBlank() && !"-".equals(spec.getPalletStackingMethod().trim())) 
                 ? spec.getPalletStackingMethod() 
                 : ((spec.getPalletStackingPattern() != null && !spec.getPalletStackingPattern().isBlank() && !"-".equals(spec.getPalletStackingPattern().trim())) 
@@ -554,7 +564,7 @@ public class PackagingSpecExportService {
 
             addRow(sheet0, currentRow++, 28f, labelStyle, dataStyle, "인박스 구분", effInboxType, "인박스 입수량", effInboxQty, "인박스 규격", effInboxSize, "인박스 재질", effInboxMat);
             addRow(sheet0, currentRow++, 28f, labelStyle, dataStyle, "아웃박스 구분", effOutboxType, "아웃박스 입수량", effOutboxQty, "아웃박스 규격", effOutboxSize, "아웃박스 재질", effOutboxMat);
-            addRow(sheet0, currentRow++, 28f, labelStyle, dataStyle, "팔레트 종류", effPalletType, "적재 방법", effStackMethod, "팔레트 규격", effPalletSize, "높이 제한", effPalletHeightLimit);
+            addRow(sheet0, currentRow++, 28f, labelStyle, dataStyle, "팔레트 종류", displayPalletType, "적재 방법", effStackMethod, "팔레트 규격", effPalletSize, "높이 제한", effPalletHeightLimit);
             addRow(sheet0, currentRow++, 28f, labelStyle, dataStyle, "1아웃박스 중량 [제한12kg]", effOneOutboxWt, "1팔레트 중량 [제한630kg]", effOnePalletWt, "1팔레트 높이 [제한1500mm]", effOnePalletHt, "검증 상태", "정상 규격");
 
             // [5-1. 3D 입수 및 팔레트 적재 형태 (3D Loading Layout)]
@@ -566,7 +576,11 @@ public class PackagingSpecExportService {
             // [6. 사양서 특이사항]
             createSectionHeader(sheet0, currentRow, "6. 📝 사양서 특이사항 (Remarks)", headerStyle, 7, 28);
             currentRow++;
-            String remText = spec.getRemarks() != null ? spec.getRemarks() : "등록된 특이사항이 없습니다.";
+            String remText = spec.getRemarks() != null ? spec.getRemarks() : "";
+            if (isNonKppAju && !remText.contains("모서리 각대")) {
+                remText = (remText.isBlank() ? "" : (remText + "\n")) + "• [팔레트 보호] 모서리 각대 사용 (KPP, 아주팔레트 외 규격 팔레트 적용)";
+            }
+            if (remText.isBlank()) remText = "등록된 특이사항이 없습니다.";
             int remLines = remText.split("\\r?\\n").length;
             Row remRow = sheet0.createRow(currentRow);
             remRow.setHeightInPoints(Math.max(60f, Math.min(300f, remLines * 18f)));
@@ -1163,6 +1177,10 @@ public class PackagingSpecExportService {
         String effOutboxMat = (spec.getOutboxMaterial() != null && !spec.getOutboxMaterial().isBlank()) ? spec.getOutboxMaterial() : "KLB.S.S.K.K";
 
         String effPalletType = (spec.getPalletTypeStr() != null && !spec.getPalletTypeStr().isBlank()) ? spec.getPalletTypeStr() : "-";
+        boolean isNonKppAjuPdf = !"-".equals(effPalletType) && !isKppOrAjuPallet(effPalletType);
+        String displayPalletTypePdf = isNonKppAjuPdf && !effPalletType.contains("모서리 각대") 
+            ? (effPalletType + " [모서리 각대 사용]") 
+            : effPalletType;
         String effStackMethod = (spec.getPalletStackingMethod() != null && !spec.getPalletStackingMethod().isBlank() && !"-".equals(spec.getPalletStackingMethod().trim())) 
             ? spec.getPalletStackingMethod() 
             : ((spec.getPalletStackingPattern() != null && !spec.getPalletStackingPattern().isBlank() && !"-".equals(spec.getPalletStackingPattern().trim())) 
@@ -1187,7 +1205,7 @@ public class PackagingSpecExportService {
         addPdfKeyValueRow(table, labelFont, dataFont, BG_LABEL, BG_DATA, BORDER_COLOR,
                 "아웃박스 구분", effOutboxType, "아웃박스 입수량", effOutboxQty, "아웃박스 규격", effOutboxSize, "아웃박스 재질", effOutboxMat);
         addPdfKeyValueRow(table, labelFont, dataFont, BG_LABEL, BG_DATA, BORDER_COLOR,
-                "팔레트 종류", effPalletType, "적재 방법", effStackMethod, "팔레트 규격", effPalletSize, "높이 제한", effPalletHeightLimit);
+                "팔레트 종류", displayPalletTypePdf, "적재 방법", effStackMethod, "팔레트 규격", effPalletSize, "높이 제한", effPalletHeightLimit);
         addPdfKeyValueRow(table, labelFont, dataFont, BG_LABEL, BG_DATA, BORDER_COLOR,
                 "1아웃박스 중량", effOneOutboxWt, "1팔레트 중량", effOnePalletWt, "1팔레트 높이", effOnePalletHt, "검증 상태", "정상 규격");
 
@@ -1274,7 +1292,11 @@ public class PackagingSpecExportService {
         // [6. 사양서 특이사항]
         addPdfSectionHeader(table, "6. 📝 사양서 특이사항 (Remarks)", sectionFont, BG_SECTION, BORDER_COLOR);
         addPdfCell(table, "특이사항", labelFont, BG_LABEL, BORDER_COLOR, 1, Element.ALIGN_CENTER, 4f);
-        String remText = spec.getRemarks() != null && !spec.getRemarks().isBlank() ? spec.getRemarks() : "등록된 특이사항이 없습니다.";
+        String remText = spec.getRemarks() != null && !spec.getRemarks().isBlank() ? spec.getRemarks() : "";
+        if (isNonKppAjuPdf && !remText.contains("모서리 각대")) {
+            remText = (remText.isBlank() ? "" : (remText + "\n")) + "• [팔레트 보호] 모서리 각대 사용 (KPP, 아주팔레트 외 규격 팔레트 적용)";
+        }
+        if (remText.isBlank()) remText = "등록된 특이사항이 없습니다.";
         addPdfCell(table, remText, dataFont, BG_DATA, BORDER_COLOR, 7, Element.ALIGN_LEFT, 4f);
 
         document.add(table);
@@ -2620,7 +2642,11 @@ public class PackagingSpecExportService {
                     ? spec.getPalletStackingMethod() : defaultPattern);
 
             String sizeStr = spec.getPalletSize() != null ? spec.getPalletSize() : "1,100×1,100mm";
-            boolean hasCornerPost = "O".equalsIgnoreCase(spec.getCornerPostUseYn());
+            String pType = spec.getPalletTypeStr() != null && !spec.getPalletTypeStr().isBlank() 
+                ? spec.getPalletTypeStr() 
+                : (product.getChannels() != null && !product.getChannels().isEmpty() ? product.getChannels().get(0).getPalletType() : null);
+            boolean isNonKppAjuPallet = pType != null && !"-".equals(pType) && !isKppOrAjuPallet(pType);
+            boolean hasCornerPost = "O".equalsIgnoreCase(spec.getCornerPostUseYn()) || isNonKppAjuPallet;
 
             try {
                 g2.setFont(getSafeFont(java.awt.Font.PLAIN, 11));
@@ -2629,7 +2655,7 @@ public class PackagingSpecExportService {
             } catch (Throwable ignored) {}
 
             if (hasCornerPost) {
-                drawBadge(g2, width - 110, 26, "[코너 각대 연동]", new Color(254, 243, 199), new Color(217, 119, 6), new Color(253, 230, 138));
+                drawBadge(g2, width - 120, 26, "[모서리 각대 사용]", new Color(254, 243, 199), new Color(217, 119, 6), new Color(253, 230, 138));
             }
 
             drawIsometricPalletStack(g2, width / 2, height / 2 + 25, stacks, tierQty, sizeStr, hasCornerPost);

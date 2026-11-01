@@ -33,6 +33,15 @@ public class PackagingSpecComponent {
     private String supplier;            // 업체
     private String remarks;             // 비고
 
+    @Column(length = 500)
+    private String coatingSpec;         // 코팅 세부 사양
+    @Column(length = 500)
+    private String printingSpec;        // 인쇄 세부 사양
+    @Column(length = 500)
+    private String adhesiveSpec;        // 접착제 세부 사양
+    @Column(length = 500)
+    private String postProcessingSpec;  // 후가공 사양
+
     @Column(length = 1000)
     private String imagePath;           // 부자재 사진 URL
 }

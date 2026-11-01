@@ -10,6 +10,7 @@ import { splitSearchTokens, matchesAllTokens } from './utils/searchUtils';
 import GridColorLegendPopover from './components/common/GridColorLegendPopover';
 import GridConditionalFormattingModal from './components/common/GridConditionalFormattingModal';
 import useGridTabRecovery from './hooks/useGridTabRecovery';
+import useGridStatePersistence from './hooks/useGridStatePersistence';
 
 const CLAIM_LEGENDS = [
     { label: '치명 클레임 (CRITICAL)', color: '#be123c', bg: '#fff5f5', icon: '🔴', scope: '행 전체', desc: '중대 결함으로 지정된 고위험 클레임 건 (연분홍 배경 & 붉은 글자)' },
@@ -34,6 +35,7 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated, is
     const { canView, isAdmin } = usePermissions(user);
     const gridRef = useRef(null);
     useGridTabRecovery(gridRef, isActive);
+    const { saveColumnState } = useGridStatePersistence(gridRef, 'qms_grid_col_state_claims');
     const [actualClaims, setActualClaims] = useState([]);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [selectedClaim, setSelectedClaim] = useState(null);
@@ -611,6 +613,9 @@ const ClaimManagementPage = ({ user, onNavigate, navigationData, onNavigated, is
                     theme="legacy"
                     ref={gridRef}
                     rowData={filteredClaims}
+                    onColumnResized={saveColumnState}
+                    onColumnMoved={saveColumnState}
+                    onSortChanged={saveColumnState}
                     columnDefs={columnDefs}
                     pagination={false}
                     onRowDoubleClicked={handleRowClick}

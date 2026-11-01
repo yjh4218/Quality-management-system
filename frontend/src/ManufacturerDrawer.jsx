@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { createManufacturer, updateManufacturer, uploadFile, getManufacturerCategories, getFileUrl } from './api';
 import SaveConfirmModal from './components/SaveConfirmModal';
 import { toast } from 'react-toastify';
@@ -119,10 +120,10 @@ const ManufacturerDrawer = ({ manufacturer, onClose, canEdit }) => {
 
 // getFileUrl imported from ./api
 
-    return (
-        <div className="drawer-overlay" style={{ backdropFilter: 'blur(4px)', background: 'rgba(0, 51, 102, 0.15)' }}>
-            <div className="drawer" onClick={(e) => e.stopPropagation()} style={{ width: '850px', borderRadius: '24px', overflow: 'hidden' }}>
-                <div className="drawer-header" style={{ padding: '30px 40px', borderBottom: '1px solid #f1f5f9' }}>
+    return createPortal(
+        <div className="drawer-overlay" style={{ zIndex: 5000 }}>
+            <div className="drawer" onClick={(e) => e.stopPropagation()} style={{ width: '100%', height: '100%', maxWidth: 'none', maxHeight: '100%', borderRadius: '12px', overflow: 'hidden' }}>
+                <div className="drawer-header" style={{ padding: '12px 24px', minHeight: '52px', flexShrink: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <span style={{ fontSize: '28px' }}>🏢</span>
                         <h2 style={{ fontSize: '22px', fontWeight: '800', margin: 0 }}>
@@ -337,7 +338,8 @@ const ManufacturerDrawer = ({ manufacturer, onClose, canEdit }) => {
                 title={previewModalFile?.title || '제조사 첨부파일 미리보기'}
                 onClose={() => setPreviewModalFile(null)}
             />
-        </div>
+        </div>,
+        document.body
     );
 };
 

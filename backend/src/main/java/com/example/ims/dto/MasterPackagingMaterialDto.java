@@ -16,6 +16,10 @@ public class MasterPackagingMaterialDto {
     private String material;
     private String manufacturer;
     private String specification;
+    private String coatingSpec;
+    private String printingSpec;
+    private String adhesiveSpec;
+    private String postProcessingSpec;
     private Boolean isMultiLayer;
     private String imagePath;
     private String updatedBy;

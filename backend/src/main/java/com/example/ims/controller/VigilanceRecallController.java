@@ -29,7 +29,7 @@ public class VigilanceRecallController {
     // =========================================================================
 
     @GetMapping("/vigilance-recall/kpi")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('VIEW_VIGILANCE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'DEVICE', 'USER') or hasAuthority('VIEW_VIGILANCE')")
     public ResponseEntity<VigilanceRecallKpiResponse> getKpiSummary() {
         return ResponseEntity.ok(service.getKpiMetrics());
     }
@@ -39,19 +39,19 @@ public class VigilanceRecallController {
     // =========================================================================
 
     @GetMapping("/vigilance")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('VIEW_VIGILANCE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'DEVICE', 'USER') or hasAuthority('VIEW_VIGILANCE')")
     public ResponseEntity<List<VigilanceReportResponse>> getAllVigilanceReports() {
         return ResponseEntity.ok(service.getAllVigilanceReports());
     }
 
     @GetMapping("/vigilance/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('VIEW_VIGILANCE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'DEVICE', 'USER') or hasAuthority('VIEW_VIGILANCE')")
     public ResponseEntity<VigilanceReportResponse> getVigilanceReport(@PathVariable Long id) {
         return ResponseEntity.ok(service.getVigilanceReport(id));
     }
 
     @PostMapping("/vigilance")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MANAGE_VIGILANCE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'DEVICE', 'USER') or hasAuthority('MANAGE_VIGILANCE')")
     public ResponseEntity<VigilanceReportResponse> createVigilanceReport(
             @Valid @RequestBody VigilanceReportRequest req,
             Authentication authentication) {
@@ -60,7 +60,7 @@ public class VigilanceRecallController {
     }
 
     @PutMapping("/vigilance/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MANAGE_VIGILANCE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'DEVICE', 'USER') or hasAuthority('MANAGE_VIGILANCE')")
     public ResponseEntity<VigilanceReportResponse> updateVigilanceReport(
             @PathVariable Long id,
             @Valid @RequestBody VigilanceReportRequest req,
@@ -70,7 +70,7 @@ public class VigilanceRecallController {
     }
 
     @PostMapping("/vigilance/{id}/submit")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MANAGE_VIGILANCE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'DEVICE', 'USER') or hasAuthority('MANAGE_VIGILANCE')")
     public ResponseEntity<VigilanceReportResponse> submitVigilanceReport(
             @PathVariable Long id,
             @RequestBody Map<String, Object> body,
@@ -84,7 +84,7 @@ public class VigilanceRecallController {
     }
 
     @PostMapping("/vigilance/{id}/status")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MANAGE_VIGILANCE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'DEVICE', 'USER') or hasAuthority('MANAGE_VIGILANCE')")
     public ResponseEntity<VigilanceReportResponse> transitionVigilanceStatus(
             @PathVariable Long id,
             @RequestBody Map<String, String> body,
@@ -95,7 +95,7 @@ public class VigilanceRecallController {
     }
 
     @DeleteMapping("/vigilance/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM') or hasAuthority('MANAGE_VIGILANCE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'DEVICE') or hasAuthority('MANAGE_VIGILANCE')")
     public ResponseEntity<Void> deleteVigilanceReport(
             @PathVariable Long id,
             Authentication authentication) {
@@ -109,19 +109,19 @@ public class VigilanceRecallController {
     // =========================================================================
 
     @GetMapping("/recalls")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('VIEW_VIGILANCE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'DEVICE', 'USER') or hasAuthority('VIEW_VIGILANCE')")
     public ResponseEntity<List<ProductRecallResponse>> getAllRecalls() {
         return ResponseEntity.ok(service.getAllRecalls());
     }
 
     @GetMapping("/recalls/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('VIEW_VIGILANCE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'DEVICE', 'USER') or hasAuthority('VIEW_VIGILANCE')")
     public ResponseEntity<ProductRecallResponse> getRecall(@PathVariable Long id) {
         return ResponseEntity.ok(service.getRecall(id));
     }
 
     @PostMapping("/recalls")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MANAGE_VIGILANCE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'DEVICE', 'USER') or hasAuthority('MANAGE_VIGILANCE')")
     public ResponseEntity<ProductRecallResponse> createRecall(
             @Valid @RequestBody ProductRecallRequest req,
             Authentication authentication) {
@@ -130,7 +130,7 @@ public class VigilanceRecallController {
     }
 
     @PutMapping("/recalls/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MANAGE_VIGILANCE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'DEVICE', 'USER') or hasAuthority('MANAGE_VIGILANCE')")
     public ResponseEntity<ProductRecallResponse> updateRecall(
             @PathVariable Long id,
             @Valid @RequestBody ProductRecallRequest req,
@@ -140,7 +140,7 @@ public class VigilanceRecallController {
     }
 
     @PutMapping("/recalls/{id}/reconciliation")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MANAGE_VIGILANCE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'DEVICE', 'USER') or hasAuthority('MANAGE_VIGILANCE')")
     public ResponseEntity<ProductRecallResponse> updateReconciliation(
             @PathVariable Long id,
             @Valid @RequestBody RecallReconciliationRequest req,
@@ -150,7 +150,7 @@ public class VigilanceRecallController {
     }
 
     @PostMapping("/recalls/{id}/status")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MANAGE_VIGILANCE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'DEVICE', 'USER') or hasAuthority('MANAGE_VIGILANCE')")
     public ResponseEntity<ProductRecallResponse> transitionRecallStatus(
             @PathVariable Long id,
             @RequestBody Map<String, String> body,
@@ -162,7 +162,7 @@ public class VigilanceRecallController {
     }
 
     @DeleteMapping("/recalls/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM') or hasAuthority('MANAGE_VIGILANCE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'DEVICE') or hasAuthority('MANAGE_VIGILANCE')")
     public ResponseEntity<Void> deleteRecall(
             @PathVariable Long id,
             Authentication authentication) {

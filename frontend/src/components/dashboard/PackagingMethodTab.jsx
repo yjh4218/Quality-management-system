@@ -145,7 +145,7 @@ const AnnotatedCardImage = ({ imageUrl, annotationsJson, altText }) => {
  * - 3줄 전용 캡션 textarea
  * - 주석(도형/글씨) 카드 이미지 위 실시간 합성 표시
  */
-const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, onRegisterSaveHandler, onRegisterReloadHandler, onRegisterInheritHandler, onEnsureSpecCreated, onImagesChange }) => {
+const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, specComponents = [], onRegisterSaveHandler, onRegisterReloadHandler, onRegisterInheritHandler, onEnsureSpecCreated, onImagesChange }) => {
     const [images, setImages] = useState([]);
     const [pendingFiles, setPendingFiles] = useState([]); // 업로드 대기 신규 파일
     const [deletedIds, setDeletedIds] = useState([]); // 삭제 대기 ID 목록
@@ -190,6 +190,50 @@ const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, onRegisterSav
 
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
     const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
+
+    // 🏷️ BOM 봉합라벨 사진 자동 첨부 핸들러
+    const handleAddSealLabelImage = () => {
+        if (!specComponents || specComponents.length === 0) {
+            toast.warn("등록된 BOM 부자재 목록이 없습니다. 먼저 포장재 정보 탭의 BOM 목록을 확인해 주세요.");
+            return;
+        }
+
+        // 1. 봉합라벨 지정 부자재 탐색 (isSealLabel 명시적 체크 또는 이름/사양에 '봉합' 포함)
+        const sealItem = specComponents.find(c => {
+            if (c.isSealLabel !== undefined) return Boolean(c.isSealLabel);
+            const name = (c.componentName || '').toLowerCase();
+            const details = (c.specDetails || '').toLowerCase();
+            const code = (c.bomCode || '').toLowerCase();
+            return name.includes('봉합') || name.includes('봉인') || name.includes('seal') || 
+                   details.includes('봉합') || code.includes('seal');
+        });
+
+        if (!sealItem) {
+            toast.warn("BOM 목록에 '봉합라벨'로 지정된 부자재가 없습니다. 포장재 정보 탭의 BOM에서 '봉합라벨' 항목을 체크해 주세요.");
+            return;
+        }
+
+        if (!sealItem.imagePath) {
+            toast.warn(`[${sealItem.componentName || '봉합라벨'}] 항목에 등록된 사진이 없습니다. BOM 테이블의 사진 열에서 먼저 사진을 등록해 주세요.`);
+            return;
+        }
+
+        // 2. 포장방법 이미지 목록에 신규 스텝으로 추가
+        const nextOrder = images.length + 1;
+        const newImg = {
+            id: `temp_seal_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            imageUrl: sealItem.imagePath,
+            originalImageUrl: sealItem.imagePath,
+            caption: `[봉합라벨 부착] ${sealItem.componentName || '봉합라벨'} 부착 지침 및 확인`,
+            stepOrder: nextOrder,
+            isTemp: true,
+            annotationsJson: null
+        };
+
+        setImages(prev => [...prev, newImg]);
+        setHasUnsavedChanges(true);
+        toast.success(`🏷️ [${sealItem.componentName || '봉합라벨'}] 사진이 포장방법 NO.${nextOrder} 스텝으로 추가되었습니다! (상단 일괄 저장 시 확정됩니다)`);
+    };
 
     // 타 제품의 포장방법 사진 복사 핸들러
     const handleCopyFromProduct = async (selectedProd) => {
@@ -1071,6 +1115,19 @@ const PackagingMethodTab = ({ specId, canEdit, masterMethodImages, onRegisterSav
                                         }}
                                     >
                                         📋 타 제품 사진 복사
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        onClick={handleAddSealLabelImage}
+                                        style={{ 
+                                            background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a', 
+                                            borderRadius: '6px', padding: '6px 12px', fontSize: '11.5px', fontWeight: 'bold', 
+                                            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px',
+                                            boxShadow: '0 1px 2px rgba(180,83,9,0.1)'
+                                        }}
+                                        title="BOM에 등록된 봉합라벨 사진을 포장방법 스텝으로 자동 첨부합니다"
+                                    >
+                                        🏷️ 봉합라벨 사진 추가
                                     </button>
                                 </>
                             )}

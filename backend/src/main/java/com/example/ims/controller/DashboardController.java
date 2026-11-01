@@ -35,7 +35,7 @@ public class DashboardController {
         return ResponseEntity.ok(dashboardService.getDashboardData(user));
     }
 
-    @GetMapping("/stats")
+    @GetMapping({"/stats", "/summary"})
     public ResponseEntity<?> getDashboardStats(@AuthenticationPrincipal UserDetails userDetails) {
         if (userDetails == null) {
             return ResponseEntity.status(401).body("인증이 필요합니다.");

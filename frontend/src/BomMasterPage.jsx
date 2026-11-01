@@ -6,6 +6,8 @@ import BomRegistrationDrawer from './BomRegistrationDrawer';
 import ProductSearchPopup from './ProductSearchPopup';
 import { usePermissions } from './usePermissions';
 import useDateRangePreset from './hooks/useDateRangePreset';
+import useGridTabRecovery from './hooks/useGridTabRecovery';
+import useGridStatePersistence from './hooks/useGridStatePersistence';
 import { matchesAllTokens } from './utils/searchUtils';
 import GridColorLegendPopover from './components/common/GridColorLegendPopover';
 import GridConditionalFormattingModal from './components/common/GridConditionalFormattingModal';
@@ -30,7 +32,11 @@ const BOM_FORMATTABLE_COLUMNS = [
     { field: 'type', headerName: '유형' },
     { field: 'detailedType', headerName: '세부유형' },
     { field: 'detailedMaterial', headerName: '재질 상세' },
-    { field: 'manufacturer', headerName: '제조사' }
+    { field: 'manufacturer', headerName: '제조사' },
+    { field: 'coatingSpec', headerName: '코팅 사양' },
+    { field: 'printingSpec', headerName: '인쇄 사양' },
+    { field: 'adhesiveSpec', headerName: '접착제 사양' },
+    { field: 'postProcessingSpec', headerName: '후가공 사양' }
 ];
 
 const BOM_TYPE_MAP = {
@@ -41,7 +47,10 @@ const BOM_TYPE_MAP = {
     '부속품': ['스푼/스파츌라', '실링지', '박킹', '리드/속뚜껑', '도구가이드/설명서', '기타 부속품']
 };
 
-const BomMasterPage = ({ user }) => {
+const BomMasterPage = ({ user, isActive = true }) => {
+    const gridRef = useRef(null);
+    useGridTabRecovery(gridRef, isActive);
+    const { saveColumnState } = useGridStatePersistence(gridRef, 'qms_grid_col_state_bom_master');
     const isAdmin = user?.roles?.some(r => r.authority?.includes('ADMIN')) || user?.role === 'ADMIN';
     const [isFormattingModalOpen, setIsFormattingModalOpen] = useState(false);
     const [customRules, setCustomRules] = useState(() => {
@@ -260,6 +269,38 @@ const BomMasterPage = ({ user }) => {
             width: 160,
             valueGetter: p => `${p.data.weight || 0}g / ${p.data.thickness || 0}um`
         },
+        { 
+            field: "coatingSpec", 
+            headerName: "코팅 사양", 
+            filter: true, 
+            width: 140, 
+            cellRenderer: p => p.value ? <span style={{ color: '#0369a1', fontWeight: '600' }}>{p.value}</span> : <span style={{ color: '#94a3b8' }}>-</span>,
+            cellStyle: p => getCellStyle('coatingSpec', p.value)
+        },
+        { 
+            field: "printingSpec", 
+            headerName: "인쇄 사양", 
+            filter: true, 
+            width: 140, 
+            cellRenderer: p => p.value ? <span style={{ color: '#7c3aed', fontWeight: '600' }}>{p.value}</span> : <span style={{ color: '#94a3b8' }}>-</span>,
+            cellStyle: p => getCellStyle('printingSpec', p.value)
+        },
+        { 
+            field: "adhesiveSpec", 
+            headerName: "접착제 사양", 
+            filter: true, 
+            width: 130, 
+            cellRenderer: p => p.value ? <span style={{ color: '#059669', fontWeight: '600' }}>{p.value}</span> : <span style={{ color: '#94a3b8' }}>-</span>,
+            cellStyle: p => getCellStyle('adhesiveSpec', p.value)
+        },
+        { 
+            field: "postProcessingSpec", 
+            headerName: "후가공 사양", 
+            filter: true, 
+            width: 130, 
+            cellRenderer: p => p.value ? <span style={{ color: '#d97706', fontWeight: '600' }}>{p.value}</span> : <span style={{ color: '#94a3b8' }}>-</span>,
+            cellStyle: p => getCellStyle('postProcessingSpec', p.value)
+        },
         { field: "manufacturer", headerName: "제조사", filter: true, width: 140, cellStyle: p => getCellStyle('manufacturer', p.value) },
         {
             headerName: "관리",
@@ -418,7 +459,7 @@ const BomMasterPage = ({ user }) => {
                                 type="text"
                                 value={filters.bomCode}
                                 onChange={e => setFilters({...filters, bomCode: e.target.value})}
-                                onKeyDown={e => e.key === 'Enter' && fetchBomList()}
+                                onKeyDown={e => e.key === 'Enter' && fetchMaterials()}
                                 placeholder="코드 검색"
                                 style={{ flex: 1, padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                             />
@@ -440,7 +481,7 @@ const BomMasterPage = ({ user }) => {
                             type="text"
                             value={filters.componentName}
                             onChange={e => setFilters({...filters, componentName: e.target.value})}
-                            onKeyDown={e => e.key === 'Enter' && fetchBomList()}
+                            onKeyDown={e => e.key === 'Enter' && fetchMaterials()}
                             placeholder="구성품명 검색"
                             style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                         />
@@ -453,7 +494,7 @@ const BomMasterPage = ({ user }) => {
                             type="text"
                             value={filters.manufacturer}
                             onChange={e => setFilters({...filters, manufacturer: e.target.value})}
-                            onKeyDown={e => e.key === 'Enter' && fetchBomList()}
+                            onKeyDown={e => e.key === 'Enter' && fetchMaterials()}
                             placeholder="제조사 검색"
                             style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                         />
@@ -493,18 +534,28 @@ const BomMasterPage = ({ user }) => {
             </div>
 
             {/* 데이터 카드 */}
-            <div className="card" style={{ padding: '24px', borderRadius: '16px', flex: 1, display: 'flex', flexDirection: 'column', background: 'white', border: '1px solid #e2e8f0' }}>
-                <div style={{ marginBottom: '15px', fontWeight: '800', fontSize: '14px', color: '#64748b' }}>
-                    검색 결과: <span style={{ color: '#2563eb' }}>{filteredMaterials.length}</span> / 전체 {materials.length}건
+            <div className="card" style={{ padding: '24px', borderRadius: '16px', flex: 1, display: 'flex', flexDirection: 'column', background: 'white', border: '1px solid #e2e8f0', minHeight: '480px' }}>
+                <div style={{ marginBottom: '15px', fontWeight: '800', fontSize: '14px', color: '#64748b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                        검색 결과: <span style={{ color: '#2563eb' }}>{filteredMaterials.length}</span> / 전체 {materials.length}건
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b', fontWeight: '500' }}>
+                        💡 <span style={{ color: '#2563eb', fontWeight: '700' }}>항목을 더블클릭</span>하면 세부 사양을 열람하고 즉시 수정할 수 있습니다.
+                    </div>
                 </div>
-                <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
+                <div className="ag-theme-alpine" style={{ flex: 1, width: '100%', minHeight: '400px' }}>
                     <AgGridReact
+                        ref={gridRef}
                         theme="legacy"
                         rowData={filteredMaterials}
+                        onColumnResized={saveColumnState}
+                        onColumnMoved={saveColumnState}
+                        onSortChanged={saveColumnState}
                         columnDefs={colDefs}
                         rowHeight={54}
                         animateRows={true}
                         domLayout="normal"
+                        onRowDoubleClicked={(e) => canEdit && handleEdit(e.data)}
                     />
                 </div>
             </div>

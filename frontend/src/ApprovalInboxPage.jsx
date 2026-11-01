@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { fetchApprovalInbox, markApprovalDocumentAsRead, markApprovalDocumentsAsReadBatch, markAllApprovalDocumentsAsRead } from './api';
 import ApprovalSubmitModal from './ApprovalSubmitModal';
+import useGridTabRecovery from './hooks/useGridTabRecovery';
 
 const TAB_CONFIG = {
     'PENDING': { label: '📥 결재 대기함', desc: '내가 지금 검토 및 승인/반려해야 하는 결재 문서입니다.' },
@@ -20,7 +21,8 @@ const ApprovalInboxPage = ({
     fixedTab = null,
     onUnreadChanged,
     showAlert = (msg) => console.info(msg), 
-    showConfirm = (msg, fn) => { if (window.confirm(msg)) fn?.(); } 
+    showConfirm = (msg, fn) => { if (window.confirm(msg)) fn?.(); },
+    isActive = true
 }) => {
     const [activeTab, setActiveTab] = useState(fixedTab || 'PENDING');
     const [rowData, setRowData] = useState([]);
@@ -30,6 +32,7 @@ const ApprovalInboxPage = ({
     const [unreadOnly, setUnreadOnly] = useState(false);
     const [selectedCount, setSelectedCount] = useState(0);
     const gridRef = React.useRef(null);
+    useGridTabRecovery(gridRef, isActive);
 
     const onSelectionChanged = useCallback(() => {
         const selected = gridRef.current?.api?.getSelectedRows() || [];

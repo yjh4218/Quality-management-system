@@ -45,6 +45,7 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
   popHeight = 15, // POP 높이 mm (기본 15mm)
   useAirCap = false, // 비닐에어캡(뽁뽁이) 완충재 사용 여부
   useCornerPost = false, // 팔레트 코너 각대 적용 여부
+  usePad = false, // 팔레트 하단/상단 보호 패드 적용 여부
   palletConfig = { w: 1100, d: 1100, pattern: null, stacks: 8 },
   savedViewConfig = null,
   onViewChange = null,
@@ -883,8 +884,45 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
         });
       }
 
-      // Pallet Corner Posts (코너 각대: 실제 적재 박스타워 4모서리에 오렌지/옐로우 보호대 밀착 장착)
-      if (useCornerPost) {
+      // 팔레트 적재 보호 패드 생성 함수 (하단 골판지 슬립 패드 + 상단 보호 탑패드)
+const makePalletPads = (scene, minX, maxX, minZ, maxZ, baseY, totalHeight, sc) => {
+  const padThickness = 0.008; // 약 4~5mm 골판지 두께감
+  const padMargin = 0.012; // 박스타워 외곽으로 1~2cm 돌출된 실제 패드 마진
+  const padW = (maxX - minX) + padMargin * 2;
+  const padD = (maxZ - minZ) + padMargin * 2;
+  const centerX = (minX + maxX) / 2;
+  const centerZ = (minZ + maxZ) / 2;
+
+  const padGeo = new THREE.BoxGeometry(padW, padThickness, padD);
+  const padMat = new THREE.MeshStandardMaterial({
+    color: 0xc49a6c, // 골판지 크라프트 황갈색
+    roughness: 0.88,
+    metalness: 0.05
+  });
+  const edgesGeo = new THREE.EdgesGeometry(padGeo);
+  const edgesMat = new THREE.LineBasicMaterial({ color: 0x8a6036, linewidth: 1.5 });
+
+  // 1. 하단 보호 패드 (팔레트 목재 상판과 1단 박스 사이)
+  const bottomPad = new THREE.Mesh(padGeo, padMat);
+  bottomPad.position.set(centerX, baseY - padThickness / 2 - 0.001, centerZ);
+  bottomPad.castShadow = true;
+  bottomPad.receiveShadow = true;
+  const bottomLines = new THREE.LineSegments(edgesGeo, edgesMat);
+  bottomPad.add(bottomLines);
+  scene.add(bottomPad);
+
+  // 2. 상단 보호 탑패드 (최상단 박스 적재면 위)
+  const topPad = new THREE.Mesh(padGeo, padMat);
+  topPad.position.set(centerX, baseY + totalHeight + padThickness / 2 + 0.001, centerZ);
+  topPad.castShadow = true;
+  topPad.receiveShadow = true;
+  const topLines = new THREE.LineSegments(edgesGeo, edgesMat);
+  topPad.add(topLines);
+  scene.add(topPad);
+};
+
+      // Pallet Pads & Corner Posts (하단/상단 보호 패드 및 모서리 각대 결속 렌더링)
+      if (useCornerPost || usePad) {
         let boundMinX = Infinity, boundMaxX = -Infinity;
         let boundMinZ = Infinity, boundMaxZ = -Infinity;
 
@@ -911,7 +949,12 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
         }
 
         const totalHeight = stacks * obh;
-        makeCornerPostsAndStraps(s.scene, boundMinX, boundMaxX, boundMinZ, boundMaxZ, totalHeight, baseY, sc);
+        if (usePad || useCornerPost) {
+          makePalletPads(s.scene, boundMinX, boundMaxX, boundMinZ, boundMaxZ, baseY, totalHeight, sc);
+        }
+        if (useCornerPost) {
+          makeCornerPostsAndStraps(s.scene, boundMinX, boundMaxX, boundMinZ, boundMaxZ, totalHeight, baseY, sc);
+        }
       }
 
       const totalH = baseY + stacks * obh;
@@ -927,7 +970,7 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
         s.tgtTheta = defaultTheta;
       }
     }
-  }, [mode, inbox, outbox, unitBox, arrangement, palletConfig, useInbox, hasPop, popHeight, useAirCap, useCornerPost]);
+  }, [mode, inbox, outbox, unitBox, arrangement, palletConfig, useInbox, hasPop, popHeight, useAirCap, useCornerPost, usePad]);
 
   // ── Render Loop ──
   const renderLoop = useCallback(() => {
@@ -1025,8 +1068,8 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
     }
   };
 
-  // ── Canvas Snapshot with Ground/Grid Temporarily Hidden ──
-  const performSnapshotCapture = () => {
+  // ── Canvas Snapshot with Ground/Grid Temporarily Hidden & High-DPI Support ──
+  const performSnapshotCapture = (targetScale = 1.5) => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
     setIsCapturing(true);
@@ -1038,23 +1081,34 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
       if (s.ground) s.ground.visible = false;
       if (s.grid) s.grid.visible = false;
 
-      s.renderer.render(s.scene, s.camera);
-      dataUrl = cropCanvasContent(canvas);
-
-      if (s.ground) s.ground.visible = prevGroundVis;
-      if (s.grid) s.grid.visible = prevGridVis;
-      s.renderer.render(s.scene, s.camera);
+      // [고화질 렌더링] 엑셀/PDF 인쇄 시 뭉개짐 방지를 위해 일시적으로 픽셀 해상도 1.5~2.0배 확장
+      const originalRatio = s.renderer.getPixelRatio ? s.renderer.getPixelRatio() : 1;
+      const enhancedRatio = Math.min((window.devicePixelRatio || 1) * targetScale, 3.0);
+      try {
+        if (s.renderer.setPixelRatio && enhancedRatio > originalRatio) {
+          s.renderer.setPixelRatio(enhancedRatio);
+        }
+        s.renderer.render(s.scene, s.camera);
+        dataUrl = cropCanvasContent(canvas);
+      } finally {
+        if (s.renderer.setPixelRatio && enhancedRatio > originalRatio) {
+          s.renderer.setPixelRatio(originalRatio);
+        }
+        if (s.ground) s.ground.visible = prevGroundVis;
+        if (s.grid) s.grid.visible = prevGridVis;
+        s.renderer.render(s.scene, s.camera);
+      }
 
       if (onCapture && dataUrl) {
         onCapture(dataUrl, mode);
       }
     }
-    setTimeout(() => setIsCapturing(false), 300);
+    setTimeout(() => setIsCapturing(false), 200);
     return dataUrl;
   };
 
   const handleCapture = () => {
-    performSnapshotCapture();
+    performSnapshotCapture(1.5);
   };
 
   // 📸 고화질 3D PNG 직접 다운로드 핸들러
@@ -1213,6 +1267,18 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
     capture: performSnapshotCapture,
     resetView: handleResetView,
     setPresetView: handleSetPresetView,
+    handleResize: () => {
+      if (containerRef.current && stateRef.current.renderer && stateRef.current.camera) {
+        const w = containerRef.current.clientWidth || 480;
+        const h = typeof height === 'number' ? height : (containerRef.current.clientHeight || 410);
+        stateRef.current.camera.aspect = w / h;
+        stateRef.current.camera.updateProjectionMatrix();
+        stateRef.current.renderer.setSize(w, h);
+        if (stateRef.current.scene) {
+          stateRef.current.renderer.render(stateRef.current.scene, stateRef.current.camera);
+        }
+      }
+    },
     getViewConfig: () => {
       const s = stateRef.current;
       return {
@@ -1419,6 +1485,9 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
           stateRef.current.camera.aspect = width / currentHeight;
           stateRef.current.camera.updateProjectionMatrix();
           stateRef.current.renderer.setSize(width, currentHeight);
+          if (stateRef.current.scene) {
+            stateRef.current.renderer.render(stateRef.current.scene, stateRef.current.camera);
+          }
         }
       }
     });

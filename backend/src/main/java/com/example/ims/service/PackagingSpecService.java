@@ -38,6 +38,12 @@ public class PackagingSpecService {
     private final com.example.ims.repository.SalesChannelRepository salesChannelRepository;
     private final SalesChannelService salesChannelService;
 
+    private boolean isKppOrAjuPallet(String palletStr) {
+        if (palletStr == null || palletStr.isBlank()) return false;
+        String clean = palletStr.toLowerCase().replaceAll("[\\s_\\-]", "");
+        return clean.contains("kpp") || clean.contains("아주") || clean.contains("aju") || clean.contains("한국파렛") || clean.contains("한국팔렛");
+    }
+
     @Transactional(readOnly = true)
     public List<PackagingSpecification> getSpecsByProductId(Long productId) {
         return specRepository.findByProductId(productId);
@@ -237,11 +243,22 @@ public class PackagingSpecService {
             spec.setLotAndExpiryFormat("EXP " + channel.getExpDateFormat());
         }
 
+        String pType = channel.getPalletType();
+        boolean isKppAju = isKppOrAjuPallet(pType);
+        boolean requiresCornerPost = (channel.getPadAndFrameRequired() != null && channel.getPadAndFrameRequired())
+                || (pType != null && !pType.isBlank() && !isKppAju);
+
+        if (requiresCornerPost) {
+            spec.setCornerPostUseYn("O");
+        }
+
         // [특이사항 자동 생성 예외 처리]
         if (spec.getId() == null && (spec.getRemarks() == null || spec.getRemarks().trim().isEmpty())) {
             StringBuilder remarksBuilder = new StringBuilder();
             if (channel.getPadAndFrameRequired() != null && channel.getPadAndFrameRequired()) {
                 remarksBuilder.append("[적재사항] 패드 및 각대 부착 필수 채널");
+            } else if (pType != null && !pType.isBlank() && !isKppAju) {
+                remarksBuilder.append("[적재사항] 모서리 각대 사용 필수 (KPP, 아주팔레트 외 규격 팔레트 적용)");
             }
             if (channel.getSpecialNotes() != null && !channel.getSpecialNotes().trim().isEmpty()) {
                 if (remarksBuilder.length() > 0) remarksBuilder.append("\n");
@@ -577,6 +594,16 @@ public class PackagingSpecService {
             existingToUpdate.setOnePalletWeight(spec.getOnePalletWeight());
             existingToUpdate.setOnePalletHeight(spec.getOnePalletHeight());
             existingToUpdate.setRemarks(spec.getRemarks());
+
+            // [규정] KPP, 아주팔레트 외 팔레트 사용 시 모서리 각대 사용 자동 반영
+            String effPalletForSave = existingToUpdate.getPalletTypeStr() != null ? existingToUpdate.getPalletTypeStr() : spec.getPalletTypeStr();
+            if (effPalletForSave != null && !effPalletForSave.isBlank() && !isKppOrAjuPallet(effPalletForSave)) {
+                existingToUpdate.setCornerPostUseYn("O");
+                String curPrec = existingToUpdate.getPalletPrecautions();
+                if (curPrec == null || (!curPrec.contains("모서리 각대") && !curPrec.contains("각대"))) {
+                    existingToUpdate.setPalletPrecautions(curPrec == null || curPrec.isBlank() ? "모서리 각대 사용" : (curPrec + " / 모서리 각대 사용"));
+                }
+            }
             
             existingToUpdate.setPalletType(spec.getPalletType());
             existingToUpdate.setInboxPackingPattern(spec.getInboxPackingPattern());
@@ -1184,6 +1211,10 @@ public class PackagingSpecService {
                                 .sortOrder(comp.getId() != null ? comp.getId().intValue() : 0)
                                 .isMultiLayer(matchedMat != null && matchedMat.getIsMultiLayer() != null ? matchedMat.getIsMultiLayer() : false)
                                 .imagePath(comp.getImagePath() != null ? comp.getImagePath() : (matchedMat != null ? matchedMat.getImagePath() : null))
+                                .coatingSpec(comp.getCoatingSpec() != null ? comp.getCoatingSpec() : (matchedMat != null ? matchedMat.getCoatingSpec() : null))
+                                .printingSpec(comp.getPrintingSpec() != null ? comp.getPrintingSpec() : (matchedMat != null ? matchedMat.getPrintingSpec() : null))
+                                .adhesiveSpec(comp.getAdhesiveSpec() != null ? comp.getAdhesiveSpec() : (matchedMat != null ? matchedMat.getAdhesiveSpec() : null))
+                                .postProcessingSpec(comp.getPostProcessingSpec() != null ? comp.getPostProcessingSpec() : (matchedMat != null ? matchedMat.getPostProcessingSpec() : null))
                                 .build();
 
                         result.add(dto);
@@ -1234,6 +1265,10 @@ public class PackagingSpecService {
                 .sortOrder(item.getSortOrder())
                 .isMultiLayer(mat != null ? mat.getIsMultiLayer() : false)
                 .imagePath(mat != null ? mat.getImagePath() : null)
+                .coatingSpec(mat != null ? mat.getCoatingSpec() : null)
+                .printingSpec(mat != null ? mat.getPrintingSpec() : null)
+                .adhesiveSpec(mat != null ? mat.getAdhesiveSpec() : null)
+                .postProcessingSpec(mat != null ? mat.getPostProcessingSpec() : null)
                 .build();
     }
 }

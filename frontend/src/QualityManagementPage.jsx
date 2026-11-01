@@ -17,6 +17,8 @@ import api, {
 } from './api';
 
 import { useQualityManagement } from './hooks/useQualityManagement';
+import useGridTabRecovery from './hooks/useGridTabRecovery';
+import useGridStatePersistence from './hooks/useGridStatePersistence';
 
 const QUALITY_LEGENDS = [
     {
@@ -42,7 +44,7 @@ const QUALITY_FORMATTABLE_COLUMNS = [
     { field: 'inboundInspectionResult', headerName: '입고 검사 결과' }
 ];
 
-const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
+const QualityManagementPage = ({ user, navigationData, onNavigated, isActive = true }) => {
     const [isFormattingModalOpen, setIsFormattingModalOpen] = useState(false);
     const [customRules, setCustomRules] = useState(() => {
         try {
@@ -123,6 +125,9 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
         labelInboundId,
         handleOpenLabelModal
     } = useQualityManagement(user, navigationData, onNavigated);
+
+    useGridTabRecovery(gridRef, isActive);
+    const { saveColumnState } = useGridStatePersistence(gridRef, 'qms_grid_col_state_quality');
 
     // Register global refresh function for child components (like Drawer) to use
     useEffect(() => {
@@ -531,6 +536,9 @@ const QualityManagementPage = ({ user, navigationData, onNavigated }) => {
                 <AgGridReact theme="legacy"
                     rowHeight={54}
                     ref={gridRef}
+                    onColumnResized={saveColumnState}
+                    onColumnMoved={saveColumnState}
+                    onSortChanged={saveColumnState}
                     rowData={rowData}
                     getRowId={p => String(p.data.id)}
                     columnDefs={colDefs}

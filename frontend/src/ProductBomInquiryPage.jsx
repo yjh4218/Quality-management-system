@@ -6,6 +6,7 @@ import ProductSearchPopup from './ProductSearchPopup';
 import { usePermissions } from './usePermissions';
 import CommonFilePreviewModal from './components/common/CommonFilePreviewModal';
 import useGridTabRecovery from './hooks/useGridTabRecovery';
+import ProductBomDetailModal from './ProductBomDetailModal';
 
 const BOM_INQUIRY_LEGENDS = [
     {
@@ -30,6 +31,12 @@ const ProductBomInquiryPage = ({ user, isActive = true }) => {
     const gridRef = useRef(null);
     useGridTabRecovery(gridRef, isActive);
 
+    // 2-Way 뷰 모드 ('accordion': 제품별 계층 아코디언 뷰, 'flat': 통합 포장재 플랫 뷰)
+    const [viewMode, setViewMode] = useState('accordion');
+    const [expandedProducts, setExpandedProducts] = useState(new Set());
+    const [selectedDetailBomItem, setSelectedDetailBomItem] = useState(null);
+    const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+
     // 검색 필터 상태
     const [filters, setFilters] = useState({
         itemCode: '',
@@ -41,6 +48,69 @@ const ProductBomInquiryPage = ({ user, isActive = true }) => {
 
     // 선택된 단일 제품 (마스터 요약 카드 표시용)
     const [selectedProductSummary, setSelectedProductSummary] = useState(null);
+
+    // 제품별 그룹화 데이터 (아코디언 뷰 전용)
+    const groupedProducts = useMemo(() => {
+        const map = new Map();
+        for (const item of bomData) {
+            const key = item.itemCode || `PROD-${item.productId || 'UNKNOWN'}`;
+            if (!map.has(key)) {
+                map.set(key, {
+                    productId: item.productId,
+                    itemCode: item.itemCode,
+                    productName: item.productName,
+                    englishProductName: item.englishProductName,
+                    brandName: item.brandName,
+                    productManufacturer: item.productManufacturer,
+                    specVersion: item.specVersion,
+                    inboxQty: item.inboxQty,
+                    inboxSize: item.inboxSize,
+                    inboxType: item.inboxType,
+                    outboxQty: item.outboxQty,
+                    outboxSize: item.outboxSize,
+                    outboxType: item.outboxType,
+                    palletTotalProductQty: item.palletTotalProductQty,
+                    materials: []
+                });
+            }
+            map.get(key).materials.push(item);
+        }
+        return Array.from(map.values());
+    }, [bomData]);
+
+    // 제품 펼침/접힘 토글 핸들러
+    const toggleProductExpand = (key) => {
+        setExpandedProducts(prev => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+        });
+    };
+
+    const expandAllProducts = () => {
+        const allKeys = new Set(groupedProducts.map(p => p.itemCode || `PROD-${p.productId}`));
+        setExpandedProducts(allKeys);
+    };
+
+    const collapseAllProducts = () => {
+        setExpandedProducts(new Set());
+    };
+
+    // 포장재 세부 사양 모달 오픈
+    const openDetailModal = (bomItem) => {
+        setSelectedDetailBomItem(bomItem);
+        setIsDetailModalOpen(true);
+    };
+
+    // 데이터 로드 시 기본 펼침 상태 자동 초기화
+    useEffect(() => {
+        if (groupedProducts.length > 0) {
+            // 조회 결과가 1~3개인 경우 모두 펼치고, 많은 경우 상위 3개 자동 펼침
+            const initialKeys = new Set(groupedProducts.slice(0, 3).map(p => p.itemCode || `PROD-${p.productId}`));
+            setExpandedProducts(initialKeys);
+        }
+    }, [bomData]);
 
     // 최초 로드 시 BOM 유형 카테고리 로드 및 초기 조회
     const hasMounted = useRef(false);
@@ -405,6 +475,58 @@ const ProductBomInquiryPage = ({ user, isActive = true }) => {
             width: 130,
             type: 'numericColumn',
             valueFormatter: p => p.value ? `${Number(p.value).toLocaleString()}개` : '-'
+        },
+        {
+            field: 'coatingSpec',
+            headerName: '코팅 사양',
+            width: 140,
+            filter: 'agTextColumnFilter',
+            cellRenderer: p => p.value ? <span style={{ color: '#0369a1', fontWeight: '600' }}>{p.value}</span> : <span style={{ color: '#94a3b8' }}>-</span>
+        },
+        {
+            field: 'printingSpec',
+            headerName: '인쇄 사양',
+            width: 140,
+            filter: 'agTextColumnFilter',
+            cellRenderer: p => p.value ? <span style={{ color: '#7c3aed', fontWeight: '600' }}>{p.value}</span> : <span style={{ color: '#94a3b8' }}>-</span>
+        },
+        {
+            field: 'adhesiveSpec',
+            headerName: '접착제 사양',
+            width: 130,
+            filter: 'agTextColumnFilter',
+            cellRenderer: p => p.value ? <span style={{ color: '#059669', fontWeight: '600' }}>{p.value}</span> : <span style={{ color: '#94a3b8' }}>-</span>
+        },
+        {
+            field: 'postProcessingSpec',
+            headerName: '후가공 사양',
+            width: 130,
+            filter: 'agTextColumnFilter',
+            cellRenderer: p => p.value ? <span style={{ color: '#d97706', fontWeight: '600' }}>{p.value}</span> : <span style={{ color: '#94a3b8' }}>-</span>
+        },
+        {
+            headerName: '관리',
+            width: 100,
+            pinned: 'right',
+            cellRenderer: p => (
+                <button
+                    type="button"
+                    onClick={() => openDetailModal(p.data)}
+                    style={{
+                        padding: '4px 10px',
+                        fontSize: '11px',
+                        backgroundColor: '#eff6ff',
+                        color: '#2563eb',
+                        border: '1px solid #bfdbfe',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontWeight: '700'
+                    }}
+                    title="포장재 세부 사양 수정 및 마스터 연동"
+                >
+                    ⚙️ 세부사양
+                </button>
+            )
         },
         {
             headerName: '성적서 (MSDS/RoHS)',
@@ -821,15 +943,18 @@ const ProductBomInquiryPage = ({ user, isActive = true }) => {
                 </div>
             )}
 
-            {/* 4. 통계 요약 바 */}
+            {/* 4. 통계 요약 및 2-Way 뷰 모드 전환 바 */}
             <div style={{
-                marginBottom: '12px',
+                marginBottom: '14px',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '12px',
                 padding: '0 4px'
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '13px', fontWeight: '700', color: '#475569' }}>
+                {/* 좌측: 통계 요약 지표 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '13px', fontWeight: '700', color: '#475569', flexWrap: 'wrap' }}>
                     <div>
                         조회된 제품: <span style={{ color: '#2563eb', fontWeight: '800' }}>{summaryStats.uniqueSkus}</span>개 품목
                     </div>
@@ -841,53 +966,461 @@ const ProductBomInquiryPage = ({ user, isActive = true }) => {
                     <div style={{ fontSize: '12px', color: '#64748b' }}>
                         단일재질 {summaryStats.singleLayerCount}건 / 복합재질 {summaryStats.multiLayerCount}건
                     </div>
+                    <div style={{ color: '#cbd5e1' }}>|</div>
+                    <div style={{ fontSize: '12px', color: '#2563eb', fontWeight: '600' }}>
+                        💡 행을 더블클릭하면 세부사양(코팅/인쇄/접착제) 수정 및 마스터 연동이 가능합니다.
+                    </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: '6px' }}>
-                    {Object.entries(summaryStats.typeCounts).slice(0, 4).map(([t, count]) => (
-                        <span key={t} style={{
-                            padding: '2px 8px',
-                            backgroundColor: '#f1f5f9',
-                            borderRadius: '6px',
-                            fontSize: '11px',
-                            fontWeight: '600',
-                            color: '#475569'
+                {/* 우측: 2-Way 뷰 모드 전환 및 일괄 토글 버튼 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {viewMode === 'accordion' && groupedProducts.length > 0 && (
+                        <div style={{ display: 'flex', gap: '4px', marginRight: '6px' }}>
+                            <button
+                                type="button"
+                                onClick={expandAllProducts}
+                                style={{
+                                    padding: '6px 10px',
+                                    borderRadius: '6px',
+                                    fontSize: '12px',
+                                    fontWeight: '600',
+                                    backgroundColor: '#f1f5f9',
+                                    color: '#475569',
+                                    border: '1px solid #cbd5e1',
+                                    cursor: 'pointer'
+                                }}
+                                title="모든 제품의 포장재 리스트를 펼칩니다"
+                            >
+                                ➕ 모두 펼치기
+                            </button>
+                            <button
+                                type="button"
+                                onClick={collapseAllProducts}
+                                style={{
+                                    padding: '6px 10px',
+                                    borderRadius: '6px',
+                                    fontSize: '12px',
+                                    fontWeight: '600',
+                                    backgroundColor: '#f1f5f9',
+                                    color: '#475569',
+                                    border: '1px solid #cbd5e1',
+                                    cursor: 'pointer'
+                                }}
+                                title="모든 제품의 포장재 리스트를 접습니다"
+                            >
+                                ➖ 모두 접기
+                            </button>
+                        </div>
+                    )}
+
+                    <div style={{
+                        display: 'flex',
+                        backgroundColor: '#e2e8f0',
+                        borderRadius: '10px',
+                        padding: '3px',
+                        gap: '3px'
+                    }}>
+                        <button
+                            type="button"
+                            onClick={() => setViewMode('accordion')}
+                            style={{
+                                padding: '6px 14px',
+                                borderRadius: '8px',
+                                fontSize: '12px',
+                                fontWeight: '800',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                border: 'none',
+                                backgroundColor: viewMode === 'accordion' ? '#ffffff' : 'transparent',
+                                color: viewMode === 'accordion' ? '#2563eb' : '#64748b',
+                                boxShadow: viewMode === 'accordion' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                transition: 'all 0.15s ease'
+                            }}
+                        >
+                            <span>🌳</span> 제품별 계층 아코디언 뷰
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setViewMode('flat')}
+                            style={{
+                                padding: '6px 14px',
+                                borderRadius: '8px',
+                                fontSize: '12px',
+                                fontWeight: '800',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                border: 'none',
+                                backgroundColor: viewMode === 'flat' ? '#ffffff' : 'transparent',
+                                color: viewMode === 'flat' ? '#2563eb' : '#64748b',
+                                boxShadow: viewMode === 'flat' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                transition: 'all 0.15s ease'
+                            }}
+                        >
+                            <span>📑</span> 통합 포장재 플랫 뷰
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* 5. 데이터 표시 영역 (2-Way) */}
+            {viewMode === 'accordion' ? (
+                /* ================= [방식 1] 제품별 계층 아코디언 토글 뷰 ================= */
+                <div style={{
+                    flex: 1,
+                    overflowY: 'auto',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '14px',
+                    paddingRight: '4px'
+                }}>
+                    {groupedProducts.length === 0 ? (
+                        <div style={{
+                            padding: '60px 20px',
+                            backgroundColor: '#ffffff',
+                            borderRadius: '16px',
+                            border: '1px solid #e2e8f0',
+                            textAlign: 'center',
+                            color: '#64748b'
                         }}>
-                            {t}: {count}
-                        </span>
-                    ))}
-                </div>
-            </div>
+                            <div style={{ fontSize: '36px', marginBottom: '10px' }}>📦</div>
+                            <div style={{ fontSize: '16px', fontWeight: '700', color: '#1e293b' }}>조회된 제품 및 포장재가 없습니다.</div>
+                            <div style={{ fontSize: '13px', marginTop: '4px' }}>상단 검색 조건을 설정한 후 [조회] 버튼을 눌러주세요.</div>
+                        </div>
+                    ) : (
+                        groupedProducts.map((prod, index) => {
+                            const pKey = prod.itemCode || `PROD-${prod.productId || index}`;
+                            const isExpanded = expandedProducts.has(pKey);
 
-            {/* 5. AG Grid 데이터 영역 (플랫 그리드) */}
-            <div style={{
-                flex: 1,
-                backgroundColor: '#ffffff',
-                borderRadius: '16px',
-                border: '1px solid #e2e8f0',
-                padding: '16px',
-                display: 'flex',
-                flexDirection: 'column',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                minHeight: '400px'
-            }}>
-                <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
-                    <AgGridReact
-                        ref={gridRef}
-                        theme="legacy"
-                        rowData={bomData}
-                        columnDefs={columnDefs}
-                        rowHeight={48}
-                        headerHeight={44}
-                        animateRows={true}
-                        domLayout="normal"
-                        pagination={true}
-                        paginationPageSize={50}
-                        overlayLoadingTemplate='<span class="ag-overlay-loading-center">데이터를 불러오는 중입니다...</span>'
-                        overlayNoRowsTemplate='<span class="ag-overlay-loading-center">조회된 포장재 BOM 데이터가 없습니다. 검색 조건을 확인해주세요.</span>'
-                    />
+                            return (
+                                <div
+                                    key={pKey}
+                                    style={{
+                                        backgroundColor: '#ffffff',
+                                        borderRadius: '14px',
+                                        border: isExpanded ? '1px solid #93c5fd' : '1px solid #e2e8f0',
+                                        boxShadow: isExpanded ? '0 4px 12px -2px rgba(37,99,235,0.08)' : '0 1px 3px rgba(0,0,0,0.04)',
+                                        overflow: 'hidden',
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                >
+                                    {/* 제품 마스터 헤더 바 */}
+                                    <div
+                                        style={{
+                                            padding: '14px 20px',
+                                            backgroundColor: isExpanded ? '#f0f7ff' : '#ffffff',
+                                            borderBottom: isExpanded ? '1px solid #dbeafe' : 'none',
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            cursor: 'pointer',
+                                            userSelect: 'none'
+                                        }}
+                                        onClick={() => toggleProductExpand(pKey)}
+                                    >
+                                        {/* 좌측: 토글 버튼 및 제품 기본 정보 */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    toggleProductExpand(pKey);
+                                                }}
+                                                style={{
+                                                    padding: '6px 12px',
+                                                    borderRadius: '8px',
+                                                    fontSize: '12px',
+                                                    fontWeight: '800',
+                                                    cursor: 'pointer',
+                                                    border: isExpanded ? '1px solid #bfdbfe' : '1px solid #cbd5e1',
+                                                    backgroundColor: isExpanded ? '#2563eb' : '#f8fafc',
+                                                    color: isExpanded ? '#ffffff' : '#475569',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                            >
+                                                <span>{isExpanded ? '▼' : '▶'}</span>
+                                                <span>{isExpanded ? '접기' : `${prod.materials.length}개 포장재 보기`}</span>
+                                            </button>
+
+                                            <span style={{
+                                                padding: '3px 8px',
+                                                borderRadius: '6px',
+                                                backgroundColor: '#eff6ff',
+                                                border: '1px solid #bfdbfe',
+                                                color: '#1d4ed8',
+                                                fontSize: '12px',
+                                                fontWeight: '800',
+                                                letterSpacing: '0.5px'
+                                            }}>
+                                                {prod.itemCode || '-'}
+                                            </span>
+
+                                            <span style={{ fontSize: '15px', fontWeight: '800', color: '#0f172a' }}>
+                                                {prod.productName}
+                                            </span>
+
+                                            {prod.englishProductName && (
+                                                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '500' }}>
+                                                    ({prod.englishProductName})
+                                                </span>
+                                            )}
+
+                                            {prod.brandName && (
+                                                <span style={{
+                                                    padding: '2px 8px',
+                                                    borderRadius: '6px',
+                                                    fontSize: '11px',
+                                                    fontWeight: '600',
+                                                    backgroundColor: '#f8fafc',
+                                                    border: '1px solid #e2e8f0',
+                                                    color: '#475569'
+                                                }}>
+                                                    {prod.brandName}
+                                                </span>
+                                            )}
+
+                                            <span style={{
+                                                padding: '2px 8px',
+                                                borderRadius: '10px',
+                                                fontSize: '11px',
+                                                fontWeight: '700',
+                                                backgroundColor: '#dbeafe',
+                                                color: '#1e40af',
+                                                border: '1px solid #bfdbfe'
+                                            }}>
+                                                사양서 v{prod.specVersion || 1}
+                                            </span>
+                                        </div>
+
+                                        {/* 우측: 포장 규격 요약 배지 */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12px', color: '#64748b' }}>
+                                            {prod.inboxQty && (
+                                                <span style={{ backgroundColor: '#fff', padding: '3px 8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                                                    📦 인박스: <strong style={{ color: '#0f172a' }}>{prod.inboxQty}개</strong>
+                                                </span>
+                                            )}
+                                            {prod.outboxQty && (
+                                                <span style={{ backgroundColor: '#fff', padding: '3px 8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                                                    🚚 아웃박스: <strong style={{ color: '#0f172a' }}>{prod.outboxQty}개</strong>
+                                                </span>
+                                            )}
+                                            {prod.palletTotalProductQty && (
+                                                <span style={{ backgroundColor: '#fff', padding: '3px 8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                                                    📐 팔레트: <strong style={{ color: '#16a34a' }}>{prod.palletTotalProductQty.toLocaleString()}개</strong>
+                                                </span>
+                                            )}
+                                            <span style={{
+                                                padding: '4px 10px',
+                                                borderRadius: '12px',
+                                                fontSize: '12px',
+                                                fontWeight: '800',
+                                                backgroundColor: '#eff6ff',
+                                                color: '#2563eb',
+                                                border: '1px solid #bfdbfe'
+                                            }}>
+                                                구성품 {prod.materials.length}종
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* 토글 시 펼쳐지는 하위 구성품 포장재 리스트 테이블 */}
+                                    {isExpanded && (
+                                        <div style={{ padding: '16px 20px', backgroundColor: '#ffffff' }}>
+                                            <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
+                                                    <thead>
+                                                        <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0', color: '#475569', fontWeight: '800' }}>
+                                                            <th style={{ padding: '10px 12px', width: '60px', textAlign: 'center' }}>사진</th>
+                                                            <th style={{ padding: '10px 12px', width: '130px' }}>BOM 코드</th>
+                                                            <th style={{ padding: '10px 12px', minWidth: '160px' }}>구성품명</th>
+                                                            <th style={{ padding: '10px 12px', width: '130px' }}>유형 / 세부유형</th>
+                                                            <th style={{ padding: '10px 12px', width: '130px' }}>재질 상세</th>
+                                                            <th style={{ padding: '10px 12px', width: '130px' }}>규격 / 치수</th>
+                                                            <th style={{ padding: '10px 12px', width: '80px', textAlign: 'center' }}>소요량</th>
+                                                            <th style={{ padding: '10px 12px', width: '130px', color: '#0369a1' }}>🖌️ 코팅 사양</th>
+                                                            <th style={{ padding: '10px 12px', width: '130px', color: '#7c3aed' }}>🖨️ 인쇄 사양</th>
+                                                            <th style={{ padding: '10px 12px', width: '130px', color: '#059669' }}>🧴 접착제 사양</th>
+                                                            <th style={{ padding: '10px 12px', width: '110px' }}>제조사</th>
+                                                            <th style={{ padding: '10px 12px', width: '90px', textAlign: 'center' }}>관리</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {prod.materials.map((m, mIdx) => (
+                                                            <tr
+                                                                key={m.bomItemId || m.bomCode || mIdx}
+                                                                onDoubleClick={() => openDetailModal(m)}
+                                                                style={{
+                                                                    borderBottom: '1px solid #f1f5f9',
+                                                                    backgroundColor: mIdx % 2 === 0 ? '#ffffff' : '#fafafa',
+                                                                    cursor: 'pointer',
+                                                                    transition: 'background-color 0.15s ease'
+                                                                }}
+                                                                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#eff6ff'}
+                                                                onMouseLeave={e => e.currentTarget.style.backgroundColor = mIdx % 2 === 0 ? '#ffffff' : '#fafafa'}
+                                                                title="더블클릭 시 세부 사양 수정 및 제품코드 마스터 동기화 모달이 열립니다"
+                                                            >
+                                                                {/* 사진 */}
+                                                                <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                                                                    {m.imagePath ? (
+                                                                        <img
+                                                                            src={m.imagePath}
+                                                                            alt="포장재"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setPreviewPhoto(m.imagePath);
+                                                                            }}
+                                                                            style={{
+                                                                                width: '32px',
+                                                                                height: '32px',
+                                                                                objectFit: 'contain',
+                                                                                borderRadius: '4px',
+                                                                                border: '1px solid #cbd5e1',
+                                                                                cursor: 'pointer'
+                                                                            }}
+                                                                            title="클릭 시 확대"
+                                                                        />
+                                                                    ) : (
+                                                                        <span style={{ opacity: 0.35, fontSize: '16px' }}>📦</span>
+                                                                    )}
+                                                                </td>
+
+                                                                {/* BOM 코드 */}
+                                                                <td style={{ padding: '8px 12px', fontWeight: '800', color: '#0f766e' }}>
+                                                                    <span style={{ backgroundColor: '#f0fdfa', padding: '2px 6px', borderRadius: '4px', border: '1px solid #ccfbf1' }}>
+                                                                        {m.bomCode || '-'}
+                                                                    </span>
+                                                                </td>
+
+                                                                {/* 구성품명 */}
+                                                                <td style={{ padding: '8px 12px', fontWeight: '700', color: '#1e293b' }}>
+                                                                    {m.componentName || '-'}
+                                                                </td>
+
+                                                                {/* 유형 / 세부유형 */}
+                                                                <td style={{ padding: '8px 12px', color: '#475569' }}>
+                                                                    {m.type || '-'} {m.detailedType ? `(${m.detailedType})` : ''}
+                                                                </td>
+
+                                                                {/* 재질 상세 */}
+                                                                <td style={{ padding: '8px 12px', color: '#475569' }}>
+                                                                    {m.detailedMaterial || m.material || '-'}
+                                                                </td>
+
+                                                                {/* 규격 */}
+                                                                <td style={{ padding: '8px 12px', color: '#475569' }}>
+                                                                    {m.specification || '-'}
+                                                                </td>
+
+                                                                {/* 소요량 */}
+                                                                <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: '700', color: '#0f172a' }}>
+                                                                    {m.usageCount || 1}
+                                                                </td>
+
+                                                                {/* 코팅 사양 */}
+                                                                <td style={{ padding: '8px 12px', color: '#0369a1', fontWeight: '600' }}>
+                                                                    {m.coatingSpec || <span style={{ color: '#94a3b8' }}>-</span>}
+                                                                </td>
+
+                                                                {/* 인쇄 사양 */}
+                                                                <td style={{ padding: '8px 12px', color: '#7c3aed', fontWeight: '600' }}>
+                                                                    {m.printingSpec || <span style={{ color: '#94a3b8' }}>-</span>}
+                                                                </td>
+
+                                                                {/* 접착제 사양 */}
+                                                                <td style={{ padding: '8px 12px', color: '#059669', fontWeight: '600' }}>
+                                                                    {m.adhesiveSpec || <span style={{ color: '#94a3b8' }}>-</span>}
+                                                                </td>
+
+                                                                {/* 제조사 */}
+                                                                <td style={{ padding: '8px 12px', color: '#475569' }}>
+                                                                    {m.bomManufacturer || '-'}
+                                                                </td>
+
+                                                                {/* 관리 액션 */}
+                                                                <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            openDetailModal(m);
+                                                                        }}
+                                                                        style={{
+                                                                            padding: '4px 10px',
+                                                                            fontSize: '11px',
+                                                                            backgroundColor: '#eff6ff',
+                                                                            color: '#2563eb',
+                                                                            border: '1px solid #bfdbfe',
+                                                                            borderRadius: '6px',
+                                                                            cursor: 'pointer',
+                                                                            fontWeight: '700'
+                                                                        }}
+                                                                    >
+                                                                        ⚙️ 수정
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+
+                                            <div style={{ marginTop: '8px', fontSize: '11px', color: '#64748b', textAlign: 'right' }}>
+                                                💡 특정 포장재 행을 <strong>더블클릭</strong>하면 세부 사양 수정 팝업이 바로 열립니다.
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })
+                    )}
                 </div>
-            </div>
+            ) : (
+                /* ================= [방식 2] 기존 통합 포장재 플랫 뷰 (AG Grid) ================= */
+                <div style={{
+                    flex: 1,
+                    backgroundColor: '#ffffff',
+                    borderRadius: '16px',
+                    border: '1px solid #e2e8f0',
+                    padding: '16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                    minHeight: '400px'
+                }}>
+                    <div style={{ marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ fontSize: '13px', color: '#475569', fontWeight: '700' }}>
+                            전체 포장재 목록 (<span style={{ color: '#2563eb' }}>{bomData.length}</span>건)
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#64748b' }}>
+                            💡 행을 <strong>더블클릭</strong>하면 포장재 세부 사양 수정 및 제품 마스터 연동 모달이 열립니다.
+                        </div>
+                    </div>
+
+                    <div className="ag-theme-alpine" style={{ flex: 1, width: '100%', minHeight: '360px' }}>
+                        <AgGridReact
+                            ref={gridRef}
+                            theme="legacy"
+                            rowData={bomData}
+                            columnDefs={columnDefs}
+                            rowHeight={48}
+                            headerHeight={44}
+                            animateRows={true}
+                            domLayout="normal"
+                            pagination={true}
+                            paginationPageSize={50}
+                            onRowDoubleClicked={(e) => openDetailModal(e.data)}
+                            overlayLoadingTemplate='<span class="ag-overlay-loading-center">데이터를 불러오는 중입니다...</span>'
+                            overlayNoRowsTemplate='<span class="ag-overlay-loading-center">조회된 포장재 BOM 데이터가 없습니다. 검색 조건을 확인해주세요.</span>'
+                        />
+                    </div>
+                </div>
+            )}
 
             {/* 제품 선택 팝업 */}
             {isProductSearchOpen && (
@@ -903,6 +1436,22 @@ const ProductBomInquiryPage = ({ user, isActive = true }) => {
                     fileUrl={previewPhoto}
                     fileName="포장재 실물 사진"
                     onClose={() => setPreviewPhoto(null)}
+                />
+            )}
+
+            {/* 포장재 세부 사양 수정 및 마스터 연동 모달 */}
+            {isDetailModalOpen && (
+                <ProductBomDetailModal
+                    isOpen={isDetailModalOpen}
+                    bomItem={selectedDetailBomItem}
+                    onClose={() => {
+                        setIsDetailModalOpen(false);
+                        setSelectedDetailBomItem(null);
+                    }}
+                    onSaved={() => {
+                        fetchBomData();
+                    }}
+                    user={user}
                 />
             )}
         </div>

@@ -142,9 +142,9 @@ const ProductSpaceRatioCheckModal = ({ product, onClose, onGoToEdit }) => {
                 <div className="flex-1 overflow-y-auto p-6 space-y-4">
                     {loading ? (
                         /* 스켈레톤 로더 */
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
                             {initialCountries.map((country, idx) => (
-                                <div key={idx} className="bg-white p-4 rounded-xl border border-gray-200 animate-pulse space-y-3">
+                                <div key={idx} style={{ background: '#ffffff', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0' }} className="animate-pulse space-y-3">
                                     <div className="flex justify-between items-center">
                                         <div className="h-5 w-20 bg-gray-200 rounded"></div>
                                         <div className="h-5 w-12 bg-gray-200 rounded-full"></div>
@@ -162,7 +162,7 @@ const ProductSpaceRatioCheckModal = ({ product, onClose, onGoToEdit }) => {
                         </div>
                     ) : (
                         /* 실제 정렬된 결과 카드 목록 */
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
                             {sortedResults.map((res, idx) => {
                                 const isFail = res.status === 'FAIL';
                                 const isExpanded = expandedCountry === res.country;

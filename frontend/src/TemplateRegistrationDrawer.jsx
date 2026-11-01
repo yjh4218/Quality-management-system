@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import * as api from './api';
 import { toast } from 'react-toastify';
 import SaveConfirmModal from './components/SaveConfirmModal';
@@ -94,11 +95,11 @@ const TemplateRegistrationDrawer = ({ template, onClose, user }) => {
         }
     };
 
-    return (
-        <div className="drawer-overlay">
-            <div className="drawer modern-drawer" onClick={(e) => e.stopPropagation()} style={{ width: '800px' }}>
+    return createPortal(
+        <div className="drawer-overlay" style={{ zIndex: 5000 }}>
+            <div className="drawer modern-drawer" onClick={(e) => e.stopPropagation()} style={{ width: '100%', height: '100%', maxWidth: 'none', maxHeight: '100%' }}>
                 {/* 1. Fixed Header Area */}
-                <div className="drawer-header">
+                <div className="drawer-header" style={{ padding: '12px 24px', minHeight: '52px', flexShrink: 0 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
                             <span style={{ color: '#3182ce' }}>📋</span> {template ? '템플릿 수정' : '신규 템플릿 등록'}
@@ -258,7 +259,8 @@ const TemplateRegistrationDrawer = ({ template, onClose, user }) => {
                 onClose={() => setIsConfirmOpen(false)}
                 onConfirm={handleConfirmSave}
             />
-        </div>
+        </div>,
+        document.body
     );
 };
 

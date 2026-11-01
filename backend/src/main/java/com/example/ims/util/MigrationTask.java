@@ -286,6 +286,7 @@ public class MigrationTask implements CommandLineRunner {
             // Seed other essential local users
             seedLocalUser("qa", "qa", "품질담당자", "더파운더즈", "품질팀", "ROLE_QUALITY");
             seedLocalUser("ko", "ko", "제조사담당자", "한국콜마", "영업팀", "ROLE_MANUFACTURER");
+            seedLocalUser("device", "device", "디바이스담당자", "더파운더즈", "의료기기팀", "ROLE_DEVICE");
             
         } catch (Exception e) {
             log.warn("User seeding failed: {}", e.getMessage());

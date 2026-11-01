@@ -53,6 +53,18 @@ public class MasterPackagingMaterial {
 
     private String specification; // 구성품 규격
 
+    @Column(length = 500)
+    private String coatingSpec; // 코팅 세부 사양 (UV 무광/유광, 수성 바니시 등)
+
+    @Column(length = 500)
+    private String printingSpec; // 인쇄 세부 사양 (도수, 방식, 핫스탬핑 등)
+
+    @Column(length = 500)
+    private String adhesiveSpec; // 접착제 세부 사양 (친환경 수성, 핫멜트 등)
+
+    @Column(length = 500)
+    private String postProcessingSpec; // 후가공 및 특이 사양 (형압, 엠보싱, 타공 등)
+
     @Builder.Default
     private Boolean isMultiLayer = false; // 다층 구조 여부
 

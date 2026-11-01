@@ -72,3 +72,6 @@ backend/data/
 
 # Scratch and temporary scripts
 scratch/
+*_cookie.txt
+cookie.txt
+0.26.0

@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
 import { GlobalErrorBoundary } from './components/common/GlobalErrorBoundary.jsx';
+import { NavigationGuardProvider } from './context/NavigationGuardContext.jsx';
 import { ModuleRegistry, AllCommunityModule, provideGlobalGridOptions } from 'ag-grid-community';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
@@ -46,7 +47,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <CssBaseline />
             <LocalizationProvider dateAdapter={AdapterDayjs}>
                 <GlobalErrorBoundary>
-                    <App />
+                    <NavigationGuardProvider>
+                        <App />
+                    </NavigationGuardProvider>
                 </GlobalErrorBoundary>
                 <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} />
             </LocalizationProvider>

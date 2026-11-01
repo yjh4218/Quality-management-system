@@ -1,6 +1,7 @@
 import React, { useState, useEffect, lazy, Suspense, useCallback } from 'react';
 import { toast } from 'react-toastify';
 import { TabErrorBoundary } from './components/common/GlobalErrorBoundary.jsx';
+import { useNavigationGuard } from './context/NavigationGuardContext.jsx';
 import LoginPage from './LoginPage';
 import ProductListPage from './ProductListPage';
 import UserManagementPage from './UserManagementPage';
@@ -341,6 +342,7 @@ const App = () => {
             if (typeof onConfirm === 'function') onConfirm();
         }
     }, []);
+    const { requestNavigation } = useNavigationGuard();
     const [tabs, setTabs] = useState([
         { id: 'dashboard', page: 'dashboard', title: '📊 시스템 대시보드', data: null }
     ]);
@@ -548,14 +550,21 @@ const App = () => {
     };
 
     const handleTabSelect = (tabId) => {
-        if (activeTabId === tabId) return;
-        setActiveTabId(tabId);
-        window.dispatchEvent(new CustomEvent('qms-tab-activated', { detail: { tabId } }));
-        requestAnimationFrame(() => {
+        if (activeTabId === tabId) {
+            // 이미 활성화된 탭을 다시 누른 경우에도 그리드 가상화 복원 이벤트 발송
+            window.dispatchEvent(new CustomEvent('qms-tab-activated', { detail: { tabId } }));
             window.dispatchEvent(new Event('resize'));
+            return;
+        }
+        requestNavigation(() => {
+            setActiveTabId(tabId);
+            window.dispatchEvent(new CustomEvent('qms-tab-activated', { detail: { tabId } }));
+            requestAnimationFrame(() => {
+                window.dispatchEvent(new Event('resize'));
+            });
+            setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
+            setTimeout(() => window.dispatchEvent(new Event('resize')), 150);
         });
-        setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
-        setTimeout(() => window.dispatchEvent(new Event('resize')), 150);
     };
 
     // Notification states
@@ -1149,7 +1158,7 @@ const App = () => {
         return hasPermission(menuKey, 'VIEW');
     };
 
-    const handleNavigate = (page, data = null) => {
+    const _doExecuteNavigate = (page, data = null) => {
         // [전자결재 보안 강화] 협력업체(제조사) 계정의 결재 화면 직접 진입 원천 차단
         const isUserManufacturer = user?.roles?.some(r => r.authority?.includes('MANUFACTURER')) || user?.department === '제조사';
         const approvalPages = [
@@ -1170,7 +1179,6 @@ const App = () => {
             return;
         }
 
-
         let pageTitle = PAGE_INFO[page]?.title || data?.title;
         if (!pageTitle && page.startsWith('dynScreen_')) {
             const screenCode = page.replace('dynScreen_', '');
@@ -1185,23 +1193,41 @@ const App = () => {
             pageTitle = page;
         }
         
+        const MAX_TABS = 12;
+        let canActivate = true;
         setTabs(prev => {
             const exists = prev.find(t => t.page === page);
             if (exists) {
-                // If it exists, we might want to update its data if new data is provided
                 if (data) {
                     return prev.map(t => t.page === page ? { ...t, data } : t);
                 }
                 return prev;
             }
+            if (prev.length >= MAX_TABS) {
+                toast.warning(`열려 있는 탭이 너무 많습니다 (최대 ${MAX_TABS}개). 원활한 작업을 위해 불필요한 탭을 닫아주세요.`);
+                canActivate = false;
+                return prev;
+            }
             return [...prev, { id: page, page, title: pageTitle, data }];
         });
         
+        if (!canActivate) return;
+        
         setActiveTabId(page);
         setIsMobileMenuOpen(false);
-        // 화면 재진입 시 AG Grid 레이아웃 강제 동기화
+        // 화면 재진입 시 탭 활성화 커스텀 이벤트 및 AG Grid 레이아웃 강제 동기화
+        window.dispatchEvent(new CustomEvent('qms-tab-activated', { detail: { tabId: page } }));
+        requestAnimationFrame(() => {
+            window.dispatchEvent(new Event('resize'));
+        });
         setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
-        setTimeout(() => window.dispatchEvent(new Event('resize')), 200);
+        setTimeout(() => window.dispatchEvent(new Event('resize')), 150);
+    };
+
+    const handleNavigate = (page, data = null) => {
+        requestNavigation(() => {
+            _doExecuteNavigate(page, data);
+        });
     };
 
     useEffect(() => {
@@ -1215,12 +1241,14 @@ const App = () => {
         if (e?.stopPropagation) e.stopPropagation();
         if (tabs.length === 1) return; // Don't close the last tab
         
-        const newTabs = tabs.filter(t => t.id !== tabId);
-        setTabs(newTabs);
-        
-        if (activeTabId === tabId) {
-            setActiveTabId(newTabs[newTabs.length - 1].id);
-        }
+        requestNavigation(() => {
+            const newTabs = tabs.filter(t => t.id !== tabId);
+            setTabs(newTabs);
+            
+            if (activeTabId === tabId) {
+                setActiveTabId(newTabs[newTabs.length - 1].id);
+            }
+        });
     };
 
     const handleLoginSuccess = () => {
@@ -1245,14 +1273,23 @@ const App = () => {
         }
     };
 
-    // [보안] 30분 동안 활동이 없으면 자동 로그아웃 (Idle Timer)
+    // [보안 및 안정성] 활동 중 백엔드 세션 자동 연장 (Session Keep-Alive) & 30분 Idle Timer
     useEffect(() => {
         if (!isLoggedIn) return;
 
         let idleTimer;
-        const IDLE_TIMEOUT = 30 * 60 * 1000; // 30분
+        let lastPingTime = Date.now();
+        const IDLE_TIMEOUT = 30 * 60 * 1000; // 30분 미활동 시 자동 로그아웃
+        const KEEP_ALIVE_INTERVAL = 10 * 60 * 1000; // 사용자가 활동 중이면 10분마다 백엔드 세션 갱신
 
-        const resetTimer = () => {
+        const handleUserActivity = () => {
+            const now = Date.now();
+            // 마지막 갱신 후 10분이 경과했으면 백엔드 세션을 조용히 연장하여 장시간 폼 작성 중 세션 만료 방지
+            if (now - lastPingTime > KEEP_ALIVE_INTERVAL) {
+                lastPingTime = now;
+                getCurrentUser({ skipLoading: true, silentAuthCheck: true }).catch(() => {});
+            }
+
             if (idleTimer) clearTimeout(idleTimer);
             idleTimer = setTimeout(() => {
                 console.log(">>>> [SECURITY] Idle timeout - triggering auto-logout");
@@ -1262,13 +1299,13 @@ const App = () => {
 
         // 감지할 사용자 활동 이벤트
         const events = ['mousemove', 'keypress', 'touchstart', 'scroll', 'click'];
-        events.forEach(evt => window.addEventListener(evt, resetTimer));
+        events.forEach(evt => window.addEventListener(evt, handleUserActivity, { passive: true }));
 
-        resetTimer();
+        handleUserActivity();
 
         return () => {
             if (idleTimer) clearTimeout(idleTimer);
-            events.forEach(evt => window.removeEventListener(evt, resetTimer));
+            events.forEach(evt => window.removeEventListener(evt, handleUserActivity));
         };
     }, [isLoggedIn]);
 
@@ -2438,6 +2475,7 @@ const App = () => {
                                                 user={user}
                                                 navigationData={tab.data} 
                                                 onNavigated={() => {}} // No-op as data is stored in tab
+                                                isActive={tab.id === activeTabId}
                                             />
                                         )}
                                         {canAccess('logs') && tab.page === 'logs' && <LogManagementPage user={user} />}
@@ -2461,9 +2499,9 @@ const App = () => {
                                             />
                                         )}
 
-                                        {canAccess('brands') && tab.page === 'brands' && <BrandManagementPage user={user} onNavigate={handleNavigate} />}
-                                        {canAccess('manufacturers') && tab.page === 'manufacturers' && <ManufacturerManagementPage user={user} />}
-                                        {canAccess('salesChannels') && tab.page === 'salesChannels' && <SalesChannelManagement user={user} />}
+                                        {canAccess('brands') && tab.page === 'brands' && <BrandManagementPage user={user} onNavigate={handleNavigate} isActive={tab.id === activeTabId} />}
+                                        {canAccess('manufacturers') && tab.page === 'manufacturers' && <ManufacturerManagementPage user={user} isActive={tab.id === activeTabId} />}
+                                        {canAccess('salesChannels') && tab.page === 'salesChannels' && <SalesChannelManagement user={user} isActive={tab.id === activeTabId} />}
                                         {canAccess('channelNoteConfig') && tab.page === 'channelNoteConfig' && <ChannelNoteCategoryConfigPage user={user} />}
                                         {canAccess('manufacturerCategories') && tab.page === 'manufacturerCategories' && <ManufacturerCategoryPage user={user} />}
                                         {canAccess('products') && tab.page === 'products' && (
@@ -2587,6 +2625,7 @@ const App = () => {
                                                 user={user} 
                                                 navigationData={tab.data} 
                                                 onNavigated={() => {}} 
+                                                isActive={tab.id === activeTabId}
                                             />
                                         )}
                                         {canAccess('releaseRecord') && tab.page === 'releaseRecord' && (
@@ -2640,9 +2679,9 @@ const App = () => {
                                             <ProductionAuditDashboardPage user={user} onNavigate={handleNavigate} />
                                         )}
                                         {canAccess('productBomInquiry') && tab.page === 'productBomInquiry' && <ProductBomInquiryPage user={user} isActive={tab.id === activeTabId} />}
-                                        {canAccess('bomMaster') && tab.page === 'bomMaster' && <BomMasterPage user={user} />}
-                                        {canAccess('bomCategories') && tab.page === 'bomCategories' && <BomCategoryManagementPage user={user} />}
-                                        {canAccess('packagingTemplates') && tab.page === 'packagingTemplates' && <PackagingTemplatePage user={user} />}
+                                        {canAccess('bomMaster') && tab.page === 'bomMaster' && <BomMasterPage user={user} isActive={tab.id === activeTabId} />}
+                                        {canAccess('bomCategories') && tab.page === 'bomCategories' && <BomCategoryManagementPage user={user} isActive={tab.id === activeTabId} />}
+                                        {canAccess('packagingTemplates') && tab.page === 'packagingTemplates' && <PackagingTemplatePage user={user} isActive={tab.id === activeTabId} />}
                                         {canAccess('spaceRatioCalculator') && tab.page === 'spaceRatioCalculator' && (
                                             <PackagingSpaceRatioCalculatorPage user={user} onNavigate={handleNavigate} />
                                         )}
@@ -2675,7 +2714,8 @@ const App = () => {
                                                 navigationData={tab.data} 
                                                 onNavigated={() => {}}
                                                 showAlert={showAlert} 
-                                                showConfirm={showConfirm} 
+                                                showConfirm={showConfirm}
+                                                isActive={tab.id === activeTabId} 
                                                 fixedTab={
                                                     tab.page === 'approvalPending' ? 'PENDING' :
                                                     tab.page === 'approvalSubmitted' ? 'SUBMITTED' :

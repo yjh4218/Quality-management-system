@@ -12,6 +12,12 @@ import org.springframework.session.web.http.DefaultCookieSerializer;
 @Configuration
 public class SessionConfig {
 
+    @org.springframework.beans.factory.annotation.Value("${server.servlet.session.cookie.secure:false}")
+    private boolean useSecureCookie;
+
+    @org.springframework.beans.factory.annotation.Value("${server.servlet.session.cookie.same-site:lax}")
+    private String sameSite;
+
     @Bean
     public CookieSerializer cookieSerializer() {
         DefaultCookieSerializer serializer = new DefaultCookieSerializer();
@@ -32,10 +38,9 @@ public class SessionConfig {
         // 5. [인코딩 패치] 쿠키 값을 Base64로 인코딩하는 기능은 레이턴시 및 호환성을 위해 끕니다. (V2 이름 변경으로 충분)
         serializer.setUseBase64Encoding(false);
 
-        // 6. [핵심] SameSite 및 Secure 설정 강제 (HTTPS/Iframe 지원)
-        // HF 환경에서는 SameSite=None, Secure=true가 필수입니다.
-        serializer.setSameSite("None");
-        serializer.setUseSecureCookie(true);
+        // 6. [동적 설정] 로컬(HTTP)은 lax/false, 운영(HTTPS)은 none/true 자동 적용
+        serializer.setSameSite(sameSite != null ? sameSite : "lax");
+        serializer.setUseSecureCookie(useSecureCookie);
         
         return serializer;
     }

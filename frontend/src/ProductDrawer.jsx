@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
+import { useNavigationGuard } from './context/NavigationGuardContext.jsx';
 import {
     createProduct,
     updateProduct,
@@ -1873,6 +1875,135 @@ const ProductDrawer = ({ product, onClose, user }) => {
         { enabled: canEdit }
     );
 
+    const { registerGuard, unregisterGuard, requestNavigation } = useNavigationGuard();
+    const baselineProductSnapshotRef = useRef(null);
+    const isUserInteractedRef = useRef(false);
+
+    // 원본 데이터 스냅샷 객체 생성
+    const captureProductState = (form, spec, components) => {
+        return {
+            itemCode: form?.itemCode || '',
+            productName: form?.productName || '',
+            englishProductName: form?.englishProductName || '',
+            brandId: form?.brand?.id || null,
+            mfrId: form?.manufacturerInfo?.id || null,
+            productType: form?.productType || '',
+            channelsStr: JSON.stringify((form?.channels || []).map(c => c.channelName || c.channelCode || c)),
+            dimW: form?.dimensions?.width || '',
+            dimL: form?.dimensions?.length || '',
+            dimH: form?.dimensions?.height || '',
+            inboxQty: form?.inboxInfo?.inboxQuantity || '',
+            outboxQty: form?.outboxInfo?.outboxQuantity || '',
+            barcode: form?.productBarcode || '',
+            specInboxUseYn: spec?.inboxUseYn || '',
+            specInboxTape: spec?.inboxTapeMethod || '',
+            specOutboxTape: spec?.outboxTapeMethod || '',
+            specPalletType: spec?.palletType || '',
+            specCornerPost: spec?.cornerPostUseYn || '',
+            specPadSpec: spec?.palletPadSpec || '',
+            specCornerSpec: spec?.cornerPostSpec || '',
+            compCount: components ? components.length : 0
+        };
+    };
+
+    // 데이터 로드 완료 시 초기 기준점 캡처 (최초 1회 또는 loadData 직후)
+    useEffect(() => {
+        if (!baselineProductSnapshotRef.current && (formData.itemCode || product)) {
+            // 비동기 fetch가 완료될 수 있도록 약간의 안정화 시간 부여
+            const timer = setTimeout(() => {
+                if (!baselineProductSnapshotRef.current) {
+                    baselineProductSnapshotRef.current = captureProductState(formData, currentSpec, specComponents);
+                }
+            }, 600);
+            return () => clearTimeout(timer);
+        }
+    }, [formData.itemCode, product]);
+
+    // 전역 내비게이션 가드 등록
+    useEffect(() => {
+        registerGuard({
+            id: 'product_drawer',
+            targetName: `제품 마스터 [${formData.itemCode || formData.productName || '신규'}]`,
+            isDirty: () => {
+                // 사용자가 한 번도 폼을 건드리지 않았다면 무조건 수정사항 없음
+                if (!isUserInteractedRef.current) {
+                    return { isDirty: false, changedFields: [] };
+                }
+
+                if (!baselineProductSnapshotRef.current) {
+                    return { isDirty: false, changedFields: [] };
+                }
+
+                const base = baselineProductSnapshotRef.current;
+                const cur = captureProductState(formData, currentSpec, specComponents);
+                const changedFields = [];
+
+                if (base.itemCode !== cur.itemCode) changedFields.push('품목코드');
+                if (base.productName !== cur.productName) changedFields.push('제품명(한글)');
+                if (base.englishProductName !== cur.englishProductName) changedFields.push('제품명(영문)');
+                if (base.brandId !== cur.brandId) changedFields.push('브랜드');
+                if (base.mfrId !== cur.mfrId) changedFields.push('제조사');
+                if (base.productType !== cur.productType) changedFields.push('제품 구분');
+                if (base.channelsStr !== cur.channelsStr) changedFields.push('유통 채널');
+                if (base.dimW !== cur.dimW || base.dimL !== cur.dimL || base.dimH !== cur.dimH) changedFields.push('단상자 규격');
+                if (base.inboxQty !== cur.inboxQty) changedFields.push('인박스 수량');
+                if (base.outboxQty !== cur.outboxQty) changedFields.push('아웃박스 수량');
+                if (base.barcode !== cur.barcode) changedFields.push('제품 바코드');
+                if (base.specInboxUseYn !== cur.specInboxUseYn) changedFields.push('인박스 사용 여부');
+                if (base.specInboxTape !== cur.specInboxTape) changedFields.push('인박스 테이프 사양');
+                if (base.specOutboxTape !== cur.specOutboxTape) changedFields.push('아웃박스 테이프 사양');
+                if (base.specPalletType !== cur.specPalletType) changedFields.push('팔레트 종류');
+                if (base.specCornerPost !== cur.specCornerPost) changedFields.push('모서리 각대 사용 여부');
+                if (base.specPadSpec !== cur.specPadSpec) changedFields.push('패드 사양');
+                if (base.specCornerSpec !== cur.specCornerSpec) changedFields.push('모서리 각대 사양');
+                if (base.compCount !== cur.compCount) changedFields.push('BOM 구성품 사양');
+
+                return {
+                    isDirty: changedFields.length > 0,
+                    changedFields
+                };
+            },
+            onSave: async () => {
+                if (!formData.itemCode || !formData.itemCode.trim()) {
+                    toast.warning("품목코드는 필수 입력 항목입니다.");
+                    return false;
+                }
+                if (!formData.productName || !formData.productName.trim()) {
+                    toast.warning("제품명은 필수 입력 항목입니다.");
+                    return false;
+                }
+                if (!formData.channels || formData.channels.length === 0) {
+                    toast.warning("유통 채널을 최소 1개 이상 선택해야 합니다.");
+                    return false;
+                }
+                const isSaved = await executeSaveAll(false);
+                if (isSaved) {
+                    isUserInteractedRef.current = false;
+                    onClose(true);
+                    return true;
+                }
+                return false;
+            },
+            onDiscard: () => {
+                isUserInteractedRef.current = false;
+                if (clearDraft) clearDraft();
+            },
+            onClose: () => {
+                if (onClose) onClose();
+            }
+        });
+
+        return () => {
+            unregisterGuard('product_drawer');
+        };
+    }, [formData, currentSpec, specComponents, registerGuard, unregisterGuard, onClose, clearDraft]);
+
+    const handleRequestClose = () => {
+        requestNavigation(() => {
+            onClose();
+        });
+    };
+
     useEffect(() => {
         loadData();
     }, []);
@@ -3337,7 +3468,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
         return fileName;
     };
 
-    return (
+    return createPortal(
         <div className="drawer-overlay">
             <div className="drawer" onClick={(e) => e.stopPropagation()}>
                 <div className="drawer-header">
@@ -3351,7 +3482,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                             </span>
                         )}
                     </div>
-                    <button onClick={onClose} className="secondary close-button">
+                    <button type="button" onClick={handleRequestClose} className="secondary close-button">
                         <span className="icon">×</span> 닫기
                     </button>
                 </div>
@@ -3384,7 +3515,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                 </div>
 
                 <div className="drawer-body">
-                    <form id="product-form" onSubmit={handleSubmit} className="drawer-body-form">
+                    <form id="product-form" onSubmit={handleSubmit} className="drawer-body-form" onChange={() => { isUserInteractedRef.current = true; }} onInput={() => { isUserInteractedRef.current = true; }}>
                         <div className="tab-pane" style={{ display: activeTab === 'spaceRatio' ? 'flex' : 'none', gap: '20px' }}>
                             <div className="card" style={{ borderLeft: '5px solid #6366f1' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
@@ -8373,7 +8504,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                 🗑️ 삭제
                             </button>
                         )}
-                        <button type="button" className="secondary" onClick={onClose} style={{ minWidth: '80px' }}>닫기</button>
+                        <button type="button" className="secondary" onClick={handleRequestClose} style={{ minWidth: '80px' }}>닫기</button>
                         <button
                             type="submit"
                             form="product-form"
@@ -9323,7 +9454,8 @@ const ProductDrawer = ({ product, onClose, user }) => {
                 title={previewImageModal?.title || '제품 사진 미리보기'}
                 onClose={() => setPreviewImageModal(null)}
             />
-        </div>
+        </div>,
+        document.body
     );
 };
 

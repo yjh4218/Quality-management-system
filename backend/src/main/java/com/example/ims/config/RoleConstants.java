@@ -18,8 +18,10 @@ public final class RoleConstants {
     public static final String SALES = "ROLE_SALES";
     public static final String MANUFACTURER = "ROLE_MANUFACTURER";
     public static final String USER = "ROLE_USER";
+    public static final String DEVICE = "ROLE_DEVICE";
+    public static final String DEVICE_NAME = "DEVICE";
 
-    public static final String[] ALL_ROLES = {ADMIN, RESPONSIBLE_SALES, QUALITY, QUALITY_TEAM, SALES, MANUFACTURER, USER};
+    public static final String[] ALL_ROLES = {ADMIN, RESPONSIBLE_SALES, QUALITY, QUALITY_TEAM, SALES, MANUFACTURER, USER, DEVICE};
 
     /**
      * Helper to check if a role is valid.

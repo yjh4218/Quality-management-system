@@ -22,6 +22,7 @@ public class MasterDataService {
     private final ChannelStickerImageRepository stickerRepository;
     private final com.example.ims.repository.UserRepository userRepository;
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
+    private final com.example.ims.repository.PackagingSpecComponentRepository packagingSpecComponentRepository;
 
     // --- Packaging Method Template (Feature 2) ---
     @org.springframework.cache.annotation.Cacheable(value = "packagingTemplates", key = "'all'")
@@ -163,6 +164,29 @@ public class MasterDataService {
         }
 
         MasterPackagingMaterial saved = materialRepository.save(material);
+
+        // [연동 동기화] 동일한 BOM 코드를 사용하는 포장사양서 구성품(PackagingSpecComponent) 세부사양 동시 갱신
+        if (saved.getBomCode() != null && !saved.getBomCode().trim().isEmpty() && packagingSpecComponentRepository != null) {
+            try {
+                List<com.example.ims.entity.PackagingSpecComponent> linkedComps = packagingSpecComponentRepository.findByBomCode(saved.getBomCode().trim());
+                if (linkedComps != null && !linkedComps.isEmpty()) {
+                    for (com.example.ims.entity.PackagingSpecComponent comp : linkedComps) {
+                        if (saved.getComponentName() != null) comp.setComponentName(saved.getComponentName());
+                        if (saved.getSpecification() != null) comp.setSizeDimension(saved.getSpecification());
+                        if (saved.getWeight() != null) comp.setWeight(saved.getWeight());
+                        if (saved.getManufacturer() != null) comp.setSupplier(saved.getManufacturer());
+                        if (saved.getImagePath() != null) comp.setImagePath(saved.getImagePath());
+                        comp.setCoatingSpec(saved.getCoatingSpec());
+                        comp.setPrintingSpec(saved.getPrintingSpec());
+                        comp.setAdhesiveSpec(saved.getAdhesiveSpec());
+                        comp.setPostProcessingSpec(saved.getPostProcessingSpec());
+                    }
+                    packagingSpecComponentRepository.saveAll(linkedComps);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to sync linked PackagingSpecComponent: {}", e.getMessage());
+            }
+        }
 
         eventPublisher.publishEvent(com.example.ims.event.EntityChangeEvent.builder()
                 .entityType("BOM_MASTER")

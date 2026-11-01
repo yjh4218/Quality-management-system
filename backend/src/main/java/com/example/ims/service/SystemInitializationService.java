@@ -262,11 +262,11 @@ public class SystemInitializationService {
         });
     }
 
-    private void seedAndRepairRoles() {
+    public void seedAndRepairRoles() {
         String allActions = "[\"VIEW\",\"EDIT\",\"DELETE\"]";
         String viewOnly = "[\"VIEW\"]";
 
-        String eqmsAll = ",\"sopManual\":" + allActions + ",\"regulatoryGuide\":" + allActions 
+        String eqmsAll = ",\"medicalDevices\":" + allActions + ",\"sopManual\":" + allActions + ",\"regulatoryGuide\":" + allActions 
                 + ",\"controlledDocuments\":" + allActions + ",\"trainingManagement\":" + allActions 
                 + ",\"riskManagement\":" + allActions + ",\"designControls\":" + allActions 
                 + ",\"changeControl\":" + allActions + ",\"supplierManagement\":" + allActions 
@@ -306,12 +306,17 @@ public class SystemInitializationService {
         String qualityPerms = "[\"AUDIT_DISCLOSE_MANAGE\",\"PRODUCT_DISCLOSE_MANAGE\",\"PRODUCT_MASTER_MANAGE\",\"DASHBOARD_QUALITY_VIEW\",\"SENSITIVE_DATA_VIEW\",\"PRODUCT_PACKAGING_VIEW\",\"INGREDIENT_SAFETY_VIEW\",\"ANNOUNCEMENT_ALL_VIEW\"]";
         String respSalesPerms = "[\"PRODUCT_MASTER_MANAGE\",\"DASHBOARD_SALES_VIEW\",\"PRODUCT_PACKAGING_VIEW\",\"INGREDIENT_SAFETY_VIEW\",\"ANNOUNCEMENT_ALL_VIEW\"]";
 
+        String deviceJson = "{\"dashboard\":" + viewOnly + ",\"products\":" + viewOnly 
+                + ",\"announcements\":" + viewOnly + ",\"notifications\":" + allActions + eqmsAll + "}";
+        String devicePerms = "[\"DASHBOARD_QUALITY_VIEW\",\"PRODUCT_PACKAGING_VIEW\",\"ANNOUNCEMENT_ALL_VIEW\"]";
+
         updateOrInsertRole("ROLE_ADMIN", "시스템 관리자", "전체 시스템 관리 권한", adminJson, adminPerms);
         updateOrInsertRole("ROLE_RESPONSIBLE_SALES", "화장품책임판매관리자", "영업 및 사용자 관리 권한", respSalesJson, respSalesPerms);
         updateOrInsertRole("ROLE_QUALITY", "품질 담당자", "입고 검사 및 판정 권한", qualityJson, qualityPerms);
         updateOrInsertRole("ROLE_SALES", "영업담당자", "데이터 조회 전용", salesJson, "[\"DASHBOARD_SALES_VIEW\"]");
         updateOrInsertRole("ROLE_MANUFACTURER", "제조사 담당자", "제조사 데이터 입력 권한", mfrJson, "[]");
         updateOrInsertRole("ROLE_USER", "일반 사용자", "기본 대시보드 시청", "{\"dashboard\":[\"VIEW\"],\"announcements\":[\"VIEW\"],\"notifications\":[\"VIEW\"]}", "[]");
+        updateOrInsertRole("ROLE_DEVICE", "디바이스 담당자", "의료기기 QMS 및 설계/생산 검증 전담 권한", deviceJson, devicePerms);
     }
 
     private void updateOrInsertRole(String key, String name, String desc, String menuJson, String permsJson) {

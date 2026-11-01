@@ -28,7 +28,7 @@ public class ProductTestReportController {
     }
 
     @PostMapping("/{id}/test-reports")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'MANUFACTURER')")
     public ResponseEntity<?> addTestReport(@PathVariable Long id, @jakarta.validation.Valid @RequestBody com.example.ims.dto.ProductTestReportCreateDto payload) {
         Product product = productRepository.findById(id).orElse(null);
         if (product == null) {

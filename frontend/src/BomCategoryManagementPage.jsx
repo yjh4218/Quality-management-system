@@ -1,10 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import * as api from './api';
 import { toast } from 'react-toastify';
 import { usePermissions } from './usePermissions';
+import useGridTabRecovery from './hooks/useGridTabRecovery';
 
-const BomCategoryManagementPage = ({ user }) => {
+const BomCategoryManagementPage = ({ user, isActive = true }) => {
+    const gridRef = useRef(null);
+    useGridTabRecovery(gridRef, isActive);
     const { canEdit: checkEdit, canDelete: checkDelete } = usePermissions(user);
     const canEdit = checkEdit('bomCategories');
     const canDelete = checkDelete('bomCategories');
@@ -218,6 +221,7 @@ const BomCategoryManagementPage = ({ user }) => {
                     </div>
                     <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
                         <AgGridReact theme="legacy"
+                            ref={gridRef}
                             rowData={categories} 
                             columnDefs={colDefs} 
                             rowHeight={54}

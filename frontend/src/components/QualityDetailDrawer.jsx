@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { useNavigationGuard } from '../context/NavigationGuardContext.jsx';
 import { getProductByItemCode, deleteInbound } from '../api';
 import SaveConfirmModal from './SaveConfirmModal';
 import { usePermissions } from '../usePermissions';
@@ -28,9 +30,100 @@ const QualityDetailDrawer = ({
     onOpenLabelModal
 }) => {
     const { canViewHistory } = usePermissions(user);
+    const { registerGuard, unregisterGuard, requestNavigation } = useNavigationGuard();
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
     const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
     const [productInfo, setProductInfo] = useState(null);
+    const baselineInboundRef = useRef(null);
+    const isUserInteractedRef = useRef(false);
+
+    // 팝업 진입 시 초기 데이터 스냅샷 저장 (안정화 딜레이 적용)
+    useEffect(() => {
+        if (isOpen && selectedInbound) {
+            const timer = setTimeout(() => {
+                if (!baselineInboundRef.current) {
+                    try {
+                        baselineInboundRef.current = {
+                            inboundInspectionStatus: selectedInbound.inboundInspectionStatus || '',
+                            inboundInspectionResult: selectedInbound.inboundInspectionResult || '',
+                            controlSampleStatus: selectedInbound.controlSampleStatus || '',
+                            finalInspectionResult: selectedInbound.finalInspectionResult || '',
+                            qualityDecisionDate: selectedInbound.qualityDecisionDate || '',
+                            specificGravity: selectedInbound.specificGravity || '',
+                            testReportNumbers: selectedInbound.testReportNumbers || '',
+                            mfrRemarks: selectedInbound.mfrRemarks || '',
+                            controlSampleRemarks: selectedInbound.controlSampleRemarks || '',
+                            finalInspectionRemarks: selectedInbound.finalInspectionRemarks || ''
+                        };
+                    } catch {
+                        baselineInboundRef.current = null;
+                    }
+                }
+            }, 300);
+            return () => clearTimeout(timer);
+        }
+        if (!isOpen) {
+            baselineInboundRef.current = null;
+            isUserInteractedRef.current = false;
+        }
+    }, [isOpen, selectedInbound?.id]);
+
+    // 전역 내비게이션 가드 등록
+    useEffect(() => {
+        if (!isOpen || !selectedInbound) return;
+
+        registerGuard({
+            id: 'quality_detail_drawer',
+            targetName: `입고 품질 [${selectedInbound.productName || selectedInbound.itemCode || ''}]`,
+            isDirty: () => {
+                // 사용자가 한 번도 폼을 조작하지 않았다면 무조건 수정사항 없음
+                if (!isUserInteractedRef.current || !baselineInboundRef.current) {
+                    return { isDirty: false, changedFields: [] };
+                }
+
+                const base = baselineInboundRef.current;
+                const cur = selectedInbound;
+                const changedFields = [];
+
+                if (base.inboundInspectionStatus !== (cur.inboundInspectionStatus || '')) changedFields.push('입고검사 단계');
+                if (base.inboundInspectionResult !== (cur.inboundInspectionResult || '')) changedFields.push('입고검사 결과');
+                if (base.controlSampleStatus !== (cur.controlSampleStatus || '')) changedFields.push('관리품 확인 단계');
+                if (base.finalInspectionResult !== (cur.finalInspectionResult || '')) changedFields.push('완제품 검사 결과');
+                if (base.qualityDecisionDate !== (cur.qualityDecisionDate || '')) changedFields.push('품질 적합 판정일');
+                if (base.specificGravity !== (cur.specificGravity || '')) changedFields.push('비중값');
+                if (base.testReportNumbers !== (cur.testReportNumbers || '')) changedFields.push('시험성적서 번호');
+                if (base.mfrRemarks !== (cur.mfrRemarks || '')) changedFields.push('제조사 확인 비고');
+                if (base.controlSampleRemarks !== (cur.controlSampleRemarks || '')) changedFields.push('관리품 확인 특이사항');
+                if (base.finalInspectionRemarks !== (cur.finalInspectionRemarks || '')) changedFields.push('완제품 검사 특이사항');
+
+                return {
+                    isDirty: changedFields.length > 0,
+                    changedFields
+                };
+            },
+            onSave: async () => {
+                if (handleSave) {
+                    await handleSave();
+                    isUserInteractedRef.current = false;
+                    return true;
+                }
+                return false;
+            },
+            onClose: () => {
+                if (onClose) onClose();
+            }
+        });
+
+        return () => {
+            unregisterGuard('quality_detail_drawer');
+        };
+    }, [isOpen, selectedInbound, registerGuard, unregisterGuard, handleSave, onClose]);
+
+    const handleRequestClose = () => {
+        requestNavigation(() => {
+            if (onClose) onClose();
+        });
+    };
 
     useEffect(() => {
         const fetchProduct = async () => {
@@ -179,11 +272,11 @@ const QualityDetailDrawer = ({
     const canEditQuality = isInternalQuality || isAdmin;
     const canEditMfr = isManufacturer || isAdmin;
 
-    return (
-        <div className="drawer-overlay" style={{ zIndex: 4500 }}>
-            <div className="drawer" onClick={(e) => e.stopPropagation()} style={{ width: '1200px' }}>
+    return createPortal(
+        <div className="drawer-overlay" style={{ zIndex: 5000 }}>
+            <div className="drawer" onClick={(e) => e.stopPropagation()} style={{ width: '100%', height: '100%', maxWidth: 'none', maxHeight: '100%' }}>
                 
-                <div className="drawer-header">
+                <div className="drawer-header" style={{ padding: '12px 24px', minHeight: '52px', flexShrink: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                         {productInfo?.imagePath ? (
                             <img 
@@ -283,7 +376,7 @@ const QualityDetailDrawer = ({
                                 <span>출하승인서 결재</span>
                             </button>
                         )}
-                        <button onClick={onClose} className="secondary close-button">
+                        <button type="button" onClick={handleRequestClose} className="secondary close-button">
                             <span className="icon">×</span> 닫기
                         </button>
                     </div>
@@ -310,7 +403,7 @@ const QualityDetailDrawer = ({
                     </div>
                 </div>
 
-                <div className="drawer-body">
+                <div className="drawer-body" onChange={() => { isUserInteractedRef.current = true; }} onInput={() => { isUserInteractedRef.current = true; }}>
                     {activeTab === 'info' && (
                         <div className="tab-pane">
                             
@@ -817,7 +910,8 @@ const QualityDetailDrawer = ({
                     }}
                 />
             )}
-        </div>
+        </div>,
+        document.body
     );
 };
 

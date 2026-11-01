@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { useNavigationGuard } from './context/NavigationGuardContext.jsx';
 import { createClaim, updateClaim, uploadClaimResponse, uploadClaimPhoto, getClaimHistory, deleteClaim, getFileUrl, fetchApprovalDocTypes } from './api';
 import * as api from './api';
 import { toast } from 'react-toastify';
@@ -84,6 +86,91 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
         setFormData,
         { enabled: !readOnly && (canEditClaim('claims') || isAdmin || isQuality) }
     );
+
+    const { registerGuard, unregisterGuard, requestNavigation } = useNavigationGuard();
+    const baselineClaimSnapshotRef = useRef(null);
+    const isUserInteractedRef = useRef(false);
+
+    useEffect(() => {
+        if (!baselineClaimSnapshotRef.current && (claim || formData.itemCode)) {
+            const timer = setTimeout(() => {
+                if (!baselineClaimSnapshotRef.current) {
+                    try {
+                        baselineClaimSnapshotRef.current = {
+                            itemCode: formData.itemCode || '',
+                            productName: formData.productName || '',
+                            occurrenceQty: formData.occurrenceQty || '',
+                            primaryCategory: formData.primaryCategory || '',
+                            secondaryCategory: formData.secondaryCategory || '',
+                            tertiaryCategory: formData.tertiaryCategory || '',
+                            claimContent: formData.claimContent || '',
+                            lotNumber: formData.lotNumber || '',
+                            country: formData.country || ''
+                        };
+                    } catch {
+                        baselineClaimSnapshotRef.current = null;
+                    }
+                }
+            }, 400);
+            return () => clearTimeout(timer);
+        }
+    }, [claim, formData.itemCode]);
+
+    useEffect(() => {
+        registerGuard({
+            id: 'claim_drawer',
+            targetName: `클레임 [${formData.claimNumber || formData.itemCode || '신규'}]`,
+            isDirty: () => {
+                if (!isUserInteractedRef.current || !baselineClaimSnapshotRef.current) {
+                    return { isDirty: false, changedFields: [] };
+                }
+
+                const base = baselineClaimSnapshotRef.current;
+                const cur = formData;
+                const changedFields = [];
+
+                if (base.itemCode !== (cur.itemCode || '')) changedFields.push('품목코드');
+                if (base.productName !== (cur.productName || '')) changedFields.push('제품명');
+                if (String(base.occurrenceQty) !== String(cur.occurrenceQty || '')) changedFields.push('발생 수량');
+                if (base.primaryCategory !== (cur.primaryCategory || '')) changedFields.push('1차 클레임 분류');
+                if (base.secondaryCategory !== (cur.secondaryCategory || '')) changedFields.push('2차 클레임 분류');
+                if (base.tertiaryCategory !== (cur.tertiaryCategory || '')) changedFields.push('3차 클레임 분류');
+                if (base.claimContent !== (cur.claimContent || '')) changedFields.push('클레임 내용');
+                if (base.lotNumber !== (cur.lotNumber || '')) changedFields.push('LOT 번호');
+                if (base.country !== (cur.country || '')) changedFields.push('수출국');
+
+                return {
+                    isDirty: changedFields.length > 0,
+                    changedFields
+                };
+            },
+            onSave: async () => {
+                if (!formData.itemCode) {
+                    toast.warning("품목코드는 필수 항목입니다.");
+                    return false;
+                }
+                setIsConfirmOpen(true);
+                return false;
+            },
+            onDiscard: () => {
+                isUserInteractedRef.current = false;
+                if (clearDraft) clearDraft();
+            },
+            onClose: () => {
+                if (onClose) onClose();
+            }
+        });
+
+        return () => {
+            unregisterGuard('claim_drawer');
+        };
+    }, [formData, registerGuard, unregisterGuard, onClose, clearDraft]);
+
+    const handleRequestClose = () => {
+        requestNavigation(() => {
+            onClose();
+        });
+    };
 
     const canEditCs = (!readOnly) && hasGlobalEdit && (!isManufacturer);
     const canEditQuality = (!readOnly) && hasGlobalEdit && (isAdmin || isQuality || isManufacturer);
@@ -942,11 +1029,11 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
         }
     };
 
-    return (
-        <div className="drawer-overlay" style={{ zIndex: 4500 }}>
-            <div className="drawer" onClick={e => e.stopPropagation()}>
+    return createPortal(
+        <div className="drawer-overlay" style={{ zIndex: 5000 }}>
+            <div className="drawer" onClick={e => e.stopPropagation()} style={{ width: '100%', height: '100%', maxWidth: 'none', maxHeight: '100%' }}>
                 {/* 1. Header Section */}
-                <div className="drawer-header">
+                <div className="drawer-header" style={{ padding: '12px 24px', minHeight: '52px', flexShrink: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                         <h2>{claim ? '🔍 클레임 상세 현황' : '🆕 신규 클레임 접수'}</h2>
                         {claim?.claimNumber && (
@@ -981,7 +1068,7 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                                 📝 전자결재 상신
                             </button>
                         )}
-                        <button onClick={onClose} className="secondary close-button">
+                        <button type="button" onClick={handleRequestClose} className="secondary close-button">
                             <span className="icon">×</span> 닫기
                         </button>
                     </div>
@@ -1040,7 +1127,7 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
 
                 {/* 3. Body Section (Scrollable) */}
                 <div className="drawer-body">
-                    <form id="claim-form" onSubmit={handleSubmit} className="drawer-body-form">
+                    <form id="claim-form" onSubmit={handleSubmit} onChange={() => { isUserInteractedRef.current = true; }} onInput={() => { isUserInteractedRef.current = true; }} className="drawer-body-form">
                         {activeTab === 'details' && (
                             <div className="tab-pane">
                                 {/* 접수 정보 섹션 */}
@@ -2410,7 +2497,8 @@ const ClaimDrawer = ({ claim, onClose, onSaved, user, readOnly = false, onNaviga
                     }}
                 />
             )}
-        </div>
+        </div>,
+        document.body
     );
 };
 

@@ -150,35 +150,35 @@ export default function CoaRequestHistoryModal({ isOpen, onClose }) {
                 </div>
 
                 {/* 상단 KPI 요약 카드 */}
-                <div className="grid grid-cols-4 gap-4 p-5 bg-slate-50 border-b border-slate-200">
-                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', padding: '20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                    <div style={{ background: '#ffffff', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                         <div>
-                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">총 성적서 요청</span>
-                            <div className="text-2xl font-black text-slate-800 mt-1">{summary.totalRequested || 0}<span className="text-xs font-normal text-slate-500 ml-1">건</span></div>
+                            <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>총 성적서 요청</span>
+                            <div style={{ fontSize: '24px', fontWeight: 900, color: '#1e293b', marginTop: '4px' }}>{summary.totalRequested || 0}<span style={{ fontSize: '12px', fontWeight: 'normal', color: '#64748b', marginLeft: '4px' }}>건</span></div>
                         </div>
-                        <span className="text-3xl">📨</span>
+                        <span style={{ fontSize: '28px' }}>📨</span>
                     </div>
-                    <div className="bg-white p-4 rounded-xl border border-emerald-100 shadow-sm flex items-center justify-between bg-gradient-to-br from-white to-emerald-50/50">
+                    <div style={{ background: '#ffffff', padding: '16px', borderRadius: '12px', border: '1px solid #a7f3d0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                         <div>
-                            <span className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">회신 완료 (회신율)</span>
-                            <div className="text-2xl font-black text-emerald-600 mt-1">
+                            <span style={{ fontSize: '11px', fontWeight: 600, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.05em' }}>회신 완료 (회신율)</span>
+                            <div style={{ fontSize: '24px', fontWeight: 900, color: '#059669', marginTop: '4px' }}>
                                 {summary.fulfilledCount || 0}
-                                <span className="text-xs font-semibold text-emerald-500 ml-2">({summary.fulfillmentRate || 0}%)</span>
+                                <span style={{ fontSize: '12px', fontWeight: 600, color: '#10b981', marginLeft: '8px' }}>({summary.fulfillmentRate || 0}%)</span>
                             </div>
                         </div>
-                        <span className="text-3xl">✅</span>
+                        <span style={{ fontSize: '28px' }}>✅</span>
                     </div>
-                    <div className="bg-white p-4 rounded-xl border border-amber-200 shadow-sm flex items-center justify-between bg-gradient-to-br from-white to-amber-50/50">
+                    <div style={{ background: '#ffffff', padding: '16px', borderRadius: '12px', border: '1px solid #fde68a', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                         <div>
-                            <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider">미회신 지연 건수</span>
-                            <div className="text-2xl font-black text-amber-700 mt-1">{summary.pendingCount || 0}<span className="text-xs font-normal text-amber-600 ml-1">건</span></div>
+                            <span style={{ fontSize: '11px', fontWeight: 600, color: '#b45309', textTransform: 'uppercase', letterSpacing: '0.05em' }}>미회신 지연 건수</span>
+                            <div style={{ fontSize: '24px', fontWeight: 900, color: '#b45309', marginTop: '4px' }}>{summary.pendingCount || 0}<span style={{ fontSize: '12px', fontWeight: 'normal', color: '#d97706', marginLeft: '4px' }}>건</span></div>
                         </div>
-                        <span className="text-3xl">⏳</span>
+                        <span style={{ fontSize: '28px' }}>⏳</span>
                     </div>
-                    <div className="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm flex items-center justify-between bg-gradient-to-br from-white to-indigo-50/50">
+                    <div style={{ background: '#ffffff', padding: '16px', borderRadius: '12px', border: '1px solid #c7d2fe', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                         <div>
-                            <span className="text-xs font-semibold text-indigo-600 uppercase tracking-wider">평균 회신 리드타임</span>
-                            <div className="text-2xl font-black text-indigo-700 mt-1">
+                            <span style={{ fontSize: '11px', fontWeight: 600, color: '#4f46e5', textTransform: 'uppercase', letterSpacing: '0.05em' }}>평균 회신 리드타임</span>
+                            <div style={{ fontSize: '24px', fontWeight: 900, color: '#4338ca', marginTop: '4px' }}>
                                 {summary.avgLeadTimeHours ? (
                                     summary.avgLeadTimeHours < 24 
                                         ? `${summary.avgLeadTimeHours}시간` 
@@ -186,7 +186,7 @@ export default function CoaRequestHistoryModal({ isOpen, onClose }) {
                                 ) : '-'}
                             </div>
                         </div>
-                        <span className="text-3xl">⏱️</span>
+                        <span style={{ fontSize: '28px' }}>⏱️</span>
                     </div>
                 </div>
 

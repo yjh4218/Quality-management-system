@@ -34,6 +34,32 @@ public class PackagingSpecificationController {
     private final PackagingSpecService specService;
     private final com.example.ims.repository.PackagingMethodImageRepository methodImageRepository;
     private final com.example.ims.service.FileStorageService fileStorageService;
+    private final org.springframework.cache.CacheManager cacheManager;
+
+    private void evictSpecCaches(PackagingSpecification spec) {
+        if (spec == null || cacheManager == null) return;
+        try {
+            if (spec.getProduct() != null && spec.getProduct().getId() != null) {
+                Long productId = spec.getProduct().getId();
+                org.springframework.cache.Cache excelCache = cacheManager.getCache("spec_excel");
+                if (excelCache != null) excelCache.evict(productId);
+                org.springframework.cache.Cache pdfCache = cacheManager.getCache("spec_pdf");
+                if (pdfCache != null) pdfCache.evict(productId);
+                log.debug("[CACHE-EVICT] Successfully evicted spec_excel and spec_pdf for productId: {}", productId);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to evict spec caches: {}", e.getMessage());
+        }
+    }
+
+    private void evictSpecCachesBySpecId(Long specId) {
+        if (specId == null) return;
+        try {
+            specRepository.findById(specId).ifPresent(this::evictSpecCaches);
+        } catch (Exception e) {
+            log.warn("Failed to evict spec caches for specId {}: {}", specId, e.getMessage());
+        }
+    }
 
     @GetMapping("/product/{productId}")
     public ResponseEntity<List<PackagingSpecification>> getSpecsByProduct(@PathVariable Long productId) {
@@ -163,11 +189,13 @@ public class PackagingSpecificationController {
             byte[] excelBytes = exportService.generateExcel(productId);
             ByteArrayResource resource = new ByteArrayResource(excelBytes);
 
-            String encodedFilename = java.net.URLEncoder.encode("포장사양서_" + itemCode + ".xlsx", java.nio.charset.StandardCharsets.UTF_8.name())
-                    .replaceAll("\\+", "%20");
+            String rawFilename = "포장사양서_" + itemCode + ".xlsx";
+            org.springframework.http.ContentDisposition contentDisposition = org.springframework.http.ContentDisposition.attachment()
+                    .filename(rawFilename, java.nio.charset.StandardCharsets.UTF_8)
+                    .build();
 
             return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + encodedFilename + "\"; filename*=UTF-8''" + encodedFilename)
+                    .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition.toString())
                     .header(HttpHeaders.CACHE_CONTROL, "no-cache, no-store, must-revalidate")
                     .header(HttpHeaders.PRAGMA, "no-cache")
                     .header(HttpHeaders.EXPIRES, "0")
@@ -191,11 +219,13 @@ public class PackagingSpecificationController {
             byte[] pdfBytes = exportService.generatePdf(productId);
             ByteArrayResource resource = new ByteArrayResource(pdfBytes);
 
-            String encodedFilename = java.net.URLEncoder.encode("포장사양서_" + itemCode + ".pdf", java.nio.charset.StandardCharsets.UTF_8.name())
-                    .replaceAll("\\+", "%20");
+            String rawFilename = "포장사양서_" + itemCode + ".pdf";
+            org.springframework.http.ContentDisposition contentDisposition = org.springframework.http.ContentDisposition.attachment()
+                    .filename(rawFilename, java.nio.charset.StandardCharsets.UTF_8)
+                    .build();
 
             return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + encodedFilename + "\"; filename*=UTF-8''" + encodedFilename)
+                    .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition.toString())
                     .contentType(MediaType.APPLICATION_PDF)
                     .body(resource);
         } catch (Exception e) {
@@ -345,6 +375,7 @@ public class PackagingSpecificationController {
             }
         }
 
+        evictSpecCachesBySpecId(specId);
         return ResponseEntity.ok(uploadedList);
     }
 
@@ -376,7 +407,9 @@ public class PackagingSpecificationController {
             existing.setThumbnailUrl(updateDto.getThumbnailUrl());
         }
 
-        return ResponseEntity.ok(methodImageRepository.save(existing));
+        com.example.ims.entity.PackagingMethodImage saved = methodImageRepository.save(existing);
+        evictSpecCachesBySpecId(existing.getPackagingSpecId());
+        return ResponseEntity.ok(saved);
     }
 
     @DeleteMapping("/method-images/{id}")
@@ -386,6 +419,7 @@ public class PackagingSpecificationController {
                 .orElseThrow(() -> new RuntimeException("Image not found"));
         existing.setDeletedAt(java.time.LocalDateTime.now());
         methodImageRepository.save(existing);
+        evictSpecCachesBySpecId(existing.getPackagingSpecId());
         return ResponseEntity.ok().build();
     }
 
@@ -423,6 +457,7 @@ public class PackagingSpecificationController {
             copiedList.add(methodImageRepository.save(copy));
         }
 
+        evictSpecCachesBySpecId(targetSpecId);
         return ResponseEntity.ok(copiedList);
     }
 
@@ -437,6 +472,7 @@ public class PackagingSpecificationController {
             currentUsername = auth.getName();
         }
         List<com.example.ims.entity.PackagingMethodImage> copiedList = specService.copyMethodImagesByItemCode(targetSpecId, sourceItemCode, currentUsername);
+        evictSpecCachesBySpecId(targetSpecId);
         return ResponseEntity.ok(copiedList);
     }
 
@@ -453,7 +489,9 @@ public class PackagingSpecificationController {
         com.example.ims.entity.PackagingMethodImage existing = methodImageRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Image not found"));
         existing.setDeletedAt(null);
-        return ResponseEntity.ok(methodImageRepository.save(existing));
+        com.example.ims.entity.PackagingMethodImage restored = methodImageRepository.save(existing);
+        evictSpecCachesBySpecId(existing.getPackagingSpecId());
+        return ResponseEntity.ok(restored);
     }
 
     /**
@@ -479,24 +517,41 @@ public class PackagingSpecificationController {
             PackagingSpecification spec = specRepository.findById(specId)
                     .orElseThrow(() -> new RuntimeException("Spec not found"));
 
+            String oldImagePath = null;
             if ("inbox".equals(mode)) {
+                oldImagePath = spec.getInboxLayoutImage();
                 spec.setInboxLayoutImage(fileUrl);
                 if (viewConfig != null && !viewConfig.isBlank()) {
                     spec.setInboxViewConfig(viewConfig);
                 }
             } else if ("outbox".equals(mode)) {
+                oldImagePath = spec.getOutboxLayoutImageFile();
                 spec.setOutboxLayoutImageFile(fileUrl);
                 spec.setOutboxLayoutImage(fileUrl);
                 if (viewConfig != null && !viewConfig.isBlank()) {
                     spec.setOutboxViewConfig(viewConfig);
                 }
             } else { // pallet or pallet-cross or pallet-normal
+                oldImagePath = spec.getPalletLayoutImage();
                 spec.setPalletLayoutImage(fileUrl);
                 if (viewConfig != null && !viewConfig.isBlank()) {
                     spec.setPalletViewConfig(viewConfig);
                 }
             }
             specRepository.save(spec);
+
+            // [최적화 & 가비지 방지] 기존에 저장되었던 자동 3D 스냅샷 파일이 있으면 안전하게 정리
+            if (oldImagePath != null && !oldImagePath.equals(fileUrl) && oldImagePath.contains("pkg_3d_")) {
+                try {
+                    fileStorageService.deleteFile(oldImagePath);
+                    log.debug("[3D-CLEANUP] Deleted old 3D snapshot file: {}", oldImagePath);
+                } catch (Exception e) {
+                    log.warn("Could not delete previous 3D snapshot: {}", oldImagePath, e);
+                }
+            }
+
+            // [캐시 동기화] 엑셀/PDF 캐시 즉시 파기 -> 다음 다운로드 시 최신 3D 도면 100% 반영
+            evictSpecCaches(spec);
 
             java.util.Map<String, String> response = new java.util.HashMap<>();
             response.put("imagePath", fileUrl);

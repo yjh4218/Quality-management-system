@@ -1,17 +1,20 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { getManufacturers, deleteManufacturer, getManufacturerScorecard } from './api';
 import ManufacturerDrawer from './ManufacturerDrawer';
 import { usePermissions } from './usePermissions';
 import { toast } from 'react-toastify';
 import { matchesMultiFieldTokens } from './utils/searchUtils';
+import useGridTabRecovery from './hooks/useGridTabRecovery';
 
 /**
  * 제조사 정보 관리 페이지
  * [디자인 표준화] 제품코드 마스터의 20px 여백 및 표준 그리드 레이아웃을 적용했습니다.
  * [UX 개선] 기존 카드 형태에서 Ag-Grid 기반의 데이터 중심 레이아웃으로 전환하여 대량의 협력사 정보를 효율적으로 관리합니다.
  */
-const ManufacturerManagementPage = ({ user }) => {
+const ManufacturerManagementPage = ({ user, isActive = true }) => {
+    const gridRef = useRef(null);
+    useGridTabRecovery(gridRef, isActive);
     const { canEdit: checkEdit, canDelete: checkDelete } = usePermissions(user);
     const canEdit = checkEdit('manufacturers');
     const canDelete = checkDelete('manufacturers');
@@ -242,6 +245,7 @@ const ManufacturerManagementPage = ({ user }) => {
                 <div className="ag-theme-alpine" style={{ flex: 1, width: '100%' }}>
                     <AgGridReact
                         theme="legacy"
+                        ref={gridRef}
                         rowHeight={54}
                         rowData={rowData}
                         columnDefs={columnDefs}

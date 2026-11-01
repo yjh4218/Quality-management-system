@@ -119,33 +119,130 @@ const setGlobalLoading = (isLoading) => {
 /**
  * [공통 유틸] Blob 데이터를 파일로 다운로드합니다.
  */
-export const downloadBlob = (response, defaultFileName) => {
-    const url = window.URL.createObjectURL(new Blob([response.data]));
-    const link = document.createElement('a');
-    link.href = url;
-    
-    // Content-Disposition 헤더에서 파일명 추출 시도
-    const contentDisposition = response.headers['content-disposition'];
-    let fileName = defaultFileName;
-    if (contentDisposition) {
-        const fileNameMatch = contentDisposition.match(/filename=(.+)/);
-        if (fileNameMatch.length === 2) fileName = fileNameMatch[1];
-    }
-    
-    // 파일명에 오늘 날짜 추가 (예: filename_2026-04-26.xlsx)
-    const today = new Date().toISOString().split('T')[0];
-    const dotIndex = fileName.lastIndexOf('.');
-    if (dotIndex > -1) {
-        fileName = fileName.substring(0, dotIndex) + "_" + today + fileName.substring(dotIndex);
-    } else {
-        fileName = fileName + "_" + today;
+export const downloadBlob = async (response, defaultFileName, customMimeType = null) => {
+    if (!response || !response.data) {
+        toast.error("다운로드할 데이터가 없습니다.");
+        return;
     }
 
+    const data = response.data;
+
+    // 1. 서버 에러 응답(JSON 등)이 Blob으로 변환되어 내려온 경우 방어
+    if (data instanceof Blob && (data.type?.includes('json') || data.size < 500)) {
+        try {
+            const text = await data.text();
+            if (text.trim().startsWith('{') || text.trim().startsWith('[')) {
+                const json = JSON.parse(text);
+                const msg = json.message || json.error || "파일 다운로드 중 서버 오류가 발생했습니다.";
+                toast.error(msg);
+                return;
+            }
+        } catch (e) {
+            // 파싱 실패 시 일반 바이너리로 진행
+        }
+    }
+
+    // 2. MIME 타입 보정 (MIME 타입이 비어있으면 브라우저가 확장자를 무시하거나 이상한 파일로 저장할 수 있음)
+    let determinedType = customMimeType;
+    if (!determinedType) {
+        if (data instanceof Blob && data.type && data.type !== 'application/octet-stream') {
+            determinedType = data.type;
+        } else if (defaultFileName && defaultFileName.toLowerCase().endsWith('.xlsx')) {
+            determinedType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        } else if (defaultFileName && defaultFileName.toLowerCase().endsWith('.pdf')) {
+            determinedType = 'application/pdf';
+        } else {
+            determinedType = 'application/octet-stream';
+        }
+    }
+
+    const blob = data instanceof Blob
+        ? new Blob([data], { type: determinedType })
+        : new Blob([data], { type: determinedType });
+
+    // 3. Content-Disposition 헤더에서 서버가 지정한 파일명 파싱 (RFC 5987 UTF-8 지원)
+    let fileName = defaultFileName || 'download.xlsx';
+    const headers = response.headers || {};
+    const contentDisposition = headers['content-disposition'] || headers['Content-Disposition'];
+    if (contentDisposition) {
+        // RFC 5987 (filename*=UTF-8''...) 우선 파싱
+        const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+        if (utf8Match && utf8Match[1]) {
+            try {
+                fileName = decodeURIComponent(utf8Match[1].trim());
+            } catch (e) {
+                fileName = utf8Match[1].trim();
+            }
+        } else {
+            // 표준 filename="..." 파싱 (따옴표 및 세미콜론 제거)
+            const standardMatch = contentDisposition.match(/filename=["']?([^"';]+)["']?/i);
+            if (standardMatch && standardMatch[1]) {
+                try {
+                    fileName = decodeURIComponent(standardMatch[1].trim());
+                } catch (e) {
+                    fileName = standardMatch[1].trim();
+                }
+            }
+        }
+    } else {
+        // Content-Disposition 헤더가 없고 defaultFileName에 오늘 날짜가 없으면 날짜 태그 추가
+        const today = new Date().toISOString().split('T')[0];
+        if (fileName && !fileName.includes(today)) {
+            const dotIndex = fileName.lastIndexOf('.');
+            if (dotIndex > -1) {
+                fileName = fileName.substring(0, dotIndex) + "_" + today + fileName.substring(dotIndex);
+            } else {
+                fileName = fileName + "_" + today;
+            }
+        }
+    }
+
+    // 4. Windows 및 OS 파일 시스템 금지 문자 정제 (\ / : * ? " < > | 및 줄바꿈)
+    fileName = fileName.replace(/[\/\\:*?"<>|\r\n]/g, '_').trim();
+    
+    // 확장자 누락 방지
+    if (!fileName.includes('.')) {
+        if (determinedType.includes('sheet') || (defaultFileName && defaultFileName.toLowerCase().endsWith('.xlsx'))) {
+            fileName += '.xlsx';
+        } else if (determinedType.includes('pdf') || (defaultFileName && defaultFileName.toLowerCase().endsWith('.pdf'))) {
+            fileName += '.pdf';
+        }
+    }
+
+    // 5. 다운로드 실행
+    if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+        window.navigator.msSaveOrOpenBlob(blob, fileName);
+        return;
+    }
+
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
     link.setAttribute('download', fileName);
     document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
+    try {
+        link.click();
+    } catch (clickErr) {
+        console.warn("[downloadBlob] Programmatic link click failed, attempting fallback:", clickErr);
+        try {
+            const clickEvent = new MouseEvent('click', { view: window, bubbles: true, cancelable: true });
+            link.dispatchEvent(clickEvent);
+        } catch (e) {
+            window.open(url, '_blank');
+        }
+    }
+
+    // 6. 브라우저 다운로드 큐 진입 및 파일 쓰기 안정화 대기 후 DOM 정리 및 ObjectURL 메모리 해제
+    setTimeout(() => {
+        try {
+            if (link.parentNode) {
+                link.parentNode.removeChild(link);
+            }
+            window.URL.revokeObjectURL(url);
+        } catch (e) {
+            // cleanup ignore
+        }
+    }, 3000);
 };
 
 const getCookie = (name) => {
@@ -184,6 +281,8 @@ const api = axios.create({
     xsrfCookieName: 'XSRF-TOKEN',
     xsrfHeaderName: 'X-XSRF-TOKEN'
 });
+api.downloadBlob = downloadBlob;
+api.getBaseURL = getBaseURL;
 
 // [버그 리포트 / 비인증 로깅 전용 독립 AXIOS 인스턴스] CORS preflight 및 CSRF 인터셉터의 영향을 받지 않는 무인증 JSON 클라이언트
 const bugReportAxios = axios.create({
@@ -801,8 +900,18 @@ export const createPackagingSpec = (productId) => api.post(`/api/packaging-specs
 export const savePackagingSpec = (spec) => api.post('/api/packaging-specs', spec); // This might be used for updates
 export const copyMasterPackagingSpec = (productId, masterProductId) => 
     api.post(`/api/packaging-specs/copy-master?productId=${productId}&masterProductId=${masterProductId}`);
-export const downloadPackagingSpecExcel = (productId) => api.get(`/api/packaging-specs/export-excel/${productId}`, { responseType: 'blob' });
-export const downloadPackagingSpecPdf = (productId) => api.get(`/api/packaging-specs/export-pdf/${productId}`, { responseType: 'blob' });
+export const downloadPackagingSpecExcel = (productId) => api.get(`/api/packaging-specs/export-excel/${productId}`, { 
+    responseType: 'blob',
+    headers: {
+        'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/octet-stream'
+    }
+});
+export const downloadPackagingSpecPdf = (productId) => api.get(`/api/packaging-specs/export-pdf/${productId}`, { 
+    responseType: 'blob',
+    headers: {
+        'Accept': 'application/pdf, application/octet-stream'
+    }
+});
 export const getPackagingMethodImages = (specId) => api.get(`/api/packaging-specs/${specId}/method-images`);
 export const copyPackagingMethodImagesFromProduct = (targetSpecId, sourceItemCode) => 
     api.post(`/api/packaging-specs/${targetSpecId}/method-images/copy-from-product/${encodeURIComponent(sourceItemCode)}`);

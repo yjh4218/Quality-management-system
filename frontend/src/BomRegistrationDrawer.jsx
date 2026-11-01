@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { useNavigationGuard } from './context/NavigationGuardContext.jsx';
 import * as api from './api';
 import { toast } from 'react-toastify';
 import ManufacturerSearchModal from './ManufacturerSearchModal';
@@ -17,6 +19,10 @@ const BomRegistrationDrawer = ({ material, onClose, user }) => {
         specification: '',
         weight: '',
         thickness: '',
+        coatingSpec: '',
+        printingSpec: '',
+        adhesiveSpec: '',
+        postProcessingSpec: '',
         isMultiLayer: false,
         imagePath: '',
         layers: []
@@ -24,6 +30,87 @@ const BomRegistrationDrawer = ({ material, onClose, user }) => {
 
     const [categories, setCategories] = useState([]);
     const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+    const { registerGuard, unregisterGuard, requestNavigation } = useNavigationGuard();
+    const baselineBomSnapshotRef = useRef(null);
+    const isUserInteractedRef = useRef(false);
+
+    useEffect(() => {
+        if (!baselineBomSnapshotRef.current && (material || formData.componentName)) {
+            const timer = setTimeout(() => {
+                if (!baselineBomSnapshotRef.current) {
+                    try {
+                        baselineBomSnapshotRef.current = {
+                            bomCode: formData.bomCode || '',
+                            componentName: formData.componentName || '',
+                            type: formData.type || '',
+                            detailedType: formData.detailedType || '',
+                            detailedMaterial: formData.detailedMaterial || '',
+                            specification: formData.specification || '',
+                            weight: formData.weight || '',
+                            manufacturerCode: formData.manufacturerCode || ''
+                        };
+                    } catch {
+                        baselineBomSnapshotRef.current = null;
+                    }
+                }
+            }, 300);
+            return () => clearTimeout(timer);
+        }
+    }, [material, formData.componentName]);
+
+    useEffect(() => {
+        registerGuard({
+            id: 'bom_registration_drawer',
+            targetName: `구성품 BOM [${formData.componentName || formData.bomCode || '신규'}]`,
+            isDirty: () => {
+                if (!isUserInteractedRef.current || !baselineBomSnapshotRef.current) {
+                    return { isDirty: false, changedFields: [] };
+                }
+
+                const base = baselineBomSnapshotRef.current;
+                const cur = formData;
+                const changedFields = [];
+
+                if (base.componentName !== (cur.componentName || '')) changedFields.push('구성품명');
+                if (base.bomCode !== (cur.bomCode || '')) changedFields.push('BOM 코드');
+                if (base.type !== (cur.type || '')) changedFields.push('자재 대분류');
+                if (base.detailedType !== (cur.detailedType || '')) changedFields.push('자재 중분류');
+                if (base.detailedMaterial !== (cur.detailedMaterial || '')) changedFields.push('세부 재질');
+                if (base.specification !== (cur.specification || '')) changedFields.push('규격');
+                if (base.weight !== (cur.weight || '')) changedFields.push('중량');
+                if (base.manufacturerCode !== (cur.manufacturerCode || '')) changedFields.push('제조사 코드');
+
+                return {
+                    isDirty: changedFields.length > 0,
+                    changedFields
+                };
+            },
+            onSave: async () => {
+                if (!formData.componentName || !formData.componentName.trim()) {
+                    toast.warning("구성품명은 필수 항목입니다.");
+                    return false;
+                }
+                setIsConfirmOpen(true);
+                return false;
+            },
+            onDiscard: () => {
+                isUserInteractedRef.current = false;
+            },
+            onClose: () => {
+                if (onClose) onClose();
+            }
+        });
+
+        return () => {
+            unregisterGuard('bom_registration_drawer');
+        };
+    }, [formData, registerGuard, unregisterGuard, onClose]);
+
+    const handleRequestClose = () => {
+        requestNavigation(() => {
+            if (onClose) onClose();
+        });
+    };
     const [bomCodeChecking, setBomCodeChecking] = useState(false);
     const [bomCodeAvailable, setBomCodeAvailable] = useState(null);
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -48,6 +135,10 @@ const BomRegistrationDrawer = ({ material, onClose, user }) => {
                 specification: material.specification || '',
                 weight: material.weight || '',
                 thickness: material.thickness || '',
+                coatingSpec: material.coatingSpec || '',
+                printingSpec: material.printingSpec || '',
+                adhesiveSpec: material.adhesiveSpec || '',
+                postProcessingSpec: material.postProcessingSpec || '',
                 isMultiLayer: material.isMultiLayer || false,
                 imagePath: material.imagePath || '',
                 layers: material.layers || [],
@@ -221,22 +312,22 @@ const BomRegistrationDrawer = ({ material, onClose, user }) => {
 
     const isAluminum = (name) => name && (name.includes('알루미늄') || name.toUpperCase().includes('AL'));
 
-    return (
-        <div className="drawer-overlay">
-            <div className="drawer" onClick={e => e.stopPropagation()}>
+    return createPortal(
+        <div className="drawer-overlay" style={{ zIndex: 5000 }}>
+            <div className="drawer" onClick={e => e.stopPropagation()} style={{ width: '100%', height: '100%', maxWidth: 'none', maxHeight: '100%' }}>
                 {/* 1. Fixed Header Area */}
-                <div className="drawer-header">
+                <div className="drawer-header" style={{ padding: '12px 24px', minHeight: '52px', flexShrink: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                         <h2>{material ? '📦 구성품 수정' : '🆕 신규 구성품 등록'}</h2>
                     </div>
-                    <button onClick={() => onClose()} className="secondary close-button">
+                    <button type="button" onClick={handleRequestClose} className="secondary close-button">
                         <span className="icon">×</span> 닫기
                     </button>
                 </div>
 
                 {/* 2. Scrollable Body Area */}
                 <div className="drawer-body">
-                    <form id="bom-registration-form" onSubmit={handleSubmit} className="drawer-body-form">
+                    <form id="bom-registration-form" onSubmit={handleSubmit} className="drawer-body-form" onChange={() => { isUserInteractedRef.current = true; }} onInput={() => { isUserInteractedRef.current = true; }}>
                         {/* 섹션 1: 기본 정보 */}
                         <div className="card">
                             <h3>
@@ -431,6 +522,86 @@ const BomRegistrationDrawer = ({ material, onClose, user }) => {
                                     </div>
                                 </div>
                             )}
+                        </div>
+
+                        {/* 섹션 2-1: 포장재 가공 세부 사양 (코팅, 인쇄, 접착제, 후가공) */}
+                        <div className="card" style={{ borderLeft: '5px solid #2563eb' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '800', color: '#1e293b' }}>
+                                    <span style={{ color: '#2563eb' }}>🎨</span> 포장재 가공 세부 사양 (공정/품질 기준)
+                                </h3>
+                                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '600' }}>
+                                    * 코팅, 인쇄, 접착제 등의 상세 스펙 기재
+                                </span>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                    <label style={{ fontSize: '13px', fontWeight: '700', color: '#334155' }}>
+                                        🖌️ 코팅 사양
+                                    </label>
+                                    <input 
+                                        type="text" 
+                                        value={formData.coatingSpec || ''} 
+                                        onChange={e => setFormData({...formData, coatingSpec: e.target.value})} 
+                                        placeholder="예: 전면 UV 무광 코팅, 수성 바니시, 하드코팅" 
+                                        style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                                    />
+                                    <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
+                                        추천: UV 무광 / UV 유광 / 수성 바니시 / 라미네이팅 / 무코팅
+                                    </div>
+                                </div>
+
+                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                    <label style={{ fontSize: '13px', fontWeight: '700', color: '#334155' }}>
+                                        🖨️ 인쇄 사양
+                                    </label>
+                                    <input 
+                                        type="text" 
+                                        value={formData.printingSpec || ''} 
+                                        onChange={e => setFormData({...formData, printingSpec: e.target.value})} 
+                                        placeholder="예: 옵셋 4도+별색 1도, 실크스크린 1도, 금박" 
+                                        style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                                    />
+                                    <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
+                                        추천: 옵셋 4도 / 실크스크린 / 핫스탬핑(금/은박) / 그라비아
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                    <label style={{ fontSize: '13px', fontWeight: '700', color: '#334155' }}>
+                                        🧴 접착제 사양
+                                    </label>
+                                    <input 
+                                        type="text" 
+                                        value={formData.adhesiveSpec || ''} 
+                                        onChange={e => setFormData({...formData, adhesiveSpec: e.target.value})} 
+                                        placeholder="예: 친환경 수성 접착제, 핫멜트(EVA계), 아크릴계" 
+                                        style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                                    />
+                                    <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
+                                        추천: 친환경 수성 / 핫멜트 / 아크릴 에멀전 / 무용제형
+                                    </div>
+                                </div>
+
+                                <div className="form-group" style={{ marginBottom: 0 }}>
+                                    <label style={{ fontSize: '13px', fontWeight: '700', color: '#334155' }}>
+                                        ✨ 후가공 및 특이 사양
+                                    </label>
+                                    <input 
+                                        type="text" 
+                                        value={formData.postProcessingSpec || ''} 
+                                        onChange={e => setFormData({...formData, postProcessingSpec: e.target.value})} 
+                                        placeholder="예: 전면 형압(엠보싱), 에칭 가공, 샌딩, 윈도우 타공" 
+                                        style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                                    />
+                                    <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
+                                        추천: 형압/엠보싱 / 디보싱 / 에칭 / 타공 / 톰슨가공
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         {/* 섹션 3: 제조사 정보 */}
@@ -697,7 +868,8 @@ const BomRegistrationDrawer = ({ material, onClose, user }) => {
                     </div>
                 </div>
             )}
-        </div>
+        </div>,
+        document.body
     );
 };
 

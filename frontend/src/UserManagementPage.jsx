@@ -4,8 +4,13 @@ import { getUsers, getRoles, approveUser, toggleUserStatus, updateUserRole, unlo
 import { usePermissions } from './usePermissions';
 import { matchesAllTokens, matchesMultiFieldTokens } from './utils/searchUtils';
 import DepartmentManagementTab from './DepartmentManagementTab';
+import useGridTabRecovery from './hooks/useGridTabRecovery';
+import useGridStatePersistence from './hooks/useGridStatePersistence';
 
-const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) => {
+const UserManagementPage = ({ user: currentUser, navigationData, onNavigated, isActive = true }) => {
+    const gridRef = useRef(null);
+    useGridTabRecovery(gridRef, isActive);
+    const { saveColumnState } = useGridStatePersistence(gridRef, 'qms_grid_col_state_users');
     const { canEdit, canDelete } = usePermissions(currentUser);
     const [rowData, setRowData] = useState([]);
     const [searchFields, setSearchFields] = useState({
@@ -570,6 +575,10 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated }) 
 
                     <div className="ag-theme-alpine" style={{ flex: 1, width: '100%', marginTop: '10px' }}>
                         <AgGridReact theme="legacy"
+                            ref={gridRef}
+                            onColumnResized={saveColumnState}
+                            onColumnMoved={saveColumnState}
+                            onSortChanged={saveColumnState}
                             rowHeight={54}
                             rowData={filteredRowData}
                             columnDefs={colDefs}

@@ -49,4 +49,8 @@ public class ProductBomSummaryDto {
     private Integer sortOrder;
     private Boolean isMultiLayer;
     private String imagePath;
+    private String coatingSpec;
+    private String printingSpec;
+    private String adhesiveSpec;
+    private String postProcessingSpec;
 }

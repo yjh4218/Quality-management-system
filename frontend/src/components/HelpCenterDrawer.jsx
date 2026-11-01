@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { getPageGuide } from '../api';
 import { pageGuides } from '../guides/pageGuides';
 
@@ -55,8 +56,8 @@ const HelpCenterDrawer = ({ currentPage, onClose, user, isDrawer = true }) => {
         return text.includes(searchQuery.toLowerCase());
     });
 
-    return (
-        <div className={`help-drawer-overlay ${isDrawer ? 'drawer-mode' : 'modal-mode'}`} onClick={onClose}>
+    return createPortal(
+        <div className={`help-drawer-overlay ${isDrawer ? 'drawer-mode' : 'modal-mode'}`} onClick={onClose} style={{ zIndex: 6000 }}>
             <div className="help-drawer-container" onClick={e => e.stopPropagation()}>
                 {/* 상단 헤더 */}
                 <div className="help-drawer-header">
@@ -154,7 +155,8 @@ const HelpCenterDrawer = ({ currentPage, onClose, user, isDrawer = true }) => {
                     <button className="btn btn-secondary btn-sm" onClick={onClose}>창 닫기</button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
