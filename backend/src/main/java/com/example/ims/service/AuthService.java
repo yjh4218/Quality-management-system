@@ -39,25 +39,34 @@ public class AuthService {
         if (userRepository.findByUsername(dto.username()).isPresent()) {
             throw new IllegalArgumentException("이미 존재하는 아이디입니다.");
         }
+        if (dto.email() != null && !dto.email().isBlank() && 
+                userRepository.findByEmail(dto.email().trim()).isPresent()) {
+            throw new IllegalArgumentException("이미 사용 중인 이메일 주소입니다.");
+        }
 
         com.example.ims.entity.Manufacturer matchedManufacturer = null;
-        // 등록된 제조사 목록에 존재하는 경우 제조사 엔티티 매핑
+        String initialRole = "ROLE_USER";
+
+        // 등록된 제조사 목록에 존재하는 경우 제조사 엔티티 매핑 및 기본 권한 스마트 지정
         if (dto.companyName() != null && !dto.companyName().isBlank()) {
             matchedManufacturer = manufacturerRepository.findByName(dto.companyName()).orElse(null);
+            if (matchedManufacturer != null) {
+                initialRole = "ROLE_MANUFACTURER";
+            }
         }
 
         validatePasswordComplexity(dto.password());
 
         User newUser = User.builder()
-                .username(dto.username())
+                .username(dto.username().trim())
                 .password(passwordEncoder.encode(dto.password()))
-                .name(dto.name())
-                .companyName(dto.companyName())
+                .name(dto.name().trim())
+                .companyName(dto.companyName().trim())
                 .manufacturer(matchedManufacturer)
-                .department(dto.department())
-                .phone(dto.phone())
-                .email(dto.email())
-                .role("ROLE_USER")
+                .department(dto.department().trim())
+                .phone(dto.phone().trim())
+                .email(dto.email().trim())
+                .role(initialRole)
                 .enabled(false)
                 .locked(false)
                 .passwordResetRequired(false)
@@ -72,12 +81,13 @@ public class AuthService {
                     savedUser.getUsername(),
                     "USER_REGISTER",
                     "신규 회원가입 신청",
-                    String.format("신규 사용자 가입 신청 [ID: %s, 이메일: %s, 소속: %s]", savedUser.getUsername(), savedUser.getEmail(), savedUser.getCompanyName())
+                    String.format("신규 사용자 가입 신청 [ID: %s, 이메일: %s, 소속: %s, 초기부여권한: %s]",
+                            savedUser.getUsername(), savedUser.getEmail(), savedUser.getCompanyName(), initialRole)
             );
         } catch (Exception e) {
             log.warn("감사 로그 적재 실패 (회원가입): {}", e.getMessage());
         }
-        log.info("[AUTH] New registration request saved: {}", dto.username());
+        log.info("[AUTH] New registration request saved: {} with role: {}", dto.username(), initialRole);
 
         try {
             // 이메일 인증 링크 발송
@@ -126,6 +136,31 @@ public class AuthService {
         } catch (Exception e) {
             log.error("Failed to create user approval notification for {}: {}", savedUser.getUsername(), e.getMessage());
         }
+    }
+
+    /**
+     * 인증 이메일을 재발송합니다.
+     */
+    @Transactional
+    public void resendVerification(String usernameOrEmail, String baseUrl) {
+        if (usernameOrEmail == null || usernameOrEmail.isBlank()) {
+            throw new IllegalArgumentException("아이디 또는 이메일을 입력해 주세요.");
+        }
+        String query = usernameOrEmail.trim();
+        User user = userRepository.findByUsername(query)
+                .or(() -> userRepository.findByEmail(query))
+                .orElseThrow(() -> new IllegalArgumentException("일치하는 회원 정보를 찾을 수 없습니다."));
+
+        if (user.isEmailVerified()) {
+            throw new IllegalArgumentException("이미 이메일 인증이 완료된 계정입니다. 관리자 승인을 기다려 주시기 바랍니다.");
+        }
+
+        String newToken = UUID.randomUUID().toString();
+        user.setVerificationToken(newToken);
+        userRepository.save(user);
+
+        emailService.sendVerificationEmail(user.getEmail(), newToken, baseUrl + "/api/auth");
+        log.info("[AUTH] Verification email resent to: {}", user.getEmail());
     }
 
     /**

@@ -51,3 +51,4 @@ public class PasswordResetDto {
             String newPassword
     ) {}
 }
+

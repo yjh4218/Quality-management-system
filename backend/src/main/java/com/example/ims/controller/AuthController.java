@@ -61,6 +61,20 @@ public class AuthController {
     /**
      * 이메일 링크를 통한 사용자 인증을 처리합니다. (HTML 응답 반환)
      */
+    /**
+     * 이메일 미인증 사용자 대상 인증 메일 재발송을 처리합니다.
+     */
+    @PostMapping("/resend-verification")
+    public ResponseEntity<ApiResponse<String>> resendVerificationEmail(@RequestBody Map<String, String> body) {
+        String usernameOrEmail = body.get("username");
+        if (usernameOrEmail == null || usernameOrEmail.isBlank()) {
+            usernameOrEmail = body.get("email");
+        }
+        String baseUrl = org.springframework.web.servlet.support.ServletUriComponentsBuilder.fromCurrentContextPath().build().toUriString();
+        authService.resendVerification(usernameOrEmail, baseUrl);
+        return ResponseEntity.ok(ApiResponse.success("인증 이메일이 재발송되었습니다. 수신함을 확인해 주세요.", null));
+    }
+
     @GetMapping(value = "/verify-email", produces = "text/html;charset=UTF-8")
     public ResponseEntity<String> verifyEmail(@RequestParam String token) {
         try {

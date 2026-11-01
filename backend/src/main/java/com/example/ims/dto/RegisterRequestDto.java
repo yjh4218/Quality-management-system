@@ -19,8 +19,8 @@ public record RegisterRequestDto(
 
     @NotBlank(message = "비밀번호는 필수입니다.")
     @jakarta.validation.constraints.Pattern(
-        regexp = "^(?=.*[a-zA-Z])(?=.*[0-9])(?=.*[!@#$%^&*()_+={}\\[\\]:;\"'<>,.?/\\\\|~`]).{8,16}$",
-        message = "비밀번호는 영문, 숫자, 특수기호를 포함하여 8~16자리로 입력해주세요."
+        regexp = "^(?=.*[a-zA-Z])(?=.*[0-9])(?=.*[!@#$%^&*()_+={}\\[\\]:;\"'<>,.?/\\\\|~`]).{8,64}$",
+        message = "비밀번호는 영문, 숫자, 특수기호를 포함하여 8~64자리로 입력해주세요."
     )
     String password,
 

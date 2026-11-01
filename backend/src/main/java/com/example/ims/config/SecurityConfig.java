@@ -64,7 +64,7 @@ public class SecurityConfig {
 
                             // 비인가 익명 허용 공개 API는 검증 예외
                             if (!uri.startsWith("/api/auth/login") && !uri.startsWith("/api/auth/register") &&
-                                !uri.startsWith("/api/auth/find-password") && !uri.startsWith("/api/auth/verify-email") && !uri.startsWith("/api/auth/password-reset") &&
+                                !uri.startsWith("/api/auth/find-password") && !uri.startsWith("/api/auth/verify-email") && !uri.startsWith("/api/auth/password-reset") && !uri.startsWith("/api/auth/resend-verification") &&
                                 !uri.startsWith("/api/bug-reports") && !uri.startsWith("/api/logs/access") &&
                                 !uri.startsWith("/api/vendor-upload")) {
 
@@ -112,7 +112,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/system/health").permitAll() 
                         .requestMatchers("/api/debug/**").hasRole("ADMIN")
                         .requestMatchers("/", "/api/auth/login", "/api/auth/logout").permitAll()
-                        .requestMatchers("/api/auth/register", "/api/auth/check-username", "/api/auth/find-password", "/api/auth/verify-email", "/api/auth/password-reset/**").permitAll()
+                        .requestMatchers("/api/auth/register", "/api/auth/check-username", "/api/auth/find-password", "/api/auth/verify-email", "/api/auth/password-reset/**", "/api/auth/resend-verification").permitAll()
                         .requestMatchers("/api/vendor-upload/**").permitAll()
                         // Spring Boot Actuator 모니터링 엔드포인트 세분화 (health, info 공개 / 기타 민감정보 보호)
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()

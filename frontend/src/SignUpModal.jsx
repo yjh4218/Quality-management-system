@@ -61,9 +61,9 @@ const SignUpModal = ({ isOpen, onClose }) => {
             return;
         }
         
-        const passwordRegex = /^(?=.*[a-zA-Z])(?=.*[0-9])(?=.*[!@#$%^&*()_+={}\[\]:;"'<>,.?/\\|~`]).{8,16}$/;
+        const passwordRegex = /^(?=.*[a-zA-Z])(?=.*[0-9])(?=.*[!@#$%^&*()_+={}\[\]:;"'<>,.?/\\|~`]).{8,64}$/;
         if (!passwordRegex.test(formData.password)) {
-            alert("비밀번호는 영문, 숫자, 특수기호를 포함하여 8~16자리로 입력해주세요.");
+            alert("비밀번호는 영문, 숫자, 특수기호를 포함하여 8~64자리로 입력해주세요.");
             return;
         }
         if (!formData.companyName) {
@@ -160,7 +160,7 @@ const SignUpModal = ({ isOpen, onClose }) => {
                                     autoComplete="new-password"
                                 />
                                 <p style={{ margin: '5px 0 0 0', fontSize: '11px', color: '#718096', lineHeight: '1.4' }}>
-                                    ✓ 영문, 숫자, 특수기호 포함 8~16자
+                                    ✓ 영문, 숫자, 특수기호 포함 8~64자
                                 </p>
                             </div>
                             <div className="form-group">

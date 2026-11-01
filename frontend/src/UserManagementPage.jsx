@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AgGridReact } from 'ag-grid-react'; // React Grid Logic
-import { getUsers, getRoles, approveUser, toggleUserStatus, updateUserRole, unlockUser, resetUserPassword, getSystemSettings, saveSystemSettings, testSendEmail, getManufacturers } from './api';
+import { getUsers, getRoles, approveUser, toggleUserStatus, updateUserRole, unlockUser, resetUserPassword, getSystemSettings, saveSystemSettings, testSendEmail, getManufacturers, adminResendVerification, adminVerifyEmailManual } from './api';
 import { usePermissions } from './usePermissions';
 import { matchesAllTokens, matchesMultiFieldTokens } from './utils/searchUtils';
 import DepartmentManagementTab from './DepartmentManagementTab';
@@ -183,14 +183,27 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated, is
         );
     }, [rowData, quickFilterText]);
 
-    const handleApprove = React.useCallback(async (id) => {
-        showConfirm("이 사용자의 가입을 승인하시겠습니까?", async () => {
+    const handleApprove = React.useCallback(async (targetUser) => {
+        const emailWarn = !targetUser.emailVerified ? "\n⚠️ 주의: 이 사용자는 아직 이메일 인증을 완료하지 않았습니다." : "";
+        showConfirm(`[${targetUser.name || targetUser.username}] 사용자의 가입을 승인하시겠습니까?${emailWarn}\n(승인 시 가입 완료 안내 이메일이 발송됩니다)`, async () => {
             try {
-                await approveUser(id);
+                await approveUser(targetUser.id);
                 showAlert("사용자가 승인되었습니다!");
                 await fetchUsers(); // Refresh data
             } catch (error) {
                 showAlert("승인 처리에 실패했습니다.");
+            }
+        });
+    }, [fetchUsers, showConfirm, showAlert]);
+
+    const handleAdminResendEmail = React.useCallback(async (id, name, email) => {
+        showConfirm(`[${name}] (${email}) 사용자에게 이메일 인증 링크를 재발송하시겠습니까?`, async () => {
+            try {
+                await adminResendVerification(id);
+                showAlert("인증 이메일이 재발송되었습니다.");
+                await fetchUsers();
+            } catch (error) {
+                showAlert("재발송 실패: " + (error.response?.data?.message || error.response?.data || error.message));
             }
         });
     }, [fetchUsers, showConfirm, showAlert]);
@@ -255,19 +268,32 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated, is
 
         const cannotEdit = !canEdit('users');
         const actionStyle = cannotEdit ? { opacity: 0.5, cursor: 'not-allowed' } : { cursor: 'pointer' };
+        const isPendingApproval = !user.enabled && !user.lastLogin;
+        const isDeactivated = !user.enabled && user.lastLogin;
 
         return (
             <div style={{ display: 'flex', gap: '5px', alignItems: 'center', height: '100%', opacity: cannotEdit ? 0.7 : 1 }}>
-                {!user.enabled ? (
+                {isPendingApproval ? (
+                    <button
+                        disabled={cannotEdit}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (!cannotEdit) handleApprove(user);
+                        }}
+                        style={{ ...actionStyle, backgroundColor: '#0284c7', color: 'white', padding: '4px 8px', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: '700' }}
+                    >
+                        가입 승인
+                    </button>
+                ) : isDeactivated ? (
                     <button
                         disabled={cannotEdit}
                         onClick={(e) => {
                             e.stopPropagation();
                             if (!cannotEdit) handleToggleStatus(user.id, user.enabled);
                         }}
-                        style={{ ...actionStyle, backgroundColor: '#4CAF50', color: 'white', padding: '4px 8px', border: 'none', borderRadius: '4px', fontSize: '11px' }}
+                        style={{ ...actionStyle, backgroundColor: '#10b981', color: 'white', padding: '4px 8px', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: '600' }}
                     >
-                        활성화
+                        재활성화
                     </button>
                 ) : (
                     <button
@@ -275,10 +301,10 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated, is
                             e.stopPropagation();
                             if (!cannotEdit) handleToggleStatus(user.id, user.enabled);
                         }}
-                        disabled={cannotEdit || user.role === 'ROLE_ADMIN'}
+                        disabled={cannotEdit || user.username === 'admin'}
                         style={{
                             ...actionStyle,
-                            backgroundColor: (cannotEdit || user.role === 'ROLE_ADMIN') ? '#ccc' : '#f44336',
+                            backgroundColor: (cannotEdit || user.username === 'admin') ? '#ccc' : '#ef4444',
                             color: 'white',
                             padding: '4px 8px',
                             border: 'none',
@@ -289,8 +315,21 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated, is
                         비활성화
                     </button>
                 )}
+                {!user.emailVerified && (
+                    <button
+                        disabled={cannotEdit}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (!cannotEdit) handleAdminResendEmail(user.id, user.name, user.email);
+                        }}
+                        title="이메일 인증 링크 재발송"
+                        style={{ ...actionStyle, backgroundColor: '#ffffff', color: '#0284c7', border: '1px solid #bae6fd', padding: '3px 6px', borderRadius: '4px', fontSize: '11px', fontWeight: '600' }}
+                    >
+                        인증재발송
+                    </button>
+                )}
                 <select
-                    disabled={cannotEdit}
+                    disabled={cannotEdit || user.username === 'admin'}
                     value={user.role || 'ROLE_USER'}
                     onChange={(e) => {
                         e.stopPropagation();
@@ -309,7 +348,7 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated, is
                             e.stopPropagation();
                             if (!cannotEdit) handleUnlock(user.id);
                         }}
-                        style={{ ...actionStyle, backgroundColor: '#ff9800', color: 'white', padding: '4px 8px', border: 'none', borderRadius: '4px', fontSize: '11px' }}
+                        style={{ ...actionStyle, backgroundColor: '#f59e0b', color: 'white', padding: '4px 8px', border: 'none', borderRadius: '4px', fontSize: '11px' }}
                     >
                         잠금 해제
                     </button>
@@ -320,7 +359,7 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated, is
                         e.stopPropagation();
                         if (!cannotEdit) handleResetPassword(user.id);
                     }}
-                    style={{ ...actionStyle, backgroundColor: '#2196f3', color: 'white', padding: '4px 8px', border: 'none', borderRadius: '4px', fontSize: '11px' }}
+                    style={{ ...actionStyle, backgroundColor: '#3b82f6', color: 'white', padding: '4px 8px', border: 'none', borderRadius: '4px', fontSize: '11px' }}
                 >
                     비번 초기화
                 </button>
@@ -330,26 +369,37 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated, is
 
     // Column Definitions
     const colDefs = useMemo(() => [
-        { field: "id", headerName: "ID", width: 70 },
-        { field: "username", headerName: "아이디", filter: true, width: 150 },
+        { field: "id", headerName: "ID", width: 65 },
+        { field: "username", headerName: "아이디", filter: true, width: 140 },
+        { field: "name", headerName: "성명", filter: true, width: 110 },
+        { field: "companyName", headerName: "업체명", filter: true, width: 150 },
+        { field: "department", headerName: "부서", width: 120 },
         { field: "email", headerName: "이메일", filter: true, width: 180 },
-        { field: "name", headerName: "성명", filter: true, width: 120 },
-        { field: "companyName", headerName: "업체명", filter: true, width: 160 },
-        { field: "department", headerName: "부서", width: 130 },
         {
-            field: "role", headerName: "현재 권한", width: 160, valueFormatter: p => {
+            field: "role", headerName: "현재 권한", width: 150, valueFormatter: p => {
                 const roleObj = roles.find(r => r.roleKey === p.value);
                 return roleObj ? roleObj.displayName : p.value;
             }
         },
-        { field: "locked", headerName: "잠금상태", cellRenderer: (params) => params.value ? "🔒 잠김" : "🔓 정상", width: 100 },
-        { field: "failedAttempts", headerName: "실패횟수", width: 90 },
         { field: "emailVerified", headerName: "이메일인증", cellRenderer: (params) => params.value ? "✅ 완료" : "⏳ 미인증", width: 100 },
-        { field: "enabled", headerName: "승인여부", cellRenderer: (params) => params.value ? "✅ 승인" : "❌ 대기", width: 100 },
+        { 
+            field: "enabled", 
+            headerName: "계정상태", 
+            cellRenderer: (params) => params.value ? "✅ 활성" : (params.data?.lastLogin ? "⛔ 비활성" : "⏳ 승인대기"), 
+            width: 105 
+        },
+        { field: "locked", headerName: "잠금상태", cellRenderer: (params) => params.value ? "🔒 잠김" : "🔓 정상", width: 95 },
+        { field: "failedAttempts", headerName: "오류횟수", width: 85 },
+        { 
+            field: "createdAt", 
+            headerName: "가입일시", 
+            width: 140, 
+            valueFormatter: p => p.value ? p.value.replace('T', ' ').substring(0, 16) : '-' 
+        },
         {
             headerName: "관리 작업",
             cellRenderer: ActionsRenderer,
-            width: 310,
+            width: 370,
             sortable: false,
             filter: false
         }

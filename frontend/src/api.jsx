@@ -739,6 +739,9 @@ export const getRoleLogs = (id) => api.get(`/api/admin/roles/${id}/logs`);
 export const approveUser = (id) => api.post(`/api/admin/users/${id}/approve`);
 export const toggleUserStatus = (id) => api.post(`/api/admin/users/${id}/toggle-status`);
 export const updateUserRole = (id, role) => api.put(`/api/admin/users/${id}/role`, { role });
+export const adminResendVerification = (id) => api.post(`/api/admin/users/${id}/resend-verification`);
+export const adminVerifyEmailManual = (id) => api.post(`/api/admin/users/${id}/verify-email-manual`);
+export const resendVerificationEmail = (username) => api.post('/api/auth/resend-verification', { username });
 export const unlockUser = (id) => api.put(`/api/auth/unlock/${id}`, {});
 export const resetUserPassword = (id, newPassword) => api.put(`/api/auth/reset-password/${id}`, { newPassword });
 

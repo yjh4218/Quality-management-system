@@ -1,5 +1,6 @@
 package com.example.ims.config;
 
+import com.example.ims.entity.User;
 import com.example.ims.repository.UserRepository;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -13,6 +14,7 @@ import org.springframework.security.web.authentication.SimpleUrlAuthenticationFa
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 @Component
@@ -47,7 +49,11 @@ public class CustomAuthenticationFailureHandler extends SimpleUrlAuthenticationF
             return;
         }
 
-        userRepository.findByUsername(username).ifPresent(user -> {
+        Optional<User> userOpt = (username != null && !username.isBlank()) 
+                ? userRepository.findByUsername(username.trim()) 
+                : Optional.empty();
+
+        userOpt.ifPresent(user -> {
             if (user.isEnabled() && !user.isLocked()) {
                 // [보안/가용성] 마스터 관리자('admin') 계정은 시스템 락아웃(Lock-out) 방지를 위해 계정 잠금 대상에서 제외 (IP 블록으로 무차별 공격 방어)
                 if ("admin".equals(user.getUsername())) {
@@ -72,14 +78,26 @@ public class CustomAuthenticationFailureHandler extends SimpleUrlAuthenticationF
         }
         
         String errorMessage = "아이디 또는 비밀번호가 일치하지 않습니다.";
-        if (exception instanceof org.springframework.security.authentication.DisabledException) {
-            errorMessage = "비활성화 된 계정으로 관리자에게 문의해주시기 바랍니다.";
-        } else if (exception instanceof org.springframework.security.authentication.LockedException) {
-            errorMessage = "비밀번호 5회 오류로 인해 계정이 잠겼습니다. 관리자에게 문의해 주시기 바랍니다.";
-        } else if (exception.getMessage() != null && exception.getMessage().contains("User is disabled")) {
-            errorMessage = "비활성화 된 계정으로 관리자에게 문의해주시기 바랍니다.";
-        } else if (exception.getMessage() != null && exception.getMessage().contains("User account is locked")) {
-            errorMessage = "비밀번호 5회 오류로 인해 계정이 잠겼습니다. 관리자에게 문의해 주시기 바랍니다.";
+        boolean isDisabled = (exception instanceof org.springframework.security.authentication.DisabledException) ||
+                (exception.getMessage() != null && exception.getMessage().contains("User is disabled"));
+        boolean isLocked = (exception instanceof org.springframework.security.authentication.LockedException) ||
+                (exception.getMessage() != null && exception.getMessage().contains("User account is locked"));
+
+        if (isDisabled) {
+            if (userOpt.isPresent()) {
+                User u = userOpt.get();
+                if (!u.isEmailVerified()) {
+                    errorMessage = "이메일 인증이 완료되지 않았습니다. 수신하신 이메일의 인증 링크를 먼저 확인해 주세요.";
+                } else if (u.getLastLogin() == null) {
+                    errorMessage = "관리자 가입 승인 대기 중입니다. 관리자 승인이 완료되면 이용하실 수 있습니다.";
+                } else {
+                    errorMessage = "비활성화 된 계정으로 관리자에게 문의해주시기 바랍니다.";
+                }
+            } else {
+                errorMessage = "비활성화 된 계정으로 관리자에게 문의해주시기 바랍니다.";
+            }
+        } else if (isLocked) {
+            errorMessage = "비밀번호 5회 오류로 인해 계정이 잠겼습니다. 본인인증으로 비밀번호를 재설정하거나 관리자에게 문의해 주시기 바랍니다.";
         }
 
         log.info("로그인 실패 - 계정: {}, IP: {}, 예외: {}, 메시지: {}", username, clientIp, exception.getClass().getSimpleName(), errorMessage);

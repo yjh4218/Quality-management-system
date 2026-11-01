@@ -24,8 +24,10 @@ public class UserResponseDto {
     private String role;
     private boolean enabled;
     private boolean locked;
+    private boolean emailVerified;
     private Integer failedAttempts;
     private LocalDateTime lastLogin;
+    private LocalDateTime createdAt;
 
     public static UserResponseDto fromEntity(User user) {
         if (user == null) return null;
@@ -41,8 +43,10 @@ public class UserResponseDto {
                 .role(user.getRole())
                 .enabled(user.isEnabled())
                 .locked(user.isLocked())
+                .emailVerified(user.isEmailVerified())
                 .failedAttempts(user.getFailedAttempts())
                 .lastLogin(user.getLastLogin())
+                .createdAt(user.getCreatedAt())
                 .build();
     }
 }
