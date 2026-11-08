@@ -170,6 +170,11 @@ public class AuthController {
         response.put("username", user.getUsername());
         response.put("name", user.getName());
         response.put("companyName", user.getCompanyName());
+        Long mfrId = null;
+        try {
+            if (user.getManufacturer() != null) mfrId = user.getManufacturer().getId();
+        } catch (Exception ignored) {}
+        response.put("manufacturerId", mfrId);
         response.put("department", user.getDepartment());
         response.put("passwordResetRequired", Boolean.TRUE.equals(user.getPasswordResetRequired()));
 
@@ -209,4 +214,33 @@ public class AuthController {
         userRepository.save(user);
         return ResponseEntity.ok(ApiResponse.success("프로필 정보가 성공적으로 업데이트되었습니다.", null));
     }
+
+    /**
+     * 관리자 전용: 잠긴 사용자 계정 잠금 해제 및 실패 횟수 초기화
+     */
+    @PutMapping("/unlock/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or @perm.can('users', 'EDIT')")
+    public ResponseEntity<ApiResponse<String>> unlockUser(
+            @PathVariable Long id,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal org.springframework.security.core.userdetails.UserDetails userDetails) {
+        String modifier = userDetails != null ? userDetails.getUsername() : "ADMIN";
+        authService.unlockUser(id, modifier);
+        return ResponseEntity.ok(ApiResponse.success("사용자 계정 잠금이 성공적으로 해제되었습니다.", null));
+    }
+
+    /**
+     * 관리자 전용: 사용자 비밀번호 직접 재설정
+     */
+    @PutMapping("/reset-password/{id}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN') or @perm.can('users', 'EDIT')")
+    public ResponseEntity<ApiResponse<String>> resetUserPassword(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> body,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal org.springframework.security.core.userdetails.UserDetails userDetails) {
+        String modifier = userDetails != null ? userDetails.getUsername() : "ADMIN";
+        String newPassword = body != null ? body.get("newPassword") : null;
+        authService.resetUserPasswordByAdmin(id, newPassword, modifier);
+        return ResponseEntity.ok(ApiResponse.success("비밀번호가 성공적으로 재설정되었습니다.", null));
+    }
+
 }

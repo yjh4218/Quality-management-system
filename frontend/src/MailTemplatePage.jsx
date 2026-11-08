@@ -790,8 +790,13 @@ const MailTemplatePage = ({ user }) => {
                             rowData={filteredTemplates}
                             columnDefs={templateColumns}
                             defaultColDef={{ resizable: true, sortable: true, filter: true }}
+                            rowHeight={54}
+                            headerHeight={48}
                             pagination={true}
                             paginationPageSize={20}
+                            onRowDoubleClicked={(e) => {
+                                if (e?.data) handleEditTemplate(e.data);
+                            }}
                             overlayLoadingTemplate={loading ? '<span class="ag-overlay-loading-center">데이터를 불러오는 중입니다...</span>' : undefined}
                         />
                     </div>
@@ -802,8 +807,13 @@ const MailTemplatePage = ({ user }) => {
                         rowData={categories}
                         columnDefs={categoryColumns}
                         defaultColDef={{ resizable: true, sortable: true, filter: true }}
+                        rowHeight={54}
+                        headerHeight={48}
                         pagination={true}
                         paginationPageSize={20}
+                        onRowDoubleClicked={(e) => {
+                            if (e?.data) handleEditCategory(e.data);
+                        }}
                     />
                 </div>
             ) : (
@@ -951,8 +961,16 @@ const MailTemplatePage = ({ user }) => {
                             rowData={filteredMailHistories}
                             columnDefs={mailHistoryColumns}
                             defaultColDef={{ resizable: true, sortable: true, filter: true }}
+                            rowHeight={54}
+                            headerHeight={48}
                             pagination={true}
                             paginationPageSize={20}
+                            onRowDoubleClicked={(e) => {
+                                if (e?.data) {
+                                    setSelectedHistory(e.data);
+                                    setIsPreviewModalOpen(true);
+                                }
+                            }}
                             overlayLoadingTemplate={loading ? '<span class="ag-overlay-loading-center">이력을 불러오는 중입니다...</span>' : undefined}
                         />
                     </div>
@@ -961,12 +979,7 @@ const MailTemplatePage = ({ user }) => {
 
             {/* --- 3. 메일 본문 내용 확인 모달 --- */}
             {isPreviewModalOpen && selectedHistory && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-                    backgroundColor: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(4px)',
-                    display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 3000,
-                    padding: '20px'
-                }}>
+                <div className="modal-overlay" style={{ zIndex: 3000 }}>
                     <div style={{
                         width: '100%', maxWidth: '750px', maxHeight: '85vh', backgroundColor: '#fff',
                         borderRadius: '16px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
@@ -1015,12 +1028,7 @@ const MailTemplatePage = ({ user }) => {
 
             {/* --- 1. 메일 양식 등록/수정 모달 --- */}
             {isTemplateModalOpen && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-                    backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(6px)',
-                    display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000,
-                    padding: '20px'
-                }}>
+                <div className="modal-overlay" style={{ zIndex: 2000 }}>
                     <div style={{
                         width: '100%', maxWidth: '850px', maxHeight: '90vh', backgroundColor: '#ffffff',
                         borderRadius: '20px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
@@ -1254,12 +1262,7 @@ const MailTemplatePage = ({ user }) => {
 
             {/* --- 2. 카테고리 & 지원변수 등록/수정 모달 --- */}
             {isCategoryModalOpen && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-                    backgroundColor: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(6px)',
-                    display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000,
-                    padding: '20px'
-                }}>
+                <div className="modal-overlay" style={{ zIndex: 2000 }}>
                     <div style={{
                         width: '100%', maxWidth: '600px', maxHeight: '90vh', backgroundColor: '#ffffff',
                         borderRadius: '20px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',

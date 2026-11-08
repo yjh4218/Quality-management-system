@@ -113,9 +113,19 @@ public class MasterDataService {
             material.setBomCode(generateNextBomCode(material.getType()));
         }
 
-        // [수정] BOM 코드 중복 검사 (신규 등록인 경우)
-        if (material.getId() == null && materialRepository.existsByBomCode(material.getBomCode())) {
-            throw new RuntimeException("이미 존재하는 BOM 코드입니다: " + material.getBomCode());
+        // [수정] BOM 코드 중복 검사 (신규 등록 또는 기존 코드 변경 시 무결성 검증)
+        if (material.getId() == null) {
+            if (materialRepository.existsByBomCode(material.getBomCode())) {
+                throw new RuntimeException("이미 존재하는 BOM 코드입니다: " + material.getBomCode());
+            }
+        } else {
+            MasterPackagingMaterial existing = materialRepository.findById(material.getId()).orElse(null);
+            if (existing != null && existing.getBomCode() != null
+                    && !existing.getBomCode().equalsIgnoreCase(material.getBomCode().trim())) {
+                if (materialRepository.existsByBomCode(material.getBomCode().trim())) {
+                    throw new RuntimeException("이미 존재하는 BOM 코드입니다: " + material.getBomCode());
+                }
+            }
         }
 
         // [수정] 다층 구조(Multi-layer) 처리

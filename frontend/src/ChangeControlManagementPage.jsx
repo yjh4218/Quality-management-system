@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { toast } from 'react-toastify';
@@ -826,6 +827,12 @@ export default function ChangeControlManagementPage({ user, onNavigate }) {
                             headerHeight={48}
                             rowSelection="single"
                             onRowClicked={(e) => setSelectedCr(e.data)}
+                            onRowDoubleClicked={(e) => {
+                                if (e?.data) {
+                                    setSelectedCr(e.data);
+                                    handleOpenEditCrModal(e.data);
+                                }
+                            }}
                             overlayNoRowsTemplate="<span>등록된 변경요청서가 없습니다.</span>"
                             overlayLoadingTemplate="<span>데이터를 로딩 중입니다...</span>"
                             theme="legacy"
@@ -1023,6 +1030,12 @@ export default function ChangeControlManagementPage({ user, onNavigate }) {
                                         columnDefs={actionColumnDefs}
                                         rowHeight={54}
                                         headerHeight={48}
+                                        onRowDoubleClicked={(e) => {
+                                            if (e?.data) {
+                                                setEditingActionItem(e.data);
+                                                setIsActionModalOpen(true);
+                                            }
+                                        }}
                                         overlayNoRowsTemplate="<span>등록된 실행 조치과제가 없습니다.</span>"
                                         theme="legacy"
                                     />
@@ -1163,28 +1176,29 @@ function ChangeRequestModal({ isOpen, initialData, onClose, onSuccess }) {
         }
     };
 
-    return (
-        <div style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(3px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
-        }}>
-            <div style={{
-                width: '96vw', maxWidth: '1680px', height: '92vh', maxHeight: '94vh',
-                backgroundColor: '#ffffff', borderRadius: '12px',
-                display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden'
-            }}>
+    return createPortal(
+        <div className="drawer-overlay">
+            <div className="drawer">
                 {/* 헤더 */}
-                <div style={{ padding: '20px 28px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                        <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>
-                            {isEdit ? `✏️ 변경요청서 수정 [${initialData.changeNumber}]` : '➕ 신규 변경요청서 (Change Request) 제정'}
-                        </h2>
-                        <span style={{ fontSize: '12px', color: '#64748b' }}>
-                            ISO 13485:2016 §7.3.9 및 ISO 22716 §11 규제 정합 변경신청서
-                        </span>
+                <div className="drawer-header" style={{ padding: '14px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        {isEdit && initialData?.changeNumber && (
+                            <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#2563eb', fontSize: '13px', background: '#eff6ff', padding: '3px 10px', borderRadius: '6px', border: '1px solid #bfdbfe' }}>
+                                {initialData.changeNumber}
+                            </span>
+                        )}
+                        <div>
+                            <h2 style={{ margin: 0, fontSize: '19px', fontWeight: '800', color: '#0f172a' }}>
+                                {isEdit ? `✏️ 변경요청서 수정 [${initialData.changeNumber}]` : '➕ 신규 변경요청서 (Change Request) 제정'}
+                            </h2>
+                            <span style={{ fontSize: '12px', color: '#64748b' }}>
+                                ISO 13485:2016 §7.3.9 및 ISO 22716 §11 규제 정합 변경신청서
+                            </span>
+                        </div>
                     </div>
-                    <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#94a3b8' }}>✕</button>
+                    <button type="button" onClick={onClose} className="secondary close-button">
+                        <span className="icon">✕</span> 닫기
+                    </button>
                 </div>
 
                 {/* 바디 (스크롤) */}
@@ -1413,16 +1427,21 @@ function ChangeRequestModal({ isOpen, initialData, onClose, onSuccess }) {
                 </form>
 
                 {/* 푸터 */}
-                <div style={{ padding: '16px 28px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '10px', backgroundColor: '#f8fafc' }}>
-                    <button type="button" onClick={onClose} style={{ padding: '10px 18px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
-                        취소
-                    </button>
-                    <button type="submit" form="cr-form" disabled={submitting} style={{ padding: '10px 22px', borderRadius: '6px', border: 'none', background: '#2563eb', color: '#fff', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>
-                        {submitting ? '저장 중...' : (isEdit ? '수정 완료' : '변경요청서 저장')}
-                    </button>
+                <div className="drawer-footer" style={{ padding: '14px 24px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
+                    <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
+                        🛡️ ISO 13485:2016 §7.3.9 및 ISO 22716 §11 4M 변경관리 요건 준수
+                    </span>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button type="button" onClick={onClose} className="secondary close-button">
+                            취소
+                        </button>
+                        <button type="submit" form="cr-form" disabled={submitting} style={{ padding: '8px 22px', borderRadius: '8px', border: 'none', background: '#2563eb', color: '#fff', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>
+                            {submitting ? '저장 중...' : (isEdit ? '수정 완료' : '변경요청서 저장')}
+                        </button>
+                    </div>
                 </div>
             </div>
-        </div>
+        </div>, document.body
     );
 }
 
@@ -1462,17 +1481,9 @@ function CcbReviewModal({ isOpen, cr, onClose, onSuccess }) {
         }
     };
 
-    return (
-        <div style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(3px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
-        }}>
-            <div style={{
-                width: '96vw', maxWidth: '1400px', height: '92vh', maxHeight: '94vh',
-                backgroundColor: '#ffffff', borderRadius: '12px',
-                display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden'
-            }}>
+    return createPortal(
+        <div className="drawer-overlay">
+            <div className="drawer">
                 <div style={{ padding: '20px 28px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                         <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>
@@ -1562,7 +1573,7 @@ function CcbReviewModal({ isOpen, cr, onClose, onSuccess }) {
                     </button>
                 </div>
             </div>
-        </div>
+        </div>, document.body
     );
 }
 
@@ -1600,27 +1611,26 @@ function EffectivenessModal({ isOpen, cr, onClose, onSuccess }) {
         }
     };
 
-    return (
-        <div style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(3px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
-        }}>
-            <div style={{
-                width: '96vw', maxWidth: '1300px', height: '92vh', maxHeight: '94vh',
-                backgroundColor: '#ffffff', borderRadius: '12px',
-                display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden'
-            }}>
-                <div style={{ padding: '20px 28px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                        <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>
-                            🎯 변경 효과성 검증 평가 (Effectiveness Check)
-                        </h2>
-                        <span style={{ fontSize: '12px', color: '#64748b' }}>
-                            ISO 13485:2016 §7.3.9 변경 후 일정 기간 동안의 품질 및 신뢰성 입증
+    return createPortal(
+        <div className="drawer-overlay">
+            <div className="drawer">
+                <div className="drawer-header" style={{ padding: '14px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#10b981', fontSize: '13px', background: '#ecfdf5', padding: '3px 10px', borderRadius: '6px', border: '1px solid #a7f3d0' }}>
+                            {cr.changeNumber}
                         </span>
+                        <div>
+                            <h2 style={{ margin: 0, fontSize: '19px', fontWeight: '800', color: '#0f172a' }}>
+                                🎯 변경 효과성 검증 평가: {cr.title}
+                            </h2>
+                            <span style={{ fontSize: '12px', color: '#64748b' }}>
+                                ISO 13485:2016 §7.3.9 변경 후 일정 기간 동안의 품질 및 신뢰성 입증
+                            </span>
+                        </div>
                     </div>
-                    <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#94a3b8' }}>✕</button>
+                    <button type="button" onClick={onClose} className="secondary close-button">
+                        <span className="icon">✕</span> 닫기
+                    </button>
                 </div>
 
                 <form id="effect-form" onSubmit={handleSubmit} style={{ flex: 1, overflowY: 'auto', padding: '24px 28px' }}>
@@ -1702,7 +1712,7 @@ function EffectivenessModal({ isOpen, cr, onClose, onSuccess }) {
                     </button>
                 </div>
             </div>
-        </div>
+        </div>, document.body
     );
 }
 
@@ -1756,12 +1766,8 @@ function ActionItemModal({ isOpen, crId, initialData, onClose, onSuccess }) {
         }
     };
 
-    return (
-        <div style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(3px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100
-        }}>
+    return createPortal(
+        <div className="modal-overlay" style={{ zIndex: 5100 }}>
             <div style={{
                 width: '680px', maxWidth: '94vw', maxHeight: '90vh',
                 backgroundColor: '#ffffff', borderRadius: '10px',

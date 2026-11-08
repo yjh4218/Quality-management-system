@@ -16,6 +16,7 @@ public class BugReportService {
 
     private final BugReportRepository bugReportRepository;
     private final AuditLogService auditLogService;
+    private final org.springframework.beans.factory.ObjectProvider<NotificationService> notificationServiceProvider;
 
     @Transactional
     public BugReport submitReport(BugReport report) {
@@ -51,23 +52,42 @@ public class BugReportService {
             report.setOccurrenceCount(1);
         }
 
-        // 2. [무한루프 DB 폭주 방지] 최근 1분 내 동일 화면(screenName) + 동일 카테고리/내용 중복 제출 여부 확인 (인덱스 최적화)
+        // 2. [정밀 중복 방지] 최근 1분 내 동일 화면 + 동일 카테고리 + 유사 에러 내용 매칭 (서로 다른 에러 병합 방지)
         LocalDateTime oneMinuteAgo = LocalDateTime.now().minusMinutes(1);
-        String screen = report.getScreenName() != null ? report.getScreenName() : "";
-        String category = report.getErrorCategory() != null ? report.getErrorCategory() : "UNKNOWN";
+        String screen = report.getScreenName() != null ? report.getScreenName().trim() : "";
+        String category = report.getErrorCategory() != null ? report.getErrorCategory().trim() : "UNKNOWN";
 
-        var existing = bugReportRepository.findFirstByScreenNameAndErrorCategoryAndCreatedAtAfterOrderByCreatedAtDesc(
+        String rawDesc = report.getDescription() != null ? report.getDescription() : "";
+        String normalizedDesc = rawDesc.replaceAll("\\[CID:[^\\]]+\\]", "").trim();
+        String descPrefix = normalizedDesc.length() > 60 ? normalizedDesc.substring(0, 60) : normalizedDesc;
+
+        List<BugReport> recentList = bugReportRepository.findByScreenNameAndErrorCategoryAndCreatedAtAfter(
             screen, category, oneMinuteAgo
         );
 
-        if (existing.isPresent()) {
-            BugReport dup = existing.get();
+        BugReport dup = null;
+        for (BugReport candidate : recentList) {
+            String candidateDesc = candidate.getDescription() != null 
+                    ? candidate.getDescription().replaceAll("\\[CID:[^\\]]+\\]", "").trim() : "";
+            if (candidateDesc.startsWith(descPrefix) || descPrefix.startsWith(candidateDesc.length() > 60 ? candidateDesc.substring(0, 60) : candidateDesc)) {
+                dup = candidate;
+                break;
+            }
+        }
+
+        if (dup != null) {
             dup.setOccurrenceCount((dup.getOccurrenceCount() != null ? dup.getOccurrenceCount() : 1) + 1);
             dup.setUpdatedAt(LocalDateTime.now());
             if (report.getErrorCategory() != null && !"UNKNOWN".equals(report.getErrorCategory())) {
                 dup.setErrorCategory(report.getErrorCategory());
             }
-            return bugReportRepository.save(dup);
+            BugReport savedDup = bugReportRepository.save(dup);
+
+            // 누적 5, 10, 20회 등 주요 임계치 도달 시 관리자 알림 갱신
+            if (savedDup.getOccurrenceCount() % 5 == 0) {
+                notifyAdminsAsync(savedDup);
+            }
+            return savedDup;
         }
 
         BugReport saved = bugReportRepository.save(report);
@@ -83,7 +103,41 @@ public class BugReportService {
             log.warn("감사 로그 적재 실패 (버그 리포트 제출): {}", e.getMessage());
         }
 
+        // [실시간 알림 연동] 관리자(ROLE_ADMIN)에게 인앱 알림 종 및 SSE 브로드캐스트 즉시 발송
+        notifyAdminsAsync(saved);
+
         return saved;
+    }
+
+    private void notifyAdminsAsync(BugReport report) {
+        if (report == null) return;
+        try {
+            NotificationService notificationService = notificationServiceProvider.getIfAvailable();
+            if (notificationService != null) {
+                String sev = report.getSeverity() != null ? report.getSeverity() : "CRITICAL";
+                String title = "🚨 [버그 리포트] " + report.getScreenName() + " 오류 감지";
+                String content = String.format("[%s] %s%s",
+                        sev,
+                        report.getDescription(),
+                        (report.getOccurrenceCount() != null && report.getOccurrenceCount() > 1) 
+                                ? " (누적 " + report.getOccurrenceCount() + "회)" : "");
+                if (content.length() > 250) {
+                    content = content.substring(0, 247) + "...";
+                }
+                notificationService.createNotification(
+                        title,
+                        content,
+                        "BUG_ALERT",
+                        null,
+                        "ROLE_ADMIN",
+                        null,
+                        "/bug-reports"
+                );
+                notificationService.broadcastDataUpdate("bugReports");
+            }
+        } catch (Exception notifEx) {
+            log.warn("알림 발송 실패 (버그 리포트 연동): {}", notifEx.getMessage());
+        }
     }
 
     @Transactional(readOnly = true)

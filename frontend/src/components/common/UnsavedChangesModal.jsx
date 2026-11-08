@@ -37,6 +37,10 @@ const UnsavedChangesModal = ({
 
     return createPortal(
         <div 
+            className="modal-overlay unsaved-changes-modal-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="unsaved-changes-title"
             style={{
                 position: 'fixed',
                 top: 0,

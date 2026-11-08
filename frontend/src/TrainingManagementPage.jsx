@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import RegulatoryManualBanner from './components/common/RegulatoryManualBanner';
+import StandardWorkspaceDrawer from './components/common/StandardWorkspaceDrawer';
+import DrawerCard from './components/common/DrawerCard';
 import {
     fetchTrainingCourses,
     fetchTrainingCourseById,
@@ -1597,6 +1599,9 @@ const TrainingManagementPage = ({ user, onNavigate }) => {
                             pagination={true}
                             paginationPageSize={20}
                             paginationPageSizeSelector={[10, 20, 50, 100]}
+                            onRowDoubleClicked={(e) => {
+                                if (e?.data) handleOpenEditRecord(e.data);
+                            }}
                         />
                     )}
 
@@ -1616,6 +1621,9 @@ const TrainingManagementPage = ({ user, onNavigate }) => {
                             pagination={true}
                             paginationPageSize={20}
                             paginationPageSizeSelector={[10, 20, 50, 100]}
+                            onRowDoubleClicked={(e) => {
+                                if (e?.data) handleOpenEditCourse(e.data);
+                            }}
                         />
                     )}
 
@@ -1635,6 +1643,9 @@ const TrainingManagementPage = ({ user, onNavigate }) => {
                             pagination={true}
                             paginationPageSize={20}
                             paginationPageSizeSelector={[10, 20, 50, 100]}
+                            onRowDoubleClicked={(e) => {
+                                if (e?.data) handleOpenEditQualification(e.data);
+                            }}
                         />
                     )}
                 </div>
@@ -1643,60 +1654,43 @@ const TrainingManagementPage = ({ user, onNavigate }) => {
             {/* ========================================================================= */}
             {/* 7. 최대화 모달: 교육이수 기록 등록/수정 (96vw × 92vh) */}
             {/* ========================================================================= */}
-            {recordModalOpen && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-                    backdropFilter: 'blur(4px)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 9999
-                }}>
-                    <div style={{
-                        width: '96vw',
-                        height: '92vh',
-                        maxWidth: '1680px',
-                        backgroundColor: '#fff',
-                        borderRadius: '16px',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        overflow: 'hidden'
-                    }}>
-                        {/* 모달 헤더 */}
-                        <div style={{
-                            padding: '20px 28px',
-                            borderBottom: '1px solid #e2e8f0',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            backgroundColor: '#f8fafc'
-                        }}>
-                            <div>
-                                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f172a' }}>
-                                    {editingRecord ? '📝 교육이수 기록 수정 및 효과성 평가' : '📝 신규 교육이수 및 평가 기록 등록'}
-                                </h2>
-                                <span style={{ fontSize: '12px', color: '#64748b' }}>
-                                    ISO 13485:2016 §6.2(b)(c)에 따른 개인별 수료 평가 및 현업 업무 유효성 검증
-                                </span>
-                            </div>
-                            <button
-                                onClick={() => setRecordModalOpen(false)}
-                                style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}
-                            >
-                                ✕
-                            </button>
-                        </div>
-
-                        {/* 모달 본문 */}
-                        <form onSubmit={handleSaveRecord} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                            <div style={{ padding: '24px 28px', flex: 1, overflowY: 'auto' }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '18px', marginBottom: '22px' }}>
+            <StandardWorkspaceDrawer
+                isOpen={recordModalOpen}
+                onClose={() => setRecordModalOpen(false)}
+                title={editingRecord ? '📝 교육이수 기록 수정 및 효과성 평가' : '📝 신규 교육이수 및 평가 기록 등록'}
+                subtitle="ISO 13485:2016 §6.2(b)(c)에 따른 개인별 수료 평가 및 현업 업무 유효성 검증"
+                complianceText="ISO 13485:2016 §6.2(b)(c) & ISO 22716 §3 인력 및 교육훈련 요건"
+                footerRight={
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                            type="button"
+                            onClick={() => setRecordModalOpen(false)}
+                            className="secondary close-button"
+                        >
+                            취소
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleSaveRecord}
+                            style={{
+                                padding: '8px 22px',
+                                fontSize: '13px',
+                                fontWeight: 700,
+                                borderRadius: '8px',
+                                border: 'none',
+                                backgroundColor: '#2563eb',
+                                color: '#ffffff',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            {editingRecord ? '기록 수정 완료' : '교육이수 등록'}
+                        </button>
+                    </div>
+                }
+            >
+                <form onSubmit={handleSaveRecord} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <DrawerCard title="교육이수 및 평가 정보 입력" icon="🎓">
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '18px', marginBottom: '22px' }}>
                                     {/* 교육과정 선택 */}
                                     <div style={{ gridColumn: 'span 2' }}>
                                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
@@ -1968,108 +1962,48 @@ const TrainingManagementPage = ({ user, onNavigate }) => {
                                         style={{ width: '100%', padding: '8px 12px', fontSize: '13px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
                                     />
                                 </div>
-                            </div>
+                    </DrawerCard>
+                </form>
+            </StandardWorkspaceDrawer>
 
-                            {/* 모달 푸터 */}
-                            <div style={{
-                                padding: '16px 28px',
-                                borderTop: '1px solid #e2e8f0',
-                                display: 'flex',
-                                justifyContent: 'flex-end',
-                                gap: '10px',
-                                backgroundColor: '#f8fafc'
-                            }}>
-                                <button
-                                    type="button"
-                                    onClick={() => setRecordModalOpen(false)}
-                                    style={{
-                                        padding: '9px 18px',
-                                        fontSize: '13px',
-                                        borderRadius: '6px',
-                                        border: '1px solid #cbd5e1',
-                                        backgroundColor: '#fff',
-                                        color: '#475569',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    취소
-                                </button>
-                                <button
-                                    type="submit"
-                                    style={{
-                                        padding: '9px 22px',
-                                        fontSize: '13px',
-                                        fontWeight: 600,
-                                        borderRadius: '6px',
-                                        border: 'none',
-                                        backgroundColor: '#2563eb',
-                                        color: '#fff',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    {editingRecord ? '기록 수정 완료' : '교육이수 등록'}
-                                </button>
-                            </div>
-                        </form>
+            <StandardWorkspaceDrawer
+                isOpen={courseModalOpen}
+                onClose={() => setCourseModalOpen(false)}
+                title={editingCourse ? '📚 교육과정 마스터 수정' : '📚 신규 표준 교육과정 제정'}
+                docNumber={editingCourse ? editingCourse.courseCode : null}
+                subtitle="품질 방침 및 규제 기준(ISO 13485/22716)에 적합한 표준 교육훈련 과정 제정"
+                complianceText="ISO 13485:2016 §6.2 & 화장품법 제3조·제7조 법정의무교육 기준"
+                footerRight={
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                            type="button"
+                            onClick={() => setCourseModalOpen(false)}
+                            className="secondary close-button"
+                        >
+                            취소
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleSaveCourse}
+                            style={{
+                                padding: '8px 22px',
+                                fontSize: '13px',
+                                fontWeight: 700,
+                                borderRadius: '8px',
+                                border: 'none',
+                                backgroundColor: '#2563eb',
+                                color: '#ffffff',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            {editingCourse ? '교육과정 수정' : '교육과정 제정'}
+                        </button>
                     </div>
-                </div>
-            )}
-
-            {/* ========================================================================= */}
-            {/* 8. 최대화 모달: 교육과정 제정/수정 (96vw × 92vh) */}
-            {/* ========================================================================= */}
-            {courseModalOpen && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-                    backdropFilter: 'blur(4px)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 9999
-                }}>
-                    <div style={{
-                        width: '96vw',
-                        height: '92vh',
-                        maxWidth: '1680px',
-                        backgroundColor: '#fff',
-                        borderRadius: '16px',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        overflow: 'hidden'
-                    }}>
-                        <div style={{
-                            padding: '20px 28px',
-                            borderBottom: '1px solid #e2e8f0',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            backgroundColor: '#f8fafc'
-                        }}>
-                            <div>
-                                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f172a' }}>
-                                    {editingCourse ? '📚 교육과정 마스터 수정' : '📚 신규 표준 교육과정 제정'}
-                                </h2>
-                                <span style={{ fontSize: '12px', color: '#64748b' }}>
-                                    품질 방침 및 규제 기준(ISO 13485/22716)에 적합한 표준 교육훈련 과정 제정
-                                </span>
-                            </div>
-                            <button
-                                onClick={() => setCourseModalOpen(false)}
-                                style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}
-                            >
-                                ✕
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleSaveCourse} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                            <div style={{ padding: '24px 28px', flex: 1, overflowY: 'auto' }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '18px', marginBottom: '22px' }}>
+                }
+            >
+                <form onSubmit={handleSaveCourse} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <DrawerCard title="교육과정 마스터 명세" icon="📚">
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '18px', marginBottom: '22px' }}>
                                     <div>
                                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
                                             과정 코드 *
@@ -2245,107 +2179,47 @@ const TrainingManagementPage = ({ user, onNavigate }) => {
                                         />
                                     </div>
                                 </div>
-                            </div>
+                    </DrawerCard>
+                </form>
+            </StandardWorkspaceDrawer>
 
-                            <div style={{
-                                padding: '16px 28px',
-                                borderTop: '1px solid #e2e8f0',
-                                display: 'flex',
-                                justifyContent: 'flex-end',
-                                gap: '10px',
-                                backgroundColor: '#f8fafc'
-                            }}>
-                                <button
-                                    type="button"
-                                    onClick={() => setCourseModalOpen(false)}
-                                    style={{
-                                        padding: '9px 18px',
-                                        fontSize: '13px',
-                                        borderRadius: '6px',
-                                        border: '1px solid #cbd5e1',
-                                        backgroundColor: '#fff',
-                                        color: '#475569',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    취소
-                                </button>
-                                <button
-                                    type="submit"
-                                    style={{
-                                        padding: '9px 22px',
-                                        fontSize: '13px',
-                                        fontWeight: 600,
-                                        borderRadius: '6px',
-                                        border: 'none',
-                                        backgroundColor: '#2563eb',
-                                        color: '#fff',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    {editingCourse ? '교육과정 수정' : '교육과정 제정'}
-                                </button>
-                            </div>
-                        </form>
+            <StandardWorkspaceDrawer
+                isOpen={qualificationModalOpen}
+                onClose={() => setQualificationModalOpen(false)}
+                title={editingQualification ? '🏅 직무 자격 갱신/수정' : '🏅 신규 직무 자격 적격성 부여'}
+                subtitle="화장품법 및 ISO 13485 요건에 따른 법정·사내 전문 직무 자격 부여 및 권한 관리"
+                complianceText="ISO 13485:2016 §6.2 적격성 평가 및 법정 필수인력 자격 기준"
+                footerRight={
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                            type="button"
+                            onClick={() => setQualificationModalOpen(false)}
+                            className="secondary close-button"
+                        >
+                            취소
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleSaveQualification}
+                            style={{
+                                padding: '8px 22px',
+                                fontSize: '13px',
+                                fontWeight: 700,
+                                borderRadius: '8px',
+                                border: 'none',
+                                backgroundColor: '#7c3aed',
+                                color: '#ffffff',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            {editingQualification ? '직무자격 갱신' : '직무자격 부여'}
+                        </button>
                     </div>
-                </div>
-            )}
-
-            {/* ========================================================================= */}
-            {/* 9. 최대화 모달: 직무 자격 부여/갱신 (96vw × 92vh) */}
-            {/* ========================================================================= */}
-            {qualificationModalOpen && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-                    backdropFilter: 'blur(4px)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 9999
-                }}>
-                    <div style={{
-                        width: '96vw',
-                        height: '92vh',
-                        maxWidth: '1680px',
-                        backgroundColor: '#fff',
-                        borderRadius: '16px',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        overflow: 'hidden'
-                    }}>
-                        <div style={{
-                            padding: '20px 28px',
-                            borderBottom: '1px solid #e2e8f0',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            backgroundColor: '#f8fafc'
-                        }}>
-                            <div>
-                                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f172a' }}>
-                                    {editingQualification ? '🏅 직무 자격 갱신/수정' : '🏅 신규 직무 자격 적격성 부여'}
-                                </h2>
-                                <span style={{ fontSize: '12px', color: '#64748b' }}>
-                                    화장품법 및 ISO 13485 요건에 따른 법정·사내 전문 직무 자격 부여 및 권한 관리
-                                </span>
-                            </div>
-                            <button
-                                onClick={() => setQualificationModalOpen(false)}
-                                style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}
-                            >
-                                ✕
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleSaveQualification} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                            <div style={{ padding: '24px 28px', flex: 1, overflowY: 'auto' }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '18px', marginBottom: '22px' }}>
+                }
+            >
+                <form onSubmit={handleSaveQualification} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <DrawerCard title="직무 자격 및 권한 인증 명세" icon="🏅">
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '18px', marginBottom: '22px' }}>
                                     <div>
                                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
                                             임직원 계정 (username) *
@@ -2514,108 +2388,32 @@ const TrainingManagementPage = ({ user, onNavigate }) => {
                                         />
                                     </div>
                                 </div>
-                            </div>
+                    </DrawerCard>
+                </form>
+            </StandardWorkspaceDrawer>
 
-                            <div style={{
-                                padding: '16px 28px',
-                                borderTop: '1px solid #e2e8f0',
-                                display: 'flex',
-                                justifyContent: 'flex-end',
-                                gap: '10px',
-                                backgroundColor: '#f8fafc'
-                            }}>
-                                <button
-                                    type="button"
-                                    onClick={() => setQualificationModalOpen(false)}
-                                    style={{
-                                        padding: '9px 18px',
-                                        fontSize: '13px',
-                                        borderRadius: '6px',
-                                        border: '1px solid #cbd5e1',
-                                        backgroundColor: '#fff',
-                                        color: '#475569',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    취소
-                                </button>
-                                <button
-                                    type="submit"
-                                    style={{
-                                        padding: '9px 22px',
-                                        fontSize: '13px',
-                                        fontWeight: 600,
-                                        borderRadius: '6px',
-                                        border: 'none',
-                                        backgroundColor: '#7c3aed',
-                                        color: '#fff',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    {editingQualification ? '직무자격 갱신' : '직무자격 부여'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* ========================================================================= */}
-            {/* 10. 상세 조회 & 효과성 평가 팝업 (96vw × 92vh) */}
-            {/* ========================================================================= */}
             {detailModalOpen && selectedDetail && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-                    backdropFilter: 'blur(4px)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 9999
-                }}>
-                    <div style={{
-                        width: '96vw',
-                        height: '92vh',
-                        maxWidth: '1680px',
-                        backgroundColor: '#fff',
-                        borderRadius: '16px',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        overflow: 'hidden'
-                    }}>
-                        <div style={{
-                            padding: '20px 28px',
-                            borderBottom: '1px solid #e2e8f0',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            backgroundColor: '#f8fafc'
-                        }}>
-                            <div>
-                                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f172a' }}>
-                                    {selectedDetail.type === 'record' ? `📋 교육이수 상세: ${selectedDetail.item.recordNo}` :
-                                     selectedDetail.type === 'course' ? `📚 교육과정 상세: ${selectedDetail.item.courseCode}` :
-                                     `🏅 직무자격 상세: ${selectedDetail.item.qualificationName}`}
-                                </h2>
-                                <span style={{ fontSize: '12px', color: '#64748b' }}>
-                                    감사 추적성(Audit Trail) 및 효과성 검증 상세 보고서
-                                </span>
-                            </div>
-                            <button
-                                onClick={() => setDetailModalOpen(false)}
-                                style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}
-                            >
-                                ✕
-                            </button>
-                        </div>
-
-                        <div style={{ padding: '24px 28px', flex: 1, overflowY: 'auto' }}>
-                            {selectedDetail.type === 'record' && (
+            <StandardWorkspaceDrawer
+                isOpen={detailModalOpen && !!selectedDetail}
+                onClose={() => setDetailModalOpen(false)}
+                title={selectedDetail?.type === 'record' ? `📋 교육이수 상세: ${selectedDetail.item.recordNo}` :
+                       selectedDetail?.type === 'course' ? `📚 교육과정 상세: ${selectedDetail.item.courseCode}` :
+                       `🏅 직무자격 상세: ${selectedDetail?.item?.qualificationName}`}
+                subtitle="감사 추적성(Audit Trail) 및 효과성 검증 상세 보고서"
+                complianceText="ISO 13485:2016 §6.2 & ISO 22716 §3 교육훈련 및 자격관리 감사 표준"
+                footerRight={
+                    <button
+                        type="button"
+                        onClick={() => setDetailModalOpen(false)}
+                        className="secondary close-button"
+                    >
+                        <span className="icon">✕</span> 닫기
+                    </button>
+                }
+            >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <DrawerCard title="세부 보고서 명세" icon="📄">
+                        {selectedDetail?.type === 'record' && (
                                 <div>
                                     {/* 상단 요약 카드 */}
                                     <div style={{
@@ -2767,7 +2565,7 @@ const TrainingManagementPage = ({ user, onNavigate }) => {
                                 </div>
                             )}
 
-                            {selectedDetail.type === 'course' && (
+                            {selectedDetail?.type === 'course' && (
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
                                     <div style={{ padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
                                         <h4 style={{ margin: '0 0 8px 0', color: '#334155' }}>과정 개요</h4>
@@ -2794,7 +2592,7 @@ const TrainingManagementPage = ({ user, onNavigate }) => {
                                 </div>
                             )}
 
-                            {selectedDetail.type === 'qualification' && (
+                            {selectedDetail?.type === 'qualification' && (
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
                                     <div style={{ padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
                                         <h4 style={{ margin: '0 0 8px 0', color: '#334155' }}>자격 및 보유자 정보</h4>
@@ -2820,33 +2618,9 @@ const TrainingManagementPage = ({ user, onNavigate }) => {
                                     </div>
                                 </div>
                             )}
-                        </div>
-
-                        <div style={{
-                            padding: '16px 28px',
-                            borderTop: '1px solid #e2e8f0',
-                            display: 'flex',
-                            justifyContent: 'flex-end',
-                            backgroundColor: '#f8fafc'
-                        }}>
-                            <button
-                                onClick={() => setDetailModalOpen(false)}
-                                style={{
-                                    padding: '9px 20px',
-                                    fontSize: '13px',
-                                    fontWeight: 600,
-                                    borderRadius: '6px',
-                                    border: '1px solid #cbd5e1',
-                                    backgroundColor: '#fff',
-                                    color: '#334155',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                닫기
-                            </button>
-                        </div>
-                    </div>
+                    </DrawerCard>
                 </div>
+            </StandardWorkspaceDrawer>
             )}
         </div>
     );

@@ -220,17 +220,19 @@ const ApprovalLineModal = ({
     if (!isOpen) return null;
 
     return (
-        <div style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(3px)',
-            zIndex: 10500, display: 'flex', justifyContent: 'center', alignItems: 'center'
-        }}>
-            <div style={{
-                backgroundColor: '#ffffff', borderRadius: '12px',
-                width: '1050px', maxWidth: '96vw', height: '780px', maxHeight: '92vh',
-                display: 'flex', flexDirection: 'column',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflow: 'hidden'
-            }}>
+        <div 
+            className="drawer-overlay"
+            style={{ zIndex: 10500 }}
+        >
+            <div 
+                className="drawer"
+                style={{
+                    backgroundColor: '#ffffff', borderRadius: '12px',
+                    width: '100%', maxWidth: 'none', height: '100%', maxHeight: '100%',
+                    display: 'flex', flexDirection: 'column',
+                    boxShadow: '0 25px 70px rgba(0, 0, 0, 0.35)', overflow: 'hidden',
+                    border: '1px solid #e2e8f0'
+                }}>
                 {/* 헤더 */}
                 <div style={{
                     padding: '16px 24px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0',

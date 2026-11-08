@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-quartz.css';
+import useGridStatePersistence from '../../hooks/useGridStatePersistence';
+import useGridTabRecovery from '../../hooks/useGridTabRecovery';
 
 /**
  * DashboardDataTable:
@@ -17,9 +19,22 @@ const DashboardDataTable = ({
     columnDefs = [],
     onRowDoubleClick,
     pageSizeOptions = [10, 20, 50, 100],
-    defaultPageSize = 20
+    defaultPageSize = 20,
+    storageKey = null,
+    gridKey = null,
+    isActive = true,
+    onColumnResized,
+    onColumnMoved,
+    onSortChanged,
+    onColumnVisible,
+    onColumnPinned,
 }) => {
     const gridRef = useRef(null);
+    const effectiveKey = storageKey || gridKey;
+
+    useGridTabRecovery(gridRef, isActive);
+    const { saveColumnState } = useGridStatePersistence(gridRef, effectiveKey);
+
     const [pageSize, setPageSize] = useState(defaultPageSize);
     const [currentPage, setCurrentPage] = useState(0);
     const [totalPages, setTotalPages] = useState(1);
@@ -148,6 +163,26 @@ const DashboardDataTable = ({
                         if (onRowDoubleClick) {
                             onRowDoubleClick(params.data);
                         }
+                    }}
+                    onColumnResized={(params) => {
+                        if (effectiveKey) saveColumnState();
+                        if (onColumnResized) onColumnResized(params);
+                    }}
+                    onColumnMoved={(params) => {
+                        if (effectiveKey) saveColumnState();
+                        if (onColumnMoved) onColumnMoved(params);
+                    }}
+                    onSortChanged={(params) => {
+                        if (effectiveKey) saveColumnState();
+                        if (onSortChanged) onSortChanged(params);
+                    }}
+                    onColumnVisible={(params) => {
+                        if (effectiveKey) saveColumnState();
+                        if (onColumnVisible) onColumnVisible(params);
+                    }}
+                    onColumnPinned={(params) => {
+                        if (effectiveKey) saveColumnState();
+                        if (onColumnPinned) onColumnPinned(params);
                     }}
                 />
             </div>

@@ -1,9 +1,11 @@
+import { createPortal } from 'react-dom';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
 import { toast } from 'react-toastify';
 import RegulatoryManualBanner from './components/common/RegulatoryManualBanner';
+import StandardWorkspaceDrawer from './components/common/StandardWorkspaceDrawer';
 import {
     fetchSupplierQualifications,
     fetchSupplierQualificationById,
@@ -144,7 +146,8 @@ export default function SupplierManagementPage({ user, onNavigate }) {
                 keyword: searchKeyword || undefined
             };
             const res = await fetchSupplierQualifications(params);
-            setQualifications(res.content || []);
+            const list = Array.isArray(res) ? res : (Array.isArray(res?.content) ? res.content : (Array.isArray(res?.data) ? res.data : []));
+            setQualifications(list);
         } catch (err) {
             console.error('Failed to load qualifications:', err);
             toast.error('공급업체 적격성 목록을 불러오지 못했습니다.');
@@ -163,7 +166,8 @@ export default function SupplierManagementPage({ user, onNavigate }) {
                 keyword: searchKeyword || undefined
             };
             const res = await fetchSupplierEvaluations(params);
-            setEvaluations(res.content || []);
+            const list = Array.isArray(res) ? res : (Array.isArray(res?.content) ? res.content : (Array.isArray(res?.data) ? res.data : []));
+            setEvaluations(list);
         } catch (err) {
             console.error('Failed to load evaluations:', err);
             toast.error('공급업체 평가 목록을 불러오지 못했습니다.');
@@ -183,7 +187,8 @@ export default function SupplierManagementPage({ user, onNavigate }) {
                 keyword: searchKeyword || undefined
             };
             const res = await fetchQualityAgreements(params);
-            setAgreements(res.content || []);
+            const list = Array.isArray(res) ? res : (Array.isArray(res?.content) ? res.content : (Array.isArray(res?.data) ? res.data : []));
+            setAgreements(list);
         } catch (err) {
             console.error('Failed to load quality agreements:', err);
             toast.error('품질협약서 목록을 불러오지 못했습니다.');
@@ -194,10 +199,12 @@ export default function SupplierManagementPage({ user, onNavigate }) {
 
     const loadManufacturers = useCallback(async () => {
         try {
-            const data = await getManufacturers();
-            setManufacturersList(data || []);
+            const res = await getManufacturers();
+            const list = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+            setManufacturersList(list);
         } catch (err) {
             console.error('Failed to load manufacturers:', err);
+            setManufacturersList([]);
         }
     }, []);
 
@@ -1156,6 +1163,12 @@ export default function SupplierManagementPage({ user, onNavigate }) {
                         pagination={true}
                         paginationPageSize={10}
                         theme="legacy"
+                        onRowDoubleClicked={(params) => {
+                            if (params?.data) {
+                                setSelectedQual(params.data);
+                                setShowQualModal(true);
+                            }
+                        }}
                         overlayLoadingTemplate='<span class="ag-overlay-loading-center">공급업체 적격성 목록 로딩 중...</span>'
                     />
                 )}
@@ -1167,6 +1180,12 @@ export default function SupplierManagementPage({ user, onNavigate }) {
                         pagination={true}
                         paginationPageSize={10}
                         theme="legacy"
+                        onRowDoubleClicked={(params) => {
+                            if (params?.data) {
+                                setSelectedEval(params.data);
+                                setShowEvalModal(true);
+                            }
+                        }}
                         overlayLoadingTemplate='<span class="ag-overlay-loading-center">정기 평가 목록 로딩 중...</span>'
                     />
                 )}
@@ -1178,6 +1197,12 @@ export default function SupplierManagementPage({ user, onNavigate }) {
                         pagination={true}
                         paginationPageSize={10}
                         theme="legacy"
+                        onRowDoubleClicked={(params) => {
+                            if (params?.data) {
+                                setSelectedQaa(params.data);
+                                setShowQaaModal(true);
+                            }
+                        }}
                         overlayLoadingTemplate='<span class="ag-overlay-loading-center">품질협약서(QAA) 목록 로딩 중...</span>'
                     />
                 )}
@@ -1251,11 +1276,12 @@ export default function SupplierManagementPage({ user, onNavigate }) {
 // =========================================================================
 // 모달 1: 공급업체 적격성 등록/수정 컴포넌트
 // =========================================================================
-function SupplierQualificationModal({ isOpen, initialData, manufacturers, onClose, onSuccess }) {
+function SupplierQualificationModal({ isOpen, initialData, manufacturers = [], onClose, onSuccess }) {
     const isEdit = !!initialData;
+    const mList = Array.isArray(manufacturers) ? manufacturers : (Array.isArray(manufacturers?.data) ? manufacturers.data : []);
     const [formData, setFormData] = useState({
         supplierCode: initialData?.supplierCode || '',
-        manufacturerId: initialData?.manufacturerId || (manufacturers[0]?.id || ''),
+        manufacturerId: initialData?.manufacturerId || (mList[0]?.id || ''),
         supplierType: initialData?.supplierType || 'RAW_MATERIAL',
         approvalStatus: initialData?.approvalStatus || 'PENDING_QUALIFICATION',
         supplierGrade: initialData?.supplierGrade || 'GRADE_B',
@@ -1298,73 +1324,57 @@ function SupplierQualificationModal({ isOpen, initialData, manufacturers, onClos
     };
 
     return (
-        <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            backgroundColor: 'rgba(15, 23, 42, 0.65)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999
-        }}>
-            <div style={{
-                width: '96vw',
-                height: '92vh',
-                backgroundColor: '#fff',
-                borderRadius: '12px',
-                display: 'flex',
-                flexDirection: 'column',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                overflow: 'hidden'
-            }}>
-                {/* 헤더 */}
-                <div style={{
-                    padding: '18px 24px',
-                    borderBottom: '1px solid #e2e8f0',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    backgroundColor: '#f8fafc'
-                }}>
-                    <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>
-                        {isEdit ? '🏭 공급업체 적격성 정보 수정' : '🏭 공급업체 적격성(ASL) 신규 등록'}
-                    </h2>
+        <StandardWorkspaceDrawer
+            isOpen={isOpen}
+            onClose={onClose}
+            title={isEdit ? '🏭 공급업체 적격성 정보 수정' : '🏭 공급업체 적격성(ASL) 신규 등록'}
+            subtitle="ISO 13485:2016 §7.4 및 ISO 22716 §7 구매/공급업체 적격성 평가 및 승인"
+            docNumber={formData.supplierCode}
+            complianceText="ISO 13485:2016 §7.4 & ISO 22716 §7 공급업체 평가 및 선정 기준"
+            footerRight={
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button type="button" onClick={onClose} className="secondary close-button">
+                        취소
+                    </button>
                     <button
-                        onClick={onClose}
+                        type="submit"
+                        form="supplier-qual-form"
+                        disabled={submitting}
                         style={{
+                            padding: '8px 22px',
+                            borderRadius: '8px',
                             border: 'none',
-                            background: 'transparent',
-                            fontSize: '22px',
-                            cursor: 'pointer',
-                            color: '#64748b'
+                            background: '#1e40af',
+                            color: '#fff',
+                            fontSize: '13px',
+                            fontWeight: '700',
+                            cursor: 'pointer'
                         }}
                     >
-                        ✕
+                        {submitting ? '저장 중...' : (isEdit ? '수정 완료' : '적격성 등록')}
                     </button>
                 </div>
-
-                {/* 폼 본문 */}
-                <form onSubmit={handleSubmit} style={{ flex: 1, overflowY: 'auto', padding: '24px 32px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '20px' }}>
-                        <div>
-                            <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
-                                공급업체 (제조사 마스터 연동) *
-                            </label>
-                            <select
-                                value={formData.manufacturerId}
-                                onChange={(e) => setFormData({ ...formData, manufacturerId: e.target.value })}
-                                required
-                                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
-                            >
-                                <option value="">선택하세요</option>
-                                {manufacturers.map(m => (
-                                    <option key={m.id} value={m.id}>{m.name} ({m.category || '기타'})</option>
-                                ))}
-                            </select>
-                        </div>
+            }
+        >
+            {/* 폼 본문 */}
+            <form id="supplier-qual-form" onSubmit={handleSubmit} style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+                    <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
+                            공급업체 (제조사 마스터 연동) *
+                        </label>
+                        <select
+                            value={formData.manufacturerId}
+                            onChange={(e) => setFormData({ ...formData, manufacturerId: e.target.value })}
+                            required
+                            style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                        >
+                            <option value="">선택하세요</option>
+                            {mList.map(m => (
+                                <option key={m.id} value={m.id}>{m.name} ({m.category || '기타'})</option>
+                            ))}
+                        </select>
+                    </div>
 
                         <div>
                             <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
@@ -1521,50 +1531,19 @@ function SupplierQualificationModal({ isOpen, initialData, manufacturers, onClos
                         />
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '24px' }}>
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            style={{
-                                padding: '10px 20px',
-                                borderRadius: '6px',
-                                border: '1px solid #cbd5e1',
-                                background: '#fff',
-                                fontWeight: '600',
-                                cursor: 'pointer'
-                            }}
-                        >
-                            취소
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={submitting}
-                            style={{
-                                padding: '10px 24px',
-                                borderRadius: '6px',
-                                border: 'none',
-                                background: '#1e40af',
-                                color: '#fff',
-                                fontWeight: '700',
-                                cursor: 'pointer'
-                            }}
-                        >
-                            {submitting ? '저장 중...' : (isEdit ? '수정 완료' : '적격성 등록')}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
+            </form>
+        </StandardWorkspaceDrawer>
     );
 }
 
 // =========================================================================
 // 모달 2: 정기 종합평가 등록/수정 컴포넌트 (4대 영역 실시간 계산)
 // =========================================================================
-function SupplierEvaluationModal({ isOpen, initialData, qualifications, onClose, onSuccess }) {
+function SupplierEvaluationModal({ isOpen, initialData, qualifications = [], onClose, onSuccess }) {
     const isEdit = !!initialData;
+    const qList = Array.isArray(qualifications) ? qualifications : (Array.isArray(qualifications?.content) ? qualifications.content : (Array.isArray(qualifications?.data) ? qualifications.data : []));
     const [formData, setFormData] = useState({
-        qualificationId: initialData?.qualificationId || (qualifications[0]?.id || ''),
+        qualificationId: initialData?.qualificationId || (qList[0]?.id || ''),
         evaluationYear: initialData?.evaluationYear || new Date().getFullYear(),
         evaluationPeriod: initialData?.evaluationPeriod || 'ANNUAL',
         qualityScore: initialData?.qualityScore !== undefined ? initialData.qualityScore : 35,
@@ -1623,69 +1602,58 @@ function SupplierEvaluationModal({ isOpen, initialData, qualifications, onClose,
     };
 
     return (
-        <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            backgroundColor: 'rgba(15, 23, 42, 0.65)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999
-        }}>
-            <div style={{
-                width: '96vw',
-                height: '92vh',
-                backgroundColor: '#fff',
-                borderRadius: '12px',
-                display: 'flex',
-                flexDirection: 'column',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                overflow: 'hidden'
-            }}>
-                {/* 헤더 */}
-                <div style={{
-                    padding: '18px 24px',
-                    borderBottom: '1px solid #e2e8f0',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    backgroundColor: '#f8fafc'
-                }}>
-                    <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>
-                        {isEdit ? '📊 공급업체 정기 평가 수정' : '📊 정기 공급업체 성과 종합평가 (ISO 13485 / ISO 22716)'}
-                    </h2>
+        <StandardWorkspaceDrawer
+            isOpen={isOpen}
+            onClose={onClose}
+            title={isEdit ? '📊 공급업체 정기 평가 수정' : '📊 정기 공급업체 성과 종합평가 (ISO 13485 / ISO 22716)'}
+            subtitle="품질(40점), 납기(30점), 기술/대응(20점), ESG(10점) 4대 영역 정기 평가"
+            complianceText="ISO 13485:2016 §7.4.1 & ISO 22716 §7 공급업체 정기 모니터링 기준"
+            footerRight={
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button type="button" onClick={onClose} className="secondary close-button">
+                        취소
+                    </button>
                     <button
-                        onClick={onClose}
-                        style={{ border: 'none', background: 'transparent', fontSize: '22px', cursor: 'pointer', color: '#64748b' }}
+                        type="submit"
+                        form="supplier-eval-form"
+                        disabled={submitting}
+                        style={{
+                            padding: '8px 22px',
+                            borderRadius: '8px',
+                            border: 'none',
+                            background: '#047857',
+                            color: '#fff',
+                            fontSize: '13px',
+                            fontWeight: '700',
+                            cursor: 'pointer'
+                        }}
                     >
-                        ✕
+                        {submitting ? '저장 중...' : (isEdit ? '수정 완료' : '평가 완료 및 등급 반영')}
                     </button>
                 </div>
-
-                <form onSubmit={handleSubmit} style={{ flex: 1, overflowY: 'auto', padding: '24px 32px' }}>
-                    {/* 공급사 선택 및 평가 시기 */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '20px', marginBottom: '20px' }}>
-                        <div>
-                            <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
-                                평가 대상 공급업체 (ASL 등재 업체) *
-                            </label>
-                            <select
-                                value={formData.qualificationId}
-                                onChange={(e) => setFormData({ ...formData, qualificationId: e.target.value })}
-                                required
-                                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
-                            >
-                                <option value="">선택하세요</option>
-                                {qualifications.map(q => (
-                                    <option key={q.id} value={q.id}>
-                                        [{q.supplierCode}] {q.manufacturerName} - {q.supplierTypeDesc}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
+            }
+        >
+            <form id="supplier-eval-form" onSubmit={handleSubmit} style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+                {/* 공급사 선택 및 평가 시기 */}
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+                    <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
+                            평가 대상 공급업체 (ASL 등재 업체) *
+                        </label>
+                        <select
+                            value={formData.qualificationId}
+                            onChange={(e) => setFormData({ ...formData, qualificationId: e.target.value })}
+                            required
+                            style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                        >
+                            <option value="">선택하세요</option>
+                            {qList.map(q => (
+                                <option key={q.id} value={q.id}>
+                                    [{q.supplierCode}] {q.manufacturerName} - {q.supplierTypeDesc}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
 
                         <div>
                             <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
@@ -1925,44 +1893,20 @@ function SupplierEvaluationModal({ isOpen, initialData, qualifications, onClose,
                         )}
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '24px' }}>
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            style={{ padding: '10px 20px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', fontWeight: '600', cursor: 'pointer' }}
-                        >
-                            취소
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={submitting}
-                            style={{
-                                padding: '10px 24px',
-                                borderRadius: '6px',
-                                border: 'none',
-                                background: '#047857',
-                                color: '#fff',
-                                fontWeight: '700',
-                                cursor: 'pointer'
-                            }}
-                        >
-                            {submitting ? '저장 중...' : (isEdit ? '수정 완료' : '평가 완료 및 등급 반영')}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
+            </form>
+        </StandardWorkspaceDrawer>
     );
 }
 
 // =========================================================================
 // 모달 3: 품질보증협약서(QAA) 등록/수정 컴포넌트
 // =========================================================================
-function QualityAgreementModal({ isOpen, initialData, manufacturers, qualifications, onClose, onSuccess }) {
+function QualityAgreementModal({ isOpen, initialData, manufacturers = [], qualifications = [], onClose, onSuccess }) {
     const isEdit = !!initialData;
+    const mList = Array.isArray(manufacturers) ? manufacturers : (Array.isArray(manufacturers?.data) ? manufacturers.data : []);
     const [formData, setFormData] = useState({
         agreementNumber: initialData?.agreementNumber || '',
-        manufacturerId: initialData?.manufacturerId || (manufacturers[0]?.id || ''),
+        manufacturerId: initialData?.manufacturerId || (mList[0]?.id || ''),
         qualificationId: initialData?.qualificationId || '',
         title: initialData?.title || '',
         agreementType: initialData?.agreementType || 'CONTRACT_MANUFACTURING',
@@ -2019,81 +1963,71 @@ function QualityAgreementModal({ isOpen, initialData, manufacturers, qualificati
     };
 
     return (
-        <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            backgroundColor: 'rgba(15, 23, 42, 0.65)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999
-        }}>
-            <div style={{
-                width: '96vw',
-                height: '92vh',
-                backgroundColor: '#fff',
-                borderRadius: '12px',
-                display: 'flex',
-                flexDirection: 'column',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                overflow: 'hidden'
-            }}>
-                {/* 헤더 */}
-                <div style={{
-                    padding: '18px 24px',
-                    borderBottom: '1px solid #e2e8f0',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    backgroundColor: '#f8fafc'
-                }}>
-                    <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>
-                        {isEdit ? '📜 품질보증협약서(QAA) 수정' : '📜 품질보증협약서 (Quality Assurance Agreement - QAA) 신규 체결'}
-                    </h2>
+        <StandardWorkspaceDrawer
+            isOpen={isOpen}
+            onClose={onClose}
+            title={isEdit ? '📜 품질보증협약서(QAA) 수정' : '📜 품질보증협약서 (Quality Assurance Agreement - QAA) 신규 체결'}
+            subtitle="ISO 13485:2016 §7.4.2 & EU MDR Art. 10 품질협약 체결 의무"
+            docNumber={formData.agreementNumber}
+            complianceText="ISO 13485:2016 §7.4.2 & EU MDR Art. 10 품질협약서 체결 의무"
+            footerRight={
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button type="button" onClick={onClose} className="secondary close-button">
+                        취소
+                    </button>
                     <button
-                        onClick={onClose}
-                        style={{ border: 'none', background: 'transparent', fontSize: '22px', cursor: 'pointer', color: '#64748b' }}
+                        type="submit"
+                        form="supplier-qaa-form"
+                        disabled={submitting}
+                        style={{
+                            padding: '8px 22px',
+                            borderRadius: '8px',
+                            border: 'none',
+                            background: '#4338ca',
+                            color: '#fff',
+                            fontSize: '13px',
+                            fontWeight: '700',
+                            cursor: 'pointer'
+                        }}
                     >
-                        ✕
+                        {submitting ? '저장 중...' : (isEdit ? '수정 완료' : '품질협약 체결 등록')}
                     </button>
                 </div>
-
-                <form onSubmit={handleSubmit} style={{ flex: 1, overflowY: 'auto', padding: '24px 32px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px', marginBottom: '20px' }}>
-                        <div>
-                            <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
-                                협약 제목 *
-                            </label>
-                            <input
-                                type="text"
-                                value={formData.title}
-                                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                                required
-                                placeholder="예: 의료기기 핵심부품 공급 및 품질보증에 관한 기본협약서"
-                                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
-                            />
-                        </div>
-
-                        <div>
-                            <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
-                                협약 대상 제조사(공급업체) *
-                            </label>
-                            <select
-                                value={formData.manufacturerId}
-                                onChange={(e) => setFormData({ ...formData, manufacturerId: e.target.value })}
-                                required
-                                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
-                            >
-                                <option value="">선택하세요</option>
-                                {manufacturers.map(m => (
-                                    <option key={m.id} value={m.id}>{m.name}</option>
-                                ))}
-                            </select>
-                        </div>
+            }
+        >
+            <form id="supplier-qaa-form" onSubmit={handleSubmit} style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px', marginBottom: '20px' }}>
+                    <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
+                            협약 제목 *
+                        </label>
+                        <input
+                            type="text"
+                            value={formData.title}
+                            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                            required
+                            placeholder="예: 의료기기 핵심부품 공급 및 품질보증에 관한 기본협약서"
+                            style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                        />
                     </div>
+
+                    <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#334155', marginBottom: '6px' }}>
+                            협약 대상 제조사(공급업체) *
+                        </label>
+                        <select
+                            value={formData.manufacturerId}
+                            onChange={(e) => setFormData({ ...formData, manufacturerId: e.target.value })}
+                            required
+                            style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                        >
+                            <option value="">선택하세요</option>
+                            {mList.map(m => (
+                                <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '20px' }}>
                         <div>
@@ -2268,33 +2202,8 @@ function QualityAgreementModal({ isOpen, initialData, manufacturers, qualificati
                         </label>
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '24px' }}>
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            style={{ padding: '10px 20px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', fontWeight: '600', cursor: 'pointer' }}
-                        >
-                            취소
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={submitting}
-                            style={{
-                                padding: '10px 24px',
-                                borderRadius: '6px',
-                                border: 'none',
-                                background: '#4338ca',
-                                color: '#fff',
-                                fontWeight: '700',
-                                cursor: 'pointer'
-                            }}
-                        >
-                            {submitting ? '저장 중...' : (isEdit ? '수정 완료' : '품질협약 체결 등록')}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
+            </form>
+        </StandardWorkspaceDrawer>
     );
 }
 
@@ -2302,54 +2211,27 @@ function QualityAgreementModal({ isOpen, initialData, manufacturers, qualificati
 // 모달 4: 공급업체 종합 이력 및 상세 뷰어 모달
 // =========================================================================
 function SupplierDetailModal({ qual, onClose }) {
+    if (!qual) return null;
     return (
-        <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            backgroundColor: 'rgba(15, 23, 42, 0.65)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999
-        }}>
-            <div style={{
-                width: '96vw',
-                height: '92vh',
-                backgroundColor: '#fff',
-                borderRadius: '12px',
-                display: 'flex',
-                flexDirection: 'column',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                overflow: 'hidden'
-            }}>
-                {/* 헤더 */}
-                <div style={{
-                    padding: '18px 24px',
-                    borderBottom: '1px solid #e2e8f0',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    backgroundColor: '#f8fafc'
-                }}>
-                    <div>
-                        <span style={{ fontSize: '13px', fontWeight: '700', color: '#1e40af' }}>[{qual.supplierCode}]</span>
-                        <h2 style={{ margin: '4px 0 0 0', fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>
-                            {qual.manufacturerName} - 공급업체 상세 프로필
-                        </h2>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        style={{ border: 'none', background: 'transparent', fontSize: '22px', cursor: 'pointer', color: '#64748b' }}
-                    >
-                        ✕
-                    </button>
-                </div>
-
-                {/* 본문 */}
-                <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px' }}>
+        <StandardWorkspaceDrawer
+            isOpen={!!qual}
+            onClose={onClose}
+            title={`${qual.manufacturerName} - 공급업체 상세 프로필`}
+            subtitle="공급업체 승인 현황, 종합 평가 이력 및 품질협약 체결 상태 원장"
+            docNumber={qual.supplierCode}
+            complianceText="ISO 13485:2016 §7.4 승인된 공급업체 목록(ASL) 감사 원장"
+            footerRight={
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="secondary close-button"
+                >
+                    <span className="icon">✕</span> 닫기
+                </button>
+            }
+        >
+            {/* 본문 */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
                         <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                             <div style={{ fontSize: '12px', color: '#64748b' }}>승인 상태</div>
@@ -2408,24 +2290,7 @@ function SupplierDetailModal({ qual, onClose }) {
                         </div>
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
-                        <button
-                            onClick={onClose}
-                            style={{
-                                padding: '10px 24px',
-                                borderRadius: '6px',
-                                border: '1px solid #cbd5e1',
-                                background: '#1e293b',
-                                color: '#fff',
-                                fontWeight: '700',
-                                cursor: 'pointer'
-                            }}
-                        >
-                            닫기
-                        </button>
-                    </div>
                 </div>
-            </div>
-        </div>
+        </StandardWorkspaceDrawer>
     );
 }

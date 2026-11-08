@@ -392,8 +392,8 @@ const ApprovalInboxPage = ({
                     rowData={displayedData}
                     columnDefs={columnDefs}
                     animateRows={true}
-                    headerHeight={40}
-                    rowHeight={46}
+                    headerHeight={48}
+                    rowHeight={54}
                     rowSelection={{ mode: 'multiRow' }}
                     onSelectionChanged={onSelectionChanged}
                     onRowClicked={(e) => {
@@ -401,6 +401,12 @@ const ApprovalInboxPage = ({
                             return;
                         }
                         handleDocumentClick(e.data);
+                    }}
+                    onRowDoubleClicked={(e) => {
+                        if (e.event?.target?.closest('.ag-selection-checkbox') || e.event?.target?.type === 'checkbox') {
+                            return;
+                        }
+                        if (e?.data) handleDocumentClick(e.data);
                     }}
                     defaultColDef={{ resizable: true, sortable: true, filter: true }}
                 />

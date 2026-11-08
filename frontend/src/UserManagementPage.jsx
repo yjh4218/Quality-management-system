@@ -635,6 +635,15 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated, is
                             pagination={true}
                             paginationPageSize={100}
                             quickFilterText={quickFilterText}
+                            onRowDoubleClicked={(e) => {
+                                if (e?.data) {
+                                    if (!e.data.enabled && !e.data.lastLogin) {
+                                        handleApprove(e.data);
+                                    } else {
+                                        showAlert(`[${e.data.name}] 계정: ${e.data.username} | 소속: ${e.data.companyName || '-'} / ${e.data.department || '-'} | 권한: ${e.data.roleName || e.data.role}`);
+                                    }
+                                }
+                            }}
                         />
                     </div>
                 </div>)}
@@ -799,7 +808,7 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated, is
 
             {/* 커스텀 Confirm 모달 */}
             {confirmModal.isOpen && (
-                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div className="modal-overlay" style={{ zIndex: 9999 }}>
                     <div style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '8px', minWidth: '320px', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
                         <p style={{ fontSize: '16px', marginBottom: '24px', color: '#333', fontWeight: '500' }}>{confirmModal.message}</p>
                         <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
@@ -815,7 +824,7 @@ const UserManagementPage = ({ user: currentUser, navigationData, onNavigated, is
 
             {/* 커스텀 Alert 모달 */}
             {alertModal.isOpen && (
-                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div className="modal-overlay" style={{ zIndex: 9999 }}>
                     <div style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '8px', minWidth: '320px', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
                         <p style={{ fontSize: '16px', marginBottom: '24px', color: '#333', fontWeight: '500' }}>{alertModal.message}</p>
                         <button onClick={() => setAlertModal({ isOpen: false, message: '' })} style={{ padding: '8px 32px', backgroundColor: '#0056b3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>확인</button>

@@ -268,6 +268,10 @@ public class ManufacturerAuditService {
         }
     }
 
+    public java.util.Optional<ManufacturerAudit> getAuditById(Long id) {
+        return auditRepository.findById(id).filter(a -> !a.isDeleted());
+    }
+
     public List<ManufacturerAuditHistory> getAuditHistory(Long auditId) {
         return historyRepository.findByAuditIdOrderByModifiedAtDesc(auditId);
     }

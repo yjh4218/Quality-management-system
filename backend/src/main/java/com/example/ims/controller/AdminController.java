@@ -33,6 +33,7 @@ public class AdminController {
     private final EmailService emailService;
     private final RoleService roleService;
     private final AuditLogService auditLogService;
+    private final com.example.ims.service.AuthService authService;
 
     @GetMapping
     @PreAuthorize("@perm.can('users', 'VIEW')")
@@ -239,5 +240,33 @@ public class AdminController {
                     return ResponseEntity.ok("이메일 인증이 수동 완료 처리되었습니다.");
                 })
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * 관리자 화면: 잠긴 사용자 계정 잠금 해제 및 실패 횟수 초기화
+     */
+    @PutMapping("/{id}/unlock")
+    @PreAuthorize("@perm.can('users', 'EDIT')")
+    public ResponseEntity<?> unlockUser(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        String modifier = (userDetails != null) ? userDetails.getUsername() : "ADMIN";
+        authService.unlockUser(id, modifier);
+        return ResponseEntity.ok("User unlocked successfully");
+    }
+
+    /**
+     * 관리자 화면: 사용자 비밀번호 직접 재설정
+     */
+    @PutMapping("/{id}/reset-password")
+    @PreAuthorize("@perm.can('users', 'EDIT')")
+    public ResponseEntity<?> resetPassword(
+            @PathVariable Long id,
+            @RequestBody java.util.Map<String, String> body,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        String modifier = (userDetails != null) ? userDetails.getUsername() : "ADMIN";
+        String newPassword = body != null ? body.get("newPassword") : null;
+        authService.resetUserPasswordByAdmin(id, newPassword, modifier);
+        return ResponseEntity.ok("User password reset successfully");
     }
 }

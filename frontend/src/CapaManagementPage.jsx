@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import 'ag-grid-community/styles/ag-grid.css';
@@ -927,6 +928,11 @@ export default function CapaManagementPage({ user, onNavigate }) {
                     pagination={true}
                     paginationPageSize={20}
                     suppressCellFocus={true}
+                    onRowDoubleClicked={(params) => {
+                        if (params?.data) {
+                            handleOpenAuditReportModal(params.data);
+                        }
+                    }}
                 />
             </div>
 
@@ -934,8 +940,8 @@ export default function CapaManagementPage({ user, onNavigate }) {
             {/* [모달 1] 신규 CAPA 발의/등록 모달 (96vw × 92vh) */}
             {/* ========================================================================= */}
             {isCreateModalOpen && (
-                <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div style={{ width: '96vw', maxWidth: '1480px', height: '92vh', backgroundColor: '#ffffff', borderRadius: '12px', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+                <div className="drawer-overlay">
+                    <div className="drawer">
                         {/* 헤더 */}
                         <div style={{ padding: '18px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
@@ -1140,8 +1146,8 @@ export default function CapaManagementPage({ user, onNavigate }) {
             {/* [모달 2] 5-Why & Fishbone 근본원인 분석 모달 (96vw × 92vh) */}
             {/* ========================================================================= */}
             {isRootCauseModalOpen && selectedCapa && (
-                <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div style={{ width: '96vw', maxWidth: '1480px', height: '92vh', backgroundColor: '#ffffff', borderRadius: '12px', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+                <div className="drawer-overlay">
+                    <div className="drawer">
                         <div style={{ padding: '18px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
                                 <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
@@ -1287,8 +1293,8 @@ export default function CapaManagementPage({ user, onNavigate }) {
             {/* [모달 3] 시정/예방조치 과제 관리 모달 (96vw × 92vh) */}
             {/* ========================================================================= */}
             {isActionsModalOpen && selectedCapa && (
-                <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div style={{ width: '96vw', maxWidth: '1480px', height: '92vh', backgroundColor: '#ffffff', borderRadius: '12px', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+                <div className="drawer-overlay">
+                    <div className="drawer">
                         <div style={{ padding: '18px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
                                 <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
@@ -1476,8 +1482,8 @@ export default function CapaManagementPage({ user, onNavigate }) {
             {/* [모달 4] 효과성 검증 & 공식 최종 종결 모달 (96vw × 92vh) */}
             {/* ========================================================================= */}
             {isEffectivenessModalOpen && selectedCapa && (
-                <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div style={{ width: '96vw', maxWidth: '1480px', height: '92vh', backgroundColor: '#ffffff', borderRadius: '12px', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+                <div className="drawer-overlay">
+                    <div className="drawer">
                         <div style={{ padding: '18px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
                                 <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
@@ -1599,8 +1605,8 @@ export default function CapaManagementPage({ user, onNavigate }) {
             {/* [모달 5] 공식 A4 규제 감사 리포트 인쇄 모달 (96vw × 92vh) */}
             {/* ========================================================================= */}
             {isAuditReportModalOpen && selectedCapa && (
-                <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div style={{ width: '96vw', maxWidth: '1480px', height: '92vh', backgroundColor: '#ffffff', borderRadius: '12px', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+                <div className="drawer-overlay">
+                    <div className="drawer">
                         <div style={{ padding: '18px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
                                 <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>

@@ -144,7 +144,8 @@ public class QualityReportService {
         try {
             boolean isManufacturer = modifierUser.getRole().contains("ROLE_MANUFACTURER") || "제조사".equals(modifierUser.getDepartment());
             if (isManufacturer) {
-                if (!java.util.Objects.equals(modifierUser.getCompanyName(), original.getManufacturer())) {
+                String effectiveMfr = modifierUser.getManufacturer() != null ? modifierUser.getManufacturer().getName() : modifierUser.getCompanyName();
+                if (!java.util.Objects.equals(effectiveMfr, original.getManufacturer())) {
                     throw new RuntimeException("해당 입고 정보에 대한 수정 권한이 없습니다.");
                 }
             }

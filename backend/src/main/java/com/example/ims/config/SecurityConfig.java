@@ -66,7 +66,7 @@ public class SecurityConfig {
                             if (!uri.startsWith("/api/auth/login") && !uri.startsWith("/api/auth/register") &&
                                 !uri.startsWith("/api/auth/find-password") && !uri.startsWith("/api/auth/verify-email") && !uri.startsWith("/api/auth/password-reset") && !uri.startsWith("/api/auth/resend-verification") &&
                                 !uri.startsWith("/api/bug-reports") && !uri.startsWith("/api/logs/access") &&
-                                !uri.startsWith("/api/vendor-upload")) {
+                                !uri.startsWith("/api/vendor-upload") && !uri.startsWith("/api/document-requests/vendor-")) {
 
                                 String origin = request.getHeader("Origin");
                                 String referer = request.getHeader("Referer");
@@ -113,7 +113,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/debug/**").hasRole("ADMIN")
                         .requestMatchers("/", "/api/auth/login", "/api/auth/logout").permitAll()
                         .requestMatchers("/api/auth/register", "/api/auth/check-username", "/api/auth/find-password", "/api/auth/verify-email", "/api/auth/password-reset/**", "/api/auth/resend-verification").permitAll()
-                        .requestMatchers("/api/vendor-upload/**").permitAll()
+                        .requestMatchers("/api/vendor-upload/**", "/api/document-requests/vendor-portal", "/api/document-requests/vendor-upload").permitAll()
                         // Spring Boot Actuator 모니터링 엔드포인트 세분화 (health, info 공개 / 기타 민감정보 보호)
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers("/actuator/**").hasRole("ADMIN")

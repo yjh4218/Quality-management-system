@@ -14,7 +14,35 @@ import java.util.concurrent.Executor;
  */
 @Configuration
 @EnableAsync
-public class AsyncConfig {
+@lombok.RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
+public class AsyncConfig implements org.springframework.scheduling.annotation.AsyncConfigurer {
+
+    private final org.springframework.beans.factory.ObjectProvider<com.example.ims.service.BugReportService> bugReportServiceProvider;
+
+    @Override
+    public org.springframework.aop.interceptor.AsyncUncaughtExceptionHandler getAsyncUncaughtExceptionHandler() {
+        return (throwable, method, params) -> {
+            log.error("Async execution error in method {}: {}", method.getName(), throwable.getMessage(), throwable);
+            try {
+                com.example.ims.service.BugReportService bugReportService = bugReportServiceProvider.getIfAvailable();
+                if (bugReportService != null) {
+                    com.example.ims.entity.BugReport report = com.example.ims.entity.BugReport.builder()
+                            .screenName("ASYNC:" + method.getName())
+                            .errorCategory("ASYNC_TASK")
+                            .severity("HIGH")
+                            .description("[비동기 백그라운드 작업 오류] " + method.getName() + ": " + throwable.getMessage())
+                            .serverError(throwable.getClass().getName() + ": " + throwable.getMessage())
+                            .steps("Method: " + method.getDeclaringClass().getSimpleName() + "." + method.getName())
+                            .reporterUsername("SYSTEM_ASYNC")
+                            .build();
+                    bugReportService.submitReport(report);
+                }
+            } catch (Exception ex) {
+                log.warn("Failed to submit bug report for async error: {}", ex.getMessage());
+            }
+        };
+    }
 
     @Bean(name = "mailExecutor")
     public Executor mailExecutor() {

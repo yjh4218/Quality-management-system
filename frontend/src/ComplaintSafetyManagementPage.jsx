@@ -4,6 +4,7 @@ import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
 import { toast } from 'react-toastify';
 import RegulatoryManualBanner from './components/common/RegulatoryManualBanner';
+import StandardWorkspaceDrawer from './components/common/StandardWorkspaceDrawer';
 import {
     fetchComplaintSafetyKpis,
     fetchComplaintSafetyEvaluations,
@@ -1092,6 +1093,11 @@ export default function ComplaintSafetyManagementPage({ user, onNavigate }) {
                         animateRows={true}
                         suppressCellFocus={true}
                         enableCellTextSelection={true}
+                        onRowDoubleClicked={(e) => {
+                            if (e?.data) {
+                                openCausalityModal(e.data);
+                            }
+                        }}
                         overlayLoadingTemplate="<span class='ag-overlay-loading-center'>데이터를 불러오는 중입니다...</span>"
                         overlayNoRowsTemplate="<span class='ag-overlay-no-rows-center'>조회된 불만·이상사례 평가 내역이 없습니다.</span>"
                     />
@@ -1099,42 +1105,39 @@ export default function ComplaintSafetyManagementPage({ user, onNavigate }) {
             </div>
 
             {/* ========================================================================= */}
-            {/* 5. 전면 최대화 모달 1: 신규 불만/이상사례 접수 모달 */}
+            {/* 5. 전면 최대화 모달 1: 신규 불만/이상사례 접수 모달 (StandardWorkspaceDrawer) */}
             {/* ========================================================================= */}
             {isCreateModalOpen && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                    background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)',
-                    display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999
-                }}>
-                    <div style={{
-                        width: '96vw', maxWidth: '1680px', height: '92vh', maxHeight: '94vh',
-                        background: '#ffffff', borderRadius: '12px', display: 'flex', flexDirection: 'column',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflow: 'hidden'
-                    }}>
-                        {/* 모달 헤더 */}
-                        <div style={{
-                            padding: '16px 24px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc',
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                        }}>
-                            <div>
-                                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
-                                    🆕 고객 불만 및 시판 후 이상사례 신규 접수
-                                </h2>
-                                <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                                    ISO 13485:2016 §8.2.2 / ISO 22716:2007 §10 | D-9 해소: 소비자가 용기를 분실한 경우에도 LOT 미상으로 정상 접수 가능
-                                </p>
-                            </div>
+                <StandardWorkspaceDrawer
+                    isOpen={isCreateModalOpen}
+                    onClose={() => setIsCreateModalOpen(false)}
+                    title="🆕 고객 불만 및 시판 후 이상사례 신규 접수"
+                    subtitle="ISO 13485:2016 §8.2.2 / ISO 22716:2007 §10 | D-9 해소: 소비자가 용기를 분실한 경우에도 LOT 미상으로 정상 접수 가능"
+                    complianceText="ISO 13485:2016 §8.2.2 & ISO 22716:2007 §10 규제 안전성 관리 기준"
+                    footerRight={
+                        <div style={{ display: 'flex', gap: '8px' }}>
                             <button
                                 type="button"
                                 onClick={() => setIsCreateModalOpen(false)}
-                                style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}
+                                className="secondary close-button"
                             >
-                                ✕
+                                취소
+                            </button>
+                            <button
+                                type="submit"
+                                form="create-eval-form"
+                                className="primary"
+                                style={{
+                                    padding: '8px 24px', background: '#1e40af', border: 'none', borderRadius: '6px',
+                                    fontSize: '13px', fontWeight: 700, color: '#ffffff', cursor: 'pointer',
+                                    boxShadow: '0 2px 4px rgba(30, 64, 175, 0.2)'
+                                }}
+                            >
+                                불만·이상사례 접수 완료
                             </button>
                         </div>
-
-                        {/* 모달 바디 (스크롤) */}
+                    }
+                >
                         <form id="create-eval-form" onSubmit={handleCreateSubmit} style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
                             {/* 기존 클레임 선택 배너 */}
                             <div style={{
@@ -1487,66 +1490,28 @@ export default function ComplaintSafetyManagementPage({ user, onNavigate }) {
                         </form>
 
                         {/* 모달 푸터 */}
-                        <div style={{
-                            padding: '16px 24px', borderTop: '1px solid #e2e8f0', background: '#f8fafc',
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                        }}>
-                            <button
-                                type="button"
-                                onClick={() => setIsCreateModalOpen(false)}
-                                style={{
-                                    padding: '8px 18px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px',
-                                    fontSize: '13px', fontWeight: 600, color: '#475569', cursor: 'pointer'
-                                }}
-                            >
-                                취소
-                            </button>
-                            <button
-                                type="submit"
-                                form="create-eval-form"
-                                style={{
-                                    padding: '8px 24px', background: '#1e40af', border: 'none', borderRadius: '6px',
-                                    fontSize: '13px', fontWeight: 700, color: '#ffffff', cursor: 'pointer',
-                                    boxShadow: '0 2px 4px rgba(30, 64, 175, 0.2)'
-                                }}
-                            >
-                                불만·이상사례 접수 완료
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                </StandardWorkspaceDrawer>
             )}
 
             {/* ========================================================================= */}
-            {/* 6. 모달 2: WHO-UMC 인과관계 평가 및 심의 모달 */}
+            {/* 6. 모달 2: WHO-UMC 인과관계 평가 및 심의 모달 (StandardWorkspaceDrawer) */}
             {/* ========================================================================= */}
             {isCausalityModalOpen && selectedItem && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                    background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)',
-                    display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999
-                }}>
-                    <div style={{
-                        width: '96vw', maxWidth: '1680px', height: '92vh', maxHeight: '94vh',
-                        background: '#ffffff', borderRadius: '12px', display: 'flex', flexDirection: 'column',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflow: 'hidden'
-                    }}>
-                        <div style={{
-                            padding: '16px 24px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc',
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                        }}>
-                            <div>
-                                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
-                                    🔬 WHO-UMC 6단계 인과관계 평가 및 심의 의결 [{selectedItem.evaluationNumber}]
-                                </h2>
-                                <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                                    제품: {selectedItem.productName} ({selectedItem.itemCode}) | LOT: {selectedItem.lotNumber || '미상'}
-                                </p>
-                            </div>
-                            <button type="button" onClick={() => setIsCausalityModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer' }}>✕</button>
+                <StandardWorkspaceDrawer
+                    isOpen={isCausalityModalOpen && !!selectedItem}
+                    onClose={() => setIsCausalityModalOpen(false)}
+                    title={`🔬 WHO-UMC 6단계 인과관계 평가 및 결과 의결 [${selectedItem.evaluationNumber}]`}
+                    subtitle={`제품: ${selectedItem.productName} (${selectedItem.itemCode}) | LOT: ${selectedItem.lotNumber || '미상'}`}
+                    docNumber={selectedItem.evaluationNumber}
+                    complianceText="WHO-UMC 6단계 판정 및 식약처/FDA 시판후 안전관리 표준"
+                    footerRight={
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <button type="button" onClick={() => setIsCausalityModalOpen(false)} className="secondary close-button">취소</button>
+                            <button type="submit" form="causality-form" className="primary" style={{ padding: '8px 24px', background: '#1e40af', color: '#ffffff', border: 'none', borderRadius: '6px', fontWeight: 700, cursor: 'pointer' }}>인과관계 판정 완료</button>
                         </div>
-
-                        <form id="causality-form" onSubmit={handleCausalitySubmit} style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+                    }
+                >
+                    <form id="causality-form" onSubmit={handleCausalitySubmit} style={{ padding: '8px 0' }}>
                             {/* 환자 증상 요약 카드 */}
                             <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
                                 <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
@@ -1640,47 +1605,28 @@ export default function ComplaintSafetyManagementPage({ user, onNavigate }) {
                             </div>
                         </form>
 
-                        <div style={{
-                            padding: '16px 24px', borderTop: '1px solid #e2e8f0', background: '#f8fafc',
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                        }}>
-                            <button type="button" onClick={() => setIsCausalityModalOpen(false)} style={{ padding: '8px 18px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer' }}>취소</button>
-                            <button type="submit" form="causality-form" style={{ padding: '8px 24px', background: '#1e40af', color: '#ffffff', border: 'none', borderRadius: '6px', fontWeight: 700, cursor: 'pointer' }}>인과관계 판정 완료</button>
-                        </div>
-                    </div>
-                </div>
+                </StandardWorkspaceDrawer>
             )}
 
             {/* ========================================================================= */}
-            {/* 7. 모달 3: 식약처 / FDA MDR 규제기관 보고 등록 모달 */}
+            {/* 7. 모달 3: 식약처 / FDA MDR 규제기관 보고 등록 모달 (StandardWorkspaceDrawer) */}
             {/* ========================================================================= */}
             {isReportModalOpen && selectedItem && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                    background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)',
-                    display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999
-                }}>
-                    <div style={{
-                        width: '96vw', maxWidth: '1680px', height: '92vh', maxHeight: '94vh',
-                        background: '#ffffff', borderRadius: '12px', display: 'flex', flexDirection: 'column',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflow: 'hidden'
-                    }}>
-                        <div style={{
-                            padding: '16px 24px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc',
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                        }}>
-                            <div>
-                                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
-                                    🏛️ 식약처(KFDA) / FDA MDR 규제기관 보고 등록 [{selectedItem.evaluationNumber}]
-                                </h2>
-                                <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                                    화장품법 제5조의2 (인지일로부터 15일 이내 신속보고) | 21 CFR 803 의료기기 이상사례 보고(MDR)
-                                </p>
-                            </div>
-                            <button type="button" onClick={() => setIsReportModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer' }}>✕</button>
+                <StandardWorkspaceDrawer
+                    isOpen={isReportModalOpen && !!selectedItem}
+                    onClose={() => setIsReportModalOpen(false)}
+                    title={`🏛️ 식약처(KFDA) / FDA MDR 규제기관 보고 등록 [${selectedItem.evaluationNumber}]`}
+                    subtitle="화장품법 제5조의2 (인지일로부터 15일 이내 신속보고) | 21 CFR 803 의료기기 이상사례 보고(MDR)"
+                    docNumber={selectedItem.evaluationNumber}
+                    complianceText="의료기기법 제31조 / 21 CFR Part 803 (FDA MDR) / 화장품법 제5조의2"
+                    footerRight={
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <button type="button" onClick={() => setIsReportModalOpen(false)} className="secondary close-button">취소</button>
+                            <button type="submit" form="report-form" className="primary" style={{ padding: '8px 24px', background: '#be185d', color: '#ffffff', border: 'none', borderRadius: '6px', fontWeight: 700, cursor: 'pointer' }}>규제기관 보고 등록 완료</button>
                         </div>
-
-                        <form id="report-form" onSubmit={handleReportSubmit} style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+                    }
+                >
+                    <form id="report-form" onSubmit={handleReportSubmit} style={{ padding: '8px 0' }}>
                             <div style={{
                                 padding: '14px 18px', background: '#fdf2f8', borderRadius: '8px', border: '1px solid #fbcfe8',
                                 marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '14px'
@@ -1753,47 +1699,25 @@ export default function ComplaintSafetyManagementPage({ user, onNavigate }) {
                             </div>
                         </form>
 
-                        <div style={{
-                            padding: '16px 24px', borderTop: '1px solid #e2e8f0', background: '#f8fafc',
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                        }}>
-                            <button type="button" onClick={() => setIsReportModalOpen(false)} style={{ padding: '8px 18px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer' }}>취소</button>
-                            <button type="submit" form="report-form" style={{ padding: '8px 24px', background: '#be185d', color: '#ffffff', border: 'none', borderRadius: '6px', fontWeight: 700, cursor: 'pointer' }}>규제기관 보고 등록 완료</button>
-                        </div>
-                    </div>
-                </div>
+                </StandardWorkspaceDrawer>
             )}
 
             {/* ========================================================================= */}
-            {/* 8. 모달 4: 후속 조치과제(Action Items) 관리 및 종결 모달 */}
+            {/* 8. 모달 4: 후속 조치과제(Action Items) 관리 및 종결 모달 (StandardWorkspaceDrawer) */}
             {/* ========================================================================= */}
             {isActionModalOpen && selectedItem && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                    background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)',
-                    display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999
-                }}>
-                    <div style={{
-                        width: '96vw', maxWidth: '1680px', height: '92vh', maxHeight: '94vh',
-                        background: '#ffffff', borderRadius: '12px', display: 'flex', flexDirection: 'column',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflow: 'hidden'
-                    }}>
-                        <div style={{
-                            padding: '16px 24px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc',
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                        }}>
-                            <div>
-                                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
-                                    📋 후속 조치과제 관리 및 최종 종결 [{selectedItem.evaluationNumber}]
-                                </h2>
-                                <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                                    모든 후속 조치과제가 완료 및 효과성 검증(PASS)되어야 최종 종결(CLOSED) 처리할 수 있습니다.
-                                </p>
-                            </div>
-                            <button type="button" onClick={() => setIsActionModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer' }}>✕</button>
-                        </div>
-
-                        <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+                <StandardWorkspaceDrawer
+                    isOpen={isActionModalOpen && !!selectedItem}
+                    onClose={() => setIsActionModalOpen(false)}
+                    title={`📋 후속 조치과제 관리 및 최종 종결 [${selectedItem.evaluationNumber}]`}
+                    subtitle="모든 후속 조치과제가 완료 및 효과성 검증(PASS)되어야 최종 종결(CLOSED) 처리할 수 있습니다."
+                    docNumber={selectedItem.evaluationNumber}
+                    complianceText="ISO 13485:2016 §8.5.2 & §8.5.3 시정 및 예방조치(CAPA) 연계 표준"
+                    footerRight={
+                        <button type="button" onClick={() => setIsActionModalOpen(false)} className="secondary close-button">닫기</button>
+                    }
+                >
+                    <div style={{ padding: '8px 0' }}>
                             {/* 조치과제 목록 테이블 */}
                             <div style={{ marginBottom: '24px' }}>
                                 <div style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a', marginBottom: '8px' }}>
@@ -1991,25 +1915,14 @@ export default function ComplaintSafetyManagementPage({ user, onNavigate }) {
                             )}
                         </div>
 
-                        <div style={{
-                            padding: '16px 24px', borderTop: '1px solid #e2e8f0', background: '#f8fafc',
-                            display: 'flex', justifyContent: 'flex-end'
-                        }}>
-                            <button type="button" onClick={() => setIsActionModalOpen(false)} style={{ padding: '8px 20px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer' }}>닫기</button>
-                        </div>
-                    </div>
-                </div>
+                </StandardWorkspaceDrawer>
             )}
 
             {/* ========================================================================= */}
-            {/* 9. 모달 5: 공식 A4 규제 감사 리포트 인쇄 뷰어 */}
+            {/* 9. 모달 5: 공식 A4 규제 감사 리포트 인쇄 뷰어 (modal-overlay 표준) */}
             {/* ========================================================================= */}
             {isPrintModalOpen && selectedItem && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                    background: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(4px)',
-                    display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999
-                }}>
+                <div className="modal-overlay" style={{ zIndex: 5100 }}>
                     <div style={{
                         width: '96vw', maxWidth: '1080px', height: '92vh', maxHeight: '94vh',
                         background: '#ffffff', borderRadius: '8px', display: 'flex', flexDirection: 'column', overflow: 'hidden'

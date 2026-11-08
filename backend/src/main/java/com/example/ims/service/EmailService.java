@@ -26,10 +26,14 @@ public class EmailService {
 
     private void handleMailFailure(String toEmail, String mailSubject, Exception e) {
         String errMsg = e.getMessage() != null ? e.getMessage() : e.toString();
-        boolean isResendFreeTierRestriction = errMsg.contains("Resend 무료 기본 발신자") 
+        boolean isResendFreeTierRestriction = errMsg.contains("Resend") 
                 || errMsg.contains("403 Forbidden")
                 || errMsg.contains("own email address")
-                || errMsg.contains("You can only send testing emails");
+                || errMsg.contains("You can only send testing emails")
+                || errMsg.contains("Invalid `to` field")
+                || errMsg.contains("Invalid to field")
+                || errMsg.contains("testing email address")
+                || errMsg.contains("example.com");
 
         if (isResendFreeTierRestriction) {
             log.warn("[MAIL NOTICE] Resend 무료 플랜 정책 제한으로 외부 도메인 수신자({}) 메일 발송이 스킵되었습니다. (Subject: {}) - 시스템 및 인앱 알림은 정상 동작합니다.", toEmail, mailSubject);

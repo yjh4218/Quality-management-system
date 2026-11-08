@@ -81,6 +81,16 @@ public class ManufacturerService {
     }
 
     public org.springframework.data.domain.Page<Manufacturer> getAllPaged(String username, org.springframework.data.domain.Pageable pageable) {
+        if (username != null) {
+            com.example.ims.entity.User user = userRepository.findByUsername(username).orElse(null);
+            if (user != null) {
+                boolean isManufacturer = (user.getRole() != null && user.getRole().contains("ROLE_MANUFACTURER"))
+                        || "제조사".equals(user.getDepartment());
+                if (isManufacturer && user.getCompanyName() != null && !user.getCompanyName().isBlank()) {
+                    return manufacturerRepository.findByActiveTrueAndDeletedFalseAndName(user.getCompanyName(), pageable);
+                }
+            }
+        }
         return manufacturerRepository.findByActiveTrueAndIsDeletedFalse(pageable);
     }
 

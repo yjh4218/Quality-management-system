@@ -72,9 +72,28 @@ public class ManufacturerAuditController {
         return ResponseEntity.ok("/uploads/" + fileName);
     }
 
+    private boolean isUserForbiddenForAudit(com.example.ims.entity.User user, Long auditId) {
+        if (user == null) return false;
+        boolean isMfr = (user.getRole() != null && user.getRole().contains("ROLE_MANUFACTURER"))
+                || "제조사".equals(user.getDepartment());
+        if (!isMfr) return false;
+
+        ManufacturerAudit audit = auditService.getAuditById(auditId).orElse(null);
+        if (audit == null) return true; // not found treated as inaccessible or not found
+
+        String callerMfr = user.getManufacturer() != null ? user.getManufacturer().getName() : user.getCompanyName();
+        String auditMfr = audit.getManufacturer() != null ? audit.getManufacturer().getName() : null;
+
+        return callerMfr == null || auditMfr == null || !callerMfr.trim().equalsIgnoreCase(auditMfr.trim());
+    }
+
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM') or @perm.can('manufacturerAudits', 'EDIT')")
     public ResponseEntity<ManufacturerAudit> updateAudit(@PathVariable Long id, @jakarta.validation.Valid @RequestBody ManufacturerAudit audit, Authentication authentication) {
+        com.example.ims.entity.User user = getUser(authentication);
+        if (user != null && ((user.getRole() != null && user.getRole().contains("ROLE_MANUFACTURER")) || "제조사".equals(user.getDepartment()))) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+        }
         if (authentication != null) {
             audit.setModifierInfo(authentication.getName());
         }
@@ -84,46 +103,41 @@ public class ManufacturerAuditController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM') or @perm.can('manufacturerAudits', 'DELETE')")
-    public ResponseEntity<Void> deleteAudit(@PathVariable Long id) {
+    public ResponseEntity<Void> deleteAudit(@PathVariable Long id, Authentication authentication) {
+        com.example.ims.entity.User user = getUser(authentication);
+        if (user != null && ((user.getRole() != null && user.getRole().contains("ROLE_MANUFACTURER")) || "제조사".equals(user.getDepartment()))) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+        }
         auditService.deleteAudit(id);
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{id}/history")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM') or @perm.can('manufacturerAudits', 'VIEW')")
-    public ResponseEntity<?> getAuditHistory(@PathVariable Long id) {
+    public ResponseEntity<?> getAuditHistory(@PathVariable Long id, Authentication authentication) {
+        com.example.ims.entity.User user = getUser(authentication);
+        if (isUserForbiddenForAudit(user, id)) {
+            log.warn("[SECURITY] Manufacturer user '{}' unauthorized audit history access attempt for Audit ID: {}",
+                    user != null ? user.getUsername() : "unknown", id);
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+        }
         return ResponseEntity.ok(auditService.getAuditHistory(id));
     }
-
-    /**
-     * [고도화 12] Audit 결과를 PDF로 내보냅니다.
-     */
-    /*
-    @GetMapping("/{id}/export/pdf")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM') or @perm.can('manufacturerAudits', 'VIEW')")
-    public ResponseEntity<?> exportPdf(@PathVariable Long id) {
-        try {
-            log.info("[EXPORT] Generating Audit PDF for ID: {}", id);
-            byte[] pdf = auditService.generateAuditPdf(id);
-            return ResponseEntity.ok()
-                    .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=Audit_Report_" + id + ".pdf")
-                    .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
-                    .body(pdf);
-        } catch (Exception e) {
-            log.error("[EXPORT] PDF Export failed for audit {}: {}", id, e.getMessage(), e);
-            return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(java.util.Map.of("message", "PDF 생성 중 오류가 발생했습니다: " + e.getMessage()));
-        }
-    }
-    */
 
     /**
      * [고도화 12] Audit 결과를 Excel로 내보냅니다.
      */
     @GetMapping("/{id}/export/excel")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM') or @perm.can('manufacturerAudits', 'VIEW')")
-    public ResponseEntity<?> exportExcel(@PathVariable Long id) {
+    public ResponseEntity<?> exportExcel(@PathVariable Long id, Authentication authentication) {
         try {
+            com.example.ims.entity.User user = getUser(authentication);
+            if (isUserForbiddenForAudit(user, id)) {
+                log.warn("[SECURITY] Manufacturer user '{}' unauthorized audit excel export attempt for Audit ID: {}",
+                        user != null ? user.getUsername() : "unknown", id);
+                return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+            }
+
             log.info("[EXPORT] Generating Audit Excel for ID: {}", id);
             byte[] excel = auditService.generateAuditExcel(id);
             return ResponseEntity.ok()
@@ -147,6 +161,12 @@ public class ManufacturerAuditController {
             @RequestParam(required = false) String grade,
             Authentication authentication) {
         try {
+            com.example.ims.entity.User user = getUser(authentication);
+            if (user != null && ((user.getRole() != null && user.getRole().contains("ROLE_MANUFACTURER")) || "제조사".equals(user.getDepartment()))) {
+                String mfrName = user.getManufacturer() != null ? user.getManufacturer().getName() : user.getCompanyName();
+                manufacturerName = mfrName;
+            }
+
             String username = authentication != null ? authentication.getName() : "anonymous";
             log.info("[EXPORT] Generating Bulk Audit Excel for user: {}", username);
             byte[] excel = auditService.exportAuditsExcel(startDate, endDate, manufacturerName, manufacturerCode, grade, username);

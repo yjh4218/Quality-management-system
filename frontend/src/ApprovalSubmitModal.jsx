@@ -396,17 +396,19 @@ const ApprovalSubmitModal = ({
 
     return (
         <>
-            <div style={{
-                position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(3px)',
-                zIndex: 10050, display: 'flex', justifyContent: 'center', alignItems: 'center'
-            }}>
-                <div style={{
-                    backgroundColor: '#f8fafc', borderRadius: '12px',
-                    width: '96vw', height: '94vh', maxWidth: '1440px', maxHeight: '96vh',
-                    display: 'flex', flexDirection: 'column',
-                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflow: 'hidden'
-                }}>
+            <div 
+                className="drawer-overlay"
+                style={{ zIndex: 10050 }}
+            >
+                <div 
+                    className="drawer"
+                    style={{
+                        backgroundColor: '#f8fafc', borderRadius: '12px',
+                        width: '100%', height: '100%', maxWidth: 'none', maxHeight: '100%',
+                        display: 'flex', flexDirection: 'column',
+                        boxShadow: '0 25px 70px rgba(0, 0, 0, 0.35)', overflow: 'hidden',
+                        border: '1px solid #e2e8f0'
+                    }}>
                     {/* 1. 상단 윈도우 헤더 툴바 (라이트 톤 통일) */}
                     <div style={{
                         padding: '14px 24px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0',

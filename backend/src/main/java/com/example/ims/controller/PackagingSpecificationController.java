@@ -531,6 +531,12 @@ public class PackagingSpecificationController {
                 if (viewConfig != null && !viewConfig.isBlank()) {
                     spec.setOutboxViewConfig(viewConfig);
                 }
+            } else if ("pallet_wrapped".equals(mode) || "pallet-wrapped".equals(mode)) {
+                oldImagePath = spec.getPalletWrappedLayoutImage();
+                spec.setPalletWrappedLayoutImage(fileUrl);
+                if (viewConfig != null && !viewConfig.isBlank()) {
+                    spec.setPalletWrappedViewConfig(viewConfig);
+                }
             } else { // pallet or pallet-cross or pallet-normal
                 oldImagePath = spec.getPalletLayoutImage();
                 spec.setPalletLayoutImage(fileUrl);
@@ -563,6 +569,55 @@ public class PackagingSpecificationController {
         } catch (Exception e) {
             log.error("Failed to save 3D snapshot", e);
             return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    /**
+     * Upload label attachment image or channel sticker image for packaging specification.
+     * labelType: "inbox" | "zipperBag" | "outbox" | "pallet" | "channelSticker"
+     */
+    @PostMapping("/{specId}/label-image")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MENU_PRODUCTS_EDIT') or hasAuthority('MENU_PACKAGING_EDIT')")
+    public ResponseEntity<java.util.Map<String, String>> uploadLabelImage(
+            @PathVariable Long specId,
+            @RequestParam("labelType") String labelType,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", "파일이 전달되지 않았습니다."));
+        }
+
+        try {
+            PackagingSpecification spec = specRepository.findById(specId)
+                    .orElseThrow(() -> new RuntimeException("Spec not found"));
+
+            String prefix = "pkg_lbl_" + labelType;
+            String storedFileName = fileStorageService.storeFile(file, prefix);
+            String fileUrl = "/uploads/" + storedFileName;
+
+            if ("inbox".equalsIgnoreCase(labelType)) {
+                spec.setInboxLabelImage(fileUrl);
+            } else if ("zipperBag".equalsIgnoreCase(labelType)) {
+                spec.setZipperBagLabelImage(fileUrl);
+            } else if ("outbox".equalsIgnoreCase(labelType)) {
+                spec.setOutboxLabelImage(fileUrl);
+            } else if ("pallet".equalsIgnoreCase(labelType)) {
+                spec.setPalletLabelImage(fileUrl);
+            } else if ("channelSticker".equalsIgnoreCase(labelType)) {
+                spec.setChannelStickerImageUrl(fileUrl);
+            } else {
+                return ResponseEntity.badRequest().body(java.util.Map.of("error", "지원하지 않는 라벨 타입입니다: " + labelType));
+            }
+
+            specRepository.save(spec);
+            evictSpecCaches(spec);
+
+            java.util.Map<String, String> response = new java.util.HashMap<>();
+            response.put("fileUrl", fileUrl);
+            response.put("labelType", labelType);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Failed to upload label image", e);
+            return ResponseEntity.internalServerError().body(java.util.Map.of("error", e.getMessage()));
         }
     }
 }

@@ -1,6 +1,9 @@
 package com.example.ims.controller;
 
 import com.example.ims.entity.Manufacturer;
+import com.example.ims.entity.User;
+import com.example.ims.repository.UserRepository;
+import lombok.extern.slf4j.Slf4j;
 import com.example.ims.service.ManufacturerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -14,9 +17,11 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/manufacturers")
 @RequiredArgsConstructor
+@Slf4j
 public class ManufacturerController {
 
     private final ManufacturerService manufacturerService;
+    private final UserRepository userRepository;
 
     @GetMapping
     @PreAuthorize("isAuthenticated()")
@@ -73,7 +78,22 @@ public class ManufacturerController {
 
     @GetMapping("/{id}/scorecard")
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'MANUFACTURER')")
-    public ResponseEntity<com.example.ims.dto.ManufacturerScorecardDto> getScorecard(@PathVariable Long id) {
+    public ResponseEntity<com.example.ims.dto.ManufacturerScorecardDto> getScorecard(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        if (userDetails != null) {
+            User user = userRepository.findByUsername(userDetails.getUsername()).orElse(null);
+            if (user != null && user.getRole() != null && user.getRole().contains("MANUFACTURER")) {
+                Manufacturer mfr = manufacturerService.getById(id);
+                String userCompany = user.getCompanyName() != null ? user.getCompanyName().trim() : "";
+                String mfrName = mfr != null && mfr.getName() != null ? mfr.getName().trim() : "";
+                if (userCompany.isEmpty() || !userCompany.equalsIgnoreCase(mfrName)) {
+                    log.warn("[SECURITY] Manufacturer user '{}' (company: '{}') unauthorized scorecard access attempt for ID: {} ('{}')",
+                            user.getUsername(), userCompany, id, mfrName);
+                    return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+                }
+            }
+        }
         return ResponseEntity.ok(manufacturerService.getScorecard(id));
     }
 }

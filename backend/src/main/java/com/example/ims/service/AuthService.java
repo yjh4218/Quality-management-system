@@ -202,6 +202,59 @@ public class AuthService {
     }
 
     /**
+     * 관리자 전용: 잠긴 사용자 계정 잠금 해제 및 실패 횟수 초기화
+     */
+    @Transactional
+    public void unlockUser(Long userId, String modifier) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+        user.setLocked(false);
+        user.setFailedAttempts(0);
+        userRepository.save(user);
+
+        try {
+            auditLogService.logAction(
+                    modifier != null ? modifier : "ADMIN",
+                    "USER_UNLOCK",
+                    "계정 잠금 해제",
+                    String.format("사용자 [%s](ID:%d, %s) 계정 잠금 해제 및 실패 횟수 초기화", user.getName(), user.getId(), user.getUsername())
+            );
+        } catch (Exception e) {
+            log.warn("감사 로그 적재 실패 (계정 잠금 해제): {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 관리자 전용: 사용자 비밀번호 직접 재설정 및 잠금 해제
+     */
+    @Transactional
+    public void resetUserPasswordByAdmin(Long userId, String newPassword, String modifier) {
+        if (newPassword == null || newPassword.isBlank()) {
+            throw new IllegalArgumentException("새 비밀번호를 입력해 주세요.");
+        }
+        validatePasswordComplexity(newPassword);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setLocked(false);
+        user.setFailedAttempts(0);
+        user.setPasswordResetRequired(true);
+        userRepository.save(user);
+
+        try {
+            auditLogService.logAction(
+                    modifier != null ? modifier : "ADMIN",
+                    "USER_PASSWORD_RESET_ADMIN",
+                    "관리자 비밀번호 재설정",
+                    String.format("관리자에 의해 사용자 [%s](ID:%d, %s) 비밀번호 재설정 및 잠금 해제", user.getName(), user.getId(), user.getUsername())
+            );
+        } catch (Exception e) {
+            log.warn("감사 로그 적재 실패 (관리자 비밀번호 재설정): {}", e.getMessage());
+        }
+    }
+
+    /**
      * 비밀번호 복잡도 유효성 검사 (영문, 숫자, 특수기호 포함 8~64자리)
      */
     private void validatePasswordComplexity(String password) {

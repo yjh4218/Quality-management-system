@@ -141,7 +141,8 @@ public class ClaimController {
         if (standardizedRole != null && !standardizedRole.startsWith("ROLE_")) {
             standardizedRole = "ROLE_" + standardizedRole;
         }
-        return ResponseEntity.ok(claimService.getDashboardStats(standardizedRole, user.getCompanyName(), startDate, endDate, itemCode, productName, manufacturer));
+        String effectiveCompany = getEffectiveCompanyName(user);
+        return ResponseEntity.ok(claimService.getDashboardStats(standardizedRole, effectiveCompany, startDate, endDate, itemCode, productName, manufacturer));
     }
 
     @PostMapping
@@ -282,7 +283,8 @@ public class ClaimController {
                 roleStr = "ROLE_" + roleStr;
             }
     
-            byte[] excelFile = claimService.exportClaims(username, roleStr, user.getCompanyName(), startDate, endDate, itemCode, productName, lotNumber, country, qualityStatus, claimNumber, manufacturer, sharedWithManufacturer, isCriticalClaim, consumerReplyNeeded);
+            String effectiveCompany = getEffectiveCompanyName(user);
+            byte[] excelFile = claimService.exportClaims(username, roleStr, effectiveCompany, startDate, endDate, itemCode, productName, lotNumber, country, qualityStatus, claimNumber, manufacturer, sharedWithManufacturer, isCriticalClaim, consumerReplyNeeded);
             
             return ResponseEntity.ok()
                     .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=Claim_Export.xlsx")

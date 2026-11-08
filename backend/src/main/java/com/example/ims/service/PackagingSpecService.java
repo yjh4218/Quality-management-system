@@ -623,11 +623,22 @@ public class PackagingSpecService {
             existingToUpdate.setInboxViewConfig(spec.getInboxViewConfig());
             existingToUpdate.setOutboxViewConfig(spec.getOutboxViewConfig());
             existingToUpdate.setPalletViewConfig(spec.getPalletViewConfig());
+            existingToUpdate.setPalletWrappedViewConfig(spec.getPalletWrappedViewConfig());
 
             // 3D 도면 캡처/확정 이미지 필드 보존 및 반영
             if (spec.getInboxLayoutImage() != null) existingToUpdate.setInboxLayoutImage(spec.getInboxLayoutImage());
             if (spec.getOutboxLayoutImageFile() != null) existingToUpdate.setOutboxLayoutImageFile(spec.getOutboxLayoutImageFile());
             if (spec.getPalletLayoutImage() != null) existingToUpdate.setPalletLayoutImage(spec.getPalletLayoutImage());
+            if (spec.getPalletWrappedLayoutImage() != null) existingToUpdate.setPalletWrappedLayoutImage(spec.getPalletWrappedLayoutImage());
+
+            // 3D 현품표 & 유통채널 스티커 부착 선택 및 이미지 URL 연동
+            if (spec.getApplyChannelSticker() != null) existingToUpdate.setApplyChannelSticker(spec.getApplyChannelSticker());
+            if (spec.getApplyShippingLabel() != null) existingToUpdate.setApplyShippingLabel(spec.getApplyShippingLabel());
+            if (spec.getOutboxLabelImage() != null) existingToUpdate.setOutboxLabelImage(spec.getOutboxLabelImage());
+            if (spec.getChannelStickerImageUrl() != null) existingToUpdate.setChannelStickerImageUrl(spec.getChannelStickerImageUrl());
+            if (spec.getInboxLabelImage() != null) existingToUpdate.setInboxLabelImage(spec.getInboxLabelImage());
+            if (spec.getZipperBagLabelImage() != null) existingToUpdate.setZipperBagLabelImage(spec.getZipperBagLabelImage());
+            if (spec.getPalletLabelImage() != null) existingToUpdate.setPalletLabelImage(spec.getPalletLabelImage());
 
             targetSpec = existingToUpdate;
         } else {
@@ -849,11 +860,13 @@ public class PackagingSpecService {
             }
         }
 
-        // 5. 유통채널 규칙 동기화
+        // 5. 유통채널 규칙 동기화 (기존 저장된 사양서의 부착 여부 설정 보존)
         if (prod.getChannels() != null && !prod.getChannels().isEmpty()) {
-            spec.setApplyChannelSticker(shouldApplySticker(prod));
-            for (com.example.ims.entity.SalesChannel channel : prod.getChannels()) {
-                applyChannelRulesToSpec(spec, channel);
+            if (spec.getId() == null) {
+                spec.setApplyChannelSticker(shouldApplySticker(prod));
+                for (com.example.ims.entity.SalesChannel channel : prod.getChannels()) {
+                    applyChannelRulesToSpec(spec, channel);
+                }
             }
         }
     }

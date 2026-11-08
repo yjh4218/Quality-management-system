@@ -87,7 +87,7 @@ public class SmokeTest {
         assertEquals("마스터 포장법 기술", copiedSpec.getPackagingMethodText());
         
         // 검증: 채널 종속 필드들은 타겟 상품 기준으로 신규 재계산됨
-        assertFalse(copiedSpec.isApplyChannelSticker(), "타겟 상품에 채널이 없으므로 스티커 여부는 false로 재계산되어야 함");
+        assertFalse(copiedSpec.getApplyChannelSticker(), "타겟 상품에 채널이 없으므로 스티커 여부는 false로 재계산되어야 함");
         assertNotEquals(PaletteType.WOODEN_FUMIGATED, copiedSpec.getPalletType(), "팔레트 종류는 타겟 기준으로 재계산되어야 함");
     }
 

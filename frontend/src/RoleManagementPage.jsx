@@ -457,6 +457,9 @@ const RoleManagementPage = ({ user }) => {
                         paginationPageSize={50}
                         quickFilterText={quickFilterText}
                         animateRows={true}
+                        onRowDoubleClicked={(e) => {
+                            if (e?.data) handleOpenModal(e.data);
+                        }}
                     />
                 </div>
             </div>

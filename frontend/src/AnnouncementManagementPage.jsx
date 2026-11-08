@@ -1059,6 +1059,9 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
                                 pagination={true}
                                 paginationPageSize={50}
                                 animateRows={true}
+                                onRowDoubleClicked={(e) => {
+                                    if (e?.data) handleOpenDetail(e.data);
+                                }}
                             />
                         </div>
                     </div>
@@ -1102,6 +1105,9 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
                                 pagination={true}
                                 paginationPageSize={50}
                                 animateRows={true}
+                                onRowDoubleClicked={(e) => {
+                                    if (e?.data) handleOpenCategoryDrawer(e.data);
+                                }}
                             />
                         </div>
                     </div>
@@ -1449,7 +1455,7 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
             {/* 상세 보기 팝업 모달 */}
             {isDetailModalOpen && selectedAnnouncement && (
                 <div style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    position: 'fixed', top: 'var(--qms-tab-height, 44px)', left: 'var(--sidebar-width, 240px)', right: 0, bottom: 0,
                     backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100
                 }}>
                     <div style={{
@@ -1530,7 +1536,7 @@ const AnnouncementManagementPage = ({ user, onNavigate, navigationData }) => {
             {/* 이메일 발송 미리보기 팝업 모달 */}
             {isEmailPreviewOpen && previewAnnouncement && (
                 <div style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    position: 'fixed', top: 'var(--qms-tab-height, 44px)', left: 'var(--sidebar-width, 240px)', right: 0, bottom: 0,
                     backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100,
                     padding: '20px'

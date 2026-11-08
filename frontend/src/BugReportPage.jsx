@@ -407,6 +407,12 @@ ${selectedReport.serverError || '없음'}
                             }
                             handleOpenDetail(e.data);
                         }}
+                        onRowDoubleClicked={(e) => {
+                            if (e.event?.target?.closest('.ag-selection-checkbox') || e.event?.target?.type === 'checkbox') {
+                                return;
+                            }
+                            if (e?.data) handleOpenDetail(e.data);
+                        }}
                         getRowStyle={getRowStyle}
                     />
                 </div>

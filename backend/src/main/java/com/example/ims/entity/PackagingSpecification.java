@@ -84,6 +84,7 @@ public class PackagingSpecification {
     private String inboxLayoutImage;            // 인박스 입수형태 이미지 경로
     private String outboxLayoutImageFile;       // 아웃박스 입수형태 이미지 경로
     private String palletLayoutImage;           // 팔레트 적재형태 이미지 경로
+    private String palletWrappedLayoutImage;    // 팔레트 랩핑 및 현품표 부착 도면 이미지 경로
 
     // --- 중량 및 적재 높이 검증 (Sheet 1) ---
     private Double oneOutboxWeight;             // 1 아웃박스 중량 (Max 12kg)
@@ -99,7 +100,26 @@ public class PackagingSpecification {
     private PaletteType palletType;
     private String lotAndExpiryFormat;
     private String signatureJson;
-    private boolean applyChannelSticker;
+    @Column(name = "apply_channel_sticker")
+    @Builder.Default
+    private Boolean applyChannelSticker = false;
+    @Column(name = "apply_shipping_label")
+    @Builder.Default
+    private Boolean applyShippingLabel = true;
+
+    public Boolean getApplyChannelSticker() {
+        return applyChannelSticker != null ? applyChannelSticker : false;
+    }
+    public void setApplyChannelSticker(Boolean applyChannelSticker) {
+        this.applyChannelSticker = applyChannelSticker != null ? applyChannelSticker : false;
+    }
+
+    public Boolean getApplyShippingLabel() {
+        return applyShippingLabel != null ? applyShippingLabel : true;
+    }
+    public void setApplyShippingLabel(Boolean applyShippingLabel) {
+        this.applyShippingLabel = applyShippingLabel != null ? applyShippingLabel : true;
+    }
     private String packagingMethodImage;
     private String inboxSpec;
     private String zipperBagSpec;
@@ -164,10 +184,18 @@ public class PackagingSpecification {
     private Integer outboxPackingRows;              // 아웃박스 입수 세로 행 수
     private Integer outboxPackingLayers;            // 아웃박스 입수 높이 단 수
 
-    // --- 3D 시뮬레이션 카메라 뷰/각도 설정 JSON (V102) ---
+    // --- 3D 시뮬레이션 카메라 뷰/각도 설정 JSON (V102, V152) ---
     private String inboxViewConfig;                 // 인박스 3D 뷰어 카메라 각도/거리 설정
     private String outboxViewConfig;                // 아웃박스 3D 뷰어 카메라 각도/거리 설정
     private String palletViewConfig;                // 팔레트 3D 뷰어 카메라 각도/거리 설정
+    private String palletWrappedViewConfig;         // 팔레트 랩핑 3D 뷰어 카메라 각도/거리 설정
+
+    // --- 현품표 및 채널 스티커 부착 이미지 경로 (V150) ---
+    private String channelStickerImageUrl;          // 채널 스티커 규정 이미지 URL
+    private String inboxLabelImage;                 // 인박스 현품표 실물 부착 이미지 URL
+    private String zipperBagLabelImage;             // 지퍼백 현품표 실물 부착 이미지 URL
+    private String outboxLabelImage;                // 아웃박스 현품표 실물 부착 이미지 URL
+    private String palletLabelImage;                // 팔레트 현품표 실물 부착 이미지 URL
 
     private Integer version;
     private String revisionNotes;

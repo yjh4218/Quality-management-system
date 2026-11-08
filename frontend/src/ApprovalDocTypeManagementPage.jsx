@@ -114,6 +114,21 @@ const ApprovalDocTypeManagementPage = ({
         });
     };
 
+    const handleOpenDocType = (item) => {
+        if (!item) return;
+        setEditingDocType(item);
+        const matchedPreset = SCREEN_PRESETS.find(pr => pr.value === item.sourceScreen || pr.table === item.sourceTable);
+        setSelectedScreenPreset(matchedPreset ? matchedPreset.value : (item.sourceScreen ? 'CUSTOM' : ''));
+        setForm({
+            code: item.code,
+            name: item.name,
+            sourceScreen: item.sourceScreen || '',
+            sourceTable: item.sourceTable,
+            isActive: item.isActive
+        });
+        setModalOpen(true);
+    };
+
     const columnDefs = useMemo(() => [
         { headerName: 'ID', field: 'id', width: 70, cellStyle: { textAlign: 'center' } },
         { headerName: '문서유형 코드', field: 'code', width: 140, cellStyle: { fontWeight: 'bold' } },
@@ -242,15 +257,18 @@ const ApprovalDocTypeManagementPage = ({
                     rowData={docTypes}
                     columnDefs={columnDefs}
                     animateRows={true}
-                    headerHeight={40}
-                    rowHeight={46}
+                    headerHeight={48}
+                    rowHeight={54}
+                    onRowDoubleClicked={(e) => {
+                        if (e?.data) handleOpenDocType(e.data);
+                    }}
                     defaultColDef={{ resizable: true, sortable: true, filter: true }}
                 />
             </div>
 
             {/* 등록/수정 모달 */}
             {modalOpen && (
-                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100 }}>
+                <div className="modal-overlay">
                     <div style={{ backgroundColor: '#fff', borderRadius: '10px', width: '480px', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
                             <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0, color: '#0f172a' }}>

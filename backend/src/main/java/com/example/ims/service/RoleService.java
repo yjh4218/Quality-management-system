@@ -88,7 +88,19 @@ public class RoleService {
         
         role.setDisplayName(roleDetails.getDisplayName());
         role.setDescription(roleDetails.getDescription());
-        role.setSystemRole(roleDetails.isSystemRole());
+        // [SEC-09] 시스템 역할 플래그 불변성 보장 (기존 시스템 역할을 일반 역할로 강등 방지)
+        if (role.isSystemRole()) {
+            role.setSystemRole(true);
+        } else {
+            role.setSystemRole(roleDetails.isSystemRole());
+        }
+
+        // [SEC-09] ROLE_ADMIN의 경우 핵심 관리 권한 누락 방어
+        if ("ROLE_ADMIN".equalsIgnoreCase(role.getRoleKey())) {
+            if (roleDetails.getAllowedMenus() == null || roleDetails.getAllowedMenus().trim().isEmpty() || "{}".equals(roleDetails.getAllowedMenus().trim())) {
+                throw new IllegalArgumentException("시스템 최고 관리자(ROLE_ADMIN)의 메뉴 권한은 비워둘 수 없습니다.");
+            }
+        }
         role.setAllowedMenus(roleDetails.getAllowedMenus());
         role.setAllowedPermissions(roleDetails.getAllowedPermissions());
         

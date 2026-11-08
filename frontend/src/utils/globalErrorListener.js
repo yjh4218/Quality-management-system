@@ -1,14 +1,29 @@
 /**
  * QMS Global JavaScript Error & Unhandled Promise Rejection Listener
  * - Catches uncaught runtime errors before/outside React lifecycle
+ * - Records lightweight user action breadcrumbs for debugging
  * - Filters noisy browser extensions
- * - Automatically dispatches bug reports to /api/bug-reports with debouncing
+ * - Automatically dispatches bug reports to /api/bug-reports with 30s debouncing
  */
 
 import { submitBugReport, getFormattedReporterInfo } from '../api';
 import { toast } from 'react-toastify';
 
 const reportedErrors = new Set();
+const breadcrumbs = [];
+const MAX_BREADCRUMBS = 10;
+
+export const addBreadcrumb = (action, category = 'UI') => {
+    try {
+        const time = new Date().toTimeString().split(' ')[0];
+        breadcrumbs.push(`[${time}] [${category}] ${action}`);
+        if (breadcrumbs.length > MAX_BREADCRUMBS) {
+            breadcrumbs.shift();
+        }
+    } catch (e) {
+        // ignore
+    }
+};
 
 const isExtensionOrNoise = (errorMsg = '', stackTrace = '') => {
     const text = `${errorMsg} ${stackTrace}`.toLowerCase();
@@ -33,17 +48,19 @@ export const reportGlobalError = async (errorMsg, stackTrace, source = 'Global J
         return;
     }
     reportedErrors.add(dedupeKey);
-    setTimeout(() => reportedErrors.delete(dedupeKey), 5000);
+    setTimeout(() => reportedErrors.delete(dedupeKey), 30000); // 30초 디바운싱
 
     const reporterInfo = getFormattedReporterInfo();
     const isNetwork = errorMsg.includes('Load failed') || errorMsg.includes('Failed to fetch') || errorMsg.includes('Network Error');
+    const breadcrumbText = breadcrumbs.length > 0 ? `\n\n[최근 사용자 인터랙션 (Breadcrumbs)]\n${breadcrumbs.join('\n')}` : '';
+
     const payload = {
         screenName: window.__QMS_ACTIVE_PAGE__ || (typeof window !== 'undefined' ? window.location.pathname : '전역 감지'),
         url: typeof window !== 'undefined' ? window.location.href : '',
         severity: isNetwork ? 'HIGH' : 'CRITICAL',
         errorCategory: category,
         description: `[자동 감지] ${source}: ${errorMsg}`,
-        steps: `시스템 전역에서 비정상적인 예외가 감지되어 버그 리포트가 자동 접수되었습니다.\n\n[오류 구분]: ${category}\n[발생 원천]: ${source}\n[에러 메시지]\n${errorMsg}\n\n[Stack Trace]\n${stackTrace || 'N/A'}`,
+        steps: `시스템 전역에서 비정상적인 예외가 감지되어 버그 리포트가 자동 접수되었습니다.\n\n[오류 구분]: ${category}\n[발생 원천]: ${source}\n[에러 메시지]\n${errorMsg}\n\n[Stack Trace]\n${stackTrace || 'N/A'}${breadcrumbText}`,
         reporterName: reporterInfo.name,
         reporterUsername: reporterInfo.username
     };
@@ -73,6 +90,7 @@ export const initGlobalErrorListener = () => {
     }
     window.__QMS_ERROR_LISTENER_INITIALIZED__ = true;
 
+    // 1. Uncaught Exception 리스너
     window.addEventListener('error', (event) => {
         const errorMsg = event.message || (event.error && event.error.message) || 'Unknown global script error';
         const stackTrace = event.error?.stack || `${event.filename}:${event.lineno}:${event.colno}`;
@@ -80,6 +98,7 @@ export const initGlobalErrorListener = () => {
         reportGlobalError(errorMsg, stackTrace, 'Uncaught Exception', isNetwork ? 'NETWORK' : 'RUNTIME');
     });
 
+    // 2. Unhandled Promise Rejection 리스너
     window.addEventListener('unhandledrejection', (event) => {
         const reason = event.reason;
         const errorMsg = reason instanceof Error ? reason.message : (typeof reason === 'string' ? reason : JSON.stringify(reason || ''));
@@ -88,7 +107,24 @@ export const initGlobalErrorListener = () => {
         reportGlobalError(errorMsg, stackTrace, 'Unhandled Rejection', isNetwork ? 'NETWORK' : 'PROMISE');
     });
 
-    console.info('🛡️ [QMS] Global error listener successfully initialized.');
+    // 3. 사용자 클릭 및 내비게이션 브레드크럼 자동 기록
+    document.addEventListener('click', (e) => {
+        try {
+            const target = e.target;
+            if (!target) return;
+            const btn = target.closest('button, a, [role="button"], input[type="submit"]');
+            if (btn) {
+                const label = (btn.innerText || btn.getAttribute('aria-label') || btn.title || btn.tagName).trim().slice(0, 40);
+                if (label) addBreadcrumb(`Click: "${label}"`, 'CLICK');
+            }
+        } catch (ignored) {}
+    }, { capture: true, passive: true });
+
+    window.addEventListener('popstate', () => {
+        addBreadcrumb(`Navigate: ${window.location.pathname}`, 'NAV');
+    });
+
+    console.info('🛡️ [QMS] Global error listener successfully initialized with breadcrumbs.');
 };
 
 // Auto initialize on module import

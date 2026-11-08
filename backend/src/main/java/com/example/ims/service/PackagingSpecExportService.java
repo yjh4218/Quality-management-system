@@ -96,7 +96,13 @@ public class PackagingSpecExportService {
                 if (topSpec.getOutboxLayoutImageFile() != null) urlsToFetch.add(topSpec.getOutboxLayoutImageFile());
                 if (topSpec.getOutboxLayoutImage() != null) urlsToFetch.add(topSpec.getOutboxLayoutImage());
                 if (topSpec.getPalletLayoutImage() != null) urlsToFetch.add(topSpec.getPalletLayoutImage());
+                if (topSpec.getPalletWrappedLayoutImage() != null) urlsToFetch.add(topSpec.getPalletWrappedLayoutImage());
                 if (topSpec.getMarkingLocationImage() != null) urlsToFetch.add(topSpec.getMarkingLocationImage());
+                if (topSpec.getChannelStickerImageUrl() != null) urlsToFetch.add(topSpec.getChannelStickerImageUrl());
+                if (topSpec.getInboxLabelImage() != null) urlsToFetch.add(topSpec.getInboxLabelImage());
+                if (topSpec.getZipperBagLabelImage() != null) urlsToFetch.add(topSpec.getZipperBagLabelImage());
+                if (topSpec.getOutboxLabelImage() != null) urlsToFetch.add(topSpec.getOutboxLabelImage());
+                if (topSpec.getPalletLabelImage() != null) urlsToFetch.add(topSpec.getPalletLabelImage());
             }
             if (product.getImagePaths() != null) urlsToFetch.addAll(product.getImagePaths());
             if (product.getImagePath() != null) urlsToFetch.add(product.getImagePath());
@@ -481,19 +487,23 @@ public class PackagingSpecExportService {
 
             addRow(sheet0, currentRow++, 48f, labelStyle, wrapDataStyle, "인박스 날짜양식", inboxDateFormatStr, "아웃박스 날짜양식", outboxDateFormatStr, "팔레트 날짜양식", palletDateFormatStr, "-", "-");
 
-            if (stickerNote != null && stickerNote.getFileUrl() != null) {
-                byte[] stickerBytes = getImageBytesFromFileOrUrl(stickerNote.getFileUrl());
+            String effectiveStickerUrl = (spec.getChannelStickerImageUrl() != null && !spec.getChannelStickerImageUrl().isBlank())
+                    ? spec.getChannelStickerImageUrl()
+                    : (stickerNote != null ? stickerNote.getFileUrl() : null);
+
+            if (effectiveStickerUrl != null && !effectiveStickerUrl.isBlank()) {
+                byte[] stickerBytes = getImageBytesFromFileOrUrl(effectiveStickerUrl);
                 if (stickerBytes != null && stickerBytes.length > 0) {
                     Row stRow = sheet0.createRow(currentRow);
                     stRow.setHeightInPoints(200);
                     createCell(stRow, 0, "채널스티커 규정사진", labelStyle);
-                    createCell(stRow, 1, stickerNote.getNoteContent() != null && !stickerNote.getNoteContent().isEmpty() ? stickerNote.getNoteContent() : "채널 스티커 부착 규정 사진", wrapDataStyle);
+                    createCell(stRow, 1, stickerNote != null && stickerNote.getNoteContent() != null && !stickerNote.getNoteContent().isEmpty() ? stickerNote.getNoteContent() : "채널 스티커 부착 규정 사진 (아웃박스 오른쪽 상단 부착)", wrapDataStyle);
                     for (int col = 2; col <= 7; col++) createCell(stRow, col, "", wrapDataStyle);
                     sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 1, 7));
 
                     try {
                         org.apache.poi.ss.usermodel.Drawing<?> sheet0Drawing = sheet0.getDrawingPatriarch() != null ? sheet0.getDrawingPatriarch() : sheet0.createDrawingPatriarch();
-                        int picIdx = workbook.addPicture(stickerBytes, Workbook.PICTURE_TYPE_JPEG);
+                        int picIdx = workbook.addPicture(stickerBytes, detectPictureType(stickerBytes));
                         org.apache.poi.ss.usermodel.ClientAnchor anchor = workbook.getCreationHelper().createClientAnchor();
                         anchor.setCol1(1); anchor.setRow1(currentRow);
                         anchor.setCol2(4); anchor.setRow2(currentRow + 1);
@@ -505,11 +515,11 @@ public class PackagingSpecExportService {
                         log.error("Failed to insert channel sticker image into Excel sheet0", ex);
                     }
                     currentRow++;
-                } else if (stickerNote.getFileType() != null && stickerNote.getFileType().equalsIgnoreCase("PDF")) {
+                } else if (effectiveStickerUrl.toLowerCase().endsWith(".pdf") || (stickerNote != null && stickerNote.getFileType() != null && stickerNote.getFileType().equalsIgnoreCase("PDF"))) {
                     Row stRow = sheet0.createRow(currentRow);
                     stRow.setHeightInPoints(30);
                     createCell(stRow, 0, "채널스티커 규정문서", labelStyle);
-                    createCell(stRow, 1, "📄 [PDF 첨부] " + (stickerNote.getNoteContent() != null ? stickerNote.getNoteContent() : "채널 스티커 부착 규정 문서 첨부됨"), wrapDataStyle);
+                    createCell(stRow, 1, "📄 [PDF 첨부] " + (stickerNote != null && stickerNote.getNoteContent() != null ? stickerNote.getNoteContent() : "채널 스티커 부착 규정 문서 첨부됨"), wrapDataStyle);
                     for (int col = 2; col <= 7; col++) createCell(stRow, col, "", wrapDataStyle);
                     sheet0.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(currentRow, currentRow, 1, 7));
                     currentRow++;
@@ -689,8 +699,36 @@ public class PackagingSpecExportService {
             createCell(inboxNoteRow, 1, "⚠️ 인박스 현품표에는 바코드를 부착/표기하지 않습니다. (규정 준수)", wrapDataStyle);
             for (int col = 2; col <= 3; col++) createCell(inboxNoteRow, col, "", wrapDataStyle);
             sheet2.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(6, 6, 1, 3));
+
+            int lastSheet2Row = 6;
+            String effectiveInboxImg = spec.getInboxLabelImage() != null ? spec.getInboxLabelImage() : spec.getZipperBagLabelImage();
+            if (effectiveInboxImg != null && !effectiveInboxImg.isBlank()) {
+                byte[] ibImgBytes = getImageBytesFromFileOrUrl(effectiveInboxImg);
+                if (ibImgBytes != null && ibImgBytes.length > 0) {
+                    lastSheet2Row++;
+                    Row ibPicRow = sheet2.createRow(lastSheet2Row);
+                    ibPicRow.setHeightInPoints(180);
+                    createCell(ibPicRow, 0, "현품표 실물 부착사진", labelStyle);
+                    createCell(ibPicRow, 1, "", dataStyle);
+                    for (int col = 2; col <= 3; col++) createCell(ibPicRow, col, "", dataStyle);
+                    sheet2.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(lastSheet2Row, lastSheet2Row, 1, 3));
+                    try {
+                        org.apache.poi.ss.usermodel.Drawing<?> ibDrawing = sheet2.createDrawingPatriarch();
+                        int picIdx = workbook.addPicture(ibImgBytes, detectPictureType(ibImgBytes));
+                        org.apache.poi.ss.usermodel.ClientAnchor anchor = workbook.getCreationHelper().createClientAnchor();
+                        anchor.setCol1(1); anchor.setRow1(lastSheet2Row);
+                        anchor.setCol2(4); anchor.setRow2(lastSheet2Row + 1);
+                        anchor.setDx1(10 * 10000); anchor.setDy1(5 * 10000);
+                        anchor.setDx2(-10 * 10000); anchor.setDy2(-5 * 10000);
+                        ibDrawing.createPicture(anchor, picIdx);
+                    } catch (Exception ex) {
+                        log.error("Failed to insert inbox label image into Excel sheet2", ex);
+                    }
+                }
+            }
+
             sheet2.setColumnWidth(0, 6500); sheet2.setColumnWidth(1, 11000); sheet2.setColumnWidth(2, 6500); sheet2.setColumnWidth(3, 11000);
-            setOuterBorders(sheet2, 0, 6, 0, 3);
+            setOuterBorders(sheet2, 0, lastSheet2Row, 0, 3);
             applyPrintSetup(sheet2);
 
             // --- Sheet 4: 아웃박스 현품표 ---
@@ -735,8 +773,57 @@ public class PackagingSpecExportService {
                 }
             }
 
+            int lastSheet3Row = 7;
+            if (spec.getOutboxLabelImage() != null && !spec.getOutboxLabelImage().isBlank()) {
+                byte[] obLblBytes = getImageBytesFromFileOrUrl(spec.getOutboxLabelImage());
+                if (obLblBytes != null && obLblBytes.length > 0) {
+                    lastSheet3Row++;
+                    Row obLblPicRow = sheet3.createRow(lastSheet3Row);
+                    obLblPicRow.setHeightInPoints(180);
+                    createCell(obLblPicRow, 0, "아웃박스 현품표 실물사진\n(왼쪽 상단 부착)", labelStyle);
+                    createCell(obLblPicRow, 1, "", dataStyle);
+                    for (int col = 2; col <= 3; col++) createCell(obLblPicRow, col, "", dataStyle);
+                    sheet3.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(lastSheet3Row, lastSheet3Row, 1, 3));
+                    try {
+                        int picIdx = workbook.addPicture(obLblBytes, detectPictureType(obLblBytes));
+                        org.apache.poi.ss.usermodel.ClientAnchor anchor = workbook.getCreationHelper().createClientAnchor();
+                        anchor.setCol1(1); anchor.setRow1(lastSheet3Row);
+                        anchor.setCol2(4); anchor.setRow2(lastSheet3Row + 1);
+                        anchor.setDx1(10 * 10000); anchor.setDy1(5 * 10000);
+                        anchor.setDx2(-10 * 10000); anchor.setDy2(-5 * 10000);
+                        obDrawing.createPicture(anchor, picIdx);
+                    } catch (Exception ex) {
+                        log.error("Failed to insert outbox label image into Excel sheet3", ex);
+                    }
+                }
+            }
+
+            if (effectiveStickerUrl != null && !effectiveStickerUrl.isBlank()) {
+                byte[] stBytes = getImageBytesFromFileOrUrl(effectiveStickerUrl);
+                if (stBytes != null && stBytes.length > 0) {
+                    lastSheet3Row++;
+                    Row obStkPicRow = sheet3.createRow(lastSheet3Row);
+                    obStkPicRow.setHeightInPoints(180);
+                    createCell(obStkPicRow, 0, "유통채널 스티커 실물사진\n(오른쪽 상단 부착)", labelStyle);
+                    createCell(obStkPicRow, 1, "", dataStyle);
+                    for (int col = 2; col <= 3; col++) createCell(obStkPicRow, col, "", dataStyle);
+                    sheet3.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(lastSheet3Row, lastSheet3Row, 1, 3));
+                    try {
+                        int picIdx = workbook.addPicture(stBytes, detectPictureType(stBytes));
+                        org.apache.poi.ss.usermodel.ClientAnchor anchor = workbook.getCreationHelper().createClientAnchor();
+                        anchor.setCol1(1); anchor.setRow1(lastSheet3Row);
+                        anchor.setCol2(4); anchor.setRow2(lastSheet3Row + 1);
+                        anchor.setDx1(10 * 10000); anchor.setDy1(5 * 10000);
+                        anchor.setDx2(-10 * 10000); anchor.setDy2(-5 * 10000);
+                        obDrawing.createPicture(anchor, picIdx);
+                    } catch (Exception ex) {
+                        log.error("Failed to insert channel sticker into Excel sheet3", ex);
+                    }
+                }
+            }
+
             sheet3.setColumnWidth(0, 6500); sheet3.setColumnWidth(1, 11000); sheet3.setColumnWidth(2, 6500); sheet3.setColumnWidth(3, 11000);
-            setOuterBorders(sheet3, 0, 7, 0, 3);
+            setOuterBorders(sheet3, 0, lastSheet3Row, 0, 3);
             applyPrintSetup(sheet3);
 
             // --- Sheet 5: 팔레트 현품표 ---
@@ -805,8 +892,33 @@ public class PackagingSpecExportService {
                 }
             }
 
+            int lastSheet4Row = 7;
+            if (spec.getPalletLabelImage() != null && !spec.getPalletLabelImage().isBlank()) {
+                byte[] pltImgBytes = getImageBytesFromFileOrUrl(spec.getPalletLabelImage());
+                if (pltImgBytes != null && pltImgBytes.length > 0) {
+                    lastSheet4Row++;
+                    Row pltPicRow = sheet4.createRow(lastSheet4Row);
+                    pltPicRow.setHeightInPoints(180);
+                    createCell(pltPicRow, 0, "팔레트 현품표 실물사진\n(전면 랩핑 부착)", labelStyle);
+                    createCell(pltPicRow, 1, "", dataStyle);
+                    for (int col = 2; col <= 3; col++) createCell(pltPicRow, col, "", dataStyle);
+                    sheet4.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(lastSheet4Row, lastSheet4Row, 1, 3));
+                    try {
+                        int picIdx = workbook.addPicture(pltImgBytes, detectPictureType(pltImgBytes));
+                        org.apache.poi.ss.usermodel.ClientAnchor anchor = workbook.getCreationHelper().createClientAnchor();
+                        anchor.setCol1(1); anchor.setRow1(lastSheet4Row);
+                        anchor.setCol2(4); anchor.setRow2(lastSheet4Row + 1);
+                        anchor.setDx1(10 * 10000); anchor.setDy1(5 * 10000);
+                        anchor.setDx2(-10 * 10000); anchor.setDy2(-5 * 10000);
+                        pltDrawing.createPicture(anchor, picIdx);
+                    } catch (Exception ex) {
+                        log.error("Failed to insert pallet label image into Excel sheet4", ex);
+                    }
+                }
+            }
+
             sheet4.setColumnWidth(0, 6500); sheet4.setColumnWidth(1, 11000); sheet4.setColumnWidth(2, 6500); sheet4.setColumnWidth(3, 11000);
-            setOuterBorders(sheet4, 0, 7, 0, 3);
+            setOuterBorders(sheet4, 0, lastSheet4Row, 0, 3);
             applyPrintSetup(sheet4);
 
             workbook.write(out);
@@ -979,6 +1091,7 @@ public class PackagingSpecExportService {
             if (spec.getOutboxLayoutImageFile() != null) urlsToFetch.add(spec.getOutboxLayoutImageFile());
             if (spec.getOutboxLayoutImage() != null) urlsToFetch.add(spec.getOutboxLayoutImage());
             if (spec.getPalletLayoutImage() != null) urlsToFetch.add(spec.getPalletLayoutImage());
+            if (spec.getPalletWrappedLayoutImage() != null) urlsToFetch.add(spec.getPalletWrappedLayoutImage());
             if (spec.getMarkingLocationImage() != null) urlsToFetch.add(spec.getMarkingLocationImage());
             if (product.getImagePaths() != null) urlsToFetch.addAll(product.getImagePaths());
             if (product.getImagePath() != null) urlsToFetch.add(product.getImagePath());

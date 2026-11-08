@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import 'ag-grid-community/styles/ag-grid.css';
@@ -754,6 +755,9 @@ export default function OfficialRecordPolicyPage() {
                             pagination={true}
                             paginationPageSize={20}
                             onGridReady={(params) => setGridApi(params.api)}
+                            onRowDoubleClicked={(e) => {
+                                if (e?.data) setSelectedSig(e.data);
+                            }}
                         />
                     </div>
                 )}
@@ -769,6 +773,9 @@ export default function OfficialRecordPolicyPage() {
                             pagination={true}
                             paginationPageSize={20}
                             onGridReady={(params) => setGridApi(params.api)}
+                            onRowDoubleClicked={(e) => {
+                                if (e?.data) setSelectedPolicy(e.data);
+                            }}
                         />
                     </div>
                 )}
@@ -784,6 +791,9 @@ export default function OfficialRecordPolicyPage() {
                             pagination={true}
                             paginationPageSize={20}
                             onGridReady={(params) => setGridApi(params.api)}
+                            onRowDoubleClicked={(e) => {
+                                if (e?.data) setSelectedPart11(e.data);
+                            }}
                         />
                     </div>
                 )}
@@ -889,8 +899,8 @@ function CreateSignatureModal({ onClose, onSuccess }) {
     };
 
     return (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200 }}>
-            <div style={{ width: '96vw', maxWidth: '800px', backgroundColor: '#ffffff', borderRadius: '12px', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
+        <div className="drawer-overlay">
+                    <div className="drawer">
                 {/* 헤더 */}
                 <div style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1044,8 +1054,8 @@ function SignatureDetailModal({ signature, onClose, onRevoked }) {
     };
 
     return (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200 }}>
-            <div style={{ width: '96vw', maxWidth: '850px', maxHeight: '90vh', backgroundColor: '#ffffff', borderRadius: '12px', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)', overflow: 'hidden' }}>
+        <div className="drawer-overlay">
+                    <div className="drawer">
                 {/* 헤더 */}
                 <div style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1193,8 +1203,8 @@ function PolicyModal({ policy, onClose, onSaved }) {
     };
 
     return (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200 }}>
-            <div style={{ width: '96vw', maxWidth: '850px', maxHeight: '90vh', backgroundColor: '#ffffff', borderRadius: '12px', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
+        <div className="drawer-overlay">
+                    <div className="drawer">
                 <div style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{ fontSize: '20px' }}>📜</span>
@@ -1382,8 +1392,8 @@ function Part11Modal({ item, onClose, onSaved }) {
     };
 
     return (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200 }}>
-            <div style={{ width: '96vw', maxWidth: '850px', maxHeight: '90vh', backgroundColor: '#ffffff', borderRadius: '12px', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
+        <div className="drawer-overlay">
+                    <div className="drawer">
                 <div style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{ fontSize: '20px' }}>🛡️</span>

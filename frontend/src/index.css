@@ -54,7 +54,17 @@ html {
 }
 
 /* Compact 모드: 저해상도 모니터 자동 감지 (≤1440px) 또는 [data-density="compact"] 활성화 시 */
-[data-density="compact"],
+[data-density="compact"] {
+  --qms-input-height: 32px;
+  --qms-input-padding: 4px 8px;
+  --qms-input-font-size: 12px;
+  --qms-btn-padding: 5px 12px;
+  --qms-card-padding: 10px 14px;
+  --qms-tab-height: 36px;
+  --qms-tab-item-height: 28px;
+  --qms-tab-font-size: 11.5px;
+}
+
 @media (max-width: 1440px) {
   :root {
     --qms-input-height: 32px;
@@ -675,15 +685,25 @@ body:has(.modal-overlay) {
   overflow: hidden;
 }
 
-/* Drawer (Workspace Modal - Preserves Left Sidebar & Maximizes Main Workspace with Blur) */
+/* Hide floating help button when drawer or modal is open to prevent covering footer action buttons */
+body:has(.drawer-overlay) .floating-help-btn,
+body:has(.modal-overlay) .floating-help-btn {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+  transform: scale(0.8);
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+}
+
+/* Drawer (Workspace Modal - Preserves Left Sidebar & Top Tab Bar with Blur) */
 .drawer-overlay {
-  position: fixed;
-  top: 0;
-  left: var(--sidebar-width, 240px);
-  right: 0;
-  bottom: 0;
-  width: auto;
-  height: auto;
+  position: fixed !important;
+  top: var(--qms-tab-height, 44px) !important;
+  left: var(--sidebar-width, 240px) !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: auto !important;
+  height: auto !important;
   background-color: rgba(15, 23, 42, 0.45);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
@@ -691,14 +711,20 @@ body:has(.modal-overlay) {
   display: flex;
   justify-content: center;
   align-items: stretch;
-  padding: 16px 24px;
+  padding: 12px 24px 20px 24px;
   box-sizing: border-box;
+}
+
+body:not(:has(.tab-header-container)) .drawer-overlay {
+  top: 0 !important;
+  padding: 16px 24px;
 }
 
 @media (max-width: 1024px) {
   .drawer-overlay {
-    left: 0;
-    width: auto;
+    top: 0 !important;
+    left: 0 !important;
+    width: auto !important;
     padding: 8px;
   }
 }
@@ -734,7 +760,9 @@ body:has(.modal-overlay) {
 /* Modern Layout Helpers Shared by Modal and Drawer */
 .drawer-header,
 .modal-header {
-  padding: 8px 20px;
+  padding: 12px 24px;
+  min-height: 54px;
+  box-sizing: border-box;
   border-bottom: 1px solid #e5e7eb;
   background-color: #ffffff;
   display: flex;
@@ -845,7 +873,10 @@ body:has(.modal-overlay) {
 }
 
 [data-density="compact"] .drawer-body,
-[data-density="compact"] .modal-body,
+[data-density="compact"] .modal-body {
+  padding: 14px 20px;
+}
+
 @media (max-width: 1440px) {
   .drawer-body,
   .modal-body {
@@ -876,7 +907,10 @@ body:has(.modal-overlay) {
 }
 
 [data-density="compact"] .drawer-footer,
-[data-density="compact"] .modal-footer,
+[data-density="compact"] .modal-footer {
+  padding: 8px 18px;
+}
+
 @media (max-width: 1440px) {
   .drawer-footer,
   .modal-footer {
@@ -908,22 +942,38 @@ body:has(.modal-overlay) {
   margin: 0 auto;
 }
 
-/* Modal Styles - Centered (Used for Search Popups) */
+/* Modal Styles - Centered (Preserves Left LNB Sidebar & Top Tab Bar with Backdrop Blur) */
 .modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
+  position: fixed !important;
+  top: var(--qms-tab-height, 44px) !important;
+  left: var(--sidebar-width, 240px) !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  background-color: rgba(15, 23, 42, 0.45);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 3000;
-  /* Higher than Drawer (2000) */
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  padding: 12px 24px 20px 24px;
+  box-sizing: border-box;
+}
+
+body:not(:has(.tab-header-container)) .modal-overlay {
+  top: 0 !important;
+  padding: 16px 24px;
+}
+
+@media (max-width: 1024px) {
+  .modal-overlay {
+    top: 0 !important;
+    left: 0 !important;
+    width: auto !important;
+    padding: 8px;
+  }
 }
 
 .modal-content {
@@ -996,14 +1046,21 @@ body:has(.modal-overlay) {
 
 /* Compact 모드: 저해상도 모니터 자동 감지 (≤1440px) 또는 [data-density="compact"] 시 전 테이블 일괄 축소 */
 [data-density="compact"] .ag-theme-alpine,
-[data-density="compact"] .ag-theme-quartz,
+[data-density="compact"] .ag-theme-quartz {
+  --ag-row-height: 38px !important;
+  --ag-header-height: 38px !important;
+  --ag-cell-horizontal-padding: 8px !important;
+  --ag-font-size: 12px !important;
+  --ag-grid-size: 4px !important;
+}
+
 @media (max-width: 1440px) {
   .ag-theme-alpine,
   .ag-theme-quartz {
-    --ag-row-height: 38px !important;  /* 저해상도/컴팩트: 38px 고밀도 행 */
+    --ag-row-height: 38px !important;
     --ag-header-height: 38px !important;
     --ag-cell-horizontal-padding: 8px !important;
-    --ag-font-size: 12px !important;   /* 가독성 하한선 12px 준수 */
+    --ag-font-size: 12px !important;
     --ag-grid-size: 4px !important;
   }
 }
@@ -1028,6 +1085,14 @@ body:has(.modal-overlay) {
 }
 .ag-theme-quartz .ag-row:last-child {
   border-bottom: none !important;
+}
+
+/* AG Grid 행 호버 시 더블클릭 인터랙티브 피드백 커서 표준 */
+.ag-theme-alpine .ag-row:hover,
+.ag-theme-quartz .ag-row:hover,
+.ag-theme-alpine .ag-row-hover,
+.ag-theme-quartz .ag-row-hover {
+  cursor: pointer;
 }
 
 /* Center align all texts in AG Grid */
@@ -1352,7 +1417,10 @@ body {
   transition: height 0.2s ease;
 }
 
-[data-density="compact"] .tab-header-container,
+[data-density="compact"] .tab-header-container {
+  height: 36px;
+}
+
 @media (max-width: 1440px) {
   .tab-header-container {
     height: 36px;
@@ -1428,7 +1496,14 @@ body {
   line-height: 1.2;
 }
 
-[data-density="compact"] .tab-item,
+[data-density="compact"] .tab-item {
+  padding: 3px 8px;
+  height: 28px;
+  font-size: 11.5px;
+  min-width: 85px;
+  max-width: 220px;
+}
+
 @media (max-width: 1440px) {
   .tab-item {
     padding: 3px 8px;
@@ -1455,7 +1530,11 @@ body {
   max-width: 350px; /* 활성 탭은 제목을 더 넓고 시원하게 표시 */
 }
 
-[data-density="compact"] .tab-item.active,
+[data-density="compact"] .tab-item.active {
+  height: 29px;
+  max-width: 260px;
+}
+
 @media (max-width: 1440px) {
   .tab-item.active {
     height: 29px;
@@ -3217,7 +3296,12 @@ body {
   transition: all 0.2s ease;
 }
 
-[data-density="compact"] .channel-radio-grid,
+[data-density="compact"] .channel-radio-grid {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 8px;
+}
+
 @media (max-width: 1440px) {
   .channel-radio-grid {
     grid-template-columns: repeat(3, 1fr);
@@ -3281,7 +3365,11 @@ body {
   transition: all 0.2s ease;
 }
 
-[data-density="compact"] .qms-filter-card,
+[data-density="compact"] .qms-filter-card {
+  padding: 10px 14px;
+  margin-bottom: 10px;
+}
+
 @media (max-width: 1440px) {
   .qms-filter-card {
     padding: 10px 14px;
@@ -3291,7 +3379,12 @@ body {
 
 /* 4. 전역 폼 인풋 & 버튼 컴팩트 모드 스케일링 */
 [data-density="compact"] input:not([type="checkbox"]):not([type="radio"]),
-[data-density="compact"] select,
+[data-density="compact"] select {
+  height: 32px !important;
+  padding: 4px 8px !important;
+  font-size: 12px !important;
+}
+
 @media (max-width: 1440px) {
   input:not([type="checkbox"]):not([type="radio"]),
   select {

@@ -226,6 +226,12 @@ const BomCategoryManagementPage = ({ user, isActive = true }) => {
                             columnDefs={colDefs} 
                             rowHeight={54}
                             animateRows={true}
+                            onRowDoubleClicked={(e) => {
+                                if (e?.data) {
+                                    setFormData({ mainType: e.data.mainType || '', subType: e.data.subType || '' });
+                                    toast.info(`[${e.data.mainType} - ${e.data.subType}] 정보가 입력 폼에 설정되었습니다.`);
+                                }
+                            }}
                         />
                     </div>
                 </div>

@@ -51,6 +51,10 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
   onViewChange = null,
   onCapture = null,
   height = 380,
+  labelInfo = null,
+  showShippingLabel = null,
+  showChannelSticker = null,
+  onToggleOption = null,
   style = {}
 }, ref) {
   const containerRef = useRef(null);
@@ -95,6 +99,42 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
   const [isCapturing, setIsCapturing] = useState(false);
   const [boxOpacity, setBoxOpacity] = useState(1.0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // ── 3D 현품표 & 유통채널 스티커 부착 선택 상태 (Props & Dual-Sync) ──
+  const effectiveShowShippingLabel = (showShippingLabel !== null && showShippingLabel !== undefined)
+    ? !!showShippingLabel
+    : (labelInfo?.showShippingLabel !== undefined ? !!labelInfo.showShippingLabel : true);
+
+  const effectiveShowChannelSticker = (showChannelSticker !== null && showChannelSticker !== undefined)
+    ? !!showChannelSticker
+    : (labelInfo?.showChannelSticker !== undefined ? !!labelInfo.showChannelSticker : !!labelInfo?.hasChannelSticker);
+
+  const [localShowShippingLabel, setLocalShowShippingLabel] = useState(effectiveShowShippingLabel);
+  const [localShowChannelSticker, setLocalShowChannelSticker] = useState(effectiveShowChannelSticker);
+
+  useEffect(() => {
+    setLocalShowShippingLabel(effectiveShowShippingLabel);
+  }, [effectiveShowShippingLabel]);
+
+  useEffect(() => {
+    setLocalShowChannelSticker(effectiveShowChannelSticker);
+  }, [effectiveShowChannelSticker]);
+
+  const handleToggleShippingLabel = () => {
+    const nextVal = !localShowShippingLabel;
+    setLocalShowShippingLabel(nextVal);
+    if (onToggleOption) {
+      onToggleOption({ showShippingLabel: nextVal, showChannelSticker: localShowChannelSticker });
+    }
+  };
+
+  const handleToggleChannelSticker = () => {
+    const nextVal = !localShowChannelSticker;
+    setLocalShowChannelSticker(nextVal);
+    if (onToggleOption) {
+      onToggleOption({ showShippingLabel: localShowShippingLabel, showChannelSticker: nextVal });
+    }
+  };
 
   // ── Procedural Eco Green Air Pillow Texture Generator (실제 현장 에어쿠션 100% 동일 구현) ──
   const airPillowTextureRef = useRef(null);
@@ -172,6 +212,419 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
     } catch (e) {
       return null;
     }
+  };
+
+  // ── Dynamic Label & Channel Sticker Textures Generator ──
+  const resolveTextureUrl = (url) => {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) return url;
+    const origin = (typeof window !== 'undefined' && window.location.origin.includes(':5173'))
+      ? 'http://localhost:8080'
+      : (typeof window !== 'undefined' ? window.location.origin : '');
+    return `${origin}${url.startsWith('/') ? '' : '/'}${url}`;
+  };
+
+  const createOutboxLabelTexture = (info) => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1024;
+      canvas.height = 720;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, 1024, 720);
+
+      ctx.strokeStyle = '#0F172A';
+      ctx.lineWidth = 12;
+      ctx.strokeRect(12, 12, 1000, 696);
+
+      ctx.fillStyle = '#0F172A';
+      ctx.fillRect(12, 12, 1000, 108);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 44px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('[ OUTBOX LABEL / 아웃박스 현품표 ]', 512, 66);
+
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      const rows = [
+        { k: '품목코드', v: info?.itemCode || 'PRD-STANDARD' },
+        { k: '제품명', v: info?.productName || '화장품 완제품' },
+        { k: '입수량', v: info?.outboxQty ? `${info.outboxQty} EA` : '30 EA' },
+        { k: '제조원', v: info?.manufacturerName || '(주)한국콜마' },
+        { k: 'LOT / EXP', v: info?.lotFormat || 'LOT20261108 / EXP 2029.11.07' }
+      ];
+
+      ctx.strokeStyle = '#CBD5E1';
+      ctx.lineWidth = 3;
+      let curY = 120;
+      const rowH = 80;
+      rows.forEach((r) => {
+        ctx.beginPath();
+        ctx.moveTo(12, curY + rowH);
+        ctx.lineTo(1012, curY + rowH);
+        ctx.stroke();
+
+        ctx.fillStyle = '#F8FAFC';
+        ctx.fillRect(16, curY + 4, 240, rowH - 8);
+        ctx.fillStyle = '#334155';
+        ctx.font = 'bold 32px sans-serif';
+        ctx.fillText(r.k, 32, curY + rowH / 2);
+
+        ctx.fillStyle = '#0F172A';
+        ctx.font = 'bold 32px sans-serif';
+        const textVal = String(r.v).length > 28 ? String(r.v).substring(0, 26) + '...' : String(r.v);
+        ctx.fillText(textVal, 280, curY + rowH / 2);
+
+        curY += rowH;
+      });
+
+      // Barcode pattern at bottom
+      ctx.fillStyle = '#000000';
+      const bcStartX = 120;
+      const bcWidth = 784;
+      const bcY = 540;
+      const bcH = 88;
+      const barPattern = [3,2,1,4,2,3,1,2,4,1,3,2,1,4,3,2,1,2,3,4,1,2,3,1,4,2,3,1,2,4,2,1,3,4,1,2];
+      let px = bcStartX;
+      barPattern.forEach((w, i) => {
+        if (i % 2 === 0 && px + w * 5.0 <= bcStartX + bcWidth) {
+          ctx.fillRect(px, bcY, w * 5.0, bcH);
+        }
+        px += w * 5.6;
+      });
+
+      ctx.font = 'bold 30px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(info?.barcode || '8809123456789', 512, 672);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const createChannelStickerTexture = (info) => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 760;
+      canvas.height = 760;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#FEF3C7';
+      ctx.fillRect(0, 0, 760, 760);
+
+      ctx.strokeStyle = '#D97706';
+      ctx.lineWidth = 16;
+      ctx.strokeRect(16, 16, 728, 728);
+
+      ctx.fillStyle = '#D97706';
+      ctx.fillRect(16, 16, 728, 120);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 44px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🏷️ 유통 채널 출하 스티커', 380, 76);
+
+      ctx.fillStyle = '#92400E';
+      ctx.font = 'bold 52px sans-serif';
+      const chanName = info?.channelName || '유통채널 물류센터';
+      ctx.fillText(chanName, 380, 210);
+
+      ctx.fillStyle = '#B45309';
+      ctx.font = 'bold 32px sans-serif';
+      ctx.fillText('[ 물류 검수 합격 / STICKER ]', 380, 276);
+
+      const qrX = 220, qrY = 330, qrS = 320;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(qrX, qrY, qrS, qrS);
+      ctx.strokeStyle = '#D97706';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(qrX, qrY, qrS, qrS);
+
+      ctx.fillStyle = '#1E293B';
+      ctx.fillRect(qrX + 20, qrY + 20, 70, 70);
+      ctx.clearRect(qrX + 34, qrY + 34, 42, 42);
+      ctx.fillRect(qrX + 44, qrY + 44, 22, 22);
+
+      ctx.fillRect(qrX + qrS - 90, qrY + 20, 70, 70);
+      ctx.clearRect(qrX + qrS - 76, qrY + 34, 42, 42);
+      ctx.fillRect(qrX + qrS - 66, qrY + 44, 22, 22);
+
+      ctx.fillRect(qrX + 20, qrY + qrS - 90, 70, 70);
+      ctx.clearRect(qrX + 34, qrY + qrS - 76, 42, 42);
+      ctx.fillRect(qrX + 44, qrY + qrS - 66, 22, 22);
+
+      for (let r = 0; r < 6; r++) {
+        for (let c = 0; c < 6; c++) {
+          if ((r + c * 3) % 2 === 0) {
+            ctx.fillRect(qrX + 110 + c * 20, qrY + 110 + r * 20, 14, 14);
+          }
+        }
+      }
+
+      ctx.fillStyle = '#78350F';
+      ctx.font = 'bold 30px sans-serif';
+      ctx.fillText('* 채널 물류센터 규정 준수 라벨 *', 380, 700);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const createInboxLabelTexture = (info) => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 880;
+      canvas.height = 560;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, 880, 560);
+
+      ctx.strokeStyle = '#2563EB';
+      ctx.lineWidth = 10;
+      ctx.strokeRect(10, 10, 860, 540);
+
+      ctx.fillStyle = '#2563EB';
+      ctx.fillRect(10, 10, 860, 96);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 40px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('[ INBOX LABEL / 인박스 현품표 ]', 440, 58);
+
+      ctx.textAlign = 'left';
+      const rows = [
+        { k: '품목코드', v: info?.itemCode || 'PRD-STANDARD' },
+        { k: '제품명', v: info?.productName || '화장품 제품' },
+        { k: '입수량', v: info?.inboxQty ? `${info.inboxQty} EA` : '10 EA' },
+        { k: '제조원', v: info?.manufacturerName || '(주)한국콜마' }
+      ];
+
+      ctx.strokeStyle = '#CBD5E1';
+      ctx.lineWidth = 3;
+      let curY = 110;
+      const rowH = 84;
+      rows.forEach((r) => {
+        ctx.beginPath();
+        ctx.moveTo(10, curY + rowH);
+        ctx.lineTo(870, curY + rowH);
+        ctx.stroke();
+
+        ctx.fillStyle = '#EFF6FF';
+        ctx.fillRect(14, curY + 4, 200, rowH - 8);
+        ctx.fillStyle = '#1E40AF';
+        ctx.font = 'bold 30px sans-serif';
+        ctx.fillText(r.k, 28, curY + rowH / 2);
+
+        ctx.fillStyle = '#0F172A';
+        ctx.font = 'bold 30px sans-serif';
+        ctx.fillText(String(r.v).substring(0, 24), 236, curY + rowH / 2);
+
+        curY += rowH;
+      });
+
+      ctx.fillStyle = '#64748B';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('⚠️ 인박스 현품표 바코드 미부착 (규정 준수)', 440, 504);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const createZipperBagLabelTexture = (info) => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 800;
+      canvas.height = 520;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, 800, 520);
+
+      ctx.strokeStyle = '#059669';
+      ctx.lineWidth = 10;
+      ctx.strokeRect(10, 10, 780, 500);
+
+      ctx.fillStyle = '#059669';
+      ctx.fillRect(10, 10, 780, 92);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 38px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('[ ZIPPER BAG / 지퍼백 현품표 ]', 400, 56);
+
+      ctx.textAlign = 'left';
+      const rows = [
+        { k: '품목코드', v: info?.itemCode || 'PRD-STANDARD' },
+        { k: '제품명', v: info?.productName || '지퍼백 포장 완제품' },
+        { k: '포장수량', v: info?.inboxQty ? `${info.inboxQty} EA` : '10 EA' },
+        { k: '밀봉상태', v: '지퍼백 밀봉 검사필' }
+      ];
+
+      ctx.strokeStyle = '#CBD5E1';
+      ctx.lineWidth = 3;
+      let curY = 106;
+      const rowH = 80;
+      rows.forEach((r) => {
+        ctx.beginPath();
+        ctx.moveTo(10, curY + rowH);
+        ctx.lineTo(790, curY + rowH);
+        ctx.stroke();
+
+        ctx.fillStyle = '#ECFDF5';
+        ctx.fillRect(14, curY + 4, 190, rowH - 8);
+        ctx.fillStyle = '#065F46';
+        ctx.font = 'bold 30px sans-serif';
+        ctx.fillText(r.k, 28, curY + rowH / 2);
+
+        ctx.fillStyle = '#0F172A';
+        ctx.font = 'bold 30px sans-serif';
+        ctx.fillText(String(r.v).substring(0, 24), 228, curY + rowH / 2);
+
+        curY += rowH;
+      });
+
+      ctx.fillStyle = '#059669';
+      ctx.font = 'bold 26px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('✓ PE 지퍼백 포장 규격 준수', 400, 472);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const createPalletLabelTexture = (info) => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 720;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, 512, 720);
+
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 8;
+      ctx.strokeRect(8, 8, 496, 704);
+
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(8, 8, 496, 68);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('[ PALLET SHIPPING TAG / 팔레트 현품표 ]', 256, 42);
+
+      ctx.textAlign = 'left';
+      const rows = [
+        { k: '품목코드', v: info?.itemCode || 'PRD-STANDARD' },
+        { k: '국문 제품명', v: info?.productName || '화장품 완제품' },
+        { k: '박스 적재량', v: info?.palletBoxQty ? `${info.palletBoxQty} Box` : '40 Box' },
+        { k: '총 낱개수량', v: info?.palletTotalQty ? `${info.palletTotalQty} EA` : '1,200 EA' },
+        { k: '제조원', v: info?.manufacturerName || '(주)한국콜마' },
+        { k: 'LOT / EXP', v: info?.lotFormat || 'LOT20261108 / EXP 2029.11.07' }
+      ];
+
+      ctx.strokeStyle = '#CBD5E1';
+      ctx.lineWidth = 2;
+      let curY = 76;
+      const rowH = 60;
+      rows.forEach((r) => {
+        ctx.beginPath();
+        ctx.moveTo(8, curY + rowH);
+        ctx.lineTo(504, curY + rowH);
+        ctx.stroke();
+
+        ctx.fillStyle = '#F1F5F9';
+        ctx.fillRect(10, curY + 2, 130, rowH - 4);
+        ctx.fillStyle = '#0F172A';
+        ctx.font = 'bold 18px sans-serif';
+        ctx.fillText(r.k, 20, curY + rowH / 2);
+
+        ctx.fillStyle = '#000000';
+        ctx.font = 'bold 18px sans-serif';
+        ctx.fillText(String(r.v).substring(0, 25), 155, curY + rowH / 2);
+
+        curY += rowH;
+      });
+
+      ctx.fillStyle = '#000000';
+      const bcStartX = 56;
+      const bcWidth = 400;
+      const bcY = 480;
+      const bcH = 120;
+      const barPattern = [4,2,1,5,2,3,1,3,4,1,3,2,1,5,3,2,1,3,3,4,1,3,3,1,5,2,3,1,2,5,2,1,4,5,1,3];
+      let px = bcStartX;
+      barPattern.forEach((w, i) => {
+        if (i % 2 === 0 && px + w * 2.6 <= bcStartX + bcWidth) {
+          ctx.fillRect(px, bcY, w * 2.6, bcH);
+        }
+        px += w * 2.9;
+      });
+
+      ctx.font = 'bold 24px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(info?.barcode || '8809123456789', 256, 645);
+
+      ctx.font = '15px sans-serif';
+      ctx.fillStyle = '#475569';
+      ctx.fillText('PALLET LOGISTICS TAG - DO NOT DAMAGE', 256, 680);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const makeLabelMaterial = (defaultTexture, customImageUrl) => {
+    const mat = new THREE.MeshStandardMaterial({
+      map: defaultTexture,
+      roughness: 0.25,
+      metalness: 0.05,
+      transparent: false,
+      side: THREE.DoubleSide
+    });
+    mat.polygonOffset = true;
+    mat.polygonOffsetFactor = -1;
+    mat.polygonOffsetUnits = -1;
+
+    if (customImageUrl) {
+      try {
+        const fullUrl = resolveTextureUrl(customImageUrl);
+        const loader = new THREE.TextureLoader();
+        loader.setCrossOrigin('anonymous');
+        loader.load(
+          fullUrl,
+          (loadedTex) => {
+            loadedTex.colorSpace = THREE.SRGBColorSpace;
+            mat.map = loadedTex;
+            mat.needsUpdate = true;
+          },
+          undefined,
+          () => {}
+        );
+      } catch (e) {}
+    }
+    return mat;
   };
 
   // ── Helper: 3D Box Mesh ──
@@ -656,6 +1109,9 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
         makeAirCapBuffer(s.scene, padW, padD, padH, px0, padY, pz0, hasPop, cols, rows);
       }
 
+      // [사용자 요구사항] 인박스 3D 도면에서는 순수 단상자 입수/배열에 집중하기 위해 인박스 외관 현품표 라벨 미표시
+      // (인박스 현품표는 Sheet 3 및 인박스 사양 섹션에서 확인)
+
       const popH = Math.max((popHeight || 15) * sc, 0.012);
       const totalHeight = bh + (hasPop ? popH : (useAirCap ? (hasPop ? popH : 0.024) : 0));
       const maxDim = Math.max(bw, bd, totalHeight);
@@ -714,6 +1170,9 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
         // ── Case A: Outbox containing distinct solid Inboxes (인박스 실물 골판지 박스 형태 렌더링) ──
         let inboxIndex = 1;
         const totalInboxes = cols * rows * layers;
+        const ibMat = labelInfo?.isZipperBag
+          ? makeLabelMaterial(createZipperBagLabelTexture(labelInfo), labelInfo?.zipperBagLabelImage)
+          : makeLabelMaterial(createInboxLabelTexture(labelInfo), labelInfo?.inboxLabelImage);
 
         for (let lz = 0; lz < layers; lz++) {
           for (let ry = 0; ry < rows; ry++) {
@@ -740,15 +1199,15 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
               tapeMesh.position.set(ibX + ibW / 2, ibY + ibH + tapeH / 2, ibZ + ibD / 2);
               s.scene.add(tapeMesh);
 
-              // 3. Clear Side Shipping / Barcode Label (측면 현품표 스티커)
-              const lblW = ibW * 0.45;
-              const lblH = ibH * 0.40;
-              const lblThick = 0.002;
-              const lblGeo = new THREE.BoxGeometry(lblW, lblH, lblThick);
-              const lblMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.3, metalness: 0.05 });
-              const lblMesh = new THREE.Mesh(lblGeo, lblMat);
-              lblMesh.position.set(ibX + ibW * 0.70, ibY + ibH * 0.50, ibZ + ibD + lblThick / 2);
-              s.scene.add(lblMesh);
+              // 3. Inbox Shipping Label on Front (+Z face) of each Inbox (현품표 부착)
+              if (localShowShippingLabel && ibMat) {
+                const lblW = ibW * 0.54;
+                const lblH = ibH * 0.46;
+                const lblGeo = new THREE.PlaneGeometry(lblW, lblH);
+                const lblMesh = new THREE.Mesh(lblGeo, ibMat);
+                lblMesh.position.set(ibX + ibW * 0.68, ibY + ibH * 0.50, ibZ + ibD + 0.003);
+                s.scene.add(lblMesh);
+              }
 
               // 4. White Clean Grid/Edge Outline on each inbox for crisp contrast
               const ibEdgeGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(ibW, ibH, ibD), 12);
@@ -769,9 +1228,9 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
               bCtx.fillText(`IN-${inboxIndex}`, 64, 32);
               const bTex = new THREE.CanvasTexture(badgeCanvas);
               const bMat = new THREE.MeshBasicMaterial({ map: bTex, transparent: true });
-              const bGeo = new THREE.PlaneGeometry(ibW * 0.38, ibH * 0.22);
+              const bGeo = new THREE.PlaneGeometry(ibW * 0.30, ibH * 0.20);
               const bMesh = new THREE.Mesh(bGeo, bMat);
-              bMesh.position.set(ibX + ibW * 0.28, ibY + ibH * 0.65, ibZ + ibD + 0.003);
+              bMesh.position.set(ibX + ibW * 0.22, ibY + ibH * 0.68, ibZ + ibD + 0.004);
               s.scene.add(bMesh);
 
               inboxIndex++;
@@ -822,6 +1281,9 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
         }
       }
 
+      // [사용자 요구사항] 아웃박스 3D 도면에서는 순수 박스 입수 배치(인박스/단상자)에 집중하기 위해
+      // 아웃박스 외관 현품표 및 채널 스티커 미표시 (사양서 Sheet 4 및 별도 규격 섹션에서 관리)
+
       const popH = Math.max((popHeight || 15) * sc, 0.012);
       const totalHeight = bh + (hasPop ? popH : (useAirCap ? 0.024 : 0));
       const maxDim = Math.max(bw, bd, totalHeight);
@@ -837,8 +1299,9 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
       }
 
     } else {
-      // ── Pallet 3D Mode (pallet-cross / pallet-normal) ──
-      const isCross = mode === 'pallet-cross';
+      // ── Pallet 3D Mode (pallet-cross / pallet-normal / pallet-wrapped) ──
+      const isWrapped = mode === 'pallet-wrapped' || mode === 'pallet_wrapped';
+      const isCross = mode === 'pallet-cross' || (isWrapped && palletConfig?.mode !== 'pallet-normal');
       const pw = palletConfig?.w || 1100;
       const pd = palletConfig?.d || 1100;
       const stacks = Math.min(palletConfig?.stacks || 8, 20);
@@ -849,6 +1312,35 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
 
       // Positions from pattern
       const tierPositions = getPalletPatternPositions(palletConfig?.pattern, pw, pd, sc);
+
+      // Determine outer bounds of pallet tier
+      let boundMinX = Infinity, boundMaxX = -Infinity;
+      let boundMinZ = Infinity, boundMaxZ = -Infinity;
+
+      tierPositions.forEach((box) => {
+        boundMinX = Math.min(boundMinX, box.x);
+        boundMaxX = Math.max(boundMaxX, box.x + box.w);
+        boundMinZ = Math.min(boundMinZ, box.z);
+        boundMaxZ = Math.max(boundMaxZ, box.z + box.d);
+
+        if (isCross) {
+          const interlocked = getInterlockedBox(box.x, box.z, box.w, box.d, palletConfig?.pattern?.category, pw * sc, pd * sc);
+          boundMinX = Math.min(boundMinX, interlocked.x);
+          boundMaxX = Math.max(boundMaxX, interlocked.x + interlocked.w);
+          boundMinZ = Math.min(boundMinZ, interlocked.z);
+          boundMaxZ = Math.max(boundMaxZ, interlocked.z + interlocked.d);
+        }
+      });
+
+      if (!isFinite(boundMinX)) {
+        boundMinX = -pw * sc / 2;
+        boundMaxX = pw * sc / 2;
+        boundMinZ = -pd * sc / 2;
+        boundMaxZ = pd * sc / 2;
+      }
+
+      const outboxMat = localShowShippingLabel ? makeLabelMaterial(createOutboxLabelTexture(labelInfo), labelInfo?.outboxLabelImage) : null;
+      const stickerMat = localShowChannelSticker ? makeLabelMaterial(createChannelStickerTexture(labelInfo), labelInfo?.channelStickerImage) : null;
 
       for (let layer = 0; layer < stacks; layer++) {
         const layerY = baseY + layer * obh;
@@ -881,45 +1373,180 @@ const PackagingViewer3D = forwardRef(function PackagingViewer3D({
           const tapeMesh = new THREE.Mesh(tapeGeo, tapeMat);
           tapeMesh.position.set(bx + bw / 2, layerY + obh + 0.001, bz + bd / 2);
           s.scene.add(tapeMesh);
+
+          // ── 아웃박스 외벽 라벨: 팔레트 적재(pallet-cross/normal) 및 랩핑(pallet-wrapped) 공통 부착 ──
+          const lblW = bw * 0.38;
+          const lblH = obh * 0.36;
+          const stkW = bw * 0.32;
+          const stkH = obh * 0.32;
+
+          // 1. Front (+Z face)
+          if (Math.abs((bz + bd) - boundMaxZ) < 0.02) {
+            // 왼쪽 상단: 현품표
+            if (localShowShippingLabel && outboxMat) {
+              const lMesh = new THREE.Mesh(new THREE.PlaneGeometry(lblW, lblH), outboxMat);
+              lMesh.position.set(bx + bw * 0.26, layerY + obh * 0.68, bz + bd + 0.003);
+              s.scene.add(lMesh);
+            }
+            // 오른쪽 상단: 채널 스티커
+            if (localShowChannelSticker && stickerMat) {
+              const sMesh = new THREE.Mesh(new THREE.PlaneGeometry(stkW, stkH), stickerMat);
+              sMesh.position.set(bx + bw * 0.74, layerY + obh * 0.68, bz + bd + 0.003);
+              s.scene.add(sMesh);
+            }
+          }
+
+          // 2. Right (+X face)
+          if (Math.abs((bx + bw) - boundMaxX) < 0.02) {
+            const sideLblW = bd * 0.38;
+            const sideStkW = bd * 0.32;
+            // +X 면 바라볼 때: 왼쪽은 +Z, 오른쪽은 -Z
+            if (localShowShippingLabel && outboxMat) {
+              const lMesh = new THREE.Mesh(new THREE.PlaneGeometry(sideLblW, lblH), outboxMat);
+              lMesh.position.set(bx + bw + 0.003, layerY + obh * 0.68, bz + bd * 0.74);
+              lMesh.rotation.set(0, Math.PI / 2, 0);
+              s.scene.add(lMesh);
+            }
+            if (localShowChannelSticker && stickerMat) {
+              const sMesh = new THREE.Mesh(new THREE.PlaneGeometry(sideStkW, stkH), stickerMat);
+              sMesh.position.set(bx + bw + 0.003, layerY + obh * 0.68, bz + bd * 0.26);
+              sMesh.rotation.set(0, Math.PI / 2, 0);
+              s.scene.add(sMesh);
+            }
+          }
+
+          // 3. Left (-X face)
+          if (Math.abs(bx - boundMinX) < 0.02) {
+            const sideLblW = bd * 0.38;
+            const sideStkW = bd * 0.32;
+            // -X 면 바라볼 때: 왼쪽은 -Z, 오른쪽은 +Z
+            if (localShowShippingLabel && outboxMat) {
+              const lMesh = new THREE.Mesh(new THREE.PlaneGeometry(sideLblW, lblH), outboxMat);
+              lMesh.position.set(bx - 0.003, layerY + obh * 0.68, bz + bd * 0.26);
+              lMesh.rotation.set(0, -Math.PI / 2, 0);
+              s.scene.add(lMesh);
+            }
+            if (localShowChannelSticker && stickerMat) {
+              const sMesh = new THREE.Mesh(new THREE.PlaneGeometry(sideStkW, stkH), stickerMat);
+              sMesh.position.set(bx - 0.003, layerY + obh * 0.68, bz + bd * 0.74);
+              sMesh.rotation.set(0, -Math.PI / 2, 0);
+              s.scene.add(sMesh);
+            }
+          }
+
+          // 4. Back (-Z face)
+          if (Math.abs(bz - boundMinZ) < 0.02) {
+            // -Z 면 바라볼 때: 왼쪽은 +X, 오른쪽은 -X
+            if (localShowShippingLabel && outboxMat) {
+              const lMesh = new THREE.Mesh(new THREE.PlaneGeometry(lblW, lblH), outboxMat);
+              lMesh.position.set(bx + bw * 0.74, layerY + obh * 0.68, bz - 0.003);
+              lMesh.rotation.set(0, Math.PI, 0);
+              s.scene.add(lMesh);
+            }
+            if (localShowChannelSticker && stickerMat) {
+              const sMesh = new THREE.Mesh(new THREE.PlaneGeometry(stkW, stkH), stickerMat);
+              sMesh.position.set(bx + bw * 0.26, layerY + obh * 0.68, bz - 0.003);
+              sMesh.rotation.set(0, Math.PI, 0);
+              s.scene.add(sMesh);
+            }
+          }
         });
       }
 
       // 팔레트 적재 보호 패드 생성 함수 (하단 골판지 슬립 패드 + 상단 보호 탑패드)
-const makePalletPads = (scene, minX, maxX, minZ, maxZ, baseY, totalHeight, sc) => {
-  const padThickness = 0.008; // 약 4~5mm 골판지 두께감
-  const padMargin = 0.012; // 박스타워 외곽으로 1~2cm 돌출된 실제 패드 마진
-  const padW = (maxX - minX) + padMargin * 2;
-  const padD = (maxZ - minZ) + padMargin * 2;
-  const centerX = (minX + maxX) / 2;
-  const centerZ = (minZ + maxZ) / 2;
+      const makePalletPads = (scene, minX, maxX, minZ, maxZ, baseY, totalHeight, sc) => {
+        const padThickness = 0.008; // 약 4~5mm 골판지 두께감
+        const padMargin = 0.012; // 박스타워 외곽으로 1~2cm 돌출된 실제 패드 마진
+        const padW = (maxX - minX) + padMargin * 2;
+        const padD = (maxZ - minZ) + padMargin * 2;
+        const centerX = (minX + maxX) / 2;
+        const centerZ = (minZ + maxZ) / 2;
 
-  const padGeo = new THREE.BoxGeometry(padW, padThickness, padD);
-  const padMat = new THREE.MeshStandardMaterial({
-    color: 0xc49a6c, // 골판지 크라프트 황갈색
-    roughness: 0.88,
-    metalness: 0.05
-  });
-  const edgesGeo = new THREE.EdgesGeometry(padGeo);
-  const edgesMat = new THREE.LineBasicMaterial({ color: 0x8a6036, linewidth: 1.5 });
+        const padGeo = new THREE.BoxGeometry(padW, padThickness, padD);
+        const padMat = new THREE.MeshStandardMaterial({
+          color: 0xc49a6c, // 골판지 크라프트 황갈색
+          roughness: 0.88,
+          metalness: 0.05
+        });
+        const edgesGeo = new THREE.EdgesGeometry(padGeo);
+        const edgesMat = new THREE.LineBasicMaterial({ color: 0x8a6036, linewidth: 1.5 });
 
-  // 1. 하단 보호 패드 (팔레트 목재 상판과 1단 박스 사이)
-  const bottomPad = new THREE.Mesh(padGeo, padMat);
-  bottomPad.position.set(centerX, baseY - padThickness / 2 - 0.001, centerZ);
-  bottomPad.castShadow = true;
-  bottomPad.receiveShadow = true;
-  const bottomLines = new THREE.LineSegments(edgesGeo, edgesMat);
-  bottomPad.add(bottomLines);
-  scene.add(bottomPad);
+        // 1. 하단 보호 패드 (팔레트 목재 상판과 1단 박스 사이)
+        const bottomPad = new THREE.Mesh(padGeo, padMat);
+        bottomPad.position.set(centerX, baseY - padThickness / 2 - 0.001, centerZ);
+        bottomPad.castShadow = true;
+        bottomPad.receiveShadow = true;
+        const bottomLines = new THREE.LineSegments(edgesGeo, edgesMat);
+        bottomPad.add(bottomLines);
+        scene.add(bottomPad);
 
-  // 2. 상단 보호 탑패드 (최상단 박스 적재면 위)
-  const topPad = new THREE.Mesh(padGeo, padMat);
-  topPad.position.set(centerX, baseY + totalHeight + padThickness / 2 + 0.001, centerZ);
-  topPad.castShadow = true;
-  topPad.receiveShadow = true;
-  const topLines = new THREE.LineSegments(edgesGeo, edgesMat);
-  topPad.add(topLines);
-  scene.add(topPad);
-};
+        // 2. 상단 보호 탑패드 (최상단 박스 적재면 위)
+        const topPad = new THREE.Mesh(padGeo, padMat);
+        topPad.position.set(centerX, baseY + totalHeight + padThickness / 2 + 0.001, centerZ);
+        topPad.castShadow = true;
+        topPad.receiveShadow = true;
+        const topLines = new THREE.LineSegments(edgesGeo, edgesMat);
+        topPad.add(topLines);
+        scene.add(topPad);
+      };
+
+      // 팔레트 적재 완성품 스트레치 필름 랩핑 렌더링 함수 (반투명 포장 비닐 + 텐션 밴드 레이어 라인)
+      const makePalletStretchFilmWrap = (scene, minX, maxX, minZ, maxZ, baseY, totalHeight) => {
+        const wrapMargin = 0.010; // 박스타워 및 각대 외곽으로 약 1.5cm 여유 마진
+        const wrapW = (maxX - minX) + wrapMargin * 2;
+        const wrapD = (maxZ - minZ) + wrapMargin * 2;
+        const wrapH = totalHeight + 0.008;
+        const centerX = (minX + maxX) / 2;
+        const centerZ = (minZ + maxZ) / 2;
+        const centerY = baseY + totalHeight / 2;
+
+        // 1. 투명 스트레치 필름 슬리브 (고광택 + 부드러운 반투명 플라스틱 재질)
+        const wrapGeo = new THREE.BoxGeometry(wrapW, wrapH, wrapD);
+        const wrapMat = new THREE.MeshStandardMaterial({
+          color: 0xE0F2FE, // 은은한 스카이블루 투명 비닐 틴트
+          transparent: true,
+          opacity: 0.35,
+          roughness: 0.10,
+          metalness: 0.18,
+          depthWrite: false
+        });
+        const wrapMesh = new THREE.Mesh(wrapGeo, wrapMat);
+        wrapMesh.position.set(centerX, centerY, centerZ);
+        scene.add(wrapMesh);
+
+        // 2. 외곽 하이라이트 모서리선
+        const edgeGeo = new THREE.EdgesGeometry(wrapGeo, 15);
+        const edgeMat = new THREE.LineBasicMaterial({
+          color: 0x93C5FD,
+          transparent: true,
+          opacity: 0.75
+        });
+        wrapMesh.add(new THREE.LineSegments(edgeGeo, edgeMat));
+
+        // 3. 물류 랩핑 턴(Turn) 텐션 밴드 라인 (실제 팔레트 랩핑기 회전 밴딩 효과)
+        const bandCount = Math.max(5, Math.min(10, Math.round(totalHeight / 0.12)));
+        for (let b = 1; b < bandCount; b++) {
+          const bandY = baseY + (totalHeight * (b / bandCount));
+          const bandGeo = new THREE.BufferGeometry();
+          const halfW = wrapW / 2 + 0.001;
+          const halfD = wrapD / 2 + 0.001;
+          const points = [
+            new THREE.Vector3(centerX - halfW, bandY, centerZ - halfD),
+            new THREE.Vector3(centerX + halfW, bandY, centerZ - halfD),
+            new THREE.Vector3(centerX + halfW, bandY, centerZ + halfD),
+            new THREE.Vector3(centerX - halfW, bandY, centerZ + halfD),
+            new THREE.Vector3(centerX - halfW, bandY, centerZ - halfD)
+          ];
+          bandGeo.setFromPoints(points);
+          const bandMat = new THREE.LineBasicMaterial({
+            color: 0x38BDF8,
+            transparent: true,
+            opacity: b % 2 === 0 ? 0.70 : 0.45
+          });
+          const bandLine = new THREE.Line(bandGeo, bandMat);
+          scene.add(bandLine);
+        }
+      };
 
       // Pallet Pads & Corner Posts (하단/상단 보호 패드 및 모서리 각대 결속 렌더링)
       if (useCornerPost || usePad) {
@@ -957,6 +1584,24 @@ const makePalletPads = (scene, minX, maxX, minZ, maxZ, baseY, totalHeight, sc) =
         }
       }
 
+      // ── [신규 항목] 팔레트 랩핑 및 현품표 부착 도면 (mode === 'pallet-wrapped') ──
+      if (isWrapped) {
+        const totalHeight = stacks * obh;
+        makePalletStretchFilmWrap(s.scene, boundMinX, boundMaxX, boundMinZ, boundMaxZ, baseY, totalHeight);
+
+        // Pallet Shipping Tag (팔레트 현품표: 스트레치 필름 랩핑 전면에 부착)
+        if (localShowShippingLabel) {
+          const palletMat = makeLabelMaterial(createPalletLabelTexture(labelInfo), labelInfo?.palletLabelImage);
+          const pltW = (boundMaxX - boundMinX) * 0.28;
+          const pltH = obh * 1.55;
+          const palletLabelY = baseY + Math.min(stacks * 0.52, Math.max(stacks - 1.2, 1)) * obh;
+          const pltMesh = new THREE.Mesh(new THREE.PlaneGeometry(pltW, pltH), palletMat);
+          // 랩핑 필름 외곽(+Z)에 정밀 배치 (wrapMargin: 0.010 + 0.005 = 0.015)
+          pltMesh.position.set((boundMinX + boundMaxX) / 2, palletLabelY, boundMaxZ + 0.016);
+          s.scene.add(pltMesh);
+        }
+      }
+
       const totalH = baseY + stacks * obh;
       const maxDim = Math.max(pw * sc, pd * sc, totalH);
       const defaultDist = Math.max(maxDim * 2.2, 3.2);
@@ -970,7 +1615,7 @@ const makePalletPads = (scene, minX, maxX, minZ, maxZ, baseY, totalHeight, sc) =
         s.tgtTheta = defaultTheta;
       }
     }
-  }, [mode, inbox, outbox, unitBox, arrangement, palletConfig, useInbox, hasPop, popHeight, useAirCap, useCornerPost, usePad]);
+  }, [mode, inbox, outbox, unitBox, arrangement, palletConfig, useInbox, hasPop, popHeight, useAirCap, useCornerPost, usePad, labelInfo, localShowShippingLabel, localShowChannelSticker]);
 
   // ── Render Loop ──
   const renderLoop = useCallback(() => {
@@ -1252,11 +1897,11 @@ const makePalletPads = (scene, minX, maxX, minZ, maxZ, baseY, totalHeight, sc) =
       s.tgtTheta = 0;
       s.tgtPhi = 0.08;
     } else if (preset === 'front') {
-      s.tgtTheta = 0;
-      s.tgtPhi = 1.50;
+      s.tgtTheta = Math.PI / 2; // Looking directly at front (+Z) face
+      s.tgtPhi = 1.45;
     } else if (preset === 'side') {
-      s.tgtTheta = Math.PI / 2;
-      s.tgtPhi = 1.50;
+      s.tgtTheta = 0; // Looking directly at side (+X) face
+      s.tgtPhi = 1.45;
     }
     if (onViewChange) {
       onViewChange({ theta: s.tgtTheta, phi: s.tgtPhi, dist: s.tgtDist, lookY: s.tgtLookY });
@@ -1288,7 +1933,7 @@ const makePalletPads = (scene, minX, maxX, minZ, maxZ, baseY, totalHeight, sc) =
         lookY: s.tgtLookY
       };
     }
-  }), [mode, onCapture, inbox, outbox, unitBox, arrangement, palletConfig, onViewChange]);
+  }), [mode, onCapture, inbox, outbox, unitBox, arrangement, palletConfig, onViewChange, labelInfo]);
 
   // ── Init Three.js ──
   useEffect(() => {
@@ -1633,6 +2278,139 @@ const makePalletPads = (scene, minX, maxX, minZ, maxZ, baseY, totalHeight, sc) =
             측면
           </button>
         </div>
+
+        {/* Label & Sticker Attachment Toggle Groups: 모드별 맞춤 현품표/스티커 토글 */}
+        {mode === 'outbox' && useInbox && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '3px',
+            background: 'rgba(255, 255, 255, 0.92)',
+            backdropFilter: 'blur(4px)',
+            padding: '2px 5px',
+            borderRadius: '6px',
+            border: '1px solid #CBD5E1',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.06)'
+          }}>
+            <span style={{ fontSize: '10px', fontWeight: 700, color: '#475569', padding: '0 2px' }}>부착:</span>
+            <button
+              type="button"
+              onClick={handleToggleShippingLabel}
+              style={{
+                background: localShowShippingLabel ? '#2563EB' : '#F1F5F9',
+                border: localShowShippingLabel ? '1px solid #1D4ED8' : '1px solid #CBD5E1',
+                borderRadius: '4px',
+                padding: '2px 6px',
+                fontSize: '11px',
+                fontWeight: 700,
+                color: localShowShippingLabel ? '#FFFFFF' : '#64748B',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px'
+              }}
+              title="인박스 현품표 부착 여부 실시간 선택"
+            >
+              <span>📦 인박스 현품표</span>
+              <span style={{ fontSize: '9px', opacity: 0.9 }}>{localShowShippingLabel ? 'ON' : 'OFF'}</span>
+            </button>
+          </div>
+        )}
+
+        {(mode === 'pallet-cross' || mode === 'pallet-normal') && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '3px',
+            background: 'rgba(255, 255, 255, 0.92)',
+            backdropFilter: 'blur(4px)',
+            padding: '2px 5px',
+            borderRadius: '6px',
+            border: '1px solid #CBD5E1',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.06)'
+          }}>
+            <span style={{ fontSize: '10px', fontWeight: 700, color: '#475569', padding: '0 2px' }}>부착:</span>
+            <button
+              type="button"
+              onClick={handleToggleShippingLabel}
+              style={{
+                background: localShowShippingLabel ? '#2563EB' : '#F1F5F9',
+                border: localShowShippingLabel ? '1px solid #1D4ED8' : '1px solid #CBD5E1',
+                borderRadius: '4px',
+                padding: '2px 6px',
+                fontSize: '11px',
+                fontWeight: 700,
+                color: localShowShippingLabel ? '#FFFFFF' : '#64748B',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px'
+              }}
+              title="아웃박스 현품표 부착 여부 실시간 선택"
+            >
+              <span>📦 아웃박스 현품표</span>
+              <span style={{ fontSize: '9px', opacity: 0.9 }}>{localShowShippingLabel ? 'ON' : 'OFF'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleToggleChannelSticker}
+              style={{
+                background: localShowChannelSticker ? '#0D9488' : '#F1F5F9',
+                border: localShowChannelSticker ? '1px solid #0F766E' : '1px solid #CBD5E1',
+                borderRadius: '4px',
+                padding: '2px 6px',
+                fontSize: '11px',
+                fontWeight: 700,
+                color: localShowChannelSticker ? '#FFFFFF' : '#64748B',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px'
+              }}
+              title="유통채널 스티커 부착 여부 실시간 선택"
+            >
+              <span>🏷️ 채널스티커</span>
+              <span style={{ fontSize: '9px', opacity: 0.9 }}>{localShowChannelSticker ? 'ON' : 'OFF'}</span>
+            </button>
+          </div>
+        )}
+
+        {(mode === 'pallet-wrapped' || mode === 'pallet_wrapped') && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '3px',
+            background: 'rgba(255, 255, 255, 0.92)',
+            backdropFilter: 'blur(4px)',
+            padding: '2px 5px',
+            borderRadius: '6px',
+            border: '1px solid #CBD5E1',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.06)'
+          }}>
+            <span style={{ fontSize: '10px', fontWeight: 700, color: '#475569', padding: '0 2px' }}>부착:</span>
+            <button
+              type="button"
+              onClick={handleToggleShippingLabel}
+              style={{
+                background: localShowShippingLabel ? '#2563EB' : '#F1F5F9',
+                border: localShowShippingLabel ? '1px solid #1D4ED8' : '1px solid #CBD5E1',
+                borderRadius: '4px',
+                padding: '2px 6px',
+                fontSize: '11px',
+                fontWeight: 700,
+                color: localShowShippingLabel ? '#FFFFFF' : '#64748B',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px'
+              }}
+              title="팔레트 현품표 부착 여부 실시간 선택"
+            >
+              <span>📦 팔레트 현품표</span>
+              <span style={{ fontSize: '9px', opacity: 0.9 }}>{localShowShippingLabel ? 'ON' : 'OFF'}</span>
+            </button>
+          </div>
+        )}
 
         {/* Navigation Controls Group */}
         <div style={{

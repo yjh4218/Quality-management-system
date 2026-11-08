@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { AgGridReact } from 'ag-grid-react';
 import { toast } from 'react-toastify';
 import RegulatoryManualBanner from './components/common/RegulatoryManualBanner';
+import StandardWorkspaceDrawer from './components/common/StandardWorkspaceDrawer';
+import DrawerCard from './components/common/DrawerCard';
 import {
     fetchDesignProjects,
     fetchDesignProjectById,
@@ -995,6 +997,13 @@ export default function DesignControlManagementPage({ user, onNavigate }) {
                                 setSelectedProjectId(e.data.id);
                                 setSelectedProject(e.data);
                             }}
+                            onRowDoubleClicked={(e) => {
+                                if (e?.data) {
+                                    setSelectedProjectId(e.data.id);
+                                    setSelectedProject(e.data);
+                                    handleOpenProjectModal(e.data);
+                                }
+                            }}
                         />
                     </div>
                 </>
@@ -1044,6 +1053,9 @@ export default function DesignControlManagementPage({ user, onNavigate }) {
                             headerHeight={48}
                             pagination={true}
                             paginationPageSize={10}
+                            onRowDoubleClicked={(e) => {
+                                if (e?.data) handleOpenItemModal(e.data);
+                            }}
                         />
                     </div>
                 </div>
@@ -1088,6 +1100,9 @@ export default function DesignControlManagementPage({ user, onNavigate }) {
                             headerHeight={48}
                             pagination={true}
                             paginationPageSize={10}
+                            onRowDoubleClicked={(e) => {
+                                if (e?.data) handleOpenReviewModal(e.data);
+                            }}
                         />
                     </div>
                 </div>
@@ -1096,26 +1111,44 @@ export default function DesignControlManagementPage({ user, onNavigate }) {
             {/* ========================================================================= */}
             {/* 1. 프로젝트 신규/수정 전면 최대화 모달 (96vw × 92vh) */}
             {/* ========================================================================= */}
-            {isProjectModalOpen && (
-                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <div style={{ width: '96vw', maxWidth: '1680px', height: '92vh', maxHeight: '94vh', backgroundColor: '#ffffff', borderRadius: '12px', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflow: 'hidden' }}>
-                        
-                        {/* 고정 헤더 */}
-                        <div style={{ padding: '18px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
-                            <div>
-                                <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#0f172a', margin: 0 }}>
-                                    {projectFormData.id ? `✏️ 설계개발 프로젝트 수정 [${projectFormData.projectCode}]` : '➕ 신규 의료기기 설계개발 프로젝트 등록 (ISO 13485:2016 §7.3)'}
-                                </h2>
-                                <p style={{ fontSize: '12px', color: '#64748b', margin: '4px 0 0 0' }}>
-                                    프로젝트 기본 정보 및 DHF(Design History File) 관리번호를 등록하고 초기 계획 단계를 수립합니다.
-                                </p>
-                            </div>
-                            <button onClick={() => setIsProjectModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}>✕</button>
-                        </div>
-
-                        {/* 스크롤 바디 */}
-                        <form id="projectForm" onSubmit={handleSaveProject} style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+            <StandardWorkspaceDrawer
+                isOpen={isProjectModalOpen}
+                onClose={() => setIsProjectModalOpen(false)}
+                title={projectFormData.id ? `✏️ 설계개발 프로젝트 수정 [${projectFormData.projectCode}]` : '➕ 신규 의료기기 설계개발 프로젝트 등록 (ISO 13485:2016 §7.3)'}
+                subtitle="프로젝트 기본 정보 및 DHF(Design History File) 관리번호를 등록하고 초기 계획 단계를 수립합니다."
+                docNumber={projectFormData.projectCode}
+                complianceText="ISO 13485:2016 §7.3 설계 및 개발 프로세스 요건 준수"
+                footerRight={
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                            type="button"
+                            onClick={() => setIsProjectModalOpen(false)}
+                            className="secondary close-button"
+                        >
+                            취소
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleSaveProject}
+                            style={{
+                                padding: '8px 22px',
+                                fontSize: '13px',
+                                fontWeight: 700,
+                                borderRadius: '8px',
+                                border: 'none',
+                                backgroundColor: '#2563eb',
+                                color: '#ffffff',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            {projectFormData.id ? '수정 완료' : '프로젝트 등록'}
+                        </button>
+                    </div>
+                }
+            >
+                <form id="projectForm" onSubmit={handleSaveProject} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <DrawerCard title="설계개발 프로젝트 기본 정보" icon="📁">
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
                                 <div>
                                     <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '6px' }}>프로젝트 명칭 *</label>
                                     <input
@@ -1209,59 +1242,51 @@ export default function DesignControlManagementPage({ user, onNavigate }) {
                                     style={{ width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }}
                                 />
                             </div>
-                        </form>
-
-                        {/* 고정 푸터 */}
-                        <div style={{ padding: '16px 24px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', backgroundColor: '#f8fafc' }}>
-                            <button
-                                type="button"
-                                onClick={() => setIsProjectModalOpen(false)}
-                                style={{
-                                    padding: '9px 18px', borderRadius: '6px', backgroundColor: '#ffffff', border: '1px solid #cbd5e1',
-                                    color: '#475569', fontSize: '13px', fontWeight: '600', cursor: 'pointer'
-                                }}
-                            >
-                                취소
-                            </button>
-                            <button
-                                type="submit"
-                                form="projectForm"
-                                style={{
-                                    padding: '9px 24px', borderRadius: '6px', backgroundColor: '#2563eb', border: 'none',
-                                    color: '#ffffff', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer',
-                                    boxShadow: '0 2px 4px rgba(37, 99, 235, 0.2)'
-                                }}
-                            >
-                                {projectFormData.id ? '수정 완료' : '프로젝트 등록'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+                    </DrawerCard>
+                </form>
+            </StandardWorkspaceDrawer>
 
             {/* ========================================================================= */}
             {/* 2. 설계통제 항목 등록/수정 모달 (96vw × 92vh) */}
             {/* ========================================================================= */}
-            {isItemModalOpen && (
-                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <div style={{ width: '96vw', maxWidth: '1680px', height: '92vh', maxHeight: '94vh', backgroundColor: '#ffffff', borderRadius: '12px', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflow: 'hidden' }}>
-                        
-                        {/* 고정 헤더 */}
-                        <div style={{ padding: '18px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
-                            <div>
-                                <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#0f172a', margin: 0 }}>
-                                    {itemFormData.id ? `✏️ 통제 항목 수정 [${itemFormData.itemCode}]` : `➕ [${selectedProject?.projectName}] 설계통제 항목 추가`}
-                                </h2>
-                                <p style={{ fontSize: '12px', color: '#64748b', margin: '4px 0 0 0' }}>
-                                    설계입력(DI), 출력(DO), 검증(DV), 유효성확인(VAL), 이관(TRF) 요구사항 및 판정 기준을 등록합니다.
-                                </p>
-                            </div>
-                            <button onClick={() => setIsItemModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}>✕</button>
-                        </div>
-
-                        {/* 스크롤 바디 */}
-                        <form id="itemForm" onSubmit={handleSaveItem} style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+            <StandardWorkspaceDrawer
+                isOpen={isItemModalOpen}
+                onClose={() => setIsItemModalOpen(false)}
+                title={itemFormData.id ? `✏️ 통제 항목 수정 [${itemFormData.itemCode}]` : `➕ [${selectedProject?.projectName || ''}] 설계통제 항목 추가`}
+                subtitle="ISO 13485:2016 §7.3.3-§7.3.7 요구사항(입력/출력/검증/유효성확인/이관)을 개별 통제항목으로 등록합니다."
+                docNumber={itemFormData.itemCode}
+                complianceText="ISO 13485:2016 §7.3.3-§7.3.7 설계 입력/출력 및 V&V 요건"
+                footerRight={
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                            type="button"
+                            onClick={() => setIsItemModalOpen(false)}
+                            className="secondary close-button"
+                        >
+                            취소
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleSaveItem}
+                            style={{
+                                padding: '8px 22px',
+                                fontSize: '13px',
+                                fontWeight: 700,
+                                borderRadius: '8px',
+                                border: 'none',
+                                backgroundColor: '#10b981',
+                                color: '#ffffff',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            {itemFormData.id ? '항목 수정' : '항목 추가'}
+                        </button>
+                    </div>
+                }
+            >
+                <form id="itemForm" onSubmit={handleSaveItem} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <DrawerCard title="설계통제 상세 항목 명세" icon="📐">
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
                                 <div>
                                     <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '6px' }}>통제 유형 (Item Type) *</label>
                                     <select
@@ -1370,58 +1395,51 @@ export default function DesignControlManagementPage({ user, onNavigate }) {
                                     />
                                 </div>
                             </div>
-                        </form>
-
-                        {/* 고정 푸터 */}
-                        <div style={{ padding: '16px 24px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', backgroundColor: '#f8fafc' }}>
-                            <button
-                                type="button"
-                                onClick={() => setIsItemModalOpen(false)}
-                                style={{
-                                    padding: '9px 18px', borderRadius: '6px', backgroundColor: '#ffffff', border: '1px solid #cbd5e1',
-                                    color: '#475569', fontSize: '13px', fontWeight: '600', cursor: 'pointer'
-                                }}
-                            >
-                                취소
-                            </button>
-                            <button
-                                type="submit"
-                                form="itemForm"
-                                style={{
-                                    padding: '9px 24px', borderRadius: '6px', backgroundColor: '#10b981', border: 'none',
-                                    color: '#ffffff', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer'
-                                }}
-                            >
-                                {itemFormData.id ? '항목 수정' : '항목 추가'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+                    </DrawerCard>
+                </form>
+            </StandardWorkspaceDrawer>
 
             {/* ========================================================================= */}
             {/* 3. 설계 심의 (Design Review) 등록/수정 모달 (96vw × 92vh) */}
             {/* ========================================================================= */}
-            {isReviewModalOpen && (
-                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <div style={{ width: '96vw', maxWidth: '1680px', height: '92vh', maxHeight: '94vh', backgroundColor: '#ffffff', borderRadius: '12px', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflow: 'hidden' }}>
-                        
-                        {/* 고정 헤더 */}
-                        <div style={{ padding: '18px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
-                            <div>
-                                <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#0f172a', margin: 0 }}>
-                                    {reviewFormData.id ? `✏️ Stage-Gate 설계심의 수정 [${reviewFormData.reviewNumber}]` : `➕ [${selectedProject?.projectName}] Stage-Gate 설계심의 등록`}
-                                </h2>
-                                <p style={{ fontSize: '12px', color: '#64748b', margin: '4px 0 0 0' }}>
-                                    ISO 13485:2016 §7.3.5에 의거 각 개발 단계 완료 심의 및 다음 단계 진입(GO/HOLD) 승인 결정을 기록합니다.
-                                </p>
-                            </div>
-                            <button onClick={() => setIsReviewModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}>✕</button>
-                        </div>
-
-                        {/* 스크롤 바디 */}
-                        <form id="reviewForm" onSubmit={handleSaveReview} style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+            <StandardWorkspaceDrawer
+                isOpen={isReviewModalOpen}
+                onClose={() => setIsReviewModalOpen(false)}
+                title={reviewFormData.id ? `✏️ Stage-Gate 설계심의 수정 [${reviewFormData.reviewNumber}]` : `➕ [${selectedProject?.projectName || ''}] Stage-Gate 설계심의 등록`}
+                subtitle="ISO 13485:2016 §7.3.5에 의거 각 개발 단계 완료 심의 및 다음 단계 진입(GO/HOLD) 승인 결정을 기록합니다."
+                docNumber={reviewFormData.reviewNumber}
+                complianceText="ISO 13485:2016 §7.3.5 설계 심의(Design Review) 및 Gate 판정 요건"
+                footerRight={
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                            type="button"
+                            onClick={() => setIsReviewModalOpen(false)}
+                            className="secondary close-button"
+                        >
+                            취소
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleSaveReview}
+                            style={{
+                                padding: '8px 22px',
+                                fontSize: '13px',
+                                fontWeight: 700,
+                                borderRadius: '8px',
+                                border: 'none',
+                                backgroundColor: '#9333ea',
+                                color: '#ffffff',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            {reviewFormData.id ? '심의 수정' : '심의 등록'}
+                        </button>
+                    </div>
+                }
+            >
+                <form id="reviewForm" onSubmit={handleSaveReview} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <DrawerCard title="Stage-Gate 설계심의 기록 명세" icon="⚖️">
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
                                 <div>
                                     <label style={{ display: 'block', fontSize: '13px', fontWeight: 'bold', color: '#334155', marginBottom: '6px' }}>심의 대상 단계 *</label>
                                     <select
@@ -1494,78 +1512,49 @@ export default function DesignControlManagementPage({ user, onNavigate }) {
                                     style={{ width: '100%', padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }}
                                 />
                             </div>
-                        </form>
-
-                        {/* 고정 푸터 */}
-                        <div style={{ padding: '16px 24px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', backgroundColor: '#f8fafc' }}>
-                            <button
-                                type="button"
-                                onClick={() => setIsReviewModalOpen(false)}
-                                style={{
-                                    padding: '9px 18px', borderRadius: '6px', backgroundColor: '#ffffff', border: '1px solid #cbd5e1',
-                                    color: '#475569', fontSize: '13px', fontWeight: '600', cursor: 'pointer'
-                                }}
-                            >
-                                취소
-                            </button>
-                            <button
-                                type="submit"
-                                form="reviewForm"
-                                style={{
-                                    padding: '9px 24px', borderRadius: '6px', backgroundColor: '#7c3aed', border: 'none',
-                                    color: '#ffffff', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer'
-                                }}
-                            >
-                                {reviewFormData.id ? '심의 수정' : '심의 등록'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+                    </DrawerCard>
+                </form>
+            </StandardWorkspaceDrawer>
 
             {/* ========================================================================= */}
             {/* 4. DHF (Design History File) 종합 보고서 인덱스 모달 (96vw × 92vh) */}
             {/* ========================================================================= */}
             {isDhfModalOpen && selectedProject && (
-                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <div style={{ width: '96vw', maxWidth: '1680px', height: '92vh', maxHeight: '94vh', backgroundColor: '#ffffff', borderRadius: '12px', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', overflow: 'hidden' }}>
-                        
-                        {/* 고정 헤더 */}
-                        <div style={{ padding: '18px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <span style={{ fontSize: '24px' }}>📁</span>
-                                <div>
-                                    <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#0f172a', margin: 0 }}>
-                                        DHF 종합 편철 보고서: [{selectedProject.dhfNumber}] {selectedProject.projectName}
-                                    </h2>
-                                    <p style={{ fontSize: '12px', color: '#64748b', margin: '4px 0 0 0' }}>
-                                        21 CFR 820.30(j) / ISO 13485:2016 §7.3.10 규격 정합 설계이력파일(DHF) 인덱스 및 편철 현황
-                                    </p>
-                                </div>
-                            </div>
-                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                <span style={{
-                                    padding: '4px 10px', borderRadius: '16px', fontSize: '12px', fontWeight: 'bold',
-                                    backgroundColor: selectedProject.dhfStatus === 'FROZEN' ? '#f1f5f9' : '#ecfdf5',
-                                    color: selectedProject.dhfStatus === 'FROZEN' ? '#475569' : '#059669',
-                                    border: '1px solid currentColor'
-                                }}>
-                                    {selectedProject.dhfStatus === 'FROZEN' ? '🔒 FROZEN (동결)' : '🟢 OPEN (개방)'}
-                                </span>
-                                <button onClick={() => setIsDhfModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}>✕</button>
-                            </div>
-                        </div>
-
-                        {/* 스크롤 바디: DHF 인덱스 트리 및 증빙 매핑 */}
-                        <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                            
-                            {/* 프로젝트 요약 카드 */}
+            <StandardWorkspaceDrawer
+                isOpen={isDhfModalOpen && !!selectedProject}
+                onClose={() => setIsDhfModalOpen(false)}
+                title={`DHF 종합 편철 보고서: [${selectedProject?.dhfNumber || ''}] ${selectedProject?.projectName || ''}`}
+                subtitle="21 CFR 820.30(j) / ISO 13485:2016 §7.3.10 규격 정합 설계이력파일(DHF) 인덱스 및 편철 현황"
+                docNumber={selectedProject?.dhfNumber}
+                statusBadge={selectedProject ? (
+                    <span style={{
+                        padding: '3px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 800,
+                        backgroundColor: selectedProject.dhfStatus === 'FROZEN' ? '#f1f5f9' : '#ecfdf5',
+                        color: selectedProject.dhfStatus === 'FROZEN' ? '#475569' : '#059669',
+                        border: '1px solid currentColor'
+                    }}>
+                        {selectedProject.dhfStatus === 'FROZEN' ? '🔒 FROZEN (동결)' : '🟢 OPEN (개방)'}
+                    </span>
+                ) : null}
+                complianceText="21 CFR 820.30(j) / ISO 13485:2016 §7.3.10 설계이력파일(DHF) 편철 표준"
+                footerRight={
+                    <button
+                        type="button"
+                        onClick={() => setIsDhfModalOpen(false)}
+                        className="secondary close-button"
+                    >
+                        <span className="icon">✕</span> 닫기
+                    </button>
+                }
+            >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {/* 프로젝트 요약 카드 */}
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                <div><span style={{ color: '#64748b', fontSize: '12px' }}>프로젝트 코드:</span> <strong style={{ display: 'block', fontSize: '14px' }}>{selectedProject.projectCode}</strong></div>
-                                <div><span style={{ color: '#64748b', fontSize: '12px' }}>대상 기기명:</span> <strong style={{ display: 'block', fontSize: '14px' }}>{selectedProject.targetDeviceName}</strong></div>
-                                <div><span style={{ color: '#64748b', fontSize: '12px' }}>기기 등급:</span> <strong style={{ display: 'block', fontSize: '14px' }}>{selectedProject.deviceClassification}</strong></div>
-                                <div><span style={{ color: '#64748b', fontSize: '12px' }}>책임자 / 부서:</span> <strong style={{ display: 'block', fontSize: '14px' }}>{selectedProject.projectLeader} ({selectedProject.department})</strong></div>
-                                <div><span style={{ color: '#64748b', fontSize: '12px' }}>개발 일정:</span> <strong style={{ display: 'block', fontSize: '14px' }}>{selectedProject.startDate} ~ {selectedProject.targetCompletionDate}</strong></div>
+                                <div><span style={{ color: '#64748b', fontSize: '12px' }}>프로젝트 코드:</span> <strong style={{ display: 'block', fontSize: '14px' }}>{selectedProject?.projectCode || '-'}</strong></div>
+                                <div><span style={{ color: '#64748b', fontSize: '12px' }}>대상 기기명:</span> <strong style={{ display: 'block', fontSize: '14px' }}>{selectedProject?.targetDeviceName || '-'}</strong></div>
+                                <div><span style={{ color: '#64748b', fontSize: '12px' }}>기기 등급:</span> <strong style={{ display: 'block', fontSize: '14px' }}>{selectedProject?.deviceClassification || '-'}</strong></div>
+                                <div><span style={{ color: '#64748b', fontSize: '12px' }}>책임자 / 부서:</span> <strong style={{ display: 'block', fontSize: '14px' }}>{selectedProject?.projectLeader || '-'} ({selectedProject?.department || '-'})</strong></div>
+                                <div><span style={{ color: '#64748b', fontSize: '12px' }}>개발 일정:</span> <strong style={{ display: 'block', fontSize: '14px' }}>{selectedProject?.startDate || '-'} ~ {selectedProject?.targetCompletionDate || '-'}</strong></div>
                                 <div><span style={{ color: '#64748b', fontSize: '12px' }}>통제 항목 수:</span> <strong style={{ display: 'block', fontSize: '14px', color: '#2563eb' }}>{controlItems.length}건</strong></div>
                             </div>
 
@@ -1660,22 +1649,8 @@ export default function DesignControlManagementPage({ user, onNavigate }) {
                                     </div>
                                 )}
                             </div>
-                        </div>
-
-                        {/* 고정 푸터 */}
-                        <div style={{ padding: '16px 24px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', backgroundColor: '#f8fafc' }}>
-                            <button
-                                onClick={() => setIsDhfModalOpen(false)}
-                                style={{
-                                    padding: '9px 24px', borderRadius: '6px', backgroundColor: '#2563eb', border: 'none',
-                                    color: '#ffffff', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer'
-                                }}
-                            >
-                                닫기
-                            </button>
-                        </div>
-                    </div>
                 </div>
+            </StandardWorkspaceDrawer>
             )}
         </div>
     );

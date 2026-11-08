@@ -68,7 +68,7 @@ public class MedicalDeviceProductController {
      * 의료기기 품목 신규 등록.
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'DEVICE', 'USER') or hasAuthority('MENU_PRODUCTS_EDIT')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'DEVICE') or hasAuthority('MENU_PRODUCTS_EDIT')")
     public ResponseEntity<MedicalDeviceProduct> createDevice(
             @Valid @RequestBody MedicalDeviceProduct device,
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -80,7 +80,7 @@ public class MedicalDeviceProductController {
      * 의료기기 품목 정보 수정.
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'DEVICE', 'USER') or hasAuthority('MENU_PRODUCTS_EDIT')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'DEVICE') or hasAuthority('MENU_PRODUCTS_EDIT')")
     public ResponseEntity<MedicalDeviceProduct> updateDevice(
             @PathVariable Long id,
             @Valid @RequestBody MedicalDeviceProduct device,
@@ -93,7 +93,7 @@ public class MedicalDeviceProductController {
      * 의료기기 품목 소프트 삭제.
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'DEVICE', 'USER') or hasAuthority('MENU_PRODUCTS_DELETE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'DEVICE') or hasAuthority('MENU_PRODUCTS_DELETE')")
     public ResponseEntity<Void> deleteDevice(
             @PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails) {

@@ -86,7 +86,15 @@ public class PermissionService {
                 Map<String, Object> map = objectMapper.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
                 Object val = map.get(menuKey);
                 if (val instanceof List) {
-                    return ((List<?>) val).contains(action);
+                    List<?> list = (List<?>) val;
+                    if (list.contains(action)) {
+                        return true;
+                    }
+                    // [SEC-01] CREATE 액션 요청 시 EDIT 권한이 부여되어 있다면 생성 권한 허용 (표준 CRUD 호환)
+                    if ("CREATE".equalsIgnoreCase(action) && list.contains("EDIT")) {
+                        return true;
+                    }
+                    return false;
                 }
             } else if (json.contains(menuKey) && "VIEW".equals(action)) {
                 return true;

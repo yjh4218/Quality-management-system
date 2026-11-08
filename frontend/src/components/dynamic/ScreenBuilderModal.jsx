@@ -884,22 +884,8 @@ const ScreenBuilderModal = ({ isOpen, onClose, onSuccess, mode = 'create', scree
 
     const modalElement = (
         <div 
-            className="modal-overlay"
-            style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                width: '100%',
-                height: '100%',
-                backgroundColor: 'rgba(15, 23, 42, 0.65)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 999999,
-                backdropFilter: 'blur(4px)'
-            }}
+            className="drawer-overlay"
+            style={{ zIndex: 5000 }}
             onClick={(e) => {
                 if (e.target === e.currentTarget) {
                     onClose();
@@ -907,19 +893,20 @@ const ScreenBuilderModal = ({ isOpen, onClose, onSuccess, mode = 'create', scree
             }}
         >
             <div 
+                className="drawer"
                 style={{
-                    width: '1200px',
-                    maxWidth: '96vw',
-                    height: '88vh',
-                    maxHeight: '900px',
+                    width: '100%',
+                    maxWidth: 'none',
+                    height: '100%',
+                    maxHeight: '100%',
                     backgroundColor: '#ffffff',
-                    borderRadius: '16px',
-                    boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.35)',
+                    borderRadius: '12px',
+                    boxShadow: '0 25px 70px rgba(0, 0, 0, 0.35)',
                     display: 'flex',
                     flexDirection: 'column',
                     overflow: 'hidden',
-                    border: '1px solid #cbd5e1'
-                }}
+                    border: '1px solid #e2e8f0',
+                                    }}
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* 1. 모달 헤더 (QMS 표준 클린 화이트 & 딥 네이비) */}

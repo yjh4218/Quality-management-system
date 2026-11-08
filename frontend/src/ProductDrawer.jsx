@@ -176,6 +176,8 @@ const ProductDrawer = ({ product, onClose, user }) => {
         inboxLayoutImage: '',
         outboxLayoutImageFile: '',
         palletLayoutImage: '',
+        palletWrappedLayoutImage: '',
+        palletWrappedViewConfig: '',
         inboxPackingPattern: '',
         outboxPackingPattern: '',
         palletStackingPattern: '',
@@ -191,6 +193,12 @@ const ProductDrawer = ({ product, onClose, user }) => {
         lotAndExpiryFormat: '',
         signatureJson: '[]',
         applyChannelSticker: false,
+        applyShippingLabel: true,
+        channelStickerImageUrl: '',
+        inboxLabelImage: '',
+        zipperBagLabelImage: '',
+        outboxLabelImage: '',
+        palletLabelImage: '',
         bomItems: []
     });
     const [masterCertificates, setMasterCertificates] = useState([]);
@@ -765,6 +773,10 @@ const ProductDrawer = ({ product, onClose, user }) => {
                     fileType: stickerNote.fileType || (stickerNote.fileUrl.toLowerCase().endsWith('.pdf') ? 'PDF' : 'IMAGE'),
                     noteContent: stickerNote.noteContent || ''
                 });
+                setCurrentSpec(prev => ({
+                    ...prev,
+                    channelStickerImageUrl: prev.channelStickerImageUrl || stickerNote.fileUrl
+                }));
             } else {
                 setChannelStickerInfo(null);
             }
@@ -970,6 +982,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
             unitBoxMarkingDisplay: containerDisplay || prev.unitBoxMarkingDisplay,
             outboxChannelStickerStandard: stickerLabel,
             applyChannelSticker: !!channel.channelStickerRequired,
+            channelStickerImageUrl: (channelStickerInfo && channelStickerInfo.fileUrl) ? channelStickerInfo.fileUrl : prev.channelStickerImageUrl || '',
             outboxCushioningStandard: cushioningLabel,
             popRequiredStandard: popLabel,
             unitBoxMarkingRule: cleanRule || prev.unitBoxMarkingRule || '',
@@ -1095,6 +1108,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                     const cfgStr = JSON.stringify(curCfg);
                     if (sim3DTab === 'inbox') specToSave.inboxViewConfig = cfgStr;
                     else if (sim3DTab === 'outbox') specToSave.outboxViewConfig = cfgStr;
+                    else if (sim3DTab === 'pallet_wrapped') specToSave.palletWrappedViewConfig = cfgStr;
                     else specToSave.palletViewConfig = cfgStr;
                 }
             }
@@ -1347,8 +1361,8 @@ const ProductDrawer = ({ product, onClose, user }) => {
             toast.warn("사양서를 먼저 한 번 저장한 후 3D 도면을 확정할 수 있습니다.");
             return;
         }
-        const normalizedMode = mode.startsWith('pallet') ? 'pallet' : mode;
-        if (normalizedMode === 'pallet') {
+        const normalizedMode = mode.includes('wrapped') ? 'pallet_wrapped' : (mode.startsWith('pallet') ? 'pallet' : mode);
+        if (normalizedMode.startsWith('pallet')) {
             const tierQty = parseInt(currentSpec?.palletTierQty || 0, 10);
             const tierCount = parseInt(currentSpec?.palletTierCount || 0, 10);
             if (tierQty <= 0 || tierCount <= 0) {
@@ -1377,6 +1391,12 @@ const ProductDrawer = ({ product, onClose, user }) => {
                         outboxLayoutImage: savedPath,
                         outboxViewConfig: viewConfigStr || prev.outboxViewConfig
                     }));
+                } else if (normalizedMode === 'pallet_wrapped') {
+                    setCurrentSpec(prev => ({ 
+                        ...prev, 
+                        palletWrappedLayoutImage: savedPath,
+                        palletWrappedViewConfig: viewConfigStr || prev.palletWrappedViewConfig
+                    }));
                 } else {
                     setCurrentSpec(prev => ({ 
                         ...prev, 
@@ -1384,8 +1404,9 @@ const ProductDrawer = ({ product, onClose, user }) => {
                         palletViewConfig: viewConfigStr || prev.palletViewConfig
                     }));
                 }
+                const modeLabel = normalizedMode === 'inbox' ? '인박스' : normalizedMode === 'outbox' ? '아웃박스' : (normalizedMode === 'pallet_wrapped' ? '팔레트 랩핑' : '팔레트 적재');
                 setImageErrorMap(prev => ({ ...prev, [normalizedMode]: false }));
-                toast.success(`📸 ${normalizedMode === 'inbox' ? '인박스' : normalizedMode === 'outbox' ? '아웃박스' : '팔레트'} 3D 도면이 확정 저장되었습니다! (엑셀 출력 100% 반영)`);
+                toast.success(`📸 ${modeLabel} 3D 도면이 확정 저장되었습니다! (엑셀 출력 100% 반영)`);
             }
         } catch (err) {
             toast.error("3D 도면 저장 중 오류가 발생했습니다.");
@@ -1396,8 +1417,8 @@ const ProductDrawer = ({ product, onClose, user }) => {
     };
 
     const handleCaptureCurrent3D = (mode) => {
-        const normalizedMode = mode.startsWith('pallet') ? 'pallet' : mode;
-        if (normalizedMode === 'pallet') {
+        const normalizedMode = mode.includes('wrapped') ? 'pallet_wrapped' : (mode.startsWith('pallet') ? 'pallet' : mode);
+        if (normalizedMode.startsWith('pallet')) {
             const tierQty = parseInt(currentSpec?.palletTierQty || 0, 10);
             const tierCount = parseInt(currentSpec?.palletTierCount || 0, 10);
             if (tierQty <= 0 || tierCount <= 0) {
@@ -1408,7 +1429,9 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
         const curConfirmedImage = normalizedMode === 'inbox' 
             ? currentSpec.inboxLayoutImage 
-            : (normalizedMode === 'outbox' ? (currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) : currentSpec.palletLayoutImage);
+            : (normalizedMode === 'outbox' 
+                ? (currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) 
+                : (normalizedMode === 'pallet_wrapped' ? currentSpec.palletWrappedLayoutImage : currentSpec.palletLayoutImage));
 
         const doCapture = () => {
             if (!viewer3DRef.current?.capture) {
@@ -1452,9 +1475,10 @@ const ProductDrawer = ({ product, onClose, user }) => {
         if (hasInbox && (forceAll || !currentSpec.inboxLayoutImage)) modesToSave.push('inbox');
         if (forceAll || !(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage)) modesToSave.push('outbox');
         if (forceAll || !currentSpec.palletLayoutImage) modesToSave.push('pallet');
+        if (forceAll || !currentSpec.palletWrappedLayoutImage) modesToSave.push('pallet_wrapped');
 
         if (modesToSave.length === 0) {
-            toast.info("이미 모든 3D 도면(인박스, 아웃박스, 팔레트)이 확정 저장되어 있습니다.");
+            toast.info("이미 모든 3D 도면(인박스, 아웃박스, 팔레트 적재, 팔레트 랩핑)이 확정 저장되어 있습니다.");
             return;
         }
 
@@ -1465,7 +1489,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
             for (let i = 0; i < modesToSave.length; i++) {
                 const targetMode = modesToSave[i];
-                const modeLabel = targetMode === 'inbox' ? '인박스' : targetMode === 'outbox' ? '아웃박스' : '팔레트';
+                const modeLabel = targetMode === 'inbox' ? '인박스' : targetMode === 'outbox' ? '아웃박스' : (targetMode === 'pallet_wrapped' ? '팔레트 랩핑' : '팔레트 적재');
                 toast.info(`📸 3D 도면 일괄 저장 중... (${i + 1}/${modesToSave.length}) - [${modeLabel}]`, { autoClose: 1200 });
                 
                 setSim3DTab(targetMode);
@@ -1484,6 +1508,8 @@ const ProductDrawer = ({ product, onClose, user }) => {
                             else if (targetMode === 'outbox') {
                                 updatedImages.outboxLayoutImageFile = savedPath;
                                 updatedImages.outboxLayoutImage = savedPath;
+                            } else if (targetMode === 'pallet_wrapped') {
+                                updatedImages.palletWrappedLayoutImage = savedPath;
                             } else updatedImages.palletLayoutImage = savedPath;
                         }
                     }
@@ -1510,9 +1536,12 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
     const handleDirectImageUpload = async (file, mode) => {
         if (!file) return;
-        const curConfirmedImage = mode === 'inbox' 
+        const normalizedMode = mode.includes('wrapped') ? 'pallet_wrapped' : (mode.startsWith('pallet') ? 'pallet' : mode);
+        const curConfirmedImage = normalizedMode === 'inbox' 
             ? currentSpec.inboxLayoutImage 
-            : (mode === 'outbox' ? (currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) : currentSpec.palletLayoutImage);
+            : (normalizedMode === 'outbox' 
+                ? (currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) 
+                : (normalizedMode === 'pallet_wrapped' ? currentSpec.palletWrappedLayoutImage : currentSpec.palletLayoutImage));
 
         const doUpload = async () => {
             if (!currentSpec?.id) {
@@ -1524,15 +1553,17 @@ const ProductDrawer = ({ product, onClose, user }) => {
                 const uploadRes = await uploadFile(file, formData.productName || 'pkg-spec');
                 const fileUrl = uploadRes.data?.fileUrl || uploadRes.data?.url || uploadRes.data;
                 if (fileUrl) {
-                    const normalizedMode = mode.startsWith('pallet') ? 'pallet' : mode;
                     if (normalizedMode === 'inbox') {
                         setCurrentSpec(prev => ({ ...prev, inboxLayoutImage: fileUrl }));
                     } else if (normalizedMode === 'outbox') {
                         setCurrentSpec(prev => ({ ...prev, outboxLayoutImageFile: fileUrl, outboxLayoutImage: fileUrl }));
+                    } else if (normalizedMode === 'pallet_wrapped') {
+                        setCurrentSpec(prev => ({ ...prev, palletWrappedLayoutImage: fileUrl }));
                     } else {
                         setCurrentSpec(prev => ({ ...prev, palletLayoutImage: fileUrl }));
                     }
-                    toast.success(`📁 ${normalizedMode === 'inbox' ? '인박스' : normalizedMode === 'outbox' ? '아웃박스' : '팔레트'} 도면 이미지가 등록되었습니다. (사양서 저장 필요)`);
+                    const modeLabel = normalizedMode === 'inbox' ? '인박스' : normalizedMode === 'outbox' ? '아웃박스' : (normalizedMode === 'pallet_wrapped' ? '팔레트 랩핑' : '팔레트 적재');
+                    toast.success(`📁 ${modeLabel} 도면 이미지가 등록되었습니다. (사양서 저장 필요)`);
                 }
             } catch (err) {
                 console.error(err);
@@ -1560,17 +1591,66 @@ const ProductDrawer = ({ product, onClose, user }) => {
             title: '자동 모드 복원 확인',
             message: '확정된 도면을 해제하고 자동 3D 모드로 정말 복원하시겠습니까?',
             onConfirm: () => {
-                const normalizedMode = mode.startsWith('pallet') ? 'pallet' : mode;
+                const normalizedMode = mode.includes('wrapped') ? 'pallet_wrapped' : (mode.startsWith('pallet') ? 'pallet' : mode);
                 if (normalizedMode === 'inbox') {
                     setCurrentSpec(prev => ({ ...prev, inboxLayoutImage: null }));
                 } else if (normalizedMode === 'outbox') {
                     setCurrentSpec(prev => ({ ...prev, outboxLayoutImageFile: null, outboxLayoutImage: null }));
+                } else if (normalizedMode === 'pallet_wrapped') {
+                    setCurrentSpec(prev => ({ ...prev, palletWrappedLayoutImage: null }));
                 } else {
                     setCurrentSpec(prev => ({ ...prev, palletLayoutImage: null }));
                 }
-                toast.info(`🔄 ${normalizedMode === 'inbox' ? '인박스' : normalizedMode === 'outbox' ? '아웃박스' : '팔레트'} 도면이 자동 3D 모드로 복원되었습니다. (사양서 저장 시 적용)`);
+                const modeLabel = normalizedMode === 'inbox' ? '인박스' : normalizedMode === 'outbox' ? '아웃박스' : (normalizedMode === 'pallet_wrapped' ? '팔레트 랩핑' : '팔레트 적재');
+                toast.info(`🔄 ${modeLabel} 도면이 자동 3D 모드로 복원되었습니다. (사양서 저장 시 적용)`);
             }
         });
+    };
+
+    const handleLabelImageUpload = async (labelType, file) => {
+        if (!file) return;
+        try {
+            let uploadedUrl = '';
+            if (currentSpec?.id) {
+                const res = await api.uploadPackagingSpecLabelImage(currentSpec.id, labelType, file);
+                uploadedUrl = res.data?.fileUrl;
+            } else {
+                const res = await uploadFile(file, `pkg_label_${labelType}`);
+                uploadedUrl = res.data?.fileUrl || res.data?.url || res.data;
+            }
+            if (uploadedUrl) {
+                const fieldMap = {
+                    inbox: 'inboxLabelImage',
+                    zipperBag: 'zipperBagLabelImage',
+                    outbox: 'outboxLabelImage',
+                    pallet: 'palletLabelImage',
+                    channelSticker: 'channelStickerImageUrl'
+                };
+                const targetField = fieldMap[labelType];
+                if (targetField) {
+                    setCurrentSpec(prev => ({ ...prev, [targetField]: uploadedUrl }));
+                    toast.success("현품표/스티커 이미지가 성공적으로 등록되었습니다.");
+                }
+            }
+        } catch (err) {
+            console.error("라벨 이미지 업로드 실패:", err);
+            toast.error("이미지 업로드에 실패했습니다.");
+        }
+    };
+
+    const handleLabelImageDelete = (labelType) => {
+        const fieldMap = {
+            inbox: 'inboxLabelImage',
+            zipperBag: 'zipperBagLabelImage',
+            outbox: 'outboxLabelImage',
+            pallet: 'palletLabelImage',
+            channelSticker: 'channelStickerImageUrl'
+        };
+        const targetField = fieldMap[labelType];
+        if (targetField) {
+            setCurrentSpec(prev => ({ ...prev, [targetField]: '' }));
+            toast.info("부착 이미지가 삭제되었습니다 (가상 표준 라벨로 자동 전환됩니다).");
+        }
     };
 
     const open3DPreview = (type) => {
@@ -1597,6 +1677,11 @@ const ProductDrawer = ({ product, onClose, user }) => {
             imgPath = currentSpec?.outboxLayoutImageFile || currentSpec?.outboxLayoutImage || '';
             pattern = currentSpec?.outboxPackingPattern || (hasInbox ? `2열×2행×1단 (인박스 4박스입, 총 ${currentSpec?.outboxQty || 40}개)` : `4열×5행×2단 (총 ${currentSpec?.outboxQty || 40}개)`);
             size = currentSpec?.outboxSize || `${oBox.w}×${oBox.d}×${oBox.h} mm`;
+        } else if (targetType === 'pallet_wrapped' || targetType === 'pallet-wrapped') {
+            title = '🎁 팔레트 3D 랩핑 및 현품표 부착 도면';
+            imgPath = currentSpec?.palletWrappedLayoutImage || '';
+            pattern = (currentSpec?.palletStackingPattern || '8방 핀휠 교차적재') + ' (스트레치 필름 랩핑 + 팔레트 현품표 부착)';
+            size = currentSpec?.palletSize || currentSpec?.palletSpec || `${pBox.w}×${pBox.d} mm (${palletStacks}단)`;
         } else {
             title = '🏗️ 팔레트 3D 적재 도면';
             imgPath = currentSpec?.palletLayoutImage || '';
@@ -2892,6 +2977,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
         if (hasInbox && !currentSpec.inboxLayoutImage) missing3D.push('인박스 3D 입수 도면');
         if (!(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage)) missing3D.push('아웃박스 3D 입수 도면');
         if (!currentSpec.palletLayoutImage) missing3D.push('팔레트 3D 적재 도면');
+        if (!currentSpec.palletWrappedLayoutImage) missing3D.push('팔레트 3D 랩핑 도면');
 
         const methodImgCount = (packagingMethodImages && packagingMethodImages.length) || (currentSpec.methodImages && currentSpec.methodImages.length) || (currentSpec.packagingMethodImage ? 1 : 0);
         const missingMethod = methodImgCount === 0;
@@ -2981,6 +3067,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
         if (hasInbox && !currentSpec.inboxLayoutImage) missing3D.push('인박스 3D 입수 도면');
         if (!(currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage)) missing3D.push('아웃박스 3D 입수 도면');
         if (!currentSpec.palletLayoutImage) missing3D.push('팔레트 3D 적재 도면');
+        if (!currentSpec.palletWrappedLayoutImage) missing3D.push('팔레트 3D 랩핑 도면');
 
         const methodImgCount = (packagingMethodImages && packagingMethodImages.length) || (currentSpec.methodImages && currentSpec.methodImages.length) || (currentSpec.packagingMethodImage ? 1 : 0);
         const missingMethod = methodImgCount === 0;
@@ -6615,30 +6702,33 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                     <div className="form-group" style={{ marginBottom: '8px' }}>
                                                         <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#7c3aed' }}>🏷️ 채널스티커 (채널 자동 매칭 - 수정 불가)</label>
                                                         <input type="text" value={currentSpec.outboxChannelStickerStandard || ''} readOnly style={{ fontSize: '13px', padding: '6px 8px', background: '#e2e8f0', color: '#334155', cursor: 'not-allowed' }} placeholder="채널 선택 시 자동 반영" />
-                                                        {channelStickerInfo?.fileUrl && (
+                                                        {(channelStickerInfo?.fileUrl || currentSpec.channelStickerImageUrl) && (
                                                             <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '8px' }}>
-                                                                {channelStickerInfo.fileType === 'PDF' || channelStickerInfo.fileUrl.toLowerCase().endsWith('.pdf') ? (
+                                                                {(channelStickerInfo?.fileType === 'PDF' || (currentSpec.channelStickerImageUrl || channelStickerInfo?.fileUrl || '').toLowerCase().endsWith('.pdf')) ? (
                                                                     <div 
                                                                         style={{ width: '48px', height: '48px', backgroundColor: '#fee2e2', color: '#dc2626', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', fontSize: '11px', borderRadius: '6px', cursor: 'pointer', flexShrink: 0 }}
-                                                                        onClick={() => setPreviewStickerFile({ url: getFullFileUrl(channelStickerInfo.fileUrl), type: 'PDF' })}
+                                                                        onClick={() => setPreviewStickerFile({ url: getFullFileUrl(currentSpec.channelStickerImageUrl || channelStickerInfo?.fileUrl), type: 'PDF' })}
                                                                         title="클릭 시 크게보기"
                                                                     >
                                                                         📄 PDF
                                                                     </div>
                                                                 ) : (
                                                                     <img
-                                                                        src={getFullFileUrl(channelStickerInfo.fileUrl)}
+                                                                        src={getFullFileUrl(currentSpec.channelStickerImageUrl || channelStickerInfo?.fileUrl)}
                                                                         alt="채널 스티커 규정"
                                                                         style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #cbd5e1', cursor: 'pointer', backgroundColor: '#fff', flexShrink: 0 }}
-                                                                        onClick={() => setPreviewStickerFile({ url: getFullFileUrl(channelStickerInfo.fileUrl), type: 'IMAGE' })}
+                                                                        onClick={() => setPreviewStickerFile({ url: getFullFileUrl(currentSpec.channelStickerImageUrl || channelStickerInfo?.fileUrl), type: 'IMAGE' })}
                                                                         title="클릭 시 크게보기"
                                                                     />
                                                                 )}
                                                                 <div style={{ flex: 1, minWidth: 0 }}>
                                                                     <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#6d28d9', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                        <span>📷 채널 스티커 규정 이미지/문서 첨부됨</span>
+                                                                        <span>📷 채널 스티커 규정 첨부됨</span>
+                                                                        <span style={{ fontSize: '10px', background: '#ede9fe', color: '#7c3aed', padding: '1px 6px', borderRadius: '4px' }}>
+                                                                            3D 아웃박스 오른쪽 상단 부착
+                                                                        </span>
                                                                     </div>
-                                                                    {channelStickerInfo.noteContent && (
+                                                                    {channelStickerInfo?.noteContent && (
                                                                         <div style={{ fontSize: '11px', color: '#475569', marginTop: '2px', whiteSpace: 'pre-line', textOverflow: 'ellipsis', overflow: 'hidden' }}>
                                                                             {channelStickerInfo.noteContent}
                                                                         </div>
@@ -6646,7 +6736,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                 </div>
                                                                 <button
                                                                     type="button"
-                                                                    onClick={() => setPreviewStickerFile({ url: getFullFileUrl(channelStickerInfo.fileUrl), type: channelStickerInfo.fileType || (channelStickerInfo.fileUrl.toLowerCase().endsWith('.pdf') ? 'PDF' : 'IMAGE') })}
+                                                                    onClick={() => setPreviewStickerFile({ url: getFullFileUrl(currentSpec.channelStickerImageUrl || channelStickerInfo?.fileUrl), type: (channelStickerInfo?.fileType || ((currentSpec.channelStickerImageUrl || channelStickerInfo?.fileUrl || '').toLowerCase().endsWith('.pdf') ? 'PDF' : 'IMAGE')) })}
                                                                     style={{ padding: '4px 10px', fontSize: '12px', fontWeight: '600', color: '#6d28d9', backgroundColor: '#fff', border: '1px solid #c4b5fd', borderRadius: '6px', cursor: 'pointer', whiteSpace: 'nowrap' }}
                                                                 >
                                                                     👁️ 크게보기
@@ -7106,6 +7196,23 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                             >
                                                                 🏗️ 팔레트 3D 적재
                                                             </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setSim3DTab('pallet_wrapped')}
+                                                                style={{
+                                                                    border: 'none',
+                                                                    background: sim3DTab === 'pallet_wrapped' ? '#0d9488' : 'transparent',
+                                                                    color: sim3DTab === 'pallet_wrapped' ? '#ffffff' : '#475569',
+                                                                    fontWeight: sim3DTab === 'pallet_wrapped' ? 'bold' : 'normal',
+                                                                    padding: '6px 14px',
+                                                                    borderRadius: '6px',
+                                                                    fontSize: '12px',
+                                                                    cursor: 'pointer',
+                                                                    transition: 'all 0.15s'
+                                                                }}
+                                                            >
+                                                                🎁 팔레트 랩핑 3D (현품표)
+                                                            </button>
                                                         </div>
                                                     </div>
 
@@ -7509,6 +7616,61 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                             </div>
                                                                         </div>
                                                                     </div>
+
+                                                                    {/* 3. 현품표 부착 & 유통채널 스티커 부착 (3D 시뮬레이션 실시간 연동) */}
+                                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8fafc', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                                                            <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#1e40af' }}>📦 현품표 부착</span>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    const nextVal = currentSpec.applyShippingLabel === false ? true : false;
+                                                                                    setCurrentSpec(prev => ({ ...prev, applyShippingLabel: nextVal }));
+                                                                                }}
+                                                                                disabled={!canEdit}
+                                                                                style={{
+                                                                                    padding: '4px 10px',
+                                                                                    fontSize: '11px',
+                                                                                    fontWeight: 'bold',
+                                                                                    borderRadius: '6px',
+                                                                                    border: 'none',
+                                                                                    background: currentSpec.applyShippingLabel !== false ? '#2563eb' : '#e2e8f0',
+                                                                                    color: currentSpec.applyShippingLabel !== false ? '#ffffff' : '#64748b',
+                                                                                    cursor: 'pointer',
+                                                                                    whiteSpace: 'nowrap'
+                                                                                }}
+                                                                                title="아웃박스, 인박스, 팔레트 현품표 부착 여부 선택"
+                                                                            >
+                                                                                {currentSpec.applyShippingLabel !== false ? 'ON (부착)' : 'OFF'}
+                                                                            </button>
+                                                                        </div>
+
+                                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8fafc', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                                                            <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#b45309' }}>🏷️ 채널스티커</span>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => {
+                                                                                    const nextVal = !currentSpec.applyChannelSticker;
+                                                                                    setCurrentSpec(prev => ({ ...prev, applyChannelSticker: nextVal }));
+                                                                                }}
+                                                                                disabled={!canEdit}
+                                                                                style={{
+                                                                                    padding: '4px 10px',
+                                                                                    fontSize: '11px',
+                                                                                    fontWeight: 'bold',
+                                                                                    borderRadius: '6px',
+                                                                                    border: 'none',
+                                                                                    background: currentSpec.applyChannelSticker ? '#d97706' : '#e2e8f0',
+                                                                                    color: currentSpec.applyChannelSticker ? '#ffffff' : '#64748b',
+                                                                                    cursor: 'pointer',
+                                                                                    whiteSpace: 'nowrap'
+                                                                                }}
+                                                                                title="유통채널 출하 스티커(오른쪽 상단) 부착 여부 선택"
+                                                                            >
+                                                                                {currentSpec.applyChannelSticker ? 'ON (부착)' : 'OFF'}
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
                                                                 </div>
                                                             </div>
 
@@ -7535,9 +7697,9 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                 ? currentSpec.inboxLayoutImage 
                                                                 : (sim3DTab === 'outbox' 
                                                                     ? (currentSpec.outboxLayoutImageFile || currentSpec.outboxLayoutImage) 
-                                                                    : currentSpec.palletLayoutImage);
+                                                                    : (sim3DTab === 'pallet_wrapped' ? currentSpec.palletWrappedLayoutImage : currentSpec.palletLayoutImage));
                                                             const hasConfirmedImage = Boolean(curConfirmedImage);
-                                                            const tabName = sim3DTab === 'inbox' ? '인박스' : (sim3DTab === 'outbox' ? '아웃박스' : '팔레트');
+                                                            const tabName = sim3DTab === 'inbox' ? '인박스' : (sim3DTab === 'outbox' ? '아웃박스' : (sim3DTab === 'pallet_wrapped' ? '팔레트 랩핑' : '팔레트 적재'));
 
                                                             return (
                                                                 <div style={{ position: 'relative', minHeight: '460px' }}>
@@ -7562,7 +7724,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                         }}>
                                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                                                 <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e293b' }}>
-                                                                                    {sim3DTab === 'inbox' ? '📥 인박스 3D' : (sim3DTab === 'outbox' ? '📦 아웃박스 3D' : '🏗️ 팔레트 3D')}
+                                                                                    {sim3DTab === 'inbox' ? '📥 인박스 3D' : (sim3DTab === 'outbox' ? '📦 아웃박스 3D' : (sim3DTab === 'pallet_wrapped' ? '🎁 팔레트 랩핑 3D (현품표)' : '🏗️ 팔레트 3D 적재'))}
                                                                                 </span>
                                                                                 {hasConfirmedImage ? (
                                                                                     <span style={{
@@ -7756,7 +7918,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
 
                                                                         <PackagingViewer3D
                                                                             ref={viewer3DRef}
-                                                                            mode={sim3DTab === 'pallet' ? pallet3DMode : sim3DTab}
+                                                                            mode={sim3DTab === 'pallet' ? pallet3DMode : (sim3DTab === 'pallet_wrapped' ? 'pallet-wrapped' : sim3DTab)}
                                                                             unitBox={uBox}
                                                                             inbox={iBox}
                                                                             outbox={oBox}
@@ -7776,10 +7938,40 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                             savedViewConfig={
                                                                                 sim3DTab === 'inbox' 
                                                                                     ? currentSpec.inboxViewConfig 
-                                                                                    : (sim3DTab === 'outbox' ? currentSpec.outboxViewConfig : currentSpec.palletViewConfig)
+                                                                                    : (sim3DTab === 'outbox' 
+                                                                                        ? currentSpec.outboxViewConfig 
+                                                                                        : (sim3DTab === 'pallet_wrapped' ? currentSpec.palletWrappedViewConfig : currentSpec.palletViewConfig))
                                                                             }
                                                                             onCapture={(dataUrl, renderedMode) => handleSave3DSnapshot(dataUrl, renderedMode)}
+                                                                            showShippingLabel={currentSpec.applyShippingLabel !== false}
+                                                                            showChannelSticker={!!currentSpec.applyChannelSticker}
+                                                                            onToggleOption={({ showShippingLabel, showChannelSticker }) => {
+                                                                                setCurrentSpec(prev => ({
+                                                                                    ...prev,
+                                                                                    applyShippingLabel: showShippingLabel,
+                                                                                    applyChannelSticker: showChannelSticker
+                                                                                }));
+                                                                            }}
                                                                             height={410}
+                                                                            labelInfo={{
+                                                                                outboxLabelImage: currentSpec.outboxLabelImage,
+                                                                                channelStickerImage: currentSpec.channelStickerImageUrl || channelStickerInfo?.fileUrl,
+                                                                                inboxLabelImage: currentSpec.inboxLabelImage,
+                                                                                zipperBagLabelImage: currentSpec.zipperBagLabelImage,
+                                                                                palletLabelImage: currentSpec.palletLabelImage,
+                                                                                hasChannelSticker: !!currentSpec.applyChannelSticker,
+                                                                                showShippingLabel: currentSpec.applyShippingLabel !== false,
+                                                                                showChannelSticker: !!currentSpec.applyChannelSticker,
+                                                                                channelName: (formData.channels && formData.channels[0]?.name) || '',
+                                                                                isZipperBag: currentSpec.inboxPackagingType === '지퍼백',
+                                                                                itemCode: formData.itemCode || currentSpec.itemCode || '',
+                                                                                productName: formData.productName || currentSpec.productName || '',
+                                                                                outboxQty: currentSpec.outboxQty || currentSpec.outboxTotalQty || '',
+                                                                                inboxQty: currentSpec.inboxQty || currentSpec.outboxInboxQty || '',
+                                                                                barcode: formData.outboxBarcode || formData.productBarcode || currentSpec.barcode || '8809123456789',
+                                                                                manufacturerName: formData.manufacturerInfo?.name || '(주)한국콜마',
+                                                                                lotFormat: currentSpec.outboxDateFormat || 'LOT: YYYYMMDD / EXP: YYYY.MM.DD'
+                                                                            }}
                                                                         />
 
                                                                         {/* 3D 사양서 도면 3대 영역 확정 현황 패널 */}
@@ -7799,7 +7991,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                                 </span>
                                                                             </div>
 
-                                                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                                                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
                                                                                 {/* 1. 인박스 */}
                                                                                 <div style={{
                                                                                     background: '#ffffff',
@@ -8043,7 +8235,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                                         title="클릭하여 크게보기"
                                                                                     >
                                                                                         <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#b45309', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                                                            3. 팔레트 도면
+                                                                                            3. 팔레트 적재 도면
                                                                                         </div>
                                                                                         <div style={{ fontSize: '10px', color: imageErrorMap.pallet ? '#dc2626' : (currentSpec.palletLayoutImage ? '#15803d' : '#94a3b8'), fontWeight: imageErrorMap.pallet ? 600 : 'normal' }}>
                                                                                             {imageErrorMap.pallet ? '⚠️ 파일 소실 (재캡처)' : (currentSpec.palletLayoutImage ? '✓ 도면 확정됨' : '자동 3D 도면')}
@@ -8064,7 +8256,7 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                                                 cursor: 'pointer',
                                                                                                 whiteSpace: 'nowrap'
                                                                                             }}
-                                                                                            title="팔레트 3D 도면을 확대 미리보기합니다."
+                                                                                            title="팔레트 3D 적재 도면을 확대 미리보기합니다."
                                                                                         >
                                                                                             🔍
                                                                                         </button>
@@ -8086,9 +8278,106 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                                                                                 cursor: 'pointer',
                                                                                                 whiteSpace: 'nowrap'
                                                                                             }}
-                                                                                            title="팔레트 3D 뷰로 이동하여 즉시 캡처/저장합니다."
+                                                                                            title="팔레트 3D 적재 뷰로 이동하여 즉시 캡처/저장합니다."
                                                                                         >
                                                                                             📸 {currentSpec.palletLayoutImage ? '재캡처' : '캡처'}
+                                                                                        </button>
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                {/* 4. 팔레트 랩핑 */}
+                                                                                <div style={{
+                                                                                    background: '#ffffff',
+                                                                                    padding: '8px 10px',
+                                                                                    borderRadius: '8px',
+                                                                                    border: currentSpec.palletWrappedLayoutImage ? (imageErrorMap.pallet_wrapped ? '1px dashed #f87171' : '1px solid #a7f3d0') : '1px dashed #cbd5e1',
+                                                                                    display: 'flex',
+                                                                                    alignItems: 'center',
+                                                                                    gap: '8px',
+                                                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                                                                                }}>
+                                                                                    {currentSpec.palletWrappedLayoutImage && !imageErrorMap.pallet_wrapped ? (
+                                                                                        <img
+                                                                                            src={getFileUrl(currentSpec.palletWrappedLayoutImage)}
+                                                                                            alt="팔레트 랩핑 도면"
+                                                                                            style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #a7f3d0', cursor: 'pointer', flexShrink: 0 }}
+                                                                                            title="클릭하여 팔레트 3D 랩핑 도면 크게보기"
+                                                                                            onClick={() => open3DPreview('pallet_wrapped')}
+                                                                                            onError={() => setImageErrorMap(prev => ({ ...prev, pallet_wrapped: true }))}
+                                                                                        />
+                                                                                    ) : (
+                                                                                        <div
+                                                                                            onClick={() => open3DPreview('pallet_wrapped')}
+                                                                                            style={{
+                                                                                                width: '36px',
+                                                                                                height: '36px',
+                                                                                                background: imageErrorMap.pallet_wrapped ? '#fef2f2' : '#ecfdf5',
+                                                                                                border: imageErrorMap.pallet_wrapped ? '1px dashed #f87171' : '1px solid #a7f3d0',
+                                                                                                borderRadius: '4px',
+                                                                                                display: 'flex',
+                                                                                                alignItems: 'center',
+                                                                                                justifyContent: 'center',
+                                                                                                fontSize: '15px',
+                                                                                                cursor: 'pointer',
+                                                                                                flexShrink: 0
+                                                                                            }}
+                                                                                            title={imageErrorMap.pallet_wrapped ? '도면 파일 소실됨 (클릭하여 재캡처 안내)' : '팔레트 3D 랩핑 도면 미리보기'}
+                                                                                        >
+                                                                                            {imageErrorMap.pallet_wrapped ? '⚠️' : '🎁'}
+                                                                                        </div>
+                                                                                    )}
+                                                                                    <div
+                                                                                        style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+                                                                                        onClick={() => open3DPreview('pallet_wrapped')}
+                                                                                        title="클릭하여 크게보기"
+                                                                                    >
+                                                                                        <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#047857', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                                            4. 팔레트 랩핑 도면
+                                                                                        </div>
+                                                                                        <div style={{ fontSize: '10px', color: imageErrorMap.pallet_wrapped ? '#dc2626' : (currentSpec.palletWrappedLayoutImage ? '#15803d' : '#94a3b8'), fontWeight: imageErrorMap.pallet_wrapped ? 600 : 'normal' }}>
+                                                                                            {imageErrorMap.pallet_wrapped ? '⚠️ 파일 소실 (재캡처)' : (currentSpec.palletWrappedLayoutImage ? '✓ 도면 확정됨' : '자동 3D 도면')}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0 }}>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => open3DPreview('pallet_wrapped')}
+                                                                                            style={{
+                                                                                                padding: '3px 6px',
+                                                                                                fontSize: '10px',
+                                                                                                fontWeight: 600,
+                                                                                                borderRadius: '4px',
+                                                                                                border: '1px solid #cbd5e1',
+                                                                                                background: '#ffffff',
+                                                                                                color: '#334155',
+                                                                                                cursor: 'pointer',
+                                                                                                whiteSpace: 'nowrap'
+                                                                                            }}
+                                                                                            title="팔레트 3D 랩핑 도면을 확대 미리보기합니다."
+                                                                                        >
+                                                                                            🔍
+                                                                                        </button>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            disabled={snapshotUploading}
+                                                                                            onClick={() => {
+                                                                                                setSim3DTab('pallet_wrapped');
+                                                                                                setTimeout(() => handleCaptureCurrent3D('pallet_wrapped'), 250);
+                                                                                            }}
+                                                                                            style={{
+                                                                                                padding: '3px 6px',
+                                                                                                fontSize: '10px',
+                                                                                                fontWeight: 600,
+                                                                                                borderRadius: '4px',
+                                                                                                border: '1px solid #a7f3d0',
+                                                                                                background: '#ecfdf5',
+                                                                                                color: '#047857',
+                                                                                                cursor: 'pointer',
+                                                                                                whiteSpace: 'nowrap'
+                                                                                            }}
+                                                                                            title="팔레트 3D 랩핑 뷰로 이동하여 즉시 캡처/저장합니다."
+                                                                                        >
+                                                                                            📸 {currentSpec.palletWrappedLayoutImage ? '재캡처' : '캡처'}
                                                                                         </button>
                                                                                     </div>
                                                                                 </div>
@@ -8288,11 +8577,85 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                             </div>
                                         </div>
 
-                                        <div style={{ marginTop: '25px', padding: '20px', background: '#fff', border: '1px dashed #cbd5e1', borderRadius: '8px', textAlign: 'center' }}>
-                                            <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#475569', marginBottom: '8px' }}>📸 인박스 외관 및 포장 상태 이미지 (3D 모델/도면 연동부)</div>
-                                            <div style={{ height: '180px', background: '#f1f5f9', borderRadius: '6px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#94a3b8', fontSize: '12px' }}>
-                                                [ 인박스 3D WebGL / 도면 렌더링 영역 ]
+                                        <div style={{ marginTop: '25px', padding: '20px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '10px' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px' }}>
+                                                <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <span>📸</span>
+                                                    <span>{currentSpec.inboxPackagingType === '지퍼백' ? '지퍼백 현품표 실물 부착 사진' : '인박스 현품표 실물 부착 사진'}</span>
+                                                    <span style={{ fontSize: '11px', fontWeight: 'normal', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
+                                                        3D 뷰 및 사양서 도면 연동
+                                                    </span>
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                    <label style={{
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '5px',
+                                                        padding: '6px 12px',
+                                                        background: '#2563eb',
+                                                        color: '#fff',
+                                                        fontSize: '12px',
+                                                        fontWeight: 'bold',
+                                                        borderRadius: '6px',
+                                                        border: 'none'
+                                                    }}>
+                                                        📷 실물 사진 등록
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*"
+                                                            style={{ display: 'none' }}
+                                                            onChange={(e) => {
+                                                                const file = e.target.files && e.target.files[0];
+                                                                if (file) handleLabelImageUpload(currentSpec.inboxPackagingType === '지퍼백' ? 'zipperBag' : 'inbox', file);
+                                                            }}
+                                                        />
+                                                    </label>
+                                                    {(currentSpec.inboxPackagingType === '지퍼백' ? currentSpec.zipperBagLabelImage : currentSpec.inboxLabelImage) && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleLabelImageDelete(currentSpec.inboxPackagingType === '지퍼백' ? 'zipperBag' : 'inbox')}
+                                                            style={{
+                                                                padding: '6px 10px',
+                                                                background: '#fff',
+                                                                color: '#ef4444',
+                                                                border: '1px solid #fca5a5',
+                                                                borderRadius: '6px',
+                                                                fontSize: '12px',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                        >
+                                                            🗑️ 삭제
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
+                                            
+                                            {(currentSpec.inboxPackagingType === '지퍼백' ? currentSpec.zipperBagLabelImage : currentSpec.inboxLabelImage) ? (
+                                                <div style={{ display: 'flex', gap: '16px', alignItems: 'center', background: '#f8fafc', padding: '12px', borderRadius: '8px' }}>
+                                                    <img
+                                                        src={getFileUrl(currentSpec.inboxPackagingType === '지퍼백' ? currentSpec.zipperBagLabelImage : currentSpec.inboxLabelImage)}
+                                                        alt="현품표 실물"
+                                                        style={{ width: '160px', height: '110px', objectFit: 'contain', background: '#fff', borderRadius: '6px', border: '1px solid #cbd5e1', cursor: 'pointer' }}
+                                                        onClick={() => setPreviewImageModal({ url: getFileUrl(currentSpec.inboxPackagingType === '지퍼백' ? currentSpec.zipperBagLabelImage : currentSpec.inboxLabelImage), title: currentSpec.inboxPackagingType === '지퍼백' ? '지퍼백 현품표 실물' : '인박스 현품표 실물' })}
+                                                        title="클릭 시 원본 크게보기"
+                                                    />
+                                                    <div style={{ fontSize: '12px', color: '#475569', lineHeight: '1.6' }}>
+                                                        <div style={{ fontWeight: 'bold', color: '#0f172a', marginBottom: '4px' }}>✅ 등록된 실물 현품표 사진이 3D 모델에 적용되었습니다.</div>
+                                                        <div>• 파일 경로: {currentSpec.inboxPackagingType === '지퍼백' ? currentSpec.zipperBagLabelImage : currentSpec.inboxLabelImage}</div>
+                                                        <div style={{ color: '#0284c7', marginTop: '4px' }}>💡 3D 시뮬레이션 탭을 열면 인박스/지퍼백 표면에 해당 현품표가 실물 크기로 부착되어 렌더링됩니다.</div>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div style={{ padding: '24px', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '8px', textAlign: 'center' }}>
+                                                    <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '6px' }}>
+                                                        등록된 실물 사진이 없습니다. (위 버튼을 눌러 사진을 등록할 수 있습니다)
+                                                    </div>
+                                                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                                                        실물 사진이 등록되지 않은 경우, 상단의 사양서 데이터(품명, LOT, 바코드)를 바탕으로 <strong>3D 가상 표준 현품표</strong>가 자동 생성되어 부착됩니다.
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 )}
@@ -8382,10 +8745,132 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                             </div>
                                         </div>
 
-                                        <div style={{ marginTop: '25px', padding: '20px', background: '#fff', border: '1px dashed #cbd5e1', borderRadius: '8px', textAlign: 'center' }}>
-                                            <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#475569', marginBottom: '8px' }}>📸 아웃박스 외관 및 착인 위치 이미지 (3D 모델/도면 연동부)</div>
-                                            <div style={{ height: '180px', background: '#f1f5f9', borderRadius: '6px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#94a3b8', fontSize: '12px' }}>
-                                                [ 이미지 드래그 업로드 또는 3D WebGL 캔버스 렌더링 영역 ]
+                                        <div style={{ marginTop: '25px', padding: '20px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '10px' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px' }}>
+                                                <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <span>📸</span>
+                                                    <span>아웃박스 현품표 및 채널 스티커 실물 부착 관리</span>
+                                                    <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#1e40af', background: '#dbeafe', padding: '2px 8px', borderRadius: '4px' }}>
+                                                        왼쪽 상단 = 현품표 / 오른쪽 상단 = 채널 스티커
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* 규정 부착 배치 안내 카드 */}
+                                            <div style={{ padding: '10px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', fontSize: '12px', color: '#1e40af', marginBottom: '16px', lineHeight: '1.6' }}>
+                                                <strong>📦 아웃박스 외벽 라벨 표준 부착 규정</strong>: 아웃박스 외벽(바깥 노출면) 기준 <strong>왼쪽 상단에 '아웃박스 현품표'</strong>, <strong>오른쪽 상단에 '유통채널 스티커'</strong>가 부착되며, 3D 팔레트 적재 및 아웃박스 3D 뷰에 실시간 연동됩니다.
+                                            </div>
+
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                                {/* 1. 아웃박스 현품표 (왼쪽 상단) */}
+                                                <div style={{ padding: '14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                                        <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#0f172a' }}>
+                                                            🏷️ 아웃박스 현품표 <span style={{ color: '#2563eb', fontSize: '11px' }}>(왼쪽 상단 부착)</span>
+                                                        </div>
+                                                        <div style={{ display: 'flex', gap: '6px' }}>
+                                                            <label style={{
+                                                                cursor: 'pointer',
+                                                                padding: '4px 10px',
+                                                                background: '#2563eb',
+                                                                color: '#fff',
+                                                                fontSize: '11px',
+                                                                fontWeight: 'bold',
+                                                                borderRadius: '4px'
+                                                            }}>
+                                                                사진 등록
+                                                                <input
+                                                                    type="file"
+                                                                    accept="image/*"
+                                                                    style={{ display: 'none' }}
+                                                                    onChange={(e) => {
+                                                                        const file = e.target.files && e.target.files[0];
+                                                                        if (file) handleLabelImageUpload('outbox', file);
+                                                                    }}
+                                                                />
+                                                            </label>
+                                                            {currentSpec.outboxLabelImage && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleLabelImageDelete('outbox')}
+                                                                    style={{ padding: '4px 8px', background: '#fff', color: '#ef4444', border: '1px solid #fca5a5', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
+                                                                >
+                                                                    삭제
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    {currentSpec.outboxLabelImage ? (
+                                                        <div style={{ textAlign: 'center' }}>
+                                                            <img
+                                                                src={getFileUrl(currentSpec.outboxLabelImage)}
+                                                                alt="아웃박스 현품표 실물"
+                                                                style={{ maxWidth: '100%', height: '110px', objectFit: 'contain', background: '#fff', borderRadius: '6px', border: '1px solid #cbd5e1', cursor: 'pointer' }}
+                                                                onClick={() => setPreviewImageModal({ url: getFileUrl(currentSpec.outboxLabelImage), title: '아웃박스 현품표 실물' })}
+                                                                title="클릭 시 크게보기"
+                                                            />
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ padding: '16px', background: '#fff', border: '1px dashed #cbd5e1', borderRadius: '6px', textAlign: 'center', fontSize: '11px', color: '#64748b' }}>
+                                                            실물 사진 미등록 시 <strong>3D 가상 아웃박스 현품표</strong>가 자동 부착됩니다.
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* 2. 채널 스티커 (오른쪽 상단) */}
+                                                <div style={{ padding: '14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                                        <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#0f172a' }}>
+                                                            🏷️ 유통채널 스티커 <span style={{ color: '#d97706', fontSize: '11px' }}>(오른쪽 상단 부착)</span>
+                                                        </div>
+                                                        <div style={{ display: 'flex', gap: '6px' }}>
+                                                            <label style={{
+                                                                cursor: 'pointer',
+                                                                padding: '4px 10px',
+                                                                background: '#d97706',
+                                                                color: '#fff',
+                                                                fontSize: '11px',
+                                                                fontWeight: 'bold',
+                                                                borderRadius: '4px'
+                                                            }}>
+                                                                스티커 등록
+                                                                <input
+                                                                    type="file"
+                                                                    accept="image/*"
+                                                                    style={{ display: 'none' }}
+                                                                    onChange={(e) => {
+                                                                        const file = e.target.files && e.target.files[0];
+                                                                        if (file) handleLabelImageUpload('channelSticker', file);
+                                                                    }}
+                                                                />
+                                                            </label>
+                                                            {currentSpec.channelStickerImageUrl && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleLabelImageDelete('channelSticker')}
+                                                                    style={{ padding: '4px 8px', background: '#fff', color: '#ef4444', border: '1px solid #fca5a5', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
+                                                                >
+                                                                    삭제
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    {(currentSpec.channelStickerImageUrl || channelStickerInfo?.fileUrl) ? (
+                                                        <div style={{ textAlign: 'center' }}>
+                                                            <img
+                                                                src={getFileUrl(currentSpec.channelStickerImageUrl || channelStickerInfo?.fileUrl)}
+                                                                alt="채널 스티커"
+                                                                style={{ maxWidth: '100%', height: '110px', objectFit: 'contain', background: '#fff', borderRadius: '6px', border: '1px solid #cbd5e1', cursor: 'pointer' }}
+                                                                onClick={() => setPreviewImageModal({ url: getFileUrl(currentSpec.channelStickerImageUrl || channelStickerInfo?.fileUrl), title: '채널 스티커 규정 이미지' })}
+                                                                title="클릭 시 크게보기"
+                                                            />
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ padding: '16px', background: '#fff', border: '1px dashed #cbd5e1', borderRadius: '6px', textAlign: 'center', fontSize: '11px', color: '#64748b' }}>
+                                                            유통채널에 등록된 스티커 규정이 있거나 스티커 부착 항목 활성화 시 <strong>오른쪽 상단에 자동 연동</strong>됩니다.
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -8476,11 +8961,85 @@ const ProductDrawer = ({ product, onClose, user }) => {
                                             </div>
                                         </div>
 
-                                        <div style={{ marginTop: '25px', padding: '20px', background: '#fff', border: '1px dashed #cbd5e1', borderRadius: '8px', textAlign: 'center' }}>
-                                            <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#475569', marginBottom: '8px' }}>📸 팔레트 적재 형태 도면 / 이미지</div>
-                                            <div style={{ height: '180px', background: '#f1f5f9', borderRadius: '6px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: '#94a3b8', fontSize: '12px' }}>
-                                                [ 적재 3D 시뮬레이터 캔버스 영역 ]
+                                        <div style={{ marginTop: '25px', padding: '20px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '10px' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px' }}>
+                                                <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <span>📸</span>
+                                                    <span>팔레트 현품표 실물 부착 사진</span>
+                                                    <span style={{ fontSize: '11px', fontWeight: 'normal', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
+                                                        팔레트 랩핑 전면 부착 (3D 및 사양서 연동)
+                                                    </span>
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                    <label style={{
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '5px',
+                                                        padding: '6px 12px',
+                                                        background: '#2563eb',
+                                                        color: '#fff',
+                                                        fontSize: '12px',
+                                                        fontWeight: 'bold',
+                                                        borderRadius: '6px',
+                                                        border: 'none'
+                                                    }}>
+                                                        📷 실물 사진 등록
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*"
+                                                            style={{ display: 'none' }}
+                                                            onChange={(e) => {
+                                                                const file = e.target.files && e.target.files[0];
+                                                                if (file) handleLabelImageUpload('pallet', file);
+                                                            }}
+                                                        />
+                                                    </label>
+                                                    {currentSpec.palletLabelImage && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleLabelImageDelete('pallet')}
+                                                            style={{
+                                                                padding: '6px 10px',
+                                                                background: '#fff',
+                                                                color: '#ef4444',
+                                                                border: '1px solid #fca5a5',
+                                                                borderRadius: '6px',
+                                                                fontSize: '12px',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                        >
+                                                            🗑️ 삭제
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
+
+                                            {currentSpec.palletLabelImage ? (
+                                                <div style={{ display: 'flex', gap: '16px', alignItems: 'center', background: '#f8fafc', padding: '12px', borderRadius: '8px' }}>
+                                                    <img
+                                                        src={getFileUrl(currentSpec.palletLabelImage)}
+                                                        alt="팔레트 현품표 실물"
+                                                        style={{ width: '160px', height: '110px', objectFit: 'contain', background: '#fff', borderRadius: '6px', border: '1px solid #cbd5e1', cursor: 'pointer' }}
+                                                        onClick={() => setPreviewImageModal({ url: getFileUrl(currentSpec.palletLabelImage), title: '팔레트 현품표 실물' })}
+                                                        title="클릭 시 크게보기"
+                                                    />
+                                                    <div style={{ fontSize: '12px', color: '#475569', lineHeight: '1.6' }}>
+                                                        <div style={{ fontWeight: 'bold', color: '#0f172a', marginBottom: '4px' }}>✅ 등록된 실물 팔레트 현품표 사진이 3D 모델에 적용되었습니다.</div>
+                                                        <div>• 파일 경로: {currentSpec.palletLabelImage}</div>
+                                                        <div style={{ color: '#0284c7', marginTop: '4px' }}>💡 3D 팔레트 적재 뷰에서 전면 스트레치 필름 랩핑 표면에 대형 팔레트 현품표로 부착되어 렌더링됩니다.</div>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div style={{ padding: '24px', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '8px', textAlign: 'center' }}>
+                                                    <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '6px' }}>
+                                                        등록된 실물 사진이 없습니다. (위 버튼을 눌러 사진을 등록할 수 있습니다)
+                                                    </div>
+                                                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                                                        실물 사진이 등록되지 않은 경우, 사양서 데이터(박스 적재량, 총 낱개 수량, 바코드)를 바탕으로 <strong>3D 대형 가상 팔레트 현품표(A4)</strong>가 전면 랩핑에 자동 생성되어 부착됩니다.
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 )}

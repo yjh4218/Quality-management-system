@@ -38,17 +38,20 @@ public class ApprovalAdminController {
      * 관리자용 결재 문서유형 전체 목록
      */
     @GetMapping("/api/admin/approval-doc-types")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
     public ResponseEntity<List<ApprovalDocTypeDto>> getAllDocTypes() {
         return ResponseEntity.ok(adminService.getDocTypes(false));
     }
 
     @PostMapping("/api/admin/approval-doc-types")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApprovalDocTypeDto> createDocType(
             @RequestBody ApprovalDocTypeDto dto, Principal principal) {
         return ResponseEntity.ok(adminService.saveDocType(dto, principal.getName()));
     }
 
     @PutMapping("/api/admin/approval-doc-types/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApprovalDocTypeDto> updateDocType(
             @PathVariable Long id, @RequestBody ApprovalDocTypeDto dto, Principal principal) {
         dto.setId(id);
@@ -79,6 +82,7 @@ public class ApprovalAdminController {
     }
 
     @PostMapping("/api/admin/approval-templates")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApprovalTemplateDto> saveTemplate(
             @RequestBody ApprovalTemplateDto dto, Principal principal) {
         return ResponseEntity.ok(adminService.saveTemplate(dto, principal.getName()));
@@ -94,6 +98,7 @@ public class ApprovalAdminController {
     }
 
     @PutMapping("/api/admin/notification-rules/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<NotificationRuleDto> updateNotificationRule(
             @PathVariable Long id,
             @RequestBody Map<String, Boolean> body,

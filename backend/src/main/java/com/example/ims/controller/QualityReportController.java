@@ -32,6 +32,14 @@ public class QualityReportController {
     private final UserRepository userRepository;
     private final FileStorageService fileStorageService;
 
+    private String getEffectiveCompanyName(User user) {
+        if (user == null) return null;
+        if (user.getManufacturer() != null) {
+            return user.getManufacturer().getName();
+        }
+        return user.getCompanyName();
+    }
+
     @GetMapping("/inbound")
     public ResponseEntity<List<WmsInbound>> getInboundData(
             @AuthenticationPrincipal UserDetails userDetails,
@@ -60,8 +68,8 @@ public class QualityReportController {
         }
         
         String companyFilter = null;
-        if (user.getRole() != null && user.getRole().toUpperCase().contains("MANUFACTURER")) {
-            companyFilter = user.getCompanyName();
+        if ((user.getRole() != null && user.getRole().toUpperCase().contains("MANUFACTURER")) || "제조사".equals(user.getDepartment())) {
+            companyFilter = getEffectiveCompanyName(user);
         }
 
         return ResponseEntity.ok(wmsService.searchInbound(companyFilter, start, end, itemCode, productName, lotNumber, manufacturer, excludeStatus, grnNumber));
@@ -74,8 +82,8 @@ public class QualityReportController {
         User user = userRepository.findByUsername(userDetails.getUsername())
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
         String companyFilter = null;
-        if (user.getRole() != null && user.getRole().toUpperCase().contains("MANUFACTURER")) {
-            companyFilter = user.getCompanyName();
+        if ((user.getRole() != null && user.getRole().toUpperCase().contains("MANUFACTURER")) || "제조사".equals(user.getDepartment())) {
+            companyFilter = getEffectiveCompanyName(user);
         }
         return ResponseEntity.ok(qualityReportService.getReleaseRecords(date, companyFilter));
     }
@@ -100,8 +108,8 @@ public class QualityReportController {
                     .orElseThrow(() -> new UsernameNotFoundException("User not found"));
             
             String role = user.getRole();
-            String companyFilter = (role != null && role.toUpperCase().contains("MANUFACTURER")) 
-                    ? user.getCompanyName() : null;
+            boolean isMfr = (role != null && role.toUpperCase().contains("MANUFACTURER")) || "제조사".equals(user.getDepartment());
+            String companyFilter = isMfr ? getEffectiveCompanyName(user) : null;
             
             log.info(">>>> [EXPORT] Quality Excel - Role: {}, CompanyFilter: {}", role, companyFilter);
             

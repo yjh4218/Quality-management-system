@@ -619,7 +619,10 @@ public class SystemInitializationService {
                 "outbox_cushioning_standard VARCHAR(255)",
                 "pop_required_standard VARCHAR(255)",
                 "pallet_spec VARCHAR(255)",
-                "pallet_total_product_qty INTEGER"
+                "pallet_total_product_qty INTEGER",
+                "apply_shipping_label BOOLEAN DEFAULT TRUE",
+                "pallet_wrapped_layout_image VARCHAR(500)",
+                "pallet_wrapped_view_config TEXT"
         };
         for (String col : columns) {
             String name = col.split(" ")[0];

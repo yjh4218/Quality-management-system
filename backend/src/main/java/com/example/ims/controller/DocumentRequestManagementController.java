@@ -23,7 +23,6 @@ import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/api/document-requests")
-@PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'MANUFACTURER')")
 @RequiredArgsConstructor
 public class DocumentRequestManagementController {
 
@@ -42,6 +41,7 @@ public class DocumentRequestManagementController {
      * 필터 조건 및 페이징 처리를 지원하는 품질 서류 요구사항 리스트 조회 API
      */
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'MANUFACTURER')")
     public ResponseEntity<?> getDocumentRequirements(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String manufacturer,
@@ -85,6 +85,7 @@ public class DocumentRequestManagementController {
      * 특정 수동 요구 서류 건에 대해 이메일 즉시 재발송 (Audit Log 기록)
      */
     @PostMapping("/{requirementId}/re-request")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
     public ResponseEntity<?> reRequestDocument(
             @PathVariable Long requirementId,
             @RequestBody ReRequestPayload payload,
@@ -146,6 +147,7 @@ public class DocumentRequestManagementController {
      * 선택된 복수의 필수 서류 항목들에 대해 일괄 이메일 재발송 (Audit Log 기록)
      */
     @PostMapping("/batch-re-request")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
     public ResponseEntity<?> batchReRequestDocuments(
             @RequestBody BatchReRequestPayload payload,
             @org.springframework.security.core.annotation.AuthenticationPrincipal org.springframework.security.core.userdetails.UserDetails userDetails
@@ -240,6 +242,9 @@ public class DocumentRequestManagementController {
         if (req == null) {
             return ResponseEntity.status(404).body("{\"message\": \"해당 보안 토큰과 연결된 서류 요구사항을 찾을 수 없습니다.\"}");
         }
+        if (req.getTokenExpiresAt() != null && java.time.LocalDateTime.now().isAfter(req.getTokenExpiresAt())) {
+            return ResponseEntity.status(410).body("{\"message\": \"만료된 보안 링크입니다. 품질 담당자에게 링크 재발송을 요청해주세요.\"}");
+        }
 
         Product product = null;
         if (req.getProductId() != null) {
@@ -273,10 +278,16 @@ public class DocumentRequestManagementController {
         if (payload.getToken() == null || payload.getToken().trim().isEmpty()) {
             return ResponseEntity.badRequest().body("{\"message\": \"보안 토큰이 필요합니다.\"}");
         }
+        if (payload.getFileUrl() == null || payload.getFileUrl().trim().isEmpty() || payload.getFileName() == null || payload.getFileName().trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("{\"message\": \"업로드된 파일 정보가 올바르지 않습니다.\"}");
+        }
 
         DocumentRequirement req = requirementRepository.findBySecurityToken(payload.getToken().trim()).orElse(null);
         if (req == null) {
             return ResponseEntity.status(404).body("{\"message\": \"유효하지 않은 보안 토큰입니다.\"}");
+        }
+        if (req.getTokenExpiresAt() != null && java.time.LocalDateTime.now().isAfter(req.getTokenExpiresAt())) {
+            return ResponseEntity.status(410).body("{\"message\": \"만료된 보안 링크입니다. 서류를 제출할 수 없습니다.\"}");
         }
 
         req.setStatus(DocumentStatus.FULFILLED);
@@ -316,6 +327,7 @@ public class DocumentRequestManagementController {
      * 개별 요구서류 변경 이력 타임라인 조회 API
      */
     @GetMapping("/{id}/histories")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'MANUFACTURER')")
     public ResponseEntity<?> getRequirementHistories(@PathVariable Long id) {
         List<DocumentRequirementHistory> histories = historyRepository.findByRequirementIdOrderByUploadedAtDesc(id);
         return ResponseEntity.ok(histories);
@@ -330,6 +342,7 @@ public class DocumentRequestManagementController {
         private String changeReason;
     }
     @GetMapping("/custom-types")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'MANUFACTURER')")
     public ResponseEntity<?> getCustomDocumentTypes() {
         return ResponseEntity.ok(customDocumentTypeRepository.findAll());
     }
@@ -338,6 +351,7 @@ public class DocumentRequestManagementController {
      * 관리자용 신규 커스텀 주기 서류 종류 추가
      */
     @PostMapping("/custom-types")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
     public ResponseEntity<?> createCustomDocumentType(@RequestBody CustomDocumentType reqType) {
         if (reqType.getName() == null || reqType.getName().trim().isEmpty()) {
             return ResponseEntity.badRequest().body("{\"message\": \"문서명은 필수 입력 항목입니다.\"}");
@@ -366,6 +380,7 @@ public class DocumentRequestManagementController {
      * 커스텀 서류 종류 비활성화 및 수정 처리
      */
     @PutMapping("/custom-types/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
     public ResponseEntity<?> updateCustomDocumentType(
             @PathVariable Long id,
             @RequestBody CustomDocumentType reqData

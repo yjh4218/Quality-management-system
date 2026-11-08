@@ -434,7 +434,10 @@ api.interceptors.response.use(
         
         if (error.response && error.response.status === 401 && !isLoginRequest && !isSilentAuthCheck) {
             window.dispatchEvent(new Event('auth-unauthorized'));
-        } else if (!isLoginRequest && !isBugReportRequest && !isSilentAuthCheck && !(error.config && error.config.skipToast)) {
+        } else if (!isLoginRequest && !isBugReportRequest && !isSilentAuthCheck) {
+            const skipToast = !!(error.config && error.config.skipToast);
+            const skipBugReport = !!(error.config && error.config.skipBugReport);
+
             let errorMsg = "서버와 통신 중 문제가 발생했습니다.";
             if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
                 errorMsg = "요청 처리 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.";
@@ -459,7 +462,17 @@ api.interceptors.response.use(
             );
             const isSystemBug = isNetworkError || (error.response?.status >= 500) || (error.response?.status === 403) || isApi404 || isSystem400 || error.code === 'ECONNABORTED';
 
-            if (isSystemBug) {
+            const sanitizePayloadData = (data) => {
+                if (!data) return 'N/A';
+                let text = typeof data === 'string' ? data : '';
+                if (!text) {
+                    try { text = JSON.stringify(data); } catch (e) { return 'FormData/Binary'; }
+                }
+                return text.replace(/(["']?(?:password|passwd|secret|token|accessToken|refreshToken|credential|authorization|authCode)["']?\s*[:=]\s*["']?)([^"'&\s,}]+)(["']?)/gi, '$1***MASKED***$3')
+                           .substring(0, 2000);
+            };
+
+            if (isSystemBug && !skipBugReport) {
                 // 네트워크 에러는 서버에 전송이 원천 불가능하므로, 바로 큐로만 적재하고 불필요한 전송 시도는 건너뜁니다.
                 if (isNetworkError) {
                     console.warn("[QMS] Network Error detected. Skipping API auto-report and queueing offline.");
@@ -485,18 +498,20 @@ api.interceptors.response.use(
                     } catch (lsErr) {
                         console.error("Failed to write to localStorage:", lsErr);
                     }
-                    toast.error(
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span style={{ fontSize: '20px' }}>⚠️</span>
-                                <span style={{ fontWeight: 600 }}>통신 장애 감지</span>
-                            </div>
-                            <div style={{ fontSize: '13px', color: '#666' }}>
-                                서버와의 통신이 원활하지 않습니다. 요청이 로컬 큐에 안전하게 저장되었습니다.
-                            </div>
-                        </div>,
-                        { autoClose: 4000 }
-                    );
+                    if (!skipToast) {
+                        toast.error(
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{ fontSize: '20px' }}>⚠️</span>
+                                    <span style={{ fontWeight: 600 }}>통신 장애 감지</span>
+                                </div>
+                                <div style={{ fontSize: '13px', color: '#666' }}>
+                                    서버와의 통신이 원활하지 않습니다. 요청이 로컬 큐에 안전하게 저장되었습니다.
+                                </div>
+                            </div>,
+                            { autoClose: 4000 }
+                        );
+                    }
                 } else {
                     // 서버 에러(500+)의 경우에만 실제 API 전송 시도
                     (async () => {
@@ -510,7 +525,10 @@ api.interceptors.response.use(
                             }
                         }
 
-                        const correlationId = (serverErrorData && typeof serverErrorData === 'object') ? serverErrorData.correlationId : null;
+                        const correlationId = (serverErrorData && typeof serverErrorData === 'object' && serverErrorData.correlationId)
+                            ? serverErrorData.correlationId
+                            : (error.response?.headers?.['x-correlation-id'] || error.response?.headers?.['X-Correlation-Id'] || null);
+
                         const safeStringify = (obj) => {
                             try {
                                 const seen = new WeakSet();
@@ -518,6 +536,9 @@ api.interceptors.response.use(
                                     if (typeof v === 'object' && v !== null) {
                                         if (seen.has(v)) return '[Circular]';
                                         seen.add(v);
+                                    }
+                                    if (typeof k === 'string' && /password|token|secret|passwd|credential|auth/i.test(k)) {
+                                        return '***MASKED***';
                                     }
                                     return v;
                                 }, 2);
@@ -539,7 +560,7 @@ api.interceptors.response.use(
                                 `Status: ${error.response?.status || 'N/A'} ${error.response?.statusText || ''}`,
                                 '',
                                 `[요청 데이터]`,
-                                error.config?.data ? (typeof error.config.data === 'string' ? error.config.data.substring(0, 2000) : 'FormData/Binary') : 'N/A'
+                                sanitizePayloadData(error.config?.data)
                             ].join('\n'),
                             screenName: window.__QMS_ACTIVE_PAGE__ || window.location.pathname,
                             url: window.location.href,
@@ -550,18 +571,20 @@ api.interceptors.response.use(
 
                         try {
                             await bugReportAxios.post('/api/bug-reports', { ...bugReportPayload, errorCategory: 'API_500' });
-                            toast.error(
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <span style={{ fontSize: '20px' }}>🚨</span>
-                                        <span style={{ fontWeight: 600 }}>{errorMsg}</span>
-                                    </div>
-                                    <div style={{ fontSize: '13px', color: '#666' }}>
-                                        시스템 오류가 감지되어 에러 리포트가 관리자에게 자동 전송되었습니다.
-                                    </div>
-                                </div>,
-                                { autoClose: 5000 }
-                            );
+                            if (!skipToast) {
+                                toast.error(
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <span style={{ fontSize: '20px' }}>🚨</span>
+                                            <span style={{ fontWeight: 600 }}>{errorMsg}</span>
+                                        </div>
+                                        <div style={{ fontSize: '13px', color: '#666' }}>
+                                            시스템 오류가 감지되어 에러 리포트가 관리자에게 자동 전송되었습니다.{correlationId ? ` (식별자: ${correlationId})` : ''}
+                                        </div>
+                                    </div>,
+                                    { autoClose: 5000 }
+                                );
+                            }
                         } catch (reportErr) {
                             console.error("Failed to automatically report bug, saving to offline queue:", reportErr);
                             try {
@@ -575,6 +598,7 @@ api.interceptors.response.use(
                         }
                     })();
                 }
+            } else if (!skipToast) {
                 toast.error(
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -928,6 +952,14 @@ export const aggregateBomByComponents = (components) =>
     api.post('/api/packaging-specs/components/aggregate-bom', components);
 export const uploadPackagingSpec3DSnapshot = (specId, mode, imageBase64, viewConfig = null) => 
     api.post(`/api/packaging-specs/${specId}/3d-snapshot`, { mode, imageBase64, viewConfig });
+export const uploadPackagingSpecLabelImage = (specId, labelType, file) => {
+    const formData = new FormData();
+    formData.append('labelType', labelType);
+    formData.append('file', file);
+    return api.post(`/api/packaging-specs/${specId}/label-image`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    });
+};
 export const getProductBomSummaries = (params = {}) => {
     const query = new URLSearchParams();
     if (params.productId) query.append('productId', params.productId);

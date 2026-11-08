@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import 'ag-grid-community/styles/ag-grid.css';
@@ -1475,6 +1476,9 @@ export default function FacilityManagementPage({ user, onNavigate }) {
                         pagination={true}
                         paginationPageSize={15}
                         animateRows={true}
+                        onRowDoubleClicked={(e) => {
+                            if (e?.data) openEditEquipment(e.data);
+                        }}
                         overlayNoRowsTemplate="<span>등록된 장비/설비 내역이 없습니다.</span>"
                     />
                 )}
@@ -1490,6 +1494,9 @@ export default function FacilityManagementPage({ user, onNavigate }) {
                         pagination={true}
                         paginationPageSize={15}
                         animateRows={true}
+                        onRowDoubleClicked={(e) => {
+                            if (e?.data) openEditCalibration(e.data);
+                        }}
                         overlayNoRowsTemplate="<span>등록된 교정 성적서 및 이력이 없습니다.</span>"
                     />
                 )}
@@ -1505,6 +1512,9 @@ export default function FacilityManagementPage({ user, onNavigate }) {
                         pagination={true}
                         paginationPageSize={15}
                         animateRows={true}
+                        onRowDoubleClicked={(e) => {
+                            if (e?.data) openEditMaintenance(e.data);
+                        }}
                         overlayNoRowsTemplate="<span>등록된 유지보수/PM 이력이 없습니다.</span>"
                     />
                 )}
@@ -1520,6 +1530,9 @@ export default function FacilityManagementPage({ user, onNavigate }) {
                         pagination={true}
                         paginationPageSize={15}
                         animateRows={true}
+                        onRowDoubleClicked={(e) => {
+                            if (e?.data) openEditEnvironment(e.data);
+                        }}
                         overlayNoRowsTemplate="<span>등록된 청정실 환경 모니터링 기록이 없습니다.</span>"
                     />
                 )}
@@ -1529,29 +1542,8 @@ export default function FacilityManagementPage({ user, onNavigate }) {
             {/* Modal 1: 장비/설비 등록 및 수정 (96vw × 92vh) */}
             {/* ========================================================================= */}
             {showEquipmentModal && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.75)',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    zIndex: 9999,
-                    backdropFilter: 'blur(4px)'
-                }}>
-                    <div style={{
-                        width: '96vw',
-                        height: '92vh',
-                        backgroundColor: '#f8fafc',
-                        borderRadius: '12px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                        overflow: 'hidden'
-                    }}>
+                <div className="drawer-overlay">
+                    <div className="drawer">
                         <div style={{ padding: '16px 24px', backgroundColor: '#0f172a', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
                                 <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '800' }}>
@@ -1812,29 +1804,8 @@ export default function FacilityManagementPage({ user, onNavigate }) {
             {/* Modal 2: 교정 성적서 등록 및 판정 (96vw × 92vh) */}
             {/* ========================================================================= */}
             {showCalibrationModal && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.75)',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    zIndex: 9999,
-                    backdropFilter: 'blur(4px)'
-                }}>
-                    <div style={{
-                        width: '96vw',
-                        height: '92vh',
-                        backgroundColor: '#f8fafc',
-                        borderRadius: '12px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                        overflow: 'hidden'
-                    }}>
+                <div className="drawer-overlay">
+                    <div className="drawer">
                         <div style={{ padding: '16px 24px', backgroundColor: '#4c1d95', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
                                 <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '800' }}>
@@ -2067,29 +2038,8 @@ export default function FacilityManagementPage({ user, onNavigate }) {
             {/* Modal 3: 유지보수 및 예방보전(PM) 등록 (96vw × 92vh) */}
             {/* ========================================================================= */}
             {showMaintenanceModal && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.75)',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    zIndex: 9999,
-                    backdropFilter: 'blur(4px)'
-                }}>
-                    <div style={{
-                        width: '96vw',
-                        height: '92vh',
-                        backgroundColor: '#f8fafc',
-                        borderRadius: '12px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                        overflow: 'hidden'
-                    }}>
+                <div className="drawer-overlay">
+                    <div className="drawer">
                         <div style={{ padding: '16px 24px', backgroundColor: '#1e3a8a', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
                                 <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '800' }}>
@@ -2271,29 +2221,8 @@ export default function FacilityManagementPage({ user, onNavigate }) {
             {/* Modal 4: 청정실 & 작업환경 모니터링 등록 (96vw × 92vh) */}
             {/* ========================================================================= */}
             {showEnvironmentModal && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.75)',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    zIndex: 9999,
-                    backdropFilter: 'blur(4px)'
-                }}>
-                    <div style={{
-                        width: '96vw',
-                        height: '92vh',
-                        backgroundColor: '#f8fafc',
-                        borderRadius: '12px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                        overflow: 'hidden'
-                    }}>
+                <div className="drawer-overlay">
+                    <div className="drawer">
                         <div style={{ padding: '16px 24px', backgroundColor: '#065f46', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
                                 <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '800' }}>

@@ -19,6 +19,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.NoSuchElementException;
 
 /**
  * 전역 예외 처리기.
@@ -242,14 +243,24 @@ public class GlobalExceptionHandler {
 
     /**
      * 런타임 예외 처리.
-     * 비즈니스 유효성 검사 메시지(채널 규격 오류 등)는 마스킹 없이 400 Bad Request로 반환합니다.
+     * 비즈니스 유효성 검사 메시지(채널 규격 오류 등)는 마스킹 없이 400 Bad Request로 반환하며,
+     * NullPointer, 인덱스 초과 등 시스템 결함(버그)은 500 처리 및 버그 리포트로 자동 인계합니다.
      */
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<?> handleRuntimeException(RuntimeException ex, WebRequest request) {
         String message = ex.getMessage();
         
+        // NullPointerException, IndexOutOfBounds 등 프로그래밍 결함은 즉시 500 및 자동 리포트로 처리
+        if (ex instanceof NullPointerException ||
+            ex instanceof IndexOutOfBoundsException ||
+            ex instanceof ClassCastException ||
+            ex instanceof UnsupportedOperationException ||
+            ex instanceof NoSuchElementException) {
+            return handleGlobalException(ex, request);
+        }
+
         // 명확한 비즈니스 안내 메시지가 있는 경우는 마스킹 우회 (400 Bad Request로 반환)
-        if (message != null && (message.contains("오류]") || message.contains("규칙") || message.contains("규정") || message.contains("필수") || message.contains("초과"))) {
+        if (message != null && (message.contains("오류]") || message.contains("규칙") || message.contains("규정") || message.contains("필수") || message.contains("초과") || message.contains("선택해 주세요") || message.contains("입력해 주세요"))) {
             log.warn("Business Runtime Exception (400): {}", message);
             Map<String, String> response = new HashMap<>();
             response.put("message", message);
@@ -271,7 +282,8 @@ public class GlobalExceptionHandler {
 
     /**
      * [Task 7] 최상위 예외 처리 (500 Internal Server Error).
-     * [보안] 스택트레이스를 사용자에게 노출하지 않고 UUID 기반의 Correlation-ID를 발급하여 로그 추적성을 확보합니다.
+     * [보안] 스택트레이스를 사용자에게 노출하지 않고 UUID/CID 기반의 Correlation-ID를 발급하여 로그 추적성을 확보하며,
+     * 관리팀에 버그 리포트를 서버단에서 100% 자동 영속화합니다.
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<?> handleGlobalException(Exception ex, WebRequest request) {
@@ -283,30 +295,66 @@ public class GlobalExceptionHandler {
             return ResponseEntity.noContent().build();
         }
 
-        String correlationId = UUID.randomUUID().toString();
-        
-        // 운영 로그에만 상세 내용 기록 (스택트레이스 포함)
+        // 1. PerformanceLoggingFilter에서 주입한 Correlation-ID 확인 또는 신규 발급
+        Object attrCid = (request != null) ? request.getAttribute("correlationId", WebRequest.SCOPE_REQUEST) : null;
+        String correlationId = (attrCid != null) ? attrCid.toString() : ("CID-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
+
+        // 2. 발생 URI 및 요청자 정보 추출
+        String screenName = "SERVER-EXCEPTION";
+        String requestUrl = (request != null) ? request.getDescription(false) : "N/A";
+        String httpMethod = "";
+        if (request instanceof org.springframework.web.context.request.ServletWebRequest swr) {
+            HttpServletRequest httpReq = swr.getRequest();
+            if (httpReq != null) {
+                httpMethod = httpReq.getMethod();
+                screenName = httpMethod + " " + httpReq.getRequestURI();
+                requestUrl = httpReq.getRequestURL().toString();
+            }
+        }
+
+        String reporterUsername = "SYSTEM_AUTO";
+        try {
+            org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getName())) {
+                reporterUsername = auth.getName();
+            }
+        } catch (Exception ignored) {}
+
+        // 3. 스택트레이스 발췌 (상위 15라인)
+        StringBuilder stackBuilder = new StringBuilder();
+        stackBuilder.append(ex.getClass().getName()).append(": ").append(msg).append("\n");
+        StackTraceElement[] elements = ex.getStackTrace();
+        if (elements != null) {
+            int limit = Math.min(elements.length, 15);
+            for (int i = 0; i < limit; i++) {
+                stackBuilder.append("    at ").append(elements[i].toString()).append("\n");
+            }
+        }
+
+        // 운영 로그에 상세 내용 기록 (Correlation-ID 연동)
         log.error("[CORRELATION-ID: {}] Unhandled server error: {}", correlationId, ex.getMessage(), ex);
 
-        // [자동 버그리포트 연동] 500 에러 발생 시 시스템 감사 및 추적을 위해 BugReport 자동 적재
+        // 4. [자동 버그리포트 연동] 500 에러 발생 시 시스템 감사 및 추적을 위해 BugReport 자동 적재
         try {
             bugReportService.submitReport(BugReport.builder()
-                    .screenName("SERVER-EXCEPTION")
+                    .screenName(screenName)
                     .errorCategory("API_500")
-                    .description("[Correlation-ID: " + correlationId + "] " + (msg != null ? msg : ex.getClass().getSimpleName()))
-                    .url(request != null ? request.getDescription(false) : null)
-                    .serverError(ex.getClass().getName() + ": " + msg)
-                    .steps("Unhandled server exception captured by GlobalExceptionHandler")
+                    .description("[CID: " + correlationId + "] " + ex.getClass().getSimpleName() + ": " + (msg != null ? msg : "Internal Server Error"))
+                    .url(requestUrl)
+                    .serverError(stackBuilder.toString())
+                    .steps("Unhandled server exception captured by GlobalExceptionHandler\nMethod: " + httpMethod + "\nURI: " + requestUrl + "\nCorrelation-ID: " + correlationId)
                     .severity("CRITICAL")
-                    .reporterUsername("SYSTEM_AUTO")
+                    .reporterUsername(reporterUsername)
                     .build());
         } catch (Exception bugEx) {
             log.warn("Failed to auto-submit BugReport for correlation {}: {}", correlationId, bugEx.getMessage());
         }
 
-        Map<String, String> response = new HashMap<>();
-        response.put("message", "시스템 내부 무결성 검사 중 오류가 발생했습니다. 증상이 지속되면 관리자에게 문의하세요.");
-        response.put("correlationId", correlationId); // 사용자에게는 ID만 전달하여 문의 시 참조하게 함
+        Map<String, Object> response = new HashMap<>();
+        response.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+        response.put("error", "InternalServerError");
+        response.put("message", "서버 내부 처리 중 오류가 발생했습니다. 증상이 지속되면 관리자에게 문의하세요. (식별자: " + correlationId + ")");
+        response.put("correlationId", correlationId);
 
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }

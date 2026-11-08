@@ -498,8 +498,44 @@ const SalesChannelManagement = ({ user }) => {
             </div>
 
             {showDrawer && (
-                <div className="modal-overlay" style={{ zIndex: 1000, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <div className="modal-content" onClick={e => e.stopPropagation()} style={{ width: '1100px', maxWidth: '95vw', maxHeight: '92vh', borderRadius: '20px', backgroundColor: 'white', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                <div 
+                    className="drawer-overlay" 
+                    style={{ 
+                        zIndex: 1000, 
+                        position: 'fixed', 
+                        top: 0, 
+                        left: 'var(--sidebar-width, 240px)', 
+                        right: 0, 
+                        bottom: 0, 
+                        width: 'auto',
+                        height: 'auto',
+                        backgroundColor: 'rgba(15, 23, 42, 0.45)', 
+                        backdropFilter: 'blur(6px)', 
+                        WebkitBackdropFilter: 'blur(6px)',
+                        display: 'flex', 
+                        alignItems: 'stretch', 
+                        justifyContent: 'center',
+                        padding: '16px 24px',
+                        boxSizing: 'border-box'
+                    }}
+                >
+                    <div 
+                        className="drawer" 
+                        onClick={e => e.stopPropagation()} 
+                        style={{ 
+                            width: '100%', 
+                            maxWidth: 'none', 
+                            height: '100%', 
+                            maxHeight: '100%', 
+                            borderRadius: '12px', 
+                            backgroundColor: 'white', 
+                            display: 'flex', 
+                            flexDirection: 'column', 
+                            boxShadow: '0 25px 70px rgba(0, 0, 0, 0.35)', 
+                            border: '1px solid #e2e8f0', 
+                            overflow: 'hidden' 
+                        }}
+                    >
                         
                         {/* 1. Fixed Modal Header */}
                         <div className="modal-header" style={{ padding: '20px 30px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

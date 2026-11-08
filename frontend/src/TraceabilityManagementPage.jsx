@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import 'ag-grid-community/styles/ag-grid.css';
@@ -853,6 +854,12 @@ export default function TraceabilityManagementPage({ user, onNavigate }) {
                                 animateRows={true}
                                 pagination={true}
                                 paginationPageSize={10}
+                                onRowDoubleClicked={(e) => {
+                                    if (e?.data) {
+                                        setEditingBatch(e.data);
+                                        setBatchModalOpen(true);
+                                    }
+                                }}
                             />
                         </div>
                     </div>
@@ -907,6 +914,12 @@ export default function TraceabilityManagementPage({ user, onNavigate }) {
                                 animateRows={true}
                                 pagination={true}
                                 paginationPageSize={10}
+                                onRowDoubleClicked={(e) => {
+                                    if (e?.data) {
+                                        setSelectedLog(e.data);
+                                        setReconcileModalOpen(true);
+                                    }
+                                }}
                             />
                         </div>
                     </div>
@@ -964,6 +977,12 @@ export default function TraceabilityManagementPage({ user, onNavigate }) {
                                 animateRows={true}
                                 pagination={true}
                                 paginationPageSize={10}
+                                onRowDoubleClicked={(e) => {
+                                    if (e?.data) {
+                                        setEditingBarcode(e.data);
+                                        setBarcodeModalOpen(true);
+                                    }
+                                }}
                             />
                         </div>
                     </div>
@@ -1211,31 +1230,32 @@ function BatchRegistrationModal({ batch, batches, onClose, onSuccess }) {
         }
     };
 
-    return (
-        <div style={{
-            position: 'fixed', inset: 0, zIndex: 9999,
-            backgroundColor: 'rgba(0,0,0,0.55)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center'
-        }}>
-            <div style={{
-                width: '96vw', maxWidth: '1680px', height: '92vh', maxHeight: '94vh',
-                backgroundColor: '#ffffff', borderRadius: '16px', overflow: 'hidden',
-                display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
-            }}>
+    return createPortal(
+        <div className="drawer-overlay">
+                    <div className="drawer">
                 {/* 상단 고정 헤더 */}
-                <div style={{
-                    padding: '20px 28px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0',
+                <div className="drawer-header" style={{
+                    padding: '14px 24px', backgroundColor: '#ffffff', borderBottom: '1px solid #e2e8f0',
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                 }}>
-                    <div>
-                        <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
-                            {isEdit ? '✏️ 배치(LOT) 마스터 정보 수정' : '📦 신규 배치(LOT) 마스터 등록 및 투입 매핑'}
-                        </h2>
-                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                            ISO 13485:2016 §7.5.8 식별 및 추적성 기준에 부합하는 배치 정보와 부모 LOT 투입 관계를 구성합니다.
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        {isEdit && formData.batchNumber && (
+                            <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#2563eb', fontSize: '13px', background: '#eff6ff', padding: '3px 10px', borderRadius: '6px', border: '1px solid #bfdbfe' }}>
+                                {formData.batchNumber}
+                            </span>
+                        )}
+                        <div>
+                            <h2 style={{ margin: 0, fontSize: '19px', fontWeight: 800, color: '#0f172a' }}>
+                                {isEdit ? '✏️ 배치(LOT) 마스터 정보 수정' : '📦 신규 배치(LOT) 마스터 등록 및 투입 매핑'}
+                            </h2>
+                            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                                ISO 13485:2016 §7.5.8 식별 및 추적성 기준에 부합하는 배치 정보와 부모 LOT 투입 관계를 구성합니다.
+                            </div>
                         </div>
                     </div>
-                    <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}>✕</button>
+                    <button type="button" onClick={onClose} className="secondary close-button">
+                        <span className="icon">✕</span> 닫기
+                    </button>
                 </div>
 
                 {/* 중앙 스크롤 바디 */}
@@ -1534,16 +1554,8 @@ function TraceabilityTreeModal({ matrixData, onClose }) {
     };
 
     return (
-        <div style={{
-            position: 'fixed', inset: 0, zIndex: 9999,
-            backgroundColor: 'rgba(0,0,0,0.55)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center'
-        }}>
-            <div style={{
-                width: '96vw', maxWidth: '1680px', height: '92vh', maxHeight: '94vh',
-                backgroundColor: '#ffffff', borderRadius: '16px', overflow: 'hidden',
-                display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
-            }}>
+        <div className="drawer-overlay">
+                    <div className="drawer">
                 {/* 상단 고정 헤더 */}
                 <div style={{
                     padding: '20px 28px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0',
@@ -1670,29 +1682,28 @@ function ExternalReconciliationModal({ log, onClose, onSuccess }) {
     };
 
     return (
-        <div style={{
-            position: 'fixed', inset: 0, zIndex: 9999,
-            backgroundColor: 'rgba(0,0,0,0.55)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center'
-        }}>
-            <div style={{
-                width: '96vw', maxWidth: '1680px', height: '92vh', maxHeight: '94vh',
-                backgroundColor: '#ffffff', borderRadius: '16px', overflow: 'hidden',
-                display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
-            }}>
-                <div style={{
-                    padding: '20px 28px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0',
+        <div className="drawer-overlay">
+                    <div className="drawer">
+                <div className="drawer-header" style={{
+                    padding: '14px 24px', backgroundColor: '#ffffff', borderBottom: '1px solid #e2e8f0',
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                 }}>
-                    <div>
-                        <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
-                            ⚖️ 외부 시스템 수기 대사 승인 (Manual Reconciliation - DEC-02)
-                        </h2>
-                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                            ERP/WMS 연계 로그 번호: <strong style={{ color: '#1e40af' }}>{log.logNumber}</strong>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#e11d48', fontSize: '13px', background: '#ffe4e6', padding: '3px 10px', borderRadius: '6px', border: '1px solid #fecdd3' }}>
+                            {log.logNumber}
+                        </span>
+                        <div>
+                            <h2 style={{ margin: 0, fontSize: '19px', fontWeight: 800, color: '#0f172a' }}>
+                                ⚖️ 외부 시스템 수기 대사 승인 (Manual Reconciliation - DEC-02)
+                            </h2>
+                            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                                ERP/WMS 연계 로그 번호: <strong style={{ color: '#1e40af' }}>{log.logNumber}</strong>
+                            </div>
                         </div>
                     </div>
-                    <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}>✕</button>
+                    <button type="button" onClick={onClose} className="secondary close-button">
+                        <span className="icon">✕</span> 닫기
+                    </button>
                 </div>
 
                 <div style={{ flex: 1, overflowY: 'auto', padding: '28px' }}>
@@ -1826,29 +1837,30 @@ function BarcodeIssuanceModal({ barcode, batches, onClose, onSuccess }) {
     };
 
     return (
-        <div style={{
-            position: 'fixed', inset: 0, zIndex: 9999,
-            backgroundColor: 'rgba(0,0,0,0.55)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center'
-        }}>
-            <div style={{
-                width: '96vw', maxWidth: '1680px', height: '92vh', maxHeight: '94vh',
-                backgroundColor: '#ffffff', borderRadius: '16px', overflow: 'hidden',
-                display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
-            }}>
-                <div style={{
-                    padding: '20px 28px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0',
+        <div className="drawer-overlay">
+                    <div className="drawer">
+                <div className="drawer-header" style={{
+                    padding: '14px 24px', backgroundColor: '#ffffff', borderBottom: '1px solid #e2e8f0',
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                 }}>
-                    <div>
-                        <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
-                            {isPrintMode ? '🖨️ GS1 UDI 바코드 라벨 인쇄 미리보기' : '🏷️ GS1 UDI 바코드 및 QR 식별 라벨 발행'}
-                        </h2>
-                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                            21 CFR 820.65 / 820.120 의료기기 & 화장품 UDI 규격에 따른 고유 식별자 라벨을 생성합니다.
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        {batch.batchNumber && (
+                            <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#059669', fontSize: '13px', background: '#ecfdf5', padding: '3px 10px', borderRadius: '6px', border: '1px solid #a7f3d0' }}>
+                                {batch.batchNumber}
+                            </span>
+                        )}
+                        <div>
+                            <h2 style={{ margin: 0, fontSize: '19px', fontWeight: 800, color: '#0f172a' }}>
+                                {isPrintMode ? '🖨️ GS1 UDI 바코드 라벨 인쇄 미리보기' : '🏷️ GS1 UDI 바코드 및 QR 식별 라벨 발행'}
+                            </h2>
+                            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                                21 CFR 820.65 / 820.120 의료기기 & 화장품 UDI 규격에 따른 고유 식별자 라벨을 생성합니다.
+                            </div>
                         </div>
                     </div>
-                    <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}>✕</button>
+                    <button type="button" onClick={onClose} className="secondary close-button">
+                        <span className="icon">✕</span> 닫기
+                    </button>
                 </div>
 
                 <div style={{ flex: 1, overflowY: 'auto', padding: '28px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '28px' }}>
@@ -2010,7 +2022,7 @@ function BarcodeIssuanceModal({ barcode, batches, onClose, onSuccess }) {
                     )}
                 </div>
             </div>
-        </div>
+        </div>, document.body
     );
 }
 
@@ -2049,12 +2061,8 @@ function ExternalSyncTriggerModal({ batches, onClose, onSuccess }) {
         }
     };
 
-    return (
-        <div style={{
-            position: 'fixed', inset: 0, zIndex: 9999,
-            backgroundColor: 'rgba(0,0,0,0.55)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center'
-        }}>
+    return createPortal(
+        <div className="modal-overlay">
             <div style={{
                 width: '600px', backgroundColor: '#ffffff', borderRadius: '16px', overflow: 'hidden',
                 boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'

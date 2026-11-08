@@ -47,7 +47,7 @@ public class NotificationService {
         if (!role.isEmpty() && !role.startsWith("ROLE_")) {
             role = "ROLE_" + role;
         }
-        return subscribe(username, role, user.getCompanyName());
+        return subscribe(username, role, getEffectiveCompanyName(user));
     }
 
     public SseEmitter subscribe(String username, String role, String companyName) {
@@ -201,7 +201,7 @@ public class NotificationService {
         Pageable pageable = PageRequest.of(0, limit);
 
         return notificationRepository.findActiveNotificationsForUser(
-                username, roleList, user.getCompanyName(), pageable
+                username, roleList, getEffectiveCompanyName(user), pageable
         );
     }
 
@@ -217,7 +217,7 @@ public class NotificationService {
 
         List<String> roleList = getUserRoles(user);
         return notificationRepository.countUnreadNotificationsForUser(
-                username, roleList, user.getCompanyName()
+                username, roleList, getEffectiveCompanyName(user)
         );
     }
 
@@ -242,7 +242,7 @@ public class NotificationService {
                 isAuthorized = true;
             }
         } else if (notification.getTargetCompanyName() != null) {
-            if (notification.getTargetCompanyName().equals(user.getCompanyName())) {
+            if (notification.getTargetCompanyName().equalsIgnoreCase(getEffectiveCompanyName(user))) {
                 isAuthorized = true;
             }
         }
@@ -271,7 +271,7 @@ public class NotificationService {
 
         List<String> roleList = getUserRoles(user);
         List<Notification> unreadList = notificationRepository.findActiveNotificationsForUser(
-                username, roleList, user.getCompanyName(), PageRequest.of(0, 1000)
+                username, roleList, getEffectiveCompanyName(user), PageRequest.of(0, 1000)
         );
 
         LocalDateTime now = LocalDateTime.now();
@@ -365,9 +365,34 @@ public class NotificationService {
         Notification notification = notificationRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Notification not found with id: " + id));
 
+        if (username != null) {
+            User user = userRepository.findByUsername(username).orElse(null);
+            if (user != null) {
+                List<String> roleList = getUserRoles(user);
+                boolean isAdmin = roleList.contains("ROLE_ADMIN");
+                boolean isAuthorized = isAdmin
+                        || username.equals(notification.getTargetUsername())
+                        || (notification.getTargetRole() != null && roleList.contains(notification.getTargetRole()))
+                        || (notification.getTargetCompanyName() != null && notification.getTargetCompanyName().equalsIgnoreCase(getEffectiveCompanyName(user)));
+                if (!isAuthorized) {
+                    log.warn("[SECURITY] User '{}' unauthorized attempt to delete notification {}", username, id);
+                    throw new org.springframework.security.access.AccessDeniedException("알림 삭제 권한이 없습니다.");
+                }
+            }
+        }
+
         notification.setDeleted(true);
         notificationRepository.save(notification);
         log.info("[NOTIFICATION] Soft deleted notification: {} by {}", notification.getNotificationNumber(), username);
+    }
+
+    
+    private String getEffectiveCompanyName(User user) {
+        if (user == null) return null;
+        if (user.getManufacturer() != null) {
+            return user.getManufacturer().getName();
+        }
+        return user.getCompanyName();
     }
 
     private List<String> getUserRoles(User user) {

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { AgGridReact } from 'ag-grid-react';
 import { toast } from 'react-toastify';
 import RegulatoryManualBanner from './components/common/RegulatoryManualBanner';
+import StandardWorkspaceDrawer from './components/common/StandardWorkspaceDrawer';
+import DrawerCard from './components/common/DrawerCard';
 import {
     fetchRiskAssessments,
     fetchRiskAssessmentById,
@@ -1373,69 +1375,43 @@ export default function RiskManagementPage() {
             {/* ================================================================= */}
             {/* 6. Maximized Modal: Assessment Register / Edit (96vw × 92vh)     */}
             {/* ================================================================= */}
-            {isFormOpen && (
-                <div style={{
-                    position: 'fixed',
-                    inset: 0,
-                    zIndex: 9999,
-                    backgroundColor: 'rgba(0, 0, 0, 0.55)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '16px'
-                }}>
-                    <div style={{
-                        backgroundColor: '#ffffff',
-                        borderRadius: '16px',
-                        width: '96vw',
-                        maxWidth: '1680px',
-                        height: '92vh',
-                        maxHeight: '94vh',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                        overflow: 'hidden'
-                    }}>
-                        {/* Modal Header */}
+            <StandardWorkspaceDrawer
+                isOpen={isFormOpen}
+                onClose={() => setIsFormOpen(false)}
+                title={isEditing ? '✏️ 위험성 평가 파일 수정' : '📄 신규 위험성 평가 파일 등록'}
+                subtitle="ISO 14971:2019 규정에 부합하는 위험관리 파일(RMF) 기본 정보 등록 및 관리"
+                complianceText="ISO 14971:2019 위험관리 표준 프로세스 규정 준수"
+                footerRight={
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                            type="button"
+                            onClick={() => setIsFormOpen(false)}
+                            className="secondary close-button"
+                        >
+                            취소
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleSaveAssessment}
+                            style={{
+                                padding: '8px 22px',
+                                fontSize: '13px',
+                                fontWeight: 700,
+                                borderRadius: '8px',
+                                border: 'none',
+                                backgroundColor: '#2563eb',
+                                color: '#ffffff',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            {isEditing ? '변경사항 저장' : '등록 완료'}
+                        </button>
+                    </div>
+                }
+            >
+                <form onSubmit={handleSaveAssessment} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <DrawerCard title="위험관리 파일(RMF) 기본 정보" icon="🛡️">
                         <div style={{
-                            padding: '16px 24px',
-                            backgroundColor: '#f8fafc',
-                            borderBottom: '1px solid #e2e8f0',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            flexShrink: 0
-                        }}>
-                            <div>
-                                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <span>{isEditing ? '✏️' : '📄'}</span>
-                                    <span>{isEditing ? '위험성 평가 파일 수정' : '신규 위험성 평가 파일 등록'}</span>
-                                </h2>
-                                <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#64748b' }}>
-                                    ISO 14971:2019 규정에 부합하는 위험관리 파일(RMF) 기본 정보 등록 및 관리
-                                </p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setIsFormOpen(false)}
-                                style={{
-                                    border: 'none',
-                                    background: 'transparent',
-                                    fontSize: '26px',
-                                    fontWeight: 700,
-                                    color: '#94a3b8',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                &times;
-                            </button>
-                        </div>
-
-                        {/* Modal Body */}
-                        <form onSubmit={handleSaveAssessment} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                            <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                
-                                <div style={{
                                     display: 'grid',
                                     gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
                                     gap: '16px'
@@ -1757,245 +1733,72 @@ export default function RiskManagementPage() {
                                         />
                                     </div>
                                 </div>
-                            </div>
-
-                            {/* Modal Footer (ui-ux-guide.md 표준: 취소 왼쪽, 저장 오른쪽) */}
-                            <div style={{
-                                padding: '14px 24px',
-                                backgroundColor: '#f8fafc',
-                                borderTop: '1px solid #e2e8f0',
-                                display: 'flex',
-                                justifyContent: 'flex-end',
-                                gap: '8px',
-                                flexShrink: 0
-                            }}>
-                                <button
-                                    type="button"
-                                    onClick={() => setIsFormOpen(false)}
-                                    style={{
-                                        padding: '8px 18px',
-                                        borderRadius: '8px',
-                                        border: '1px solid #cbd5e1',
-                                        background: '#ffffff',
-                                        color: '#475569',
-                                        fontSize: '13px',
-                                        fontWeight: 700,
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    취소
-                                </button>
-                                <button
-                                    type="submit"
-                                    style={{
-                                        padding: '8px 22px',
-                                        borderRadius: '8px',
-                                        border: 'none',
-                                        background: '#2563eb',
-                                        color: '#ffffff',
-                                        fontSize: '13px',
-                                        fontWeight: 800,
-                                        cursor: 'pointer',
-                                        boxShadow: '0 1px 2px rgba(37,99,235,0.2)'
-                                    }}
-                                >
-                                    {isEditing ? '변경사항 저장' : '등록 완료'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+                    </DrawerCard>
+                </form>
+            </StandardWorkspaceDrawer>
 
             {/* ================================================================= */}
             {/* 7. Maximized Modal: FMEA Detail & Risk Analysis (96vw × 92vh)    */}
             {/* ================================================================= */}
             {isDetailOpen && currentDetail && (
-                <div style={{
-                    position: 'fixed',
-                    inset: 0,
-                    zIndex: 9999,
-                    backgroundColor: 'rgba(0, 0, 0, 0.55)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '16px'
-                }}>
-                    <div style={{
-                        backgroundColor: '#ffffff',
-                        borderRadius: '16px',
-                        width: '96vw',
-                        maxWidth: '1680px',
-                        height: '92vh',
-                        maxHeight: '94vh',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                        overflow: 'hidden'
-                    }}>
-                        {/* Header */}
-                        <div style={{
-                            padding: '16px 24px',
-                            backgroundColor: '#f8fafc',
-                            borderBottom: '1px solid #e2e8f0',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            flexShrink: 0
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <span style={{ fontSize: '26px' }}>⚠️</span>
-                                <div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
-                                            [{currentDetail.assessmentNo}] {currentDetail.title}
-                                        </h2>
-                                        <span style={{
-                                            fontSize: '11px',
-                                            fontFamily: 'monospace',
-                                            backgroundColor: '#eff6ff',
-                                            color: '#2563eb',
-                                            padding: '2px 8px',
-                                            borderRadius: '6px',
-                                            fontWeight: 800,
-                                            border: '1px solid #bfdbfe'
-                                        }}>
-                                            v{currentDetail.versionTag}
-                                        </span>
-                                        <span style={{
-                                            fontSize: '11px',
-                                            padding: '2px 10px',
-                                            borderRadius: '12px',
-                                            fontWeight: 700,
-                                            border: '1px solid #cbd5e1',
-                                            backgroundColor: '#ffffff',
-                                            color: '#475569'
-                                        }}>
-                                            {currentDetail.status}
-                                        </span>
-                                    </div>
-                                    <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#64748b' }}>
-                                        대상 품목: <strong style={{ color: '#1e293b' }}>{currentDetail.productName}</strong> | 작성: {currentDetail.author} ({currentDetail.assessmentDate}) | 승인: {currentDetail.approver || '미승인'}
-                                    </p>
-                                </div>
-                            </div>
-
-                            <button
-                                type="button"
-                                onClick={() => setIsDetailOpen(false)}
-                                style={{
-                                    border: 'none',
-                                    background: 'transparent',
-                                    fontSize: '26px',
-                                    fontWeight: 700,
-                                    color: '#94a3b8',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                &times;
-                            </button>
-                        </div>
-
-                        {/* Sub Navigation Tabs */}
-                        <div style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            padding: '0 24px',
-                            borderBottom: '1px solid #e2e8f0',
-                            backgroundColor: '#ffffff',
-                            flexShrink: 0
-                        }}>
-                            <div style={{ display: 'flex', gap: '16px' }}>
-                                <button
-                                    type="button"
-                                    onClick={() => setActiveDetailTab('hazards')}
-                                    style={{
-                                        padding: '12px 6px',
-                                        border: 'none',
-                                        borderBottom: activeDetailTab === 'hazards' ? '3px solid #2563eb' : '3px solid transparent',
-                                        backgroundColor: 'transparent',
-                                        color: activeDetailTab === 'hazards' ? '#2563eb' : '#64748b',
-                                        fontSize: '13px',
-                                        fontWeight: activeDetailTab === 'hazards' ? 800 : 600,
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '6px'
-                                    }}
-                                >
-                                    <span>📋</span>
-                                    <span>FMEA 위해요인 3계층 &amp; 통제조치 목록 ({currentDetail.hazardItems?.length || 0})</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setActiveDetailTab('matrix')}
-                                    style={{
-                                        padding: '12px 6px',
-                                        border: 'none',
-                                        borderBottom: activeDetailTab === 'matrix' ? '3px solid #2563eb' : '3px solid transparent',
-                                        backgroundColor: 'transparent',
-                                        color: activeDetailTab === 'matrix' ? '#2563eb' : '#64748b',
-                                        fontSize: '13px',
-                                        fontWeight: activeDetailTab === 'matrix' ? 800 : 600,
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '6px'
-                                    }}
-                                >
-                                    <span>📊</span>
-                                    <span>5x5 FMEA 전/후 위험 매트릭스 비교</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setActiveDetailTab('report')}
-                                    style={{
-                                        padding: '12px 6px',
-                                        border: 'none',
-                                        borderBottom: activeDetailTab === 'report' ? '3px solid #2563eb' : '3px solid transparent',
-                                        backgroundColor: 'transparent',
-                                        color: activeDetailTab === 'report' ? '#2563eb' : '#64748b',
-                                        fontSize: '13px',
-                                        fontWeight: activeDetailTab === 'report' ? 800 : 600,
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '6px'
-                                    }}
-                                >
-                                    <span>📑</span>
-                                    <span>위험관리 보고서 요약 (RMF Summary) &amp; 승인</span>
-                                </button>
-                            </div>
-
-                            {activeDetailTab === 'hazards' && (
-                                <button
-                                    type="button"
-                                    onClick={handleOpenAddHazard}
-                                    style={{
-                                        padding: '7px 16px',
-                                        fontSize: '12px',
-                                        fontWeight: 800,
-                                        color: '#ffffff',
-                                        backgroundColor: '#2563eb',
-                                        border: 'none',
-                                        borderRadius: '8px',
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '6px',
-                                        boxShadow: '0 1px 2px rgba(37,99,235,0.2)'
-                                    }}
-                                >
-                                    ➕ 위해요인 항목 추가
-                                </button>
-                            )}
-                        </div>
-
-                        {/* Tab Content */}
-                        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', backgroundColor: '#f8fafc' }}>
-                            {/* TAB 1: Hazards List Table */}
+            <StandardWorkspaceDrawer
+                isOpen={isDetailOpen && !!currentDetail}
+                onClose={() => setIsDetailOpen(false)}
+                title={`[${currentDetail?.assessmentNo || ''}] ${currentDetail?.title || ''}`}
+                subtitle={`대상 품목: ${currentDetail?.productName || ''} | 작성: ${currentDetail?.author || ''} (${currentDetail?.assessmentDate || ''}) | 승인: ${currentDetail?.approver || '미승인'}`}
+                docNumber={currentDetail?.assessmentNo}
+                revision={`v${currentDetail?.versionTag || '1.0'}`}
+                statusBadge={currentDetail ? (() => {
+                    const st = STATUS_CONFIG[currentDetail.status] || { label: currentDetail.status, color: '#475569', bg: '#f1f5f9', border: '#cbd5e1' };
+                    return (
+                        <span style={{ fontSize: '11px', fontWeight: 800, padding: '3px 10px', borderRadius: '10px', background: st.bg, color: st.color, border: `1px solid ${st.border}` }}>
+                            {st.label}
+                        </span>
+                    );
+                })() : null}
+                tabs={[
+                    { id: 'hazards', label: '위해요인 및 FMEA 조치 (3계층 모델)', icon: '⚠️' },
+                    { id: 'matrix', label: '5x5 FMEA 전/후 위험 매트릭스 비교', icon: '📊' },
+                    { id: 'report', label: '위험관리 보고서 요약 (RMF Summary) & 승인', icon: '📑' }
+                ]}
+                activeTab={activeDetailTab}
+                onTabChange={setActiveDetailTab}
+                headerRight={
+                    activeDetailTab === 'hazards' && (
+                        <button
+                            type="button"
+                            onClick={handleOpenAddHazard}
+                            style={{
+                                padding: '7px 16px',
+                                fontSize: '12px',
+                                fontWeight: 800,
+                                color: '#ffffff',
+                                backgroundColor: '#2563eb',
+                                border: 'none',
+                                borderRadius: '8px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                            }}
+                        >
+                            ➕ 위해요인 항목 추가
+                        </button>
+                    )
+                }
+                complianceText="ISO 14971:2019 & 의료기기 위험관리 기준 (MFDS)"
+                footerRight={
+                    <button
+                        type="button"
+                        onClick={() => setIsDetailOpen(false)}
+                        className="secondary close-button"
+                    >
+                        <span className="icon">✕</span> 닫기
+                    </button>
+                }
+            >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {/* TAB 1: Hazards List Table */}
                             {activeDetailTab === 'hazards' && (
                                 <div style={{
                                     backgroundColor: '#ffffff',
@@ -2020,14 +1823,14 @@ export default function RiskManagementPage() {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {(currentDetail.hazardItems || []).length === 0 ? (
+                                                {(currentDetail?.hazardItems || []).length === 0 ? (
                                                     <tr>
                                                         <td colSpan={9} style={{ padding: '36px', textAlign: 'center', color: '#94a3b8' }}>
                                                             등록된 위해요인(Hazard) 항목이 없습니다. 상단의 '+ 위해요인 항목 추가'를 눌러 위험을 등록하세요.
                                                         </td>
                                                     </tr>
                                                 ) : (
-                                                    (currentDetail.hazardItems || []).map((h) => {
+                                                    (currentDetail?.hazardItems || []).map((h) => {
                                                         const initAcc = getAcceptability(h.initialRiskScore);
                                                         const resAcc = getAcceptability(h.residualRiskScore);
                                                         return (
@@ -2185,7 +1988,7 @@ export default function RiskManagementPage() {
                                         [{currentDetail.assessmentNo}] 본 문서 위해요인 5x5 전/후 이동 매트릭스
                                     </h3>
                                     <p style={{ margin: '4px 0 16px', fontSize: '12px', color: '#64748b' }}>
-                                        본 위험관리 파일에 포함된 {currentDetail.hazardItems?.length || 0}건의 위해요인이 통제 조치를 통해 안전한 수용 영역으로 전이되었음을 시각적으로 증빙합니다.
+                                        본 위험관리 파일에 포함된 {currentDetail?.hazardItems?.length || 0}건의 위해요인이 통제 조치를 통해 안전한 수용 영역으로 전이되었음을 시각적으로 증빙합니다.
                                     </p>
 
                                     {(() => {
@@ -2197,7 +2000,7 @@ export default function RiskManagementPage() {
                                                 itemResidual[`S${s}_P${p}`] = 0;
                                             }
                                         }
-                                        (currentDetail.hazardItems || []).forEach(it => {
+                                        (currentDetail?.hazardItems || []).forEach(it => {
                                             if (it.initialSeverity && it.initialProbability) {
                                                 itemInitial[`S${it.initialSeverity}_P${it.initialProbability}`] = (itemInitial[`S${it.initialSeverity}_P${it.initialProbability}`] || 0) + 1;
                                             }
@@ -2331,105 +2134,50 @@ export default function RiskManagementPage() {
                                     </div>
                                 </div>
                             )}
-                        </div>
-
-                        {/* Modal Footer (ui-ux-guide.md 표준) */}
-                        <div style={{
-                            padding: '14px 24px',
-                            backgroundColor: '#f8fafc',
-                            borderTop: '1px solid #e2e8f0',
-                            display: 'flex',
-                            justifyContent: 'flex-end',
-                            gap: '8px',
-                            flexShrink: 0
-                        }}>
-                            <button
-                                type="button"
-                                onClick={() => setIsDetailOpen(false)}
-                                style={{
-                                    padding: '8px 20px',
-                                    borderRadius: '8px',
-                                    border: '1px solid #cbd5e1',
-                                    background: '#ffffff',
-                                    color: '#475569',
-                                    fontSize: '13px',
-                                    fontWeight: 700,
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                닫기
-                            </button>
-                        </div>
-                    </div>
                 </div>
+            </StandardWorkspaceDrawer>
             )}
 
             {/* ================================================================= */}
             {/* 8. Maximized Modal: Hazard Item Register / Edit (96vw × 92vh)     */}
             {/* ================================================================= */}
-            {isHazardModalOpen && (
-                <div style={{
-                    position: 'fixed',
-                    inset: 0,
-                    zIndex: 9999,
-                    backgroundColor: 'rgba(0, 0, 0, 0.55)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '16px'
-                }}>
-                    <div style={{
-                        backgroundColor: '#ffffff',
-                        borderRadius: '16px',
-                        width: '96vw',
-                        maxWidth: '1680px',
-                        height: '92vh',
-                        maxHeight: '94vh',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                        overflow: 'hidden'
-                    }}>
-                        {/* Header */}
-                        <div style={{
-                            padding: '16px 24px',
-                            backgroundColor: '#f8fafc',
-                            borderBottom: '1px solid #e2e8f0',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            flexShrink: 0
-                        }}>
-                            <div>
-                                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <span>⚠️</span>
-                                    <span>{editingHazard ? '위해요인(Hazard) 및 FMEA 통제 조치 수정' : '신규 위해요인(Hazard) 및 FMEA 통제 조치 등록'}</span>
-                                </h2>
-                                <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#64748b' }}>
-                                    ISO 14971:2019 위해요인 3계층 식별(Hazard-Situation-Harm) 및 통제우선순위 조치
-                                </p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setIsHazardModalOpen(false)}
-                                style={{
-                                    border: 'none',
-                                    background: 'transparent',
-                                    fontSize: '26px',
-                                    fontWeight: 700,
-                                    color: '#94a3b8',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                &times;
-                            </button>
-                        </div>
-
-                        {/* Body */}
-                        <form onSubmit={handleSaveHazard} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                            <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                
-                                {/* Section 1: Classification & 3-Tier Model */}
+            <StandardWorkspaceDrawer
+                isOpen={isHazardModalOpen}
+                onClose={() => setIsHazardModalOpen(false)}
+                title={editingHazard ? '⚠️ 위해요인(Hazard) 및 FMEA 통제 조치 수정' : '⚠️ 신규 위해요인(Hazard) 및 FMEA 통제 조치 등록'}
+                subtitle="ISO 14971:2019 위해요인 3계층 식별(Hazard-Situation-Harm) 및 통제우선순위 조치"
+                complianceText="ISO 14971:2019 FMEA 위험 우선순위(RPN) 및 잔여위험 허용 기준"
+                footerRight={
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                            type="button"
+                            onClick={() => setIsHazardModalOpen(false)}
+                            className="secondary close-button"
+                        >
+                            취소
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleSaveHazard}
+                            style={{
+                                padding: '8px 22px',
+                                fontSize: '13px',
+                                fontWeight: 700,
+                                borderRadius: '8px',
+                                border: 'none',
+                                backgroundColor: '#2563eb',
+                                color: '#ffffff',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            {editingHazard ? '위해요인 수정 저장' : '위해요인 등록 완료'}
+                        </button>
+                    </div>
+                }
+            >
+                <form onSubmit={handleSaveHazard} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <DrawerCard title="위해요인 식별 및 위험 분석 (초기 위험도)" icon="⚠️">
+                        {/* Section 1: Classification & 3-Tier Model */}
                                 <div style={{
                                     backgroundColor: '#eff6ff',
                                     padding: '16px 20px',
@@ -2977,55 +2725,9 @@ export default function RiskManagementPage() {
                                         />
                                     </div>
                                 </div>
-                            </div>
-
-                            {/* Modal Footer (ui-ux-guide.md 표준: 취소 왼쪽, 저장 오른쪽) */}
-                            <div style={{
-                                padding: '14px 24px',
-                                backgroundColor: '#f8fafc',
-                                borderTop: '1px solid #e2e8f0',
-                                display: 'flex',
-                                justifyContent: 'flex-end',
-                                gap: '8px',
-                                flexShrink: 0
-                            }}>
-                                <button
-                                    type="button"
-                                    onClick={() => setIsHazardModalOpen(false)}
-                                    style={{
-                                        padding: '8px 18px',
-                                        borderRadius: '8px',
-                                        border: '1px solid #cbd5e1',
-                                        background: '#ffffff',
-                                        color: '#475569',
-                                        fontSize: '13px',
-                                        fontWeight: 700,
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    취소
-                                </button>
-                                <button
-                                    type="submit"
-                                    style={{
-                                        padding: '8px 22px',
-                                        borderRadius: '8px',
-                                        border: 'none',
-                                        background: '#2563eb',
-                                        color: '#ffffff',
-                                        fontSize: '13px',
-                                        fontWeight: 800,
-                                        cursor: 'pointer',
-                                        boxShadow: '0 1px 2px rgba(37,99,235,0.2)'
-                                    }}
-                                >
-                                    {editingHazard ? '위해요인 수정 저장' : '위해요인 등록 완료'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+                    </DrawerCard>
+                </form>
+            </StandardWorkspaceDrawer>
         </div>
     );
 }

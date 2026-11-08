@@ -862,6 +862,9 @@ const App = () => {
                     if (payload && payload.domain) {
                         console.debug("[SSE] Real-time data-updated event received for domain:", payload.domain);
                         swrCache.invalidateByPrefix(payload.domain);
+                        if (payload.domain === 'bugReports' || payload.domain === 'bug-reports') {
+                            window.dispatchEvent(new CustomEvent('bug-reports-updated'));
+                        }
                     }
                 } catch (e) {
                     console.error("[SSE] Failed to parse data-updated event", e);
@@ -1619,7 +1622,8 @@ const App = () => {
             return fallbackRender ? fallbackRender() : null;
         }
 
-        return sortedChildren.map((item, idx) => {
+        const renderedRoutes = new Set();
+        const renderedElements = sortedChildren.map((item, idx) => {
             const isDivider = item.menuType === 'DIVIDER' || (item.menuCode && item.menuCode.startsWith('DIV_'));
 
             // 1. 구분선(소분류 헤더)
@@ -1698,6 +1702,25 @@ const App = () => {
 
             return null;
         });
+
+        // [DEC-10 eQMS 완전성 보장] MANUAL_ROOT의 신규 표준 모듈이 동적 메뉴 트리에 미등록된 경우 누락 방지
+        const extraManualItems = rootCode === "MANUAL_ROOT" ? [
+            { key: "facilityManagement", label: "🛠️ 시설·교정·유지보수 (ISO 13485/22716)" },
+            { key: "internalAuditManagement", label: "📋 내부심사·경영검토 (ISO 13485/22716)" },
+            { key: "officialRecords", label: "📜 공식 원본·전자서명 (DEC-01/Part 11)" },
+            { key: "csvValidation", label: "🛡️ CSV 밸리데이션·Go-Live (GAMP 5)" }
+        ] : [];
+
+        const extraElements = extraManualItems
+            .filter(extra => !renderedRoutes.has(extra.key) && canAccess(extra.key))
+            .map(extra => renderSidebarItem(extra.key, extra.label));
+
+        return (
+            <React.Fragment key={`dyn_section_${rootCode}`}>
+                {renderedElements}
+                {extraElements}
+            </React.Fragment>
+        );
     };
 
     // [기존 호환 헬퍼 유지]

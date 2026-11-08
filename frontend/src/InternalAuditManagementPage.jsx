@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import 'ag-grid-community/styles/ag-grid.css';
@@ -947,6 +948,15 @@ export default function InternalAuditManagementPage({ user, onNavigate }) {
                     pagination={true}
                     paginationPageSize={20}
                     onGridReady={(params) => setGridApi(params.api)}
+                    onRowDoubleClicked={(e) => {
+                        if (!e?.data) return;
+                        if (activeTab === 'AUDIT_PLAN') {
+                            handleSelectAuditForChecklist(e.data.id);
+                        } else if (activeTab === 'AUDIT_EXECUTION') {
+                            setSelectedChecklist(e.data);
+                            setShowChecklistModal(true);
+                        }
+                    }}
                     overlayLoadingTemplate={'<span class="ag-overlay-loading-center">데이터 로딩 중...</span>'}
                     overlayNoRowsTemplate={'<span class="ag-overlay-loading-center">등록된 데이터가 없습니다.</span>'}
                 />
@@ -1067,8 +1077,8 @@ function AuditPlanModal({ audit, onClose, onSaved }) {
     };
 
     return (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200 }}>
-            <div style={{ width: '96vw', maxWidth: '1400px', height: '92vh', maxHeight: '900px', backgroundColor: '#ffffff', borderRadius: '12px', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)' }}>
+        <div className="drawer-overlay">
+                    <div className="drawer">
                 {/* 헤더 */}
                 <div style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1077,7 +1087,7 @@ function AuditPlanModal({ audit, onClose, onSaved }) {
                             {isEdit ? `내부심사 계획 수정 [${audit.auditNumber}]` : '신규 내부심사 계획 수립'}
                         </h2>
                     </div>
-                    <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}>✕</button>
+                    <button type="button" onClick={onClose} className="secondary close-button"><span className="icon">✕</span> 닫기</button>
                 </div>
 
                 {/* 독립성 경고 배너 */}
@@ -1358,13 +1368,13 @@ function AuditChecklistModal({ checklist, defaultAuditId, audits, onClose, onSav
     };
 
     return (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200 }}>
-            <div style={{ width: '96vw', maxWidth: '1100px', height: '90vh', maxHeight: '800px', backgroundColor: '#ffffff', borderRadius: '12px', display: 'flex', flexDirection: 'column' }}>
+        <div className="drawer-overlay">
+                    <div className="drawer">
                 <div style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: '#0f172a' }}>
                         {isEdit ? '심사 체크리스트 항목 수정' : '신규 체크포인트 점검 항목 추가'}
                     </h2>
-                    <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}>✕</button>
+                    <button type="button" onClick={onClose} className="secondary close-button"><span className="icon">✕</span> 닫기</button>
                 </div>
 
                 <form id="checklistForm" onSubmit={handleSubmit} style={{ padding: '24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -1535,13 +1545,13 @@ function AuditFindingModal({ finding, audits, checklists, onClose, onSaved, onNa
     };
 
     return (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200 }}>
-            <div style={{ width: '96vw', maxWidth: '1300px', height: '92vh', maxHeight: '880px', backgroundColor: '#ffffff', borderRadius: '12px', display: 'flex', flexDirection: 'column' }}>
+        <div className="drawer-overlay">
+                    <div className="drawer">
                 <div style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: '#0f172a' }}>
                         {isEdit ? `심사 지적사항 수정 [${finding.findingNumber}]` : '신규 심사 지적사항(Finding) 발행'}
                     </h2>
-                    <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}>✕</button>
+                    <button type="button" onClick={onClose} className="secondary close-button"><span className="icon">✕</span> 닫기</button>
                 </div>
 
                 {isCapaClosingBlocked && (
@@ -1791,8 +1801,8 @@ function ManagementReviewModal({ review, onClose, onSaved }) {
     };
 
     return (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200 }}>
-            <div style={{ width: '96vw', maxWidth: '1440px', height: '94vh', maxHeight: '920px', backgroundColor: '#ffffff', borderRadius: '12px', display: 'flex', flexDirection: 'column' }}>
+        <div className="drawer-overlay">
+                    <div className="drawer">
                 <div style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{ fontSize: '20px' }}>🏛️</span>
@@ -1800,7 +1810,7 @@ function ManagementReviewModal({ review, onClose, onSaved }) {
                             {isEdit ? `경영검토 회의록 [${review.reviewNumber}]` : '신규 경영검토(Management Review) 회의록 작성'}
                         </h2>
                     </div>
-                    <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#64748b' }}>✕</button>
+                    <button type="button" onClick={onClose} className="secondary close-button"><span className="icon">✕</span> 닫기</button>
                 </div>
 
                 <form id="reviewForm" onSubmit={handleSubmit} style={{ padding: '24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '20px' }}>

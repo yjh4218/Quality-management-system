@@ -22,6 +22,10 @@ public interface BugReportRepository extends JpaRepository<BugReport, Long> {
         String screenName, String errorCategory, LocalDateTime since
     );
 
+    List<BugReport> findByScreenNameAndErrorCategoryAndCreatedAtAfter(
+        String screenName, String errorCategory, LocalDateTime since
+    );
+
     long countByStatus(String status);
 
     List<BugReport> findByIsReadFalse();

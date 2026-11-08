@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import 'ag-grid-community/styles/ag-grid.css';
@@ -923,6 +924,12 @@ export default function VigilanceRecallManagementPage({ user, onNavigate }) {
                             headerHeight={48}
                             pagination={true}
                             paginationPageSize={10}
+                            onRowDoubleClicked={(e) => {
+                                if (e?.data) {
+                                    setEditingVigilance(e.data);
+                                    setVigilanceModalOpen(true);
+                                }
+                            }}
                         />
                     </div>
                 </div>
@@ -995,6 +1002,12 @@ export default function VigilanceRecallManagementPage({ user, onNavigate }) {
                             headerHeight={48}
                             pagination={true}
                             paginationPageSize={10}
+                            onRowDoubleClicked={(e) => {
+                                if (e?.data) {
+                                    setEditingRecall(e.data);
+                                    setRecallModalOpen(true);
+                                }
+                            }}
                         />
                     </div>
                 </div>
@@ -1144,11 +1157,7 @@ export default function VigilanceRecallManagementPage({ user, onNavigate }) {
             {/* 모달 4: 당국 제출 처리 모달 */}
             {/* ----------------------------------------------------------------- */}
             {submitModalOpen && submittingVig && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-                    backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    zIndex: 10000
-                }}>
+                <div className="modal-overlay" style={{ zIndex: 5100 }}>
                     <div style={{
                         backgroundColor: '#fff', borderRadius: '12px', width: '500px', padding: '24px',
                         boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)'
@@ -1283,16 +1292,8 @@ function VigilanceEditModal({ editingItem, onClose, onSaveSuccess }) {
     };
 
     return (
-        <div style={{
-            position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-            backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            zIndex: 9999
-        }}>
-            <div style={{
-                backgroundColor: '#fff', borderRadius: '12px',
-                width: '96vw', maxWidth: '1680px', height: '92vh', maxHeight: '94vh',
-                display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
-            }}>
+        <div className="drawer-overlay">
+            <div className="drawer">
                 {/* 헤더 */}
                 <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff' }}>
                     <div>
@@ -1644,16 +1645,8 @@ function RecallEditModal({ editingItem, onClose, onSaveSuccess }) {
     };
 
     return (
-        <div style={{
-            position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-            backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            zIndex: 9999
-        }}>
-            <div style={{
-                backgroundColor: '#fff', borderRadius: '12px',
-                width: '96vw', maxWidth: '1680px', height: '92vh', maxHeight: '94vh',
-                display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
-            }}>
+        <div className="drawer-overlay">
+            <div className="drawer">
                 <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                         <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>
@@ -1885,16 +1878,8 @@ function ReconciliationModal({ recall, onClose, onSaveSuccess }) {
     };
 
     return (
-        <div style={{
-            position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-            backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            zIndex: 9999
-        }}>
-            <div style={{
-                backgroundColor: '#fff', borderRadius: '12px',
-                width: '96vw', maxWidth: '1680px', height: '92vh', maxHeight: '94vh',
-                display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
-            }}>
+        <div className="drawer-overlay">
+            <div className="drawer">
                 <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                         <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>
@@ -2103,11 +2088,7 @@ function PrintReportModal({ doc, type, onClose }) {
     };
 
     return (
-        <div style={{
-            position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-            backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            zIndex: 9999
-        }}>
+        <div className="modal-overlay" style={{ zIndex: 5100 }}>
             <div style={{
                 backgroundColor: '#fff', borderRadius: '12px',
                 width: '96vw', maxWidth: '1000px', height: '92vh', maxHeight: '94vh',

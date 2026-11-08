@@ -1,5 +1,7 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { AgGridReact } from 'ag-grid-react';
+import useGridStatePersistence from '../../hooks/useGridStatePersistence';
+import useGridTabRecovery from '../../hooks/useGridTabRecovery';
 
 /**
  * QMS 표준 DataGrid 컴포넌트
@@ -15,10 +17,22 @@ const DataGrid = React.forwardRef(({
     onRowDoubleClicked,
     paginationPageSize: initialPageSize = 50,
     className = "",
+    storageKey = null,
+    gridKey = null,
+    isActive = true,
+    onColumnResized,
+    onColumnMoved,
+    onSortChanged,
+    onColumnVisible,
+    onColumnPinned,
     ...props
 }, ref) => {
     const internalRef = useRef(null);
     const gridRef = ref || internalRef;
+    const effectiveKey = storageKey || gridKey;
+
+    useGridTabRecovery(gridRef, isActive);
+    const { saveColumnState } = useGridStatePersistence(gridRef, effectiveKey);
 
     const [currentPage, setCurrentPage] = useState(0);
     const [totalPages, setTotalPages] = useState(1);
@@ -85,6 +99,26 @@ const DataGrid = React.forwardRef(({
                     suppressPaginationPanel={true}
                     onPaginationChanged={onPaginationChanged}
                     onRowDoubleClicked={onRowDoubleClicked}
+                    onColumnResized={(params) => {
+                        if (effectiveKey) saveColumnState();
+                        if (onColumnResized) onColumnResized(params);
+                    }}
+                    onColumnMoved={(params) => {
+                        if (effectiveKey) saveColumnState();
+                        if (onColumnMoved) onColumnMoved(params);
+                    }}
+                    onSortChanged={(params) => {
+                        if (effectiveKey) saveColumnState();
+                        if (onSortChanged) onSortChanged(params);
+                    }}
+                    onColumnVisible={(params) => {
+                        if (effectiveKey) saveColumnState();
+                        if (onColumnVisible) onColumnVisible(params);
+                    }}
+                    onColumnPinned={(params) => {
+                        if (effectiveKey) saveColumnState();
+                        if (onColumnPinned) onColumnPinned(params);
+                    }}
                     defaultColDef={{
                         sortable: true,
                         resizable: true,

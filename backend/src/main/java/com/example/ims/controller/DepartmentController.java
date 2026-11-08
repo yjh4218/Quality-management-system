@@ -62,6 +62,7 @@ public class DepartmentController {
      * 관리자용 부서 목록 조회
      */
     @GetMapping("/api/admin/departments")
+    @PreAuthorize("hasRole('ADMIN') or @perm.can('users', 'VIEW')")
     public ResponseEntity<List<DepartmentDto>> getAllDepartments(
             @RequestParam(required = false) String companyName,
             @RequestParam(required = false, defaultValue = "false") Boolean activeOnly,
@@ -74,6 +75,7 @@ public class DepartmentController {
      * 부서 단건 조회
      */
     @GetMapping("/api/admin/departments/{id}")
+    @PreAuthorize("hasRole('ADMIN') or @perm.can('users', 'VIEW')")
     public ResponseEntity<DepartmentDto> getDepartment(@PathVariable Long id) {
         return ResponseEntity.ok(departmentService.getDepartment(id));
     }
@@ -82,6 +84,7 @@ public class DepartmentController {
      * 부서 등록
      */
     @PostMapping("/api/admin/departments")
+    @PreAuthorize("hasRole('ADMIN') or @perm.can('users', 'EDIT')")
     public ResponseEntity<DepartmentDto> createDepartment(
             @RequestBody DepartmentDto dto,
             Principal principal) {
@@ -96,6 +99,7 @@ public class DepartmentController {
      * 부서 수정
      */
     @PutMapping("/api/admin/departments/{id}")
+    @PreAuthorize("hasRole('ADMIN') or @perm.can('users', 'EDIT')")
     public ResponseEntity<DepartmentDto> updateDepartment(
             @PathVariable Long id,
             @RequestBody DepartmentDto dto,
@@ -108,6 +112,7 @@ public class DepartmentController {
      * 부서 비활성화
      */
     @DeleteMapping("/api/admin/departments/{id}")
+    @PreAuthorize("hasRole('ADMIN') or @perm.can('users', 'EDIT')")
     public ResponseEntity<Void> deleteDepartment(
             @PathVariable Long id,
             Principal principal) {
@@ -119,6 +124,7 @@ public class DepartmentController {
      * 부서 일괄 초기화/생성 (관리자용: 특정 제조원 또는 전체 제조원 대상 표준 6개 부서 생성)
      */
     @PostMapping("/api/admin/departments/batch-init")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<DepartmentDto>> initBatchDepartments(
             @RequestParam(required = false) String companyName,
             Principal principal) {
@@ -129,6 +135,7 @@ public class DepartmentController {
      * 부서 역할 지정 (부서장/부부서장/팀장 등)
      */
     @PostMapping("/api/admin/departments/{id}/roles")
+    @PreAuthorize("hasRole('ADMIN') or @perm.can('users', 'EDIT')")
     public ResponseEntity<DepartmentRoleDto> assignRole(
             @PathVariable Long id,
             @RequestBody DepartmentRoleDto roleDto,
@@ -144,6 +151,7 @@ public class DepartmentController {
      * 부서 역할 해제
      */
     @DeleteMapping("/api/admin/departments/{id}/roles/{roleCode}")
+    @PreAuthorize("hasRole('ADMIN') or @perm.can('users', 'EDIT')")
     public ResponseEntity<Void> removeRole(
             @PathVariable Long id,
             @PathVariable String roleCode,

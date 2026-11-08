@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import 'ag-grid-community/styles/ag-grid.css';
@@ -1711,26 +1712,17 @@ export default function NonConformanceManagementPage({ user, onNavigate }) {
 
             {/* 모달 1: NCR 등록 / 수정 모달 */}
             {(modalMode === 'CREATE' || modalMode === 'EDIT') && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.75)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 9999
-                }}>
-                    <div style={{
-                        width: '96vw',
-                        height: '92vh',
+                <div className="drawer-overlay">
+                    <div className="drawer" style={{
+                        width: '100%',
+                        maxWidth: 'none',
+                        height: '100%',
+                        maxHeight: '100%',
                         backgroundColor: '#ffffff',
-                        borderRadius: '16px',
+                        borderRadius: '12px',
                         display: 'flex',
                         flexDirection: 'column',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        boxShadow: '0 25px 70px rgba(0, 0, 0, 0.35)',
                         overflow: 'hidden'
                     }}>
                         {/* 모달 헤더 */}
@@ -1967,26 +1959,17 @@ export default function NonConformanceManagementPage({ user, onNavigate }) {
 
             {/* 모달 2: 원인조사 & 처리판정(Disposition) 심의 모달 */}
             {modalMode === 'INVESTIGATION' && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.75)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 9999
-                }}>
-                    <div style={{
-                        width: '96vw',
-                        height: '92vh',
+                <div className="drawer-overlay">
+                    <div className="drawer" style={{
+                        width: '100%',
+                        maxWidth: 'none',
+                        height: '100%',
+                        maxHeight: '100%',
                         backgroundColor: '#ffffff',
-                        borderRadius: '16px',
+                        borderRadius: '12px',
                         display: 'flex',
                         flexDirection: 'column',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        boxShadow: '0 25px 70px rgba(0, 0, 0, 0.35)',
                         overflow: 'hidden'
                     }}>
                         <div style={{
@@ -2060,26 +2043,17 @@ export default function NonConformanceManagementPage({ user, onNavigate }) {
 
             {/* 모달 3: 처리방안(Disposition) 및 특채 심의 모달 */}
             {modalMode === 'DISPOSITION' && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.75)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 9999
-                }}>
-                    <div style={{
-                        width: '96vw',
-                        height: '92vh',
+                <div className="drawer-overlay">
+                    <div className="drawer" style={{
+                        width: '100%',
+                        maxWidth: 'none',
+                        height: '100%',
+                        maxHeight: '100%',
                         backgroundColor: '#ffffff',
-                        borderRadius: '16px',
+                        borderRadius: '12px',
                         display: 'flex',
                         flexDirection: 'column',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        boxShadow: '0 25px 70px rgba(0, 0, 0, 0.35)',
                         overflow: 'hidden'
                     }}>
                         <div style={{
@@ -2201,26 +2175,17 @@ export default function NonConformanceManagementPage({ user, onNavigate }) {
 
             {/* 모달 4: 조치 과제(Action Items) 관리 모달 */}
             {modalMode === 'ACTIONS' && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.75)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 9999
-                }}>
-                    <div style={{
-                        width: '96vw',
-                        height: '92vh',
+                <div className="drawer-overlay">
+                    <div className="drawer" style={{
+                        width: '100%',
+                        maxWidth: 'none',
+                        height: '100%',
+                        maxHeight: '100%',
                         backgroundColor: '#ffffff',
-                        borderRadius: '16px',
+                        borderRadius: '12px',
                         display: 'flex',
                         flexDirection: 'column',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        boxShadow: '0 25px 70px rgba(0, 0, 0, 0.35)',
                         overflow: 'hidden'
                     }}>
                         <div style={{
@@ -2405,18 +2370,7 @@ export default function NonConformanceManagementPage({ user, onNavigate }) {
 
             {/* 모달 5: 격리 위치/상태 변경 모달 */}
             {modalMode === 'QUARANTINE' && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.75)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 9999
-                }}>
+                <div className="modal-overlay" style={{ zIndex: 5100 }}>
                     <div style={{
                         width: '500px',
                         backgroundColor: '#ffffff',
@@ -2462,18 +2416,7 @@ export default function NonConformanceManagementPage({ user, onNavigate }) {
 
             {/* 모달 6: 최종 종결 확인 모달 */}
             {modalMode === 'CLOSE' && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.75)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 9999
-                }}>
+                <div className="modal-overlay" style={{ zIndex: 5100 }}>
                     <div style={{
                         width: '560px',
                         backgroundColor: '#ffffff',
@@ -2511,26 +2454,17 @@ export default function NonConformanceManagementPage({ user, onNavigate }) {
 
             {/* 모달 7: 공식 NCR 감사 리포트 출력 미리보기 (Certificate of Nonconformance) */}
             {modalMode === 'REPORT' && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(15, 23, 42, 0.75)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 9999
-                }}>
-                    <div style={{
-                        width: '96vw',
-                        height: '92vh',
+                <div className="drawer-overlay">
+                    <div className="drawer" style={{
+                        width: '100%',
+                        maxWidth: 'none',
+                        height: '100%',
+                        maxHeight: '100%',
                         backgroundColor: '#ffffff',
-                        borderRadius: '16px',
+                        borderRadius: '12px',
                         display: 'flex',
                         flexDirection: 'column',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        boxShadow: '0 25px 70px rgba(0, 0, 0, 0.35)',
                         overflow: 'hidden'
                     }}>
                         <div style={{
@@ -2566,7 +2500,7 @@ export default function NonConformanceManagementPage({ user, onNavigate }) {
                                 >
                                     🖨️ 인쇄 / PDF 출력
                                 </button>
-                                <button type="button" onClick={closeModal} style={{ background: 'none', border: 'none', fontSize: '22px', cursor: 'pointer', color: '#64748b' }}>✕</button>
+                                <button type="button" onClick={closeModal} className="secondary close-button"><span className="icon">✕</span> 닫기</button>
                             </div>
                         </div>
 

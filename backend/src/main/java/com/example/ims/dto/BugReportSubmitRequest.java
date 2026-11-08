@@ -16,7 +16,7 @@ public class BugReportSubmitRequest {
     private String reporterUsername;
     private String reporterName;
 
-    @NotBlank(message = "화면명은 필수 항목입니다.")
+    @Size(max = 1000, message = "화면명은 최대 1000자까지 입력 가능합니다.")
     private String screenName;
 
     @Size(max = 1000, message = "URL은 최대 1000자까지 입력 가능합니다.")
@@ -24,7 +24,6 @@ public class BugReportSubmitRequest {
 
     private String steps;
 
-    @NotBlank(message = "설명(에러 내용)은 필수 항목입니다.")
     @Size(max = 5000, message = "설명은 최대 5000자까지 입력 가능합니다.")
     private String description;
 

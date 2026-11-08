@@ -199,6 +199,9 @@ const PackagingTemplatePage = ({ user, isActive = true }) => {
                         columnDefs={colDefs} 
                         rowHeight={54}
                         animateRows={true}
+                        onRowDoubleClicked={(e) => {
+                            if (e?.data) handleEdit(e.data);
+                        }}
                     />
                 </div>
             </div>

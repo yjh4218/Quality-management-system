@@ -18,6 +18,7 @@ import java.util.List;
 @RequestMapping("/api/csv-validation")
 @RequiredArgsConstructor
 @Slf4j
+@PreAuthorize("@perm.can('csvValidation', 'VIEW')")
 public class CsvValidationController {
 
     private final CsvValidationService csvService;
@@ -46,6 +47,7 @@ public class CsvValidationController {
     }
 
     @PostMapping("/projects")
+    @PreAuthorize("@perm.can('csvValidation', 'EDIT')")
     public ResponseEntity<CsvProjectResponse> createProject(
             @Valid @RequestBody CsvProjectRequest req,
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -54,6 +56,7 @@ public class CsvValidationController {
     }
 
     @PutMapping("/projects/{id}")
+    @PreAuthorize("@perm.can('csvValidation', 'EDIT')")
     public ResponseEntity<CsvProjectResponse> updateProject(
             @PathVariable Long id,
             @Valid @RequestBody CsvProjectRequest req,
@@ -63,6 +66,7 @@ public class CsvValidationController {
     }
 
     @DeleteMapping("/projects/{id}")
+    @PreAuthorize("@perm.can('csvValidation', 'DELETE')")
     public ResponseEntity<Void> deleteProject(@PathVariable Long id) {
         csvService.deleteProject(id);
         return ResponseEntity.noContent().build();
@@ -78,6 +82,7 @@ public class CsvValidationController {
     }
 
     @PostMapping("/protocols")
+    @PreAuthorize("@perm.can('csvValidation', 'EDIT')")
     public ResponseEntity<CsvProtocolResponse> createProtocol(
             @Valid @RequestBody CsvProtocolRequest req,
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -86,6 +91,7 @@ public class CsvValidationController {
     }
 
     @PutMapping("/protocols/{id}")
+    @PreAuthorize("@perm.can('csvValidation', 'EDIT')")
     public ResponseEntity<CsvProtocolResponse> updateProtocol(
             @PathVariable Long id,
             @Valid @RequestBody CsvProtocolRequest req,
@@ -95,6 +101,7 @@ public class CsvValidationController {
     }
 
     @DeleteMapping("/protocols/{id}")
+    @PreAuthorize("@perm.can('csvValidation', 'DELETE')")
     public ResponseEntity<Void> deleteProtocol(@PathVariable Long id) {
         csvService.deleteProtocol(id);
         return ResponseEntity.noContent().build();
@@ -110,6 +117,7 @@ public class CsvValidationController {
     }
 
     @PostMapping("/defects")
+    @PreAuthorize("@perm.can('csvValidation', 'EDIT')")
     public ResponseEntity<CsvDefectResponse> createDefect(
             @Valid @RequestBody CsvDefectRequest req,
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -118,6 +126,7 @@ public class CsvValidationController {
     }
 
     @PutMapping("/defects/{id}")
+    @PreAuthorize("@perm.can('csvValidation', 'EDIT')")
     public ResponseEntity<CsvDefectResponse> updateDefect(
             @PathVariable Long id,
             @Valid @RequestBody CsvDefectRequest req,
@@ -127,6 +136,7 @@ public class CsvValidationController {
     }
 
     @DeleteMapping("/defects/{id}")
+    @PreAuthorize("@perm.can('csvValidation', 'DELETE')")
     public ResponseEntity<Void> deleteDefect(@PathVariable Long id) {
         csvService.deleteDefect(id);
         return ResponseEntity.noContent().build();
@@ -143,6 +153,7 @@ public class CsvValidationController {
     }
 
     @PostMapping("/go-live")
+    @PreAuthorize("@perm.can('csvValidation', 'EDIT')")
     public ResponseEntity<CsvGoLiveResponse> createOrUpdateGoLiveApproval(
             @Valid @RequestBody CsvGoLiveRequest req,
             @AuthenticationPrincipal UserDetails userDetails) {

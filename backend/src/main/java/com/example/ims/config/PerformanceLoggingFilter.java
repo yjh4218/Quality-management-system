@@ -53,6 +53,18 @@ public class PerformanceLoggingFilter implements Filter {
 
         long startNano = System.nanoTime();
 
+        // [추적성] Correlation-ID 발급 및 MDC 로깅 연동
+        String correlationId = httpRequest.getHeader("X-Correlation-Id");
+        if (correlationId == null || correlationId.isBlank()) {
+            correlationId = httpRequest.getHeader("x-correlation-id");
+        }
+        if (correlationId == null || correlationId.isBlank()) {
+            correlationId = "CID-" + java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        }
+        final String finalCorrelationId = correlationId;
+        httpRequest.setAttribute("correlationId", finalCorrelationId);
+        org.slf4j.MDC.put("correlationId", finalCorrelationId);
+
         jakarta.servlet.http.HttpServletResponseWrapper responseWrapper = new jakarta.servlet.http.HttpServletResponseWrapper(httpResponse) {
             private void injectHeader() {
                 if (!isCommitted()) {
@@ -60,6 +72,8 @@ public class PerformanceLoggingFilter implements Filter {
                     String durationStr = String.valueOf(durationMs);
                     setHeader("X-Response-Time-Millis", durationStr);
                     setHeader("x-response-time-millis", durationStr);
+                    setHeader("X-Correlation-Id", finalCorrelationId);
+                    setHeader("x-correlation-id", finalCorrelationId);
                 }
             }
 
@@ -89,10 +103,12 @@ public class PerformanceLoggingFilter implements Filter {
             long durationMs = durationNs / 1_000_000L;
             String durationStr = String.valueOf(durationMs);
 
-            // 1. 프론트엔드 RTT 분해 측정을 위한 응답 헤더 주입 (커밋되지 않은 경우)
+            // 1. 프론트엔드 RTT 분해 측정 및 Correlation-ID 헤더 주입 (커밋되지 않은 경우)
             if (!httpResponse.isCommitted()) {
                 httpResponse.setHeader("X-Response-Time-Millis", durationStr);
                 httpResponse.setHeader("x-response-time-millis", durationStr);
+                httpResponse.setHeader("X-Correlation-Id", finalCorrelationId);
+                httpResponse.setHeader("x-correlation-id", finalCorrelationId);
             }
 
             // 2. 민감정보 마스킹된 URI 쿼리스트링 생성
@@ -102,12 +118,13 @@ public class PerformanceLoggingFilter implements Filter {
 
             // 3. 레이턴시 기준 조건부 로깅 (500ms 이상 WARN, 미만 DEBUG)
             if (durationMs >= SLOW_THRESHOLD_MS) {
-                log.warn("⏳ [PERF-SLOW] {} {} took {}ms (status: {}) | User: {}",
-                        method, fullPath, durationMs, httpResponse.getStatus(), username);
+                log.warn("⏳ [PERF-SLOW] [CID: {}] {} {} took {}ms (status: {}) | User: {}",
+                        finalCorrelationId, method, fullPath, durationMs, httpResponse.getStatus(), username);
             } else if (log.isDebugEnabled()) {
-                log.debug("⚡ [PERF] {} {} took {}ms (status: {}) | User: {}",
-                        method, fullPath, durationMs, httpResponse.getStatus(), username);
+                log.debug("⚡ [PERF] [CID: {}] {} {} took {}ms (status: {}) | User: {}",
+                        finalCorrelationId, method, fullPath, durationMs, httpResponse.getStatus(), username);
             }
+            org.slf4j.MDC.remove("correlationId");
         }
     }
 

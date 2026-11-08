@@ -202,6 +202,32 @@ public class ProductService {
      * @param username The ID of the user requesting creation (요청자 아이디)
      * @return The saved Product entity (저장 완료된 제품 객체)
      */
+    private void validateNoCircularParentReference(String itemCode, String parentItemCode) {
+        if (itemCode == null || parentItemCode == null || parentItemCode.trim().isEmpty()) {
+            return;
+        }
+        if (itemCode.trim().equalsIgnoreCase(parentItemCode.trim())) {
+            throw new IllegalArgumentException("자기 자신을 상위(모) 품목으로 지정할 수 없습니다: " + itemCode);
+        }
+        String currentParent = parentItemCode.trim();
+        java.util.Set<String> visited = new java.util.HashSet<>();
+        visited.add(itemCode.trim().toUpperCase());
+
+        int depth = 0;
+        while (currentParent != null && !currentParent.isEmpty() && depth < 20) {
+            if (!visited.add(currentParent.toUpperCase())) {
+                throw new IllegalArgumentException("상위(모) 품목 간에 순환 참조가 감지되었습니다: " + itemCode + " <-> " + currentParent);
+            }
+            Product parentObj = productRepository.findByItemCode(currentParent).orElse(null);
+            if (parentObj != null && parentObj.getParentItemCode() != null) {
+                currentParent = parentObj.getParentItemCode().trim();
+            } else {
+                break;
+            }
+            depth++;
+        }
+    }
+
     @Transactional
     @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public Product createProduct(Product product, String username) {
@@ -277,6 +303,11 @@ public class ProductService {
             throw new IllegalArgumentException("제조사 정보는 필수 항목입니다. 제조사를 선택해 주세요.");
         }
         product.setManufacturerInfo(resolvedMfr);
+
+        // 상위(모) 품목 순환 참조 검증
+        if (product.getParentItemCode() != null && !product.getParentItemCode().trim().isEmpty()) {
+            validateNoCircularParentReference(product.getItemCode(), product.getParentItemCode());
+        }
 
         // 기획세트 여부 자동 판별 (구성품이 있거나 productType이 기획세트인 경우)
         if (product.getProductType() == ProductType.SET || (product.getComponents() != null && !product.getComponents().isEmpty())) {
@@ -409,6 +440,10 @@ public class ProductService {
         existingProduct.setProductBarcode(updatedProduct.getProductBarcode());
         existingProduct.setInboxBarcode(updatedProduct.getInboxBarcode());
         existingProduct.setOutboxBarcode(updatedProduct.getOutboxBarcode());
+        // 상위(모) 품목 순환 참조 검증
+        if (updatedProduct.getParentItemCode() != null && !updatedProduct.getParentItemCode().trim().isEmpty()) {
+            validateNoCircularParentReference(existingProduct.getItemCode(), updatedProduct.getParentItemCode());
+        }
         existingProduct.setParentItemCode(updatedProduct.getParentItemCode());
         existingProduct.setParent(updatedProduct.isParent());
         existingProduct.setMaster(updatedProduct.isMaster());

@@ -175,6 +175,11 @@ const AccessLogPage = () => {
                         paginationPageSize={100}
                         quickFilterText={quickFilterText}
                         enableBrowserTooltips={true}
+                        onRowDoubleClicked={(e) => {
+                            if (e?.data) {
+                                toast.info(`[${e.data.action}] ${e.data.name} (${e.data.username}) - ${e.data.pageName || e.data.pageUrl} (${e.data.ipAddress})`);
+                            }
+                        }}
                     />
                 </div>
             </div>

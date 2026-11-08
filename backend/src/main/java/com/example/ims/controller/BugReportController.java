@@ -23,15 +23,18 @@ public class BugReportController {
     @PreAuthorize("permitAll()")
     public ResponseEntity<BugReport> submitReport(@jakarta.validation.Valid @RequestBody(required = false) com.example.ims.dto.BugReportSubmitRequest request, Authentication authentication) {
         com.example.ims.dto.BugReportSubmitRequest dto = (request != null) ? request : new com.example.ims.dto.BugReportSubmitRequest();
+        String screen = (dto.getScreenName() != null && !dto.getScreenName().trim().isEmpty()) ? dto.getScreenName().trim() : "전역 자동 감지";
+        String desc = (dto.getDescription() != null && !dto.getDescription().trim().isEmpty()) ? dto.getDescription().trim() : "시스템 자동 감지 런타임 오류";
+        
         BugReport targetReport = BugReport.builder()
                 .reporterUsername(dto.getReporterUsername())
                 .reporterName(dto.getReporterName())
-                .screenName(dto.getScreenName())
+                .screenName(screen)
                 .url(dto.getUrl())
                 .steps(dto.getSteps())
-                .description(dto.getDescription())
+                .description(desc)
                 .serverError(dto.getServerError())
-                .severity(dto.getSeverity())
+                .severity(dto.getSeverity() != null ? dto.getSeverity() : "CRITICAL")
                 .errorCategory(dto.getErrorCategory() != null ? dto.getErrorCategory() : "UNKNOWN")
                 .build();
 

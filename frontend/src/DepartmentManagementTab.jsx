@@ -363,9 +363,22 @@ const DepartmentManagementTab = ({
                         columnDefs={columnDefs}
                         rowSelection={{ mode: 'singleRow' }}
                         onRowClicked={(e) => handleSelectDept(e.data)}
+                        onRowDoubleClicked={(e) => {
+                            if (e?.data) {
+                                setEditingDept(e.data);
+                                setDeptForm({
+                                    companyName: e.data.companyName,
+                                    code: e.data.code,
+                                    name: e.data.name,
+                                    displayOrder: e.data.displayOrder,
+                                    isActive: e.data.isActive
+                                });
+                                setDeptModalOpen(true);
+                            }
+                        }}
                         animateRows={true}
-                        headerHeight={40}
-                        rowHeight={40}
+                        headerHeight={48}
+                        rowHeight={54}
                         defaultColDef={{ resizable: true, sortable: true, filter: true }}
                     />
                 </div>
@@ -503,7 +516,7 @@ const DepartmentManagementTab = ({
 
             {/* 부서 추가/수정 모달 */}
             {deptModalOpen && (
-                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100 }}>
+                <div className="modal-overlay">
                     <div style={{ backgroundColor: '#fff', borderRadius: '10px', width: '420px', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
                         <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#0f172a' }}>
                             {editingDept ? '부서 정보 수정' : '신규 부서 등록'}
@@ -574,7 +587,7 @@ const DepartmentManagementTab = ({
 
             {/* 역할 지정 모달 */}
             {roleModalOpen && (
-                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100 }}>
+                <div className="modal-overlay">
                     <div style={{ backgroundColor: '#fff', borderRadius: '10px', width: '420px', padding: '24px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
                         <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '8px', color: '#0f172a' }}>
                             [{selectedDept?.name}] 부서 역할 지정

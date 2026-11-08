@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { toast } from 'react-toastify';
@@ -953,6 +954,9 @@ export default function CsvValidationPage({ user, onNavigate }) {
                             rowHeight={54}
                             headerHeight={48}
                             onGridReady={params => { params.api.sizeColumnsToFit(); }}
+                            onRowDoubleClicked={(e) => {
+                                if (e?.data) handleOpenProjectModal(e.data);
+                            }}
                         />
                     </div>
                 </div>
@@ -1028,6 +1032,9 @@ export default function CsvValidationPage({ user, onNavigate }) {
                             rowHeight={54}
                             headerHeight={48}
                             onGridReady={params => { params.api.sizeColumnsToFit(); }}
+                            onRowDoubleClicked={(e) => {
+                                if (e?.data) handleOpenProtocolModal(e.data);
+                            }}
                         />
                     </div>
                 </div>
@@ -1102,6 +1109,9 @@ export default function CsvValidationPage({ user, onNavigate }) {
                             rowHeight={54}
                             headerHeight={48}
                             onGridReady={params => { params.api.sizeColumnsToFit(); }}
+                            onRowDoubleClicked={(e) => {
+                                if (e?.data) handleOpenDefectModal(e.data);
+                            }}
                         />
                     </div>
                 </div>
@@ -1225,14 +1235,8 @@ export default function CsvValidationPage({ user, onNavigate }) {
 
             {/* 모달 1: 프로젝트 등록/수정 모달 */}
             {projectModalOpen && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                    background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
-                }}>
-                    <div style={{
-                        width: '96vw', maxWidth: '1680px', height: '92vh', maxHeight: '94vh',
-                        background: '#fff', borderRadius: '8px', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)'
-                    }}>
+                <div className="drawer-overlay">
+                    <div className="drawer">
                         <div style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '800' }}>
                                 {editingProject ? '✏️ CSV 밸리데이션 프로젝트 수정' : '➕ 신규 CSV 밸리데이션 프로젝트 등록'}
@@ -1367,14 +1371,8 @@ export default function CsvValidationPage({ user, onNavigate }) {
 
             {/* 모달 2: IQ/OQ/PQ 프로토콜 등록 및 판정 모달 */}
             {protocolModalOpen && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                    background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
-                }}>
-                    <div style={{
-                        width: '96vw', maxWidth: '1680px', height: '92vh', maxHeight: '94vh',
-                        background: '#fff', borderRadius: '8px', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)'
-                    }}>
+                <div className="drawer-overlay">
+                    <div className="drawer">
                         <div style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '800' }}>
                                 {editingProtocol ? '🧪 적격성평가 프로토콜 판정 및 수정' : '➕ 신규 IQ/OQ/PQ 시험 프로토콜 등록'}
@@ -1516,14 +1514,8 @@ export default function CsvValidationPage({ user, onNavigate }) {
 
             {/* 모달 3: 결함 등록 및 조치/리스크 수용 심의 모달 */}
             {defectModalOpen && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                    background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
-                }}>
-                    <div style={{
-                        width: '96vw', maxWidth: '1680px', height: '92vh', maxHeight: '94vh',
-                        background: '#fff', borderRadius: '8px', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)'
-                    }}>
+                <div className="drawer-overlay">
+                    <div className="drawer">
                         <div style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '800' }}>
                                 {editingDefect ? '⚠️ 밸리데이션 결함 조치 및 리스크 수용 심의' : '➕ 신규 밸리데이션 결함 보고'}
@@ -1657,14 +1649,8 @@ export default function CsvValidationPage({ user, onNavigate }) {
 
             {/* 모달 4: Go-Live 최종 릴리즈 헌장 발행 및 3자 전자서명 인가 모달 */}
             {goLiveModalOpen && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                    background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
-                }}>
-                    <div style={{
-                        width: '96vw', maxWidth: '1680px', height: '92vh', maxHeight: '94vh',
-                        background: '#fff', borderRadius: '8px', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)'
-                    }}>
+                <div className="drawer-overlay">
+                    <div className="drawer">
                         <div style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '800' }}>
                                 📜 Go-Live 최종 운영 승인 헌장 (Release Authorization Charter) 발행

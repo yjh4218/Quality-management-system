@@ -56,8 +56,12 @@
 #### 그리드(AG Grid) 규칙
 
 - **행 높이 표준화 (rowHeight)**: 모든 목록 화면의 그리드는 **`rowHeight={54}` 속성을 필수 적용**하여 정보 밀도를 제품 마스터와 동일하게 일괄 통일한다. 인라인 하드코딩 속성값(`rowHeight=`)이 전역 스타일(`--ag-row-height: 54px`)을 덮어쓰지 않도록 주의한다.
+- **행 더블 클릭 필수 적용 (`onRowDoubleClicked`) [필수 표준 규정]**:
+  - 전사 모든 AG Grid 컴포넌트는 행을 더블 클릭(`onRowDoubleClicked`)했을 때 해당 항목의 대표 상세 드로어/편집 팝업(`StandardWorkspaceDrawer` 등)이 즉시 열리도록 필수 구현한다.
+  - 별도의 상세 버튼을 일일이 조준하지 않고 행의 어느 셀을 더블 클릭하더라도 즉시 열람 및 수정 화면으로 진입할 수 있어야 한다.
+  - 구현 표준: `onRowDoubleClicked={(params) => { if (params?.data) handleOpenDetail(params.data); }}`
+- **마우스 호버 커서 인터랙션**: 모든 그리드 행은 마우스 오버 시 `cursor: pointer` 스타일을 적용하여 더블 클릭 인터랙션이 가능함을 직관적으로 제공한다.
 - 기본 정렬: **날짜(최신순) → 코드 → 명칭** 순
-- 행 클릭: 상세 팝업(Drawer/Modal) 오픈
 - 페이지네이션: 기본 50건/페이지
 - 컬럼 헤더: 한국어 사용
 - 숫자 컬럼: 우측 정렬 (`type: 'numericColumn'`)
@@ -67,7 +71,19 @@
 
 ### 1-2. 상세/등록 팝업 화면 (Drawer / Modal)
 
-#### Drawer (우측 슬라이드) - 상세 수정용
+#### 전역 팝업/드로어 배치 및 네비게이션 가드 필수 규정 [✨ 2026-11 핵심 표준]
+1. **상단 탭 바 및 좌측 LNB 사이드바 시야 확보 (헤더 잘림 방지)**
+   - 모든 팝업(`modal-overlay`) 및 작업 드로어(`drawer-overlay`, `StandardWorkspaceDrawer`)는 반드시 `top: var(--qms-tab-height, 44px)` 및 `left: var(--sidebar-width, 240px)`를 준수하여 상단 탭 바와 좌측 LNB 메뉴를 가리지 않아야 한다.
+   - 인라인 `position: fixed; top: 0; left: 0;` 절대 금지 (`.drawer-overlay`, `.modal-overlay` 공통 클래스 사용).
+2. **이탈 시 미저장 변경사항 보호 (Navigation Guard)**
+   - 팝업/드로어가 열려 있는 상태에서 사용자가 좌측 LNB 메뉴나 상단 탭을 클릭하여 다른 화면으로 이동하려 할 때:
+     - **수정사항이 없는 경우 (`!isDirty`)**: 경고창 없이 즉시 대상 메뉴/탭으로 부드럽게 이동.
+     - **수정사항이 있는 경우 (`isDirty === true`)**: 즉시 이동을 차단하고 `UnsavedChangesModal`을 호출하여 "저장 후 이동", "저장하지 않고 이동", "취소" 선택지를 제공.
+   - `StandardWorkspaceDrawer` 사용 시 내부적으로 `useNavigationGuard`가 자동 연동되어 폼 입력 변경을 감지함.
+3. **플로팅 가이드/도움말(`💡`) 버튼 자동 가림 처리 (요소 가림 원천 차단)**
+   - 드로어나 모달이 활성화된 동안 우측 하단의 플로팅 가이드 버튼(`floating-help-btn`)이 모달 내부 입력란 또는 푸터 액션 버튼을 가리거나 클릭을 가로채지 않도록 `body:has(.drawer-overlay) .floating-help-btn, body:has(.modal-overlay) .floating-help-btn`을 통해 즉시 `opacity: 0 !important; pointer-events: none !important; visibility: hidden !important;`로 안전하게 감춘다.
+
+#### Drawer (우측 슬라이드 / 워크스페이스형) - 상세 수정용
 
 - **너비**: `max-w-xl` (512px) ~ `max-w-2xl` (672px) 사이
 - 복잡한 양식(필드 10개 이상): `max-w-2xl`

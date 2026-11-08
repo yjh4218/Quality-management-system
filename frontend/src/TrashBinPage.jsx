@@ -214,6 +214,9 @@ const TrashBinPage = ({ user }) => {
                         pagination={true}
                         paginationPageSize={50}
                         animateRows={true}
+                        onRowDoubleClicked={(e) => {
+                            if (e?.data) handleRestore(e.data.entityType, e.data.id);
+                        }}
                     />
                 </div>
             </div>

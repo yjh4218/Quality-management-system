@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import RegulatoryManualBanner from './components/common/RegulatoryManualBanner';
+import StandardWorkspaceDrawer from './components/common/StandardWorkspaceDrawer';
+import DrawerCard from './components/common/DrawerCard';
 import {
     fetchControlledDocuments,
     fetchControlledDocumentById,
@@ -424,7 +426,7 @@ const ControlledDocumentManagementPage = ({ user, onNavigate }) => {
         try {
             setDeleting(true);
             await deleteControlledDocument(deleteTargetDoc.id);
-            toast.success(`통제문서 [${deleteTargetDoc.docNo} (${deleteTargetDoc.revisionNo})]이(가) 안전하게 소프트 삭제되었습니다.`);
+            toast.success(`통제문서 [${deleteTargetDoc.docNo} (${deleteTargetDoc?.revisionNo})]이(가) 안전하게 소프트 삭제되었습니다.`);
             setDeleteModalOpen(false);
             setDeleteTargetDoc(null);
             loadDocuments();
@@ -1124,6 +1126,9 @@ const ControlledDocumentManagementPage = ({ user, onNavigate }) => {
                         paginationPageSize={50}
                         animateRows={true}
                         onRowClicked={(params) => handleOpenDetail(params.data)}
+                        onRowDoubleClicked={(params) => {
+                            if (params?.data) handleOpenDetail(params.data);
+                        }}
                         overlayLoadingTemplate="<span class='ag-overlay-loading-center'>통제문서 데이터를 불러오는 중입니다...</span>"
                         overlayNoRowsTemplate="<span class='ag-overlay-no-rows-center'>조회된 통제문서가 없습니다.</span>"
                     />
@@ -1133,399 +1138,330 @@ const ControlledDocumentManagementPage = ({ user, onNavigate }) => {
             {/* ═══════════════════════════════════════════════════════════════════ */}
             {/* Modal 1: 상세 전문 및 개정 이력 타임라인 (xl: 1120px) */}
             {/* ═══════════════════════════════════════════════════════════════════ */}
+            {/* Modal 1: 상세 전문 및 개정 이력 타임라인 (StandardWorkspaceDrawer 표준) */}
+            {/* ═══════════════════════════════════════════════════════════════════ */}
             {detailModalOpen && selectedDoc && (
-                <div style={{
-                    position: 'fixed',
-                    inset: 0,
-                    zIndex: 9999,
-                    backgroundColor: 'rgba(0, 0, 0, 0.55)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '20px'
-                }}>
-                    <div style={{
-                        backgroundColor: '#ffffff',
-                        borderRadius: '16px',
-                        width: '96vw',
-                        maxWidth: '1680px',
-                        height: '92vh',
-                        maxHeight: '94vh',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                        overflow: 'hidden'
-                    }}>
-                        {/* Header */}
-                        <div style={{
-                            padding: '18px 24px',
-                            backgroundColor: '#f8fafc',
-                            borderBottom: '1px solid #e2e8f0',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center'
-                        }}>
-                            <div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#2563eb', fontSize: '13px', background: '#eff6ff', padding: '2px 8px', borderRadius: '6px', border: '1px solid #bfdbfe' }}>
-                                        {selectedDoc.docNo}
-                                    </span>
-                                    <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#475569', fontSize: '12px', background: '#f1f5f9', padding: '2px 8px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
-                                        {selectedDoc.revisionNo}
-                                    </span>
-                                    {(() => {
-                                        const s = STATUS_CONFIG[selectedDoc.status] || { label: selectedDoc.status, color: '#475569', bg: '#f1f5f9', border: '#cbd5e1' };
-                                        return (
-                                            <span style={{ fontSize: '11px', fontWeight: 800, padding: '2px 8px', borderRadius: '10px', background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
-                                                {s.label}
-                                            </span>
-                                        );
-                                    })()}
-                                </div>
-                                <h3 style={{ margin: '6px 0 0 0', fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
-                                    {selectedDoc.title}
-                                </h3>
-                            </div>
+            <StandardWorkspaceDrawer
+                isOpen={detailModalOpen && !!selectedDoc}
+                onClose={() => setDetailModalOpen(false)}
+                title={selectedDoc?.title}
+                docNumber={selectedDoc?.docNo}
+                revision={selectedDoc?.revisionNo}
+                statusBadge={selectedDoc ? (() => {
+                    const s = STATUS_CONFIG[selectedDoc.status] || { label: selectedDoc.status, color: '#475569', bg: '#f1f5f9', border: '#cbd5e1' };
+                    return (
+                        <span style={{ fontSize: '11px', fontWeight: 800, padding: '3px 10px', borderRadius: '10px', background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
+                            {s.label}
+                        </span>
+                    );
+                })() : null}
+                tabs={[
+                    { id: 'content', label: '문서 본문 전문', icon: '📄' },
+                    { id: 'history', label: `전체 개정 이력 타임라인 (${revisionHistory.length}건)`, icon: '⏳' },
+                    { id: 'info', label: '규제 메타데이터 & 결재', icon: '📋' }
+                ]}
+                activeTab={activeDetailTab}
+                onTabChange={setActiveDetailTab}
+                complianceText="ISO 13485:2016 §4.2.4 & ISO 22716 §17 규제 통제문서 보존 표준"
+                footerRight={
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        {selectedDoc?.status === 'EFFECTIVE' && hasEditPermission && (
                             <button
                                 type="button"
-                                onClick={() => setDetailModalOpen(false)}
+                                onClick={() => {
+                                    setDetailModalOpen(false);
+                                    handleOpenRevision(selectedDoc);
+                                }}
                                 style={{
+                                    padding: '8px 18px',
+                                    borderRadius: '8px',
                                     border: 'none',
-                                    background: 'transparent',
-                                    fontSize: '24px',
+                                    background: '#9333ea',
+                                    color: '#ffffff',
+                                    fontSize: '13px',
                                     fontWeight: 700,
-                                    color: '#94a3b8',
                                     cursor: 'pointer'
                                 }}
                             >
-                                ×
+                                📝 새 개정판(Revision) 생성
                             </button>
-                        </div>
-
-                        {/* Tabs */}
-                        <div style={{
-                            display: 'flex',
-                            gap: '4px',
-                            padding: '0 24px',
-                            borderBottom: '1px solid #e2e8f0',
-                            backgroundColor: '#ffffff'
-                        }}>
-                            <button
-                                type="button"
-                                onClick={() => setActiveDetailTab('content')}
-                                style={{
-                                    padding: '12px 18px',
-                                    border: 'none',
-                                    background: 'transparent',
-                                    fontSize: '13px',
-                                    fontWeight: activeDetailTab === 'content' ? 800 : 600,
-                                    color: activeDetailTab === 'content' ? '#2563eb' : '#64748b',
-                                    borderBottom: activeDetailTab === 'content' ? '2px solid #2563eb' : '2px solid transparent',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                📄 문서 본문 전문
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setActiveDetailTab('history')}
-                                style={{
-                                    padding: '12px 18px',
-                                    border: 'none',
-                                    background: 'transparent',
-                                    fontSize: '13px',
-                                    fontWeight: activeDetailTab === 'history' ? 800 : 600,
-                                    color: activeDetailTab === 'history' ? '#2563eb' : '#64748b',
-                                    borderBottom: activeDetailTab === 'history' ? '2px solid #2563eb' : '2px solid transparent',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                ⏳ 전체 개정 이력 타임라인
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setActiveDetailTab('info')}
-                                style={{
-                                    padding: '12px 18px',
-                                    border: 'none',
-                                    background: 'transparent',
-                                    fontSize: '13px',
-                                    fontWeight: activeDetailTab === 'info' ? 800 : 600,
-                                    color: activeDetailTab === 'info' ? '#2563eb' : '#64748b',
-                                    borderBottom: activeDetailTab === 'info' ? '2px solid #2563eb' : '2px solid transparent',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                📋 규제 메타데이터 & 결재
-                            </button>
-                        </div>
-
-                        {/* Body */}
-                        <div style={{ padding: '24px', overflowY: 'auto', flex: 1 }}>
-                            {activeDetailTab === 'content' && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => setDetailModalOpen(false)}
+                            className="secondary close-button"
+                        >
+                            <span className="icon">✕</span> 닫기
+                        </button>
+                    </div>
+                }
+            >
+                {selectedDoc && (
+                    <>
+                        {activeDetailTab === 'content' && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                {/* 1. 기본 정보 요약 카드 */}
+                                <DrawerCard title="문서 기본 정보 및 승인 이력" icon="🏛️">
                                     <div style={{
                                         display: 'grid',
                                         gridTemplateColumns: 'repeat(4, 1fr)',
-                                        gap: '12px',
-                                        padding: '14px 18px',
-                                        background: '#f8fafc',
-                                        borderRadius: '10px',
-                                        border: '1px solid #e2e8f0',
-                                        fontSize: '12px'
+                                        gap: '16px',
+                                        fontSize: '13px'
                                     }}>
-                                        <div><span style={{ color: '#64748b' }}>주관 부서:</span> <strong>{selectedDoc.department || '-'}</strong></div>
-                                        <div><span style={{ color: '#64748b' }}>작성자:</span> <strong>{selectedDoc.authorName || '-'}</strong></div>
-                                        <div><span style={{ color: '#64748b' }}>승인자:</span> <strong>{selectedDoc.approverName || '-'}</strong></div>
-                                        <div><span style={{ color: '#64748b' }}>효력 발생일:</span> <strong style={{ fontFamily: 'monospace' }}>{selectedDoc.effectiveDate || '-'}</strong></div>
-                                    </div>
-
-                                    {selectedDoc.changeRationale && (
-                                        <div style={{
-                                            padding: '12px 16px',
-                                            borderRadius: '8px',
-                                            background: '#fffbeb',
-                                            border: '1px solid #fde68a',
-                                            fontSize: '12.5px',
-                                            color: '#92400e'
-                                        }}>
-                                            <strong>📝 개정 사유:</strong> {selectedDoc.changeRationale}
+                                        <div>
+                                            <div style={{ color: '#64748b', fontSize: '11.5px', fontWeight: 600, marginBottom: '4px' }}>🏢 주관 부서</div>
+                                            <div style={{ color: '#0f172a', fontWeight: 700 }}>{selectedDoc.department || '-'}</div>
                                         </div>
-                                    )}
+                                        <div>
+                                            <div style={{ color: '#64748b', fontSize: '11.5px', fontWeight: 600, marginBottom: '4px' }}>✍️ 작성자</div>
+                                            <div style={{ color: '#0f172a', fontWeight: 700 }}>{selectedDoc.authorName || '-'}</div>
+                                        </div>
+                                        <div>
+                                            <div style={{ color: '#64748b', fontSize: '11.5px', fontWeight: 600, marginBottom: '4px' }}>🛡️ 승인자</div>
+                                            <div style={{ color: '#0f172a', fontWeight: 700 }}>{selectedDoc.approverName || '-'}</div>
+                                        </div>
+                                        <div>
+                                            <div style={{ color: '#64748b', fontSize: '11.5px', fontWeight: 600, marginBottom: '4px' }}>📅 효력 발생일</div>
+                                            <div style={{ color: '#0f172a', fontWeight: 700, fontFamily: 'monospace' }}>{selectedDoc.effectiveDate || '-'}</div>
+                                        </div>
+                                    </div>
+                                </DrawerCard>
 
+                                {/* 2. 개정 사유 알림 배너 */}
+                                {selectedDoc.changeRationale && (
                                     <div style={{
-                                        padding: '20px',
-                                        background: '#ffffff',
-                                        border: '1px solid #e2e8f0',
+                                        padding: '14px 20px',
                                         borderRadius: '10px',
-                                        whiteSpace: 'pre-wrap',
-                                        fontFamily: 'sans-serif',
-                                        fontSize: '13.5px',
-                                        lineHeight: 1.7,
-                                        color: '#1e293b',
-                                        minHeight: '260px'
+                                        background: '#fffbeb',
+                                        border: '1px solid #fde68a',
+                                        fontSize: '13px',
+                                        color: '#92400e',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '10px'
                                     }}>
-                                        {selectedDoc.content || '본문 내용이 등록되어 있지 않습니다.'}
-                                    </div>
-                                </div>
-                            )}
-
-                            {activeDetailTab === 'history' && (
-                                <div>
-                                    <h4 style={{ margin: '0 0 14px 0', fontSize: '14px', fontWeight: 800, color: '#334155' }}>
-                                        문서 [{selectedDoc.docNo}] 전체 버전 개정 추적표
-                                    </h4>
-                                    {revisionHistory.length === 0 ? (
-                                        <div style={{ padding: '30px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
-                                            등록된 개정 이력이 없습니다.
+                                        <span style={{ fontSize: '18px' }}>📝</span>
+                                        <div>
+                                            <strong style={{ fontWeight: 800 }}>개정 사유:</strong> {selectedDoc.changeRationale}
                                         </div>
-                                    ) : (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                            {revisionHistory.map((hist) => {
-                                                const isCurrent = hist.id === selectedDoc.id;
-                                                const s = STATUS_CONFIG[hist.status] || { label: hist.status, color: '#475569', bg: '#f1f5f9', border: '#cbd5e1' };
-                                                return (
-                                                    <div
-                                                        key={hist.id}
-                                                        style={{
-                                                            padding: '16px 20px',
-                                                            borderRadius: '12px',
-                                                            border: isCurrent ? '2px solid #2563eb' : '1px solid #e2e8f0',
-                                                            background: isCurrent ? '#eff6ff' : '#ffffff'
-                                                        }}
-                                                    >
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#2563eb', fontSize: '13px' }}>
-                                                                    {hist.revisionNo}
-                                                                </span>
-                                                                <span style={{ fontSize: '11px', fontWeight: 800, padding: '2px 8px', borderRadius: '10px', background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
-                                                                    {s.label}
-                                                                </span>
-                                                                {isCurrent && (
-                                                                    <span style={{ fontSize: '11px', color: '#2563eb', fontWeight: 700 }}>(현재 열람 중)</span>
-                                                                )}
-                                                            </div>
-                                                            <span style={{ fontSize: '12px', color: '#64748b', fontFamily: 'monospace' }}>
-                                                                효력일: {hist.effectiveDate || hist.createdAt?.split('T')[0] || '-'}
+                                    </div>
+                                )}
+
+                                {/* 3. 본문 전문 Paper Reader 카드 */}
+                                <DrawerCard 
+                                    title="문서 본문 전문 (Official Controlled Document Text)" 
+                                    icon="📜"
+                                    headerRight={
+                                        <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
+                                            {selectedDoc.content ? `${selectedDoc.content.length.toLocaleString()} 자` : '미등록'}
+                                        </span>
+                                    }
+                                >
+                                    <div style={{
+                                        padding: '32px 36px',
+                                        backgroundColor: '#ffffff',
+                                        border: '1px solid #e2e8f0',
+                                        borderRadius: '8px',
+                                        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.02)',
+                                        whiteSpace: 'pre-wrap',
+                                        fontFamily: 'Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                                        fontSize: '14px',
+                                        lineHeight: 1.8,
+                                        color: '#1e293b',
+                                        minHeight: '380px'
+                                    }}>
+                                        {selectedDoc.content || (
+                                            <div style={{ padding: '60px 0', textAlign: 'center', color: '#94a3b8' }}>
+                                                <div style={{ fontSize: '32px', marginBottom: '10px' }}>📄</div>
+                                                <div style={{ fontSize: '14px', fontWeight: 600 }}>본문 내용이 등록되어 있지 않습니다.</div>
+                                                <div style={{ fontSize: '12px', marginTop: '4px' }}>상단 [✏️ 문서 내용 수정]을 통해 본문 내용을 작성해 주세요.</div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </DrawerCard>
+                            </div>
+                        )}
+
+                        {activeDetailTab === 'history' && (
+                            <DrawerCard 
+                                title={`문서 [${selectedDoc.docNo}] 전체 버전 개정 추적표`}
+                                icon="⏳"
+                                headerRight={
+                                    <span style={{ fontSize: '12px', color: '#2563eb', fontWeight: 700 }}>
+                                        총 {revisionHistory.length}개 판본
+                                    </span>
+                                }
+                            >
+                                {revisionHistory.length === 0 ? (
+                                    <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
+                                        등록된 개정 이력이 없습니다.
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                        {revisionHistory.map((hist) => {
+                                            const isCurrent = hist.id === selectedDoc.id;
+                                            const s = STATUS_CONFIG[hist.status] || { label: hist.status, color: '#475569', bg: '#f1f5f9', border: '#cbd5e1' };
+                                            return (
+                                                <div
+                                                    key={hist.id}
+                                                    style={{
+                                                        padding: '16px 20px',
+                                                        borderRadius: '12px',
+                                                        border: isCurrent ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                                                        background: isCurrent ? '#eff6ff' : '#ffffff',
+                                                        boxShadow: isCurrent ? '0 4px 6px -1px rgba(37, 99, 235, 0.1)' : 'none',
+                                                        transition: 'all 0.15s ease'
+                                                    }}
+                                                >
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#2563eb', fontSize: '13px', background: '#eff6ff', padding: '2px 8px', borderRadius: '4px', border: '1px solid #bfdbfe' }}>
+                                                                {hist.revisionNo}
                                                             </span>
-                                                        </div>
-                                                        <div style={{ marginTop: '8px', fontWeight: 700, fontSize: '14px', color: '#1e293b' }}>
-                                                            {hist.title}
-                                                        </div>
-                                                        <div style={{
-                                                            marginTop: '6px',
-                                                            padding: '8px 12px',
-                                                            borderRadius: '6px',
-                                                            background: isCurrent ? '#ffffff' : '#f8fafc',
-                                                            border: '1px solid #e2e8f0',
-                                                            fontSize: '12px',
-                                                            color: '#475569'
-                                                        }}>
-                                                            <strong>개정 사유:</strong> {hist.changeRationale || '최초 제정'}
-                                                        </div>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px', fontSize: '11.5px', color: '#64748b' }}>
-                                                            <span>작성: {hist.authorName || '-'} / 승인: {hist.approverName || '-'}</span>
-                                                            {!isCurrent && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleOpenDetail(hist)}
-                                                                    style={{
-                                                                        border: 'none',
-                                                                        background: 'transparent',
-                                                                        color: '#2563eb',
-                                                                        fontWeight: 700,
-                                                                        cursor: 'pointer',
-                                                                        textDecoration: 'underline'
-                                                                    }}
-                                                                >
-                                                                    이 버전 열람하기
-                                                                </button>
+                                                            <span style={{ fontSize: '11px', fontWeight: 800, padding: '2px 8px', borderRadius: '10px', background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
+                                                                {s.label}
+                                                            </span>
+                                                            {isCurrent && (
+                                                                <span style={{ fontSize: '12px', color: '#2563eb', fontWeight: 800 }}>📌 현재 열람 중인 판본</span>
                                                             )}
                                                         </div>
+                                                        <span style={{ fontSize: '12px', color: '#64748b', fontFamily: 'monospace' }}>
+                                                            효력 발생일: {hist.effectiveDate || hist.createdAt?.split('T')[0] || '-'}
+                                                        </span>
                                                     </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                                                    <div style={{ marginTop: '10px', fontWeight: 800, fontSize: '14.5px', color: '#1e293b' }}>
+                                                        {hist.title}
+                                                    </div>
+                                                    <div style={{
+                                                        marginTop: '8px',
+                                                        padding: '10px 14px',
+                                                        borderRadius: '8px',
+                                                        background: isCurrent ? '#ffffff' : '#f8fafc',
+                                                        border: '1px solid #e2e8f0',
+                                                        fontSize: '12.5px',
+                                                        color: '#475569'
+                                                    }}>
+                                                        <strong>개정 사유:</strong> {hist.changeRationale || '최초 제정'}
+                                                    </div>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', fontSize: '12px', color: '#64748b' }}>
+                                                        <span>작성: <strong>{hist.authorName || '-'}</strong> / 승인: <strong>{hist.approverName || '-'}</strong></span>
+                                                        {!isCurrent && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleOpenDetail(hist)}
+                                                                style={{
+                                                                    padding: '6px 14px',
+                                                                    border: '1px solid #bfdbfe',
+                                                                    background: '#eff6ff',
+                                                                    color: '#2563eb',
+                                                                    fontWeight: 700,
+                                                                    borderRadius: '6px',
+                                                                    cursor: 'pointer',
+                                                                    fontSize: '12px'
+                                                                }}
+                                                            >
+                                                                🔍 이 버전 열람하기
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </DrawerCard>
+                        )}
 
-                            {activeDetailTab === 'info' && (
+                        {activeDetailTab === 'info' && (
+                            <DrawerCard title="문서 규제 메타데이터 및 전자기록 원장" icon="📋">
                                 <div style={{
                                     display: 'grid',
                                     gridTemplateColumns: 'repeat(2, 1fr)',
-                                    gap: '14px',
-                                    padding: '18px 20px',
-                                    background: '#f8fafc',
-                                    borderRadius: '12px',
-                                    border: '1px solid #e2e8f0',
+                                    gap: '16px',
                                     fontSize: '13px'
                                 }}>
-                                    <div><span style={{ color: '#64748b' }}>문서 식별 번호:</span> <strong>{selectedDoc.docNo}</strong></div>
-                                    <div><span style={{ color: '#64748b' }}>개정 번호:</span> <strong>{selectedDoc.revisionNo}</strong></div>
-                                    <div><span style={{ color: '#64748b' }}>계층 분류:</span> <strong>{selectedDoc.docType}</strong></div>
-                                    <div><span style={{ color: '#64748b' }}>적용 규격:</span> <strong>{selectedDoc.targetFamily}</strong></div>
-                                    <div><span style={{ color: '#64748b' }}>등록 일시:</span> <strong style={{ fontFamily: 'monospace' }}>{selectedDoc.createdAt || '-'}</strong></div>
-                                    <div><span style={{ color: '#64748b' }}>최종 수정 일시:</span> <strong style={{ fontFamily: 'monospace' }}>{selectedDoc.updatedAt || '-'}</strong></div>
-                                    <div><span style={{ color: '#64748b' }}>연동 전자결재 ID:</span> <strong>{selectedDoc.approvalDocId ? `#${selectedDoc.approvalDocId}` : '단독 승인'}</strong></div>
-                                    <div><span style={{ color: '#64748b' }}>부모 문서 식별자:</span> <strong>{selectedDoc.parentDocumentId || '최초 원본'}</strong></div>
+                                    <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                        <div style={{ color: '#64748b', fontSize: '11.5px', fontWeight: 600, marginBottom: '4px' }}>문서 식별 번호 (Doc No)</div>
+                                        <div style={{ color: '#2563eb', fontWeight: 800, fontFamily: 'monospace', fontSize: '14px' }}>{selectedDoc.docNo}</div>
+                                    </div>
+                                    <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                        <div style={{ color: '#64748b', fontSize: '11.5px', fontWeight: 600, marginBottom: '4px' }}>개정 차수 (Revision)</div>
+                                        <div style={{ color: '#0f172a', fontWeight: 800, fontFamily: 'monospace', fontSize: '14px' }}>{selectedDoc.revisionNo}</div>
+                                    </div>
+                                    <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                        <div style={{ color: '#64748b', fontSize: '11.5px', fontWeight: 600, marginBottom: '4px' }}>계층 분류 (Doc Type)</div>
+                                        <div style={{ color: '#0f172a', fontWeight: 700 }}>{selectedDoc.docType}</div>
+                                    </div>
+                                    <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                        <div style={{ color: '#64748b', fontSize: '11.5px', fontWeight: 600, marginBottom: '4px' }}>적용 규격 및 제품군</div>
+                                        <div style={{ color: '#0f172a', fontWeight: 700 }}>{selectedDoc.targetFamily}</div>
+                                    </div>
+                                    <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                        <div style={{ color: '#64748b', fontSize: '11.5px', fontWeight: 600, marginBottom: '4px' }}>등록 일시 (System Created)</div>
+                                        <div style={{ color: '#0f172a', fontFamily: 'monospace' }}>{selectedDoc.createdAt || '-'}</div>
+                                    </div>
+                                    <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                        <div style={{ color: '#64748b', fontSize: '11.5px', fontWeight: 600, marginBottom: '4px' }}>최종 수정 일시 (Last Updated)</div>
+                                        <div style={{ color: '#0f172a', fontFamily: 'monospace' }}>{selectedDoc.updatedAt || '-'}</div>
+                                    </div>
+                                    <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                        <div style={{ color: '#64748b', fontSize: '11.5px', fontWeight: 600, marginBottom: '4px' }}>연동 전자결재 ID</div>
+                                        <div style={{ color: '#0f172a', fontWeight: 700 }}>{selectedDoc.approvalDocId ? `#${selectedDoc.approvalDocId}` : '단독 승인'}</div>
+                                    </div>
+                                    <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                        <div style={{ color: '#64748b', fontSize: '11.5px', fontWeight: 600, marginBottom: '4px' }}>부모 문서 식별자 (Parent ID)</div>
+                                        <div style={{ color: '#0f172a', fontWeight: 700 }}>{selectedDoc.parentDocumentId || '최초 원본'}</div>
+                                    </div>
                                 </div>
-                            )}
-                        </div>
-
-                        {/* Footer */}
-                        <div style={{
-                            padding: '14px 24px',
-                            backgroundColor: '#f8fafc',
-                            borderTop: '1px solid #e2e8f0',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center'
-                        }}>
-                            <span style={{ fontSize: '12px', color: '#64748b' }}>
-                                ISO 13485:2016 §4.2.4 & ISO 22716 §17 규제 통제문서 보존 표준
-                            </span>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                                {selectedDoc.status === 'EFFECTIVE' && hasEditPermission && (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setDetailModalOpen(false);
-                                            handleOpenRevision(selectedDoc);
-                                        }}
-                                        style={{
-                                            padding: '8px 18px',
-                                            borderRadius: '8px',
-                                            border: 'none',
-                                            background: '#9333ea',
-                                            color: '#ffffff',
-                                            fontSize: '13px',
-                                            fontWeight: 700,
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        📝 새 개정판(Revision) 생성
-                                    </button>
-                                )}
-                                <button
-                                    type="button"
-                                    onClick={() => setDetailModalOpen(false)}
-                                    style={{
-                                        padding: '8px 18px',
-                                        borderRadius: '8px',
-                                        border: '1px solid #cbd5e1',
-                                        background: '#ffffff',
-                                        color: '#475569',
-                                        fontSize: '13px',
-                                        fontWeight: 700,
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    닫기
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                            </DrawerCard>
+                        )}
+                    </>
+                )}
+            </StandardWorkspaceDrawer>
             )}
 
-            {/* ═══════════════════════════════════════════════════════════════════ */}
-            {/* Modal 2: 신규 제정 / 내용 수정 모달 (최대 크기 전면 에디터) */}
-            {/* ═══════════════════════════════════════════════════════════════════ */}
-            {createModalOpen && (
-                <div style={{
-                    position: 'fixed',
-                    inset: 0,
-                    zIndex: 9999,
-                    backgroundColor: 'rgba(0, 0, 0, 0.55)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '16px'
-                }}>
-                    <div style={{
-                        backgroundColor: '#ffffff',
-                        borderRadius: '16px',
-                        width: '96vw',
-                        maxWidth: '1680px',
-                        height: '92vh',
-                        maxHeight: '94vh',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                        overflow: 'hidden'
-                    }}>
-                        {/* Header */}
-                        <div style={{
-                            padding: '16px 24px',
-                            backgroundColor: '#f8fafc',
-                            borderBottom: '1px solid #e2e8f0',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            flexShrink: 0
-                        }}>
-                            <div>
-                                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
-                                    {isEditMode ? '✏️ 통제문서 내용 수정' : '📄 신규 통제문서 제정 등록'}
-                                </h3>
-                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                                    ISO 13485:2016 §4.2 및 ISO 22716 §17 품질문서화 기준 전문 전면 에디터
-                                </div>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setCreateModalOpen(false)}
-                                style={{ border: 'none', background: 'transparent', fontSize: '26px', fontWeight: 700, color: '#94a3b8', cursor: 'pointer' }}
-                            >
-                                ×
-                            </button>
-                        </div>
 
-                        {/* Form */}
-                        <form onSubmit={handleSaveDocument} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                            <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* ═══════════════════════════════════════════════════════════════════ */}
+            <StandardWorkspaceDrawer
+                isOpen={createModalOpen}
+                onClose={() => setCreateModalOpen(false)}
+                title={isEditMode ? '✏️ 통제문서 내용 수정' : '📄 신규 통제문서 제정 등록'}
+                subtitle="ISO 13485:2016 §4.2 및 ISO 22716 §17 품질문서화 기준 전문 전면 에디터"
+                docNumber={isEditMode ? formData.docNo : null}
+                revision={isEditMode ? formData.revisionNo : 'DRAFT'}
+                complianceText="ISO 13485:2016 §4.2 및 ISO 22716 §17 품질문서화 기준"
+                footerRight={
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                            type="button"
+                            onClick={() => setCreateModalOpen(false)}
+                            className="secondary close-button"
+                        >
+                            취소
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleSaveDocument}
+                            disabled={saving}
+                            style={{
+                                padding: '8px 24px',
+                                borderRadius: '8px',
+                                border: 'none',
+                                background: '#2563eb',
+                                color: '#ffffff',
+                                fontSize: '13px',
+                                fontWeight: 800,
+                                cursor: saving ? 'not-allowed' : 'pointer',
+                                opacity: saving ? 0.6 : 1
+                            }}
+                        >
+                            {saving ? '저장 중...' : (isEditMode ? '수정 내용 저장' : '신규 문서 등록 (DRAFT)')}
+                        </button>
+                    </div>
+                }
+            >
+                <form onSubmit={handleSaveDocument} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    
                                 
                                 {/* 템플릿 프리셋 선택기 */}
                                 {!isEditMode && (
@@ -1749,111 +1685,59 @@ const ControlledDocumentManagementPage = ({ user, onNavigate }) => {
                                         }}
                                     />
                                 </div>
-                            </div>
-
-                            {/* Footer (ui-ux-guide.md 표준: 취소 왼쪽, 저장 오른쪽) */}
-                            <div style={{
-                                padding: '14px 24px',
-                                backgroundColor: '#f8fafc',
-                                borderTop: '1px solid #e2e8f0',
-                                display: 'flex',
-                                justifyContent: 'flex-end',
-                                gap: '8px',
-                                flexShrink: 0
-                            }}>
-                                <button
-                                    type="button"
-                                    onClick={() => setCreateModalOpen(false)}
-                                    style={{
-                                        padding: '9px 20px',
-                                        borderRadius: '8px',
-                                        border: '1px solid #cbd5e1',
-                                        background: '#ffffff',
-                                        color: '#475569',
-                                        fontSize: '13px',
-                                        fontWeight: 700,
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    취소
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={saving}
-                                    style={{
-                                        padding: '9px 24px',
-                                        borderRadius: '8px',
-                                        border: 'none',
-                                        background: '#2563eb',
-                                        color: '#ffffff',
-                                        fontSize: '13px',
-                                        fontWeight: 800,
-                                        cursor: saving ? 'not-allowed' : 'pointer',
-                                        opacity: saving ? 0.6 : 1
-                                    }}
-                                >
-                                    {saving ? '저장 중...' : (isEditMode ? '수정 내용 저장' : '신규 문서 등록 (DRAFT)')}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+                            
+                </form>
+            </StandardWorkspaceDrawer>
 
             {/* ═══════════════════════════════════════════════════════════════════ */}
             {/* Modal 3: 새 개정판 (Revision) 초안 생성 모달 (최대 크기 전면 에디터) */}
             {/* ═══════════════════════════════════════════════════════════════════ */}
             {revisionModalOpen && selectedDoc && (
-                <div style={{
-                    position: 'fixed',
-                    inset: 0,
-                    zIndex: 9999,
-                    backgroundColor: 'rgba(0, 0, 0, 0.55)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '16px'
-                }}>
-                    <div style={{
-                        backgroundColor: '#ffffff',
-                        borderRadius: '16px',
-                        width: '96vw',
-                        maxWidth: '1680px',
-                        height: '92vh',
-                        maxHeight: '94vh',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                        overflow: 'hidden'
-                    }}>
-                        <div style={{
-                            padding: '16px 24px',
-                            backgroundColor: '#faf5ff',
-                            borderBottom: '1px solid #e9d5ff',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            flexShrink: 0
-                        }}>
-                            <div>
-                                <span style={{ fontFamily: 'monospace', fontWeight: 800, color: '#9333ea', fontSize: '12px', background: '#ffffff', padding: '2px 8px', borderRadius: '6px', border: '1px solid #d8b4fe' }}>
-                                    {selectedDoc.docNo} (기존 {selectedDoc.revisionNo})
-                                </span>
-                                <h3 style={{ margin: '6px 0 0 0', fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
-                                    새 개정판 (Revision) 초안 생성
-                                </h3>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setRevisionModalOpen(false)}
-                                style={{ border: 'none', background: 'transparent', fontSize: '26px', fontWeight: 700, color: '#94a3b8', cursor: 'pointer' }}
-                            >
-                                ×
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleSaveRevision} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                            <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <StandardWorkspaceDrawer
+                isOpen={revisionModalOpen && !!selectedDoc}
+                onClose={() => setRevisionModalOpen(false)}
+                title="새 개정판 (Revision) 초안 생성"
+                subtitle="ISO 13485 개정 통제 규격에 따라 신규 개정이 유효화되면 기존 문서는 SUPERSEDED로 자동 보존됩니다."
+                docNumber={selectedDoc?.docNo}
+                revision={`기존 ${selectedDoc?.revisionNo}`}
+                statusBadge={
+                    <span style={{ fontSize: '11px', fontWeight: 800, padding: '3px 10px', borderRadius: '10px', background: '#f3e8ff', color: '#9333ea', border: '1px solid #d8b4fe' }}>
+                        REVISION DRAFT
+                    </span>
+                }
+                complianceText="ISO 13485:2016 개정 통제 규정: 신규 개정 승인 시 기존 문서는 SUPERSEDED로 대체 보존됩니다."
+                footerRight={
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                            type="button"
+                            onClick={() => setRevisionModalOpen(false)}
+                            className="secondary close-button"
+                        >
+                            취소
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleSaveRevision}
+                            disabled={saving}
+                            style={{
+                                padding: '8px 22px',
+                                borderRadius: '8px',
+                                border: 'none',
+                                background: '#9333ea',
+                                color: '#ffffff',
+                                fontSize: '13px',
+                                fontWeight: 800,
+                                cursor: saving ? 'not-allowed' : 'pointer',
+                                opacity: saving ? 0.6 : 1
+                            }}
+                        >
+                            {saving ? '생성 중...' : '개정판 초안 생성 (DRAFT)'}
+                        </button>
+                    </div>
+                }
+            >
+                <form onSubmit={handleSaveRevision} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    
                                 <div style={{
                                     padding: '12px 16px',
                                     borderRadius: '8px',
@@ -1863,7 +1747,7 @@ const ControlledDocumentManagementPage = ({ user, onNavigate }) => {
                                     color: '#92400e',
                                     lineHeight: 1.5
                                 }}>
-                                    💡 <b>규제 개정 통제 안내 (ISO 13485)</b>: 기존 <b>{selectedDoc.revisionNo}</b> 문서를 모태로 신규 개정판 초안(DRAFT)을 생성합니다. 신규 개정이 최종 승인(EFFECTIVE)되면 기존 문서는 자동으로 <b>SUPERSEDED</b>로 대체 보존됩니다.
+                                    💡 <b>규제 개정 통제 안내 (ISO 13485)</b>: 기존 <b>{selectedDoc?.revisionNo || '-'}</b> 문서를 모태로 신규 개정판 초안(DRAFT)을 생성합니다. 신규 개정이 최종 승인(EFFECTIVE)되면 기존 문서는 자동으로 <b>SUPERSEDED</b>로 대체 보존됩니다.
                                 </div>
 
                                 <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.2fr 2fr', gap: '14px' }}>
@@ -1887,7 +1771,7 @@ const ControlledDocumentManagementPage = ({ user, onNavigate }) => {
                                         <input
                                             type="text"
                                             disabled
-                                            value={`${selectedDoc.docNo} (기존 ${selectedDoc.revisionNo})`}
+                                            value={`${selectedDoc?.docNo || ''} (기존 ${selectedDoc?.revisionNo || '-'})`}
                                             style={{ width: '100%', height: '38px', padding: '8px 12px', border: '1px solid #e2e8f0', background: '#f1f5f9', color: '#64748b', borderRadius: '8px', fontSize: '13px', fontFamily: 'monospace' }}
                                         />
                                     </div>
@@ -1945,51 +1829,16 @@ const ControlledDocumentManagementPage = ({ user, onNavigate }) => {
                                         }}
                                     />
                                 </div>
-                            </div>
-
-                            <div style={{
-                                padding: '14px 24px',
-                                backgroundColor: '#f8fafc',
-                                borderTop: '1px solid #e2e8f0',
-                                display: 'flex',
-                                justifyContent: 'flex-end',
-                                gap: '8px',
-                                flexShrink: 0
-                            }}>
-                                <button
-                                    type="button"
-                                    onClick={() => setRevisionModalOpen(false)}
-                                    style={{ padding: '8px 18px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#ffffff', color: '#475569', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
-                                >
-                                    취소
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={saving}
-                                    style={{ padding: '8px 22px', borderRadius: '8px', border: 'none', background: '#9333ea', color: '#ffffff', fontSize: '13px', fontWeight: 800, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }}
-                                >
-                                    {saving ? '생성 중...' : '개정판 초안 생성 (DRAFT)'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+                            
+                </form>
+            </StandardWorkspaceDrawer>
             )}
 
             {/* ═══════════════════════════════════════════════════════════════════ */}
             {/* Modal 4: 상태 전이 모달 (sm: 440px) */}
             {/* ═══════════════════════════════════════════════════════════════════ */}
             {statusModalOpen && selectedDoc && (
-                <div style={{
-                    position: 'fixed',
-                    inset: 0,
-                    zIndex: 9999,
-                    backgroundColor: 'rgba(0, 0, 0, 0.55)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '20px'
-                }}>
+                <div className="modal-overlay">
                     <div style={{
                         backgroundColor: '#ffffff',
                         borderRadius: '16px',
@@ -2084,16 +1933,7 @@ const ControlledDocumentManagementPage = ({ user, onNavigate }) => {
             {/* Modal 5: 삭제 확인 모달 (sm: 420px, window.confirm 금지 표준 준수) */}
             {/* ═══════════════════════════════════════════════════════════════════ */}
             {deleteModalOpen && deleteTargetDoc && (
-                <div style={{
-                    position: 'fixed',
-                    inset: 0,
-                    zIndex: 9999,
-                    backgroundColor: 'rgba(0, 0, 0, 0.55)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '20px'
-                }}>
+                <div className="modal-overlay">
                     <div style={{
                         backgroundColor: '#ffffff',
                         borderRadius: '16px',
@@ -2113,7 +1953,7 @@ const ControlledDocumentManagementPage = ({ user, onNavigate }) => {
                         </div>
 
                         <div style={{ fontSize: '13.5px', color: '#334155', lineHeight: 1.6 }}>
-                            정말로 통제문서 <strong>[{deleteTargetDoc.docNo} ({deleteTargetDoc.revisionNo})]</strong>을(를) 삭제하시겠습니까?
+                            정말로 통제문서 <strong>[{deleteTargetDoc?.docNo || ''} ({deleteTargetDoc?.revisionNo || '-'})]</strong>을(를) 삭제하시겠습니까?
                             <div style={{ marginTop: '8px', fontSize: '12px', color: '#64748b', background: '#f8fafc', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                                 🔒 <b>규제 감사 보존 안내</b>: ISO 13485 규정에 의거 물리적 영구 삭제되지 않으며 소프트 딜리트(is_deleted)로 안전하게 보존됩니다.
                             </div>
