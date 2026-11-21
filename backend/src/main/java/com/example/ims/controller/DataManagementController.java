@@ -48,6 +48,13 @@ public class DataManagementController {
         try {
             dataManagementService.hardDelete(type, id, principal.getName());
             return ResponseEntity.ok(Map.of("message", "항목이 영구적으로 삭제되었습니다."));
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            log.warn("[TRASH] Hard delete data integrity conflict: {}", e.getMessage());
+            return ResponseEntity.status(org.springframework.http.HttpStatus.CONFLICT)
+                    .body(Map.of("error", "DataIntegrityViolation", "message", e.getMessage() != null ? e.getMessage() : "참조 무결성 제약조건에 위배되어 영구 삭제할 수 없습니다."));
+        } catch (IllegalArgumentException e) {
+            log.warn("[TRASH] Hard delete bad argument: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", "BadRequest", "message", e.getMessage()));
         } catch (Exception e) {
             log.error("[TRASH] Hard delete failed: {}", e.getMessage());
             return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));

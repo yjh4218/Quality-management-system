@@ -46,6 +46,7 @@ public class ProductService {
     private final ExcelParsingService excelParsingService;
     private final com.example.ims.repository.ProductionAuditRepository productionAuditRepository;
     private final PackagingSpecService packagingSpecService;
+    private final com.example.ims.repository.PackagingSpecificationRepository specRepository;
     private final com.example.ims.repository.SalesChannelRepository salesChannelRepository;
     private final SalesChannelService salesChannelService;
     private final org.springframework.cache.CacheManager cacheManager;
@@ -675,6 +676,10 @@ public class ProductService {
         }
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Product not found"));
+
+        if (specRepository != null && specRepository.existsByProductId(id)) {
+            throw new org.springframework.dao.DataIntegrityViolationException("해당 제품을 참조하는 포장규격서(PackagingSpecification)가 존재하여 완전히 삭제할 수 없습니다.");
+        }
 
         // Cascade hard delete to ProductionAudit
         productionAuditRepository.findDeletedAuditsByItemCode(product.getItemCode()).forEach(audit -> productionAuditRepository.delete(audit));

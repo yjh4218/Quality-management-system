@@ -16,6 +16,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class BrandController {
     private final BrandRepository brandRepository;
+    private final com.example.ims.repository.ProductRepository productRepository;
     private final com.example.ims.service.AuditLogService auditLogService;
 
     @GetMapping
@@ -58,15 +59,23 @@ public class BrandController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     @org.springframework.cache.annotation.CacheEvict(value = "brands", allEntries = true)
-    public ResponseEntity<Void> delete(@PathVariable Long id, @AuthenticationPrincipal UserDetails userDetails) {
+    public ResponseEntity<?> delete(@PathVariable Long id, @AuthenticationPrincipal UserDetails userDetails) {
         Brand brand = brandRepository.findById(id).orElse(null);
-        if (brand != null) {
-            String oldJson = auditLogService.toCompactJson(brand);
-            brandRepository.deleteById(id);
-            auditLogService.logEntityChange("BRAND", id, "DELETE", userDetails.getUsername(), 
-                    null, userDetails.getUsername(), null, null,
-                    "브랜드 삭제: " + brand.getName(), oldJson, null);
+        if (brand == null) {
+            return ResponseEntity.notFound().build();
         }
+        if (productRepository.existsByBrandId(id)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.CONFLICT)
+                    .body(java.util.Map.of(
+                            "error", "DataIntegrityViolation",
+                            "message", "해당 브랜드를 참조하고 있는 제품 데이터가 존재하여 삭제할 수 없습니다."
+                    ));
+        }
+        String oldJson = auditLogService.toCompactJson(brand);
+        brandRepository.deleteById(id);
+        auditLogService.logEntityChange("BRAND", id, "DELETE", userDetails.getUsername(), 
+                null, userDetails.getUsername(), null, null,
+                "브랜드 삭제: " + brand.getName(), oldJson, null);
         return ResponseEntity.ok().build();
     }
 }

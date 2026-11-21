@@ -81,6 +81,9 @@ public class SpaceRatioService {
      */
     @Transactional
     public List<SpaceRatioResult> calculateSpaceRatio(SpaceRatioRequest request, String username) {
+        if (request == null) {
+            request = new SpaceRatioRequest();
+        }
         // 독립 계산을 위한 임시 Product 및 구성 생성
         Product tempProduct = new Product();
         tempProduct.setContentVolumeMl(request.getContentVolumeMl());

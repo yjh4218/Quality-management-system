@@ -19,6 +19,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     List<Product> findByParentItemCode(String parentItemCode);
     List<Product> findByIsMasterTrue();
     boolean existsByItemCode(String itemCode);
+    boolean existsByBrandId(Long brandId);
     List<Product> findByActiveTrue();
     List<Product> findByActiveTrueAndManufacturer(String manufacturer);
 

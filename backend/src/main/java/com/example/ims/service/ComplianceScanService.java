@@ -21,7 +21,7 @@ public class ComplianceScanService {
 
     @Transactional(readOnly = true)
     public ComplianceScanDto.Response scanIngredients(ComplianceScanDto.Request request) {
-        if (request.getIngredientsText() == null || request.getIngredientsText().trim().isEmpty()) {
+        if (request == null || request.getIngredientsText() == null || request.getIngredientsText().trim().isEmpty()) {
             return ComplianceScanDto.Response.builder()
                     .compliant(true)
                     .items(new ArrayList<>())

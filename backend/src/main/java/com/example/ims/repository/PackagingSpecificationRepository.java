@@ -7,4 +7,5 @@ import java.util.List;
 
 public interface PackagingSpecificationRepository extends JpaRepository<PackagingSpecification, Long> {
     List<PackagingSpecification> findByProductId(Long productId);
+    boolean existsByProductId(Long productId);
 }
