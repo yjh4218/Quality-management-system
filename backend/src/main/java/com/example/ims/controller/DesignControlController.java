@@ -50,7 +50,7 @@ public class DesignControlController {
     }
 
     @PostMapping("/projects")
-    @PreAuthorize("@perm.can('designControls', 'CREATE') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('designControls', 'CREATE') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<DesignProjectResponse> createProject(
             @Valid @RequestBody DesignProjectRequest request,
             Authentication authentication) {
@@ -59,7 +59,7 @@ public class DesignControlController {
     }
 
     @PutMapping("/projects/{id}")
-    @PreAuthorize("@perm.can('designControls', 'EDIT') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('designControls', 'EDIT') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<DesignProjectResponse> updateProject(
             @PathVariable Long id,
             @Valid @RequestBody DesignProjectRequest request,
@@ -69,7 +69,7 @@ public class DesignControlController {
     }
 
     @DeleteMapping("/projects/{id}")
-    @PreAuthorize("@perm.can('designControls', 'DELETE') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('designControls', 'DELETE') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<Void> deleteProject(
             @PathVariable Long id,
             Authentication authentication) {
@@ -79,7 +79,7 @@ public class DesignControlController {
     }
 
     @PostMapping("/projects/{id}/phase")
-    @PreAuthorize("@perm.can('designControls', 'EDIT') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('designControls', 'EDIT') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<DesignProjectResponse> advancePhase(
             @PathVariable Long id,
             @RequestParam DesignPhase nextPhase,
@@ -89,7 +89,7 @@ public class DesignControlController {
     }
 
     @PostMapping("/projects/{id}/dhf-status")
-    @PreAuthorize("@perm.can('designControls', 'EDIT') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('designControls', 'EDIT') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<DesignProjectResponse> updateDhfStatus(
             @PathVariable Long id,
             @RequestParam String dhfStatus,
@@ -109,7 +109,7 @@ public class DesignControlController {
     }
 
     @PostMapping("/projects/{projectId}/items")
-    @PreAuthorize("@perm.can('designControls', 'CREATE') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('designControls', 'CREATE') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<DesignControlItem> addControlItem(
             @PathVariable Long projectId,
             @Valid @RequestBody DesignControlItemRequest request,
@@ -119,7 +119,7 @@ public class DesignControlController {
     }
 
     @PutMapping("/projects/{projectId}/items/{itemId}")
-    @PreAuthorize("@perm.can('designControls', 'EDIT') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('designControls', 'EDIT') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<DesignControlItem> updateControlItem(
             @PathVariable Long projectId,
             @PathVariable Long itemId,
@@ -130,7 +130,7 @@ public class DesignControlController {
     }
 
     @DeleteMapping("/projects/{projectId}/items/{itemId}")
-    @PreAuthorize("@perm.can('designControls', 'DELETE') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('designControls', 'DELETE') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<Void> deleteControlItem(
             @PathVariable Long projectId,
             @PathVariable Long itemId,
@@ -151,7 +151,7 @@ public class DesignControlController {
     }
 
     @PostMapping("/projects/{projectId}/reviews")
-    @PreAuthorize("@perm.can('designControls', 'CREATE') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('designControls', 'CREATE') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<DesignReviewRecord> addReviewRecord(
             @PathVariable Long projectId,
             @Valid @RequestBody DesignReviewRecordRequest request,
@@ -161,7 +161,7 @@ public class DesignControlController {
     }
 
     @PutMapping("/projects/{projectId}/reviews/{recordId}")
-    @PreAuthorize("@perm.can('designControls', 'EDIT') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('designControls', 'EDIT') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<DesignReviewRecord> updateReviewRecord(
             @PathVariable Long projectId,
             @PathVariable Long recordId,
@@ -172,7 +172,7 @@ public class DesignControlController {
     }
 
     @DeleteMapping("/projects/{projectId}/reviews/{recordId}")
-    @PreAuthorize("@perm.can('designControls', 'DELETE') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('designControls', 'DELETE') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<Void> deleteReviewRecord(
             @PathVariable Long projectId,
             @PathVariable Long recordId,

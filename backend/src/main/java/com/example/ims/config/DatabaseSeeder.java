@@ -28,6 +28,12 @@ public class DatabaseSeeder {
     private final ClaimRepository claimRepository;
     private final PasswordEncoder passwordEncoder;
 
+    @org.springframework.beans.factory.annotation.Value("${app.seed.admin-password:admin}")
+    private String adminPassword;
+
+    @org.springframework.beans.factory.annotation.Value("${app.seed.default-password:qms1234!}")
+    private String defaultPassword;
+
     /**
      * Seeds sample data into the database.
      * Uses defensive checks to prevent duplicates.
@@ -69,9 +75,9 @@ public class DatabaseSeeder {
 
     private void seedUsers() {
         if (userRepository.findByUsername("admin").isEmpty()) {
-            userRepository.save(User.builder().username("admin").password(passwordEncoder.encode("admin"))
+            userRepository.save(User.builder().username("admin").password(passwordEncoder.encode(adminPassword))
                     .name("시스템 관리자").companyName("더파운더즈").department("관리팀")
-                    .role("ROLE_ADMIN").enabled(true).build());
+                    .role(RoleConstants.ADMIN).enabled(true).build());
         } else {
             userRepository.findByUsername("admin").ifPresent(admin -> {
                 admin.setName("시스템 관리자");
@@ -80,29 +86,29 @@ public class DatabaseSeeder {
             });
         }
         if (userRepository.findByUsername("qa").isEmpty()) {
-            userRepository.save(User.builder().username("qa").password(passwordEncoder.encode("qa"))
+            userRepository.save(User.builder().username("qa").password(passwordEncoder.encode(defaultPassword))
                     .name("품질담당자").companyName("더파운더즈").department("품질팀")
-                    .role("ROLE_QUALITY").enabled(true).build());
+                    .role(RoleConstants.QUALITY).enabled(true).build());
         }
         if (userRepository.findByUsername("md").isEmpty()) {
-            userRepository.save(User.builder().username("md").password(passwordEncoder.encode("md"))
+            userRepository.save(User.builder().username("md").password(passwordEncoder.encode(defaultPassword))
                     .name("영업담당자").companyName("더파운더즈").department("영업팀")
-                    .role("ROLE_SALES").enabled(true).build());
+                    .role(RoleConstants.SALES).enabled(true).build());
         }
         if (userRepository.findByUsername("ko").isEmpty()) {
-            userRepository.save(User.builder().username("ko").password(passwordEncoder.encode("ko"))
+            userRepository.save(User.builder().username("ko").password(passwordEncoder.encode(defaultPassword))
                     .name("제조사담당자").companyName("한국콜마").department("영업팀")
-                    .role("ROLE_MANUFACTURER").enabled(true).build());
+                    .role(RoleConstants.MANUFACTURER).enabled(true).build());
         }
         if (userRepository.findByUsername("qc").isEmpty()) {
-            userRepository.save(User.builder().username("qc").password(passwordEncoder.encode("qc"))
+            userRepository.save(User.builder().username("qc").password(passwordEncoder.encode(defaultPassword))
                     .name("화장품책임판매관리자").companyName("더파운더즈").department("품질팀")
-                    .role("ROLE_RESPONSIBLE_SALES").enabled(true).build());
+                    .role(RoleConstants.RESPONSIBLE_SALES).enabled(true).build());
         }
         if (userRepository.findByUsername("mc").isEmpty()) {
-            userRepository.save(User.builder().username("mc").password(passwordEncoder.encode("mc"))
+            userRepository.save(User.builder().username("mc").password(passwordEncoder.encode(defaultPassword))
                     .name("제조사 품질 담당자").companyName("코스메카코리아").department("품질팀")
-                    .role("ROLE_MANUFACTURER").enabled(true).build());
+                    .role(RoleConstants.MANUFACTURER).enabled(true).build());
         }
     }
 

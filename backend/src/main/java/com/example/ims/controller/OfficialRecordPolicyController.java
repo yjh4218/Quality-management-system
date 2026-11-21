@@ -1,5 +1,6 @@
 package com.example.ims.controller;
 
+import com.example.ims.config.RoleConstants;
 import com.example.ims.dto.*;
 import com.example.ims.service.OfficialRecordPolicyService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,6 +24,13 @@ public class OfficialRecordPolicyController {
 
     private final OfficialRecordPolicyService policyService;
 
+    private String resolveUsername(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new org.springframework.security.access.AccessDeniedException("인증된 사용자 정보를 확인할 수 없습니다.");
+        }
+        return authentication.getName();
+    }
+
     // =========================================================================
     // 0. KPI 지표 요약
     // =========================================================================
@@ -44,7 +52,7 @@ public class OfficialRecordPolicyController {
             Authentication authentication,
             HttpServletRequest request) {
 
-        String username = authentication != null ? authentication.getName() : "admin";
+        String username = resolveUsername(authentication);
         String clientIp = extractClientIp(request);
         String userAgent = request.getHeader("User-Agent");
 
@@ -78,7 +86,7 @@ public class OfficialRecordPolicyController {
             @PathVariable Long id,
             @RequestBody Map<String, String> body,
             Authentication authentication) {
-        String username = authentication != null ? authentication.getName() : "admin";
+        String username = resolveUsername(authentication);
         String reason = body.getOrDefault("reason", "관리자 서명 철회");
         return ResponseEntity.ok(policyService.revokeSignature(id, reason, username));
     }
@@ -98,7 +106,7 @@ public class OfficialRecordPolicyController {
     public ResponseEntity<Part11AssessmentItemResponse> createPart11Assessment(
             @Valid @RequestBody Part11AssessmentItemRequest req,
             Authentication authentication) {
-        String username = authentication != null ? authentication.getName() : "admin";
+        String username = resolveUsername(authentication);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(policyService.createPart11Assessment(req, username));
     }
@@ -109,7 +117,7 @@ public class OfficialRecordPolicyController {
             @PathVariable Long id,
             @Valid @RequestBody Part11AssessmentItemRequest req,
             Authentication authentication) {
-        String username = authentication != null ? authentication.getName() : "admin";
+        String username = resolveUsername(authentication);
         return ResponseEntity.ok(policyService.updatePart11Assessment(id, req, username));
     }
 
@@ -135,7 +143,7 @@ public class OfficialRecordPolicyController {
     public ResponseEntity<OfficialRecordPolicyResponse> createPolicy(
             @Valid @RequestBody OfficialRecordPolicyRequest req,
             Authentication authentication) {
-        String username = authentication != null ? authentication.getName() : "admin";
+        String username = resolveUsername(authentication);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(policyService.createPolicy(req, username));
     }
@@ -146,7 +154,7 @@ public class OfficialRecordPolicyController {
             @PathVariable Long id,
             @Valid @RequestBody OfficialRecordPolicyRequest req,
             Authentication authentication) {
-        String username = authentication != null ? authentication.getName() : "admin";
+        String username = resolveUsername(authentication);
         return ResponseEntity.ok(policyService.updatePolicy(id, req, username));
     }
 

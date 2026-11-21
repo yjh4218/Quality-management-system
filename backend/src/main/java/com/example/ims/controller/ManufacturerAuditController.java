@@ -1,5 +1,6 @@
 package com.example.ims.controller;
 
+import com.example.ims.config.RoleConstants;
 import com.example.ims.entity.ManufacturerAudit;
 import com.example.ims.service.ManufacturerAuditService;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +30,7 @@ public class ManufacturerAuditController {
     }
 
     @GetMapping("/search")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM') or @perm.can('manufacturerAudits', 'VIEW')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME) or hasRole(T(com.example.ims.config.RoleConstants).QUALITY_TEAM_NAME) or @perm.can('manufacturerAudits', 'VIEW')")
     public ResponseEntity<List<ManufacturerAudit>> searchAudits(
             Authentication authentication,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
@@ -39,7 +40,7 @@ public class ManufacturerAuditController {
             @RequestParam(required = false) String grade) {
         
         com.example.ims.entity.User user = getUser(authentication);
-        if (user != null && (user.getRole().contains("ROLE_MANUFACTURER") || "제조사".equals(user.getDepartment()))) {
+        if (user != null && (user.getRole().contains(RoleConstants.MANUFACTURER) || "제조사".equals(user.getDepartment()))) {
             String mfrName = user.getManufacturer() != null ? user.getManufacturer().getName() : user.getCompanyName();
             manufacturerName = mfrName;
         }
@@ -48,7 +49,7 @@ public class ManufacturerAuditController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM') or @perm.can('manufacturerAudits', 'EDIT')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME) or hasRole(T(com.example.ims.config.RoleConstants).QUALITY_TEAM_NAME) or @perm.can('manufacturerAudits', 'EDIT')")
     public ResponseEntity<ManufacturerAudit> createAudit(@jakarta.validation.Valid @RequestBody ManufacturerAudit audit, Authentication authentication) {
         if (authentication != null) {
             audit.setModifierInfo(authentication.getName());
@@ -58,7 +59,7 @@ public class ManufacturerAuditController {
 
 
     @PostMapping("/upload-photo")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM') or @perm.can('manufacturerAudits', 'EDIT')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME) or hasRole(T(com.example.ims.config.RoleConstants).QUALITY_TEAM_NAME) or @perm.can('manufacturerAudits', 'EDIT')")
     public ResponseEntity<String> uploadPhoto(@RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().body("File is empty");
@@ -74,7 +75,7 @@ public class ManufacturerAuditController {
 
     private boolean isUserForbiddenForAudit(com.example.ims.entity.User user, Long auditId) {
         if (user == null) return false;
-        boolean isMfr = (user.getRole() != null && user.getRole().contains("ROLE_MANUFACTURER"))
+        boolean isMfr = (user.getRole() != null && user.getRole().contains(RoleConstants.MANUFACTURER))
                 || "제조사".equals(user.getDepartment());
         if (!isMfr) return false;
 
@@ -88,10 +89,10 @@ public class ManufacturerAuditController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM') or @perm.can('manufacturerAudits', 'EDIT')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME) or hasRole(T(com.example.ims.config.RoleConstants).QUALITY_TEAM_NAME) or @perm.can('manufacturerAudits', 'EDIT')")
     public ResponseEntity<ManufacturerAudit> updateAudit(@PathVariable Long id, @jakarta.validation.Valid @RequestBody ManufacturerAudit audit, Authentication authentication) {
         com.example.ims.entity.User user = getUser(authentication);
-        if (user != null && ((user.getRole() != null && user.getRole().contains("ROLE_MANUFACTURER")) || "제조사".equals(user.getDepartment()))) {
+        if (user != null && ((user.getRole() != null && user.getRole().contains(RoleConstants.MANUFACTURER)) || "제조사".equals(user.getDepartment()))) {
             return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
         }
         if (authentication != null) {
@@ -102,10 +103,10 @@ public class ManufacturerAuditController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM') or @perm.can('manufacturerAudits', 'DELETE')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME) or hasRole(T(com.example.ims.config.RoleConstants).QUALITY_TEAM_NAME) or @perm.can('manufacturerAudits', 'DELETE')")
     public ResponseEntity<Void> deleteAudit(@PathVariable Long id, Authentication authentication) {
         com.example.ims.entity.User user = getUser(authentication);
-        if (user != null && ((user.getRole() != null && user.getRole().contains("ROLE_MANUFACTURER")) || "제조사".equals(user.getDepartment()))) {
+        if (user != null && ((user.getRole() != null && user.getRole().contains(RoleConstants.MANUFACTURER)) || "제조사".equals(user.getDepartment()))) {
             return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
         }
         auditService.deleteAudit(id);
@@ -113,7 +114,7 @@ public class ManufacturerAuditController {
     }
 
     @GetMapping("/{id}/history")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM') or @perm.can('manufacturerAudits', 'VIEW')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME) or hasRole(T(com.example.ims.config.RoleConstants).QUALITY_TEAM_NAME) or @perm.can('manufacturerAudits', 'VIEW')")
     public ResponseEntity<?> getAuditHistory(@PathVariable Long id, Authentication authentication) {
         com.example.ims.entity.User user = getUser(authentication);
         if (isUserForbiddenForAudit(user, id)) {
@@ -128,7 +129,7 @@ public class ManufacturerAuditController {
      * [고도화 12] Audit 결과를 Excel로 내보냅니다.
      */
     @GetMapping("/{id}/export/excel")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM') or @perm.can('manufacturerAudits', 'VIEW')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME) or hasRole(T(com.example.ims.config.RoleConstants).QUALITY_TEAM_NAME) or @perm.can('manufacturerAudits', 'VIEW')")
     public ResponseEntity<?> exportExcel(@PathVariable Long id, Authentication authentication) {
         try {
             com.example.ims.entity.User user = getUser(authentication);
@@ -152,7 +153,7 @@ public class ManufacturerAuditController {
     }
 
     @GetMapping("/export/excel")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY_TEAM') or @perm.can('manufacturerAudits', 'VIEW')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME) or hasRole(T(com.example.ims.config.RoleConstants).QUALITY_TEAM_NAME) or @perm.can('manufacturerAudits', 'VIEW')")
     public ResponseEntity<?> exportAuditsExcel(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
@@ -162,7 +163,7 @@ public class ManufacturerAuditController {
             Authentication authentication) {
         try {
             com.example.ims.entity.User user = getUser(authentication);
-            if (user != null && ((user.getRole() != null && user.getRole().contains("ROLE_MANUFACTURER")) || "제조사".equals(user.getDepartment()))) {
+            if (user != null && ((user.getRole() != null && user.getRole().contains(RoleConstants.MANUFACTURER)) || "제조사".equals(user.getDepartment()))) {
                 String mfrName = user.getManufacturer() != null ? user.getManufacturer().getName() : user.getCompanyName();
                 manufacturerName = mfrName;
             }

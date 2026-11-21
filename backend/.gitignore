@@ -45,6 +45,9 @@ backend/data/
 backend/uploads/
 backend/mock_emails/
 mock_emails/
+cookies.doc
+products.json
+response.json
 node_modules/
 frontend/node_modules/
 

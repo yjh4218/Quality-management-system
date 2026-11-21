@@ -223,6 +223,11 @@ public class TraceabilityService {
                     + request.getParentBatchNumber() + " -> " + request.getChildBatchNumber());
         }
 
+        if (isReachable(request.getChildBatchNumber(), request.getParentBatchNumber())) {
+            throw new IllegalArgumentException("순환 투입 관계(Circular Reference)가 형성되어 연결을 생성할 수 없습니다: "
+                    + request.getChildBatchNumber() + " -> ... -> " + request.getParentBatchNumber());
+        }
+
         TraceabilityLink link = TraceabilityLink.builder()
                 .parentBatchNumber(request.getParentBatchNumber())
                 .childBatchNumber(request.getChildBatchNumber())
@@ -349,6 +354,30 @@ public class TraceabilityService {
                 .depth(depth)
                 .children(new ArrayList<>())
                 .build();
+    }
+
+    private boolean isReachable(String from, String to) {
+        if (from == null || to == null) return false;
+        Set<String> visited = new HashSet<>();
+        Queue<String> queue = new LinkedList<>();
+        queue.add(from);
+        visited.add(from);
+        int depth = 0;
+        while (!queue.isEmpty() && depth < 10) {
+            int size = queue.size();
+            for (int i = 0; i < size; i++) {
+                String curr = queue.poll();
+                if (curr.equals(to)) return true;
+                List<TraceabilityLink> links = linkRepository.findByParentBatchNumber(curr);
+                for (TraceabilityLink link : links) {
+                    if (visited.add(link.getChildBatchNumber())) {
+                        queue.add(link.getChildBatchNumber());
+                    }
+                }
+            }
+            depth++;
+        }
+        return false;
     }
 
     // =========================================================================

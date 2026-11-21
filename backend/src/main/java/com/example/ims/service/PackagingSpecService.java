@@ -1139,31 +1139,42 @@ public class PackagingSpecService {
                     .map(r -> (r.getProductId() + "_" + r.getSpecVersion() + "_" + r.getBomCode()))
                     .collect(Collectors.toSet());
 
+            // [성능 최적화] 대상 사양서 목록을 사전 취합하고, N+1 쿼리 방지를 위해 배치 조회 수행
+            List<PackagingSpecification> allTargetSpecs = new java.util.ArrayList<>();
             for (Map.Entry<Long, List<PackagingSpecification>> entry : specsByProd.entrySet()) {
                 List<PackagingSpecification> pSpecs = entry.getValue();
                 if (pSpecs == null || pSpecs.isEmpty()) continue;
 
-                List<PackagingSpecification> targetSpecs;
                 if (Boolean.TRUE.equals(latestOnly)) {
                     PackagingSpecification latest = pSpecs.stream()
                             .max(Comparator.comparingInt(s -> s.getVersion() != null ? s.getVersion() : 0))
                             .orElse(pSpecs.get(0));
-                    targetSpecs = java.util.Collections.singletonList(latest);
+                    allTargetSpecs.add(latest);
                 } else {
-                    targetSpecs = pSpecs;
+                    allTargetSpecs.addAll(pSpecs);
+                }
+            }
+
+            List<Long> targetSpecIds = allTargetSpecs.stream()
+                    .map(PackagingSpecification::getId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+            Map<Long, List<PackagingSpecComponent>> compsBySpecId = targetSpecIds.isEmpty()
+                    ? java.util.Collections.emptyMap()
+                    : componentRepository.findBySpecIdIn(targetSpecIds).stream()
+                            .collect(Collectors.groupingBy(PackagingSpecComponent::getSpecId));
+
+            for (PackagingSpecification s : allTargetSpecs) {
+                Product prod = s.getProduct();
+                if (prod == null) continue;
+
+                // 제품코드 조건
+                if (itemCode != null && !itemCode.trim().isEmpty() && (prod.getItemCode() == null || !prod.getItemCode().toLowerCase().contains(itemCode.trim().toLowerCase()))) {
+                    continue;
                 }
 
-                for (PackagingSpecification s : targetSpecs) {
-                    Product prod = s.getProduct();
-                    if (prod == null) continue;
-
-                    // 제품코드 조건
-                    if (itemCode != null && !itemCode.trim().isEmpty() && (prod.getItemCode() == null || !prod.getItemCode().toLowerCase().contains(itemCode.trim().toLowerCase()))) {
-                        continue;
-                    }
-
-                    List<PackagingSpecComponent> comps = componentRepository.findBySpecId(s.getId());
-                    if (comps == null || comps.isEmpty()) continue;
+                List<PackagingSpecComponent> comps = compsBySpecId.getOrDefault(s.getId(), java.util.Collections.emptyList());
+                if (comps.isEmpty()) continue;
 
                     for (PackagingSpecComponent comp : comps) {
                         String bCode = comp.getBomCode();
@@ -1234,7 +1245,6 @@ public class PackagingSpecService {
                     }
                 }
             }
-        }
 
         return result;
     }

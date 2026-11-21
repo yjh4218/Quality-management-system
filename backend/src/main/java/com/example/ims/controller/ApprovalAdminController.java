@@ -1,5 +1,6 @@
 package com.example.ims.controller;
 
+import com.example.ims.config.RoleConstants;
 import com.example.ims.dto.ApprovalDocTypeDto;
 import com.example.ims.dto.ApprovalTemplateDto;
 import com.example.ims.dto.NotificationRuleDto;
@@ -17,7 +18,7 @@ import java.util.Map;
 @RestController
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("!hasRole('MANUFACTURER')")
+@PreAuthorize("!hasRole(T(com.example.ims.config.RoleConstants).MANUFACTURER_NAME)")
 public class ApprovalAdminController {
 
     private final ApprovalAdminService adminService;
@@ -30,6 +31,7 @@ public class ApprovalAdminController {
      * 일반 사용자용 활성 결재 문서유형 목록 (상신 시 선택용)
      */
     @GetMapping("/api/approval-doc-types")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<ApprovalDocTypeDto>> getActiveDocTypes() {
         return ResponseEntity.ok(adminService.getDocTypes(true));
     }
@@ -38,20 +40,20 @@ public class ApprovalAdminController {
      * 관리자용 결재 문서유형 전체 목록
      */
     @GetMapping("/api/admin/approval-doc-types")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'RESPONSIBLE_SALES')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME) or hasRole(T(com.example.ims.config.RoleConstants).QUALITY_NAME) or hasRole(T(com.example.ims.config.RoleConstants).RESPONSIBLE_SALES_NAME)")
     public ResponseEntity<List<ApprovalDocTypeDto>> getAllDocTypes() {
         return ResponseEntity.ok(adminService.getDocTypes(false));
     }
 
     @PostMapping("/api/admin/approval-doc-types")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<ApprovalDocTypeDto> createDocType(
             @RequestBody ApprovalDocTypeDto dto, Principal principal) {
         return ResponseEntity.ok(adminService.saveDocType(dto, principal.getName()));
     }
 
     @PutMapping("/api/admin/approval-doc-types/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<ApprovalDocTypeDto> updateDocType(
             @PathVariable Long id, @RequestBody ApprovalDocTypeDto dto, Principal principal) {
         dto.setId(id);
@@ -66,6 +68,7 @@ public class ApprovalAdminController {
      * 특정 문서유형의 현재 활성 결재선 템플릿 조회 (숫자 ID 또는 문자열 Code 다형성 지원)
      */
     @GetMapping({"/api/approval-templates/{identifier}", "/api/admin/approval-templates/{identifier}", "/api/admin/approval-templates/code/{identifier}"})
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApprovalTemplateDto> getCurrentTemplate(@PathVariable String identifier) {
         ApprovalTemplateDto tpl;
         if (identifier.matches("^\\d+$")) {
@@ -77,12 +80,13 @@ public class ApprovalAdminController {
     }
 
     @GetMapping("/api/admin/approval-templates/{docTypeId:\\d+}/history")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME) or hasRole(T(com.example.ims.config.RoleConstants).QUALITY_NAME)")
     public ResponseEntity<List<ApprovalTemplateDto>> getTemplateHistory(@PathVariable Long docTypeId) {
         return ResponseEntity.ok(adminService.getTemplateHistory(docTypeId));
     }
 
     @PostMapping("/api/admin/approval-templates")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<ApprovalTemplateDto> saveTemplate(
             @RequestBody ApprovalTemplateDto dto, Principal principal) {
         return ResponseEntity.ok(adminService.saveTemplate(dto, principal.getName()));
@@ -93,12 +97,13 @@ public class ApprovalAdminController {
     // ═══════════════════════════════════════════
 
     @GetMapping("/api/admin/notification-rules")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME) or hasRole(T(com.example.ims.config.RoleConstants).QUALITY_NAME)")
     public ResponseEntity<List<NotificationRuleDto>> getNotificationRules() {
         return ResponseEntity.ok(adminService.getNotificationRules());
     }
 
     @PutMapping("/api/admin/notification-rules/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<NotificationRuleDto> updateNotificationRule(
             @PathVariable Long id,
             @RequestBody Map<String, Boolean> body,

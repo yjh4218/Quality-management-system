@@ -59,6 +59,8 @@ public class AsyncConfig implements org.springframework.scheduling.annotation.As
         executor.setWaitForTasksToCompleteOnShutdown(true);
         // 대기 시간 최대 10초 설정
         executor.setAwaitTerminationSeconds(10);
+        // [안정성] 큐 포화 시 요청 스레드에서 직접 실행하여 작업 유실 방지
+        executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());
         executor.initialize();
         return executor;
     }
@@ -72,6 +74,8 @@ public class AsyncConfig implements org.springframework.scheduling.annotation.As
         executor.setThreadNamePrefix("QMS-Audit-Executor-");
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(5);
+        // [안정성] 큐 포화 시 요청 스레드에서 직접 실행하여 작업 유실 방지
+        executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());
         executor.initialize();
         return executor;
     }

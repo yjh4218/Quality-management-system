@@ -752,6 +752,16 @@ public class SystemInitializationService {
         } catch (Exception e) {
             log.warn(">>>> [SYSTEM INIT] Could not create claim_number_seq sequence: {}", e.getMessage());
         }
+
+        // 6. stored_files 대용량 파일 데이터 (BLOB/BYTEA) 크기 보정 (H2 기본 255바이트 초과 방지)
+        try {
+            jdbcTemplate.execute("ALTER TABLE stored_files ALTER COLUMN file_data SET DATA TYPE BLOB");
+            log.info(">>>> [SYSTEM INIT] stored_files.file_data column type enlarged to BLOB.");
+        } catch (Exception e) {
+            try {
+                jdbcTemplate.execute("ALTER TABLE stored_files ALTER COLUMN file_data TYPE BYTEA");
+            } catch (Exception ignored) {}
+        }
     }
 
     private void performDataAudit() {

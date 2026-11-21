@@ -13,11 +13,17 @@ public final class RoleConstants {
     public static final String ADMIN = "ROLE_ADMIN";
     public static final String ADMIN_NAME = "ADMIN";
     public static final String RESPONSIBLE_SALES = "ROLE_RESPONSIBLE_SALES";
+    public static final String RESPONSIBLE_SALES_NAME = "RESPONSIBLE_SALES";
     public static final String QUALITY = "ROLE_QUALITY";
+    public static final String QUALITY_NAME = "QUALITY";
     public static final String QUALITY_TEAM = "ROLE_QUALITY_TEAM";
+    public static final String QUALITY_TEAM_NAME = "QUALITY_TEAM";
     public static final String SALES = "ROLE_SALES";
+    public static final String SALES_NAME = "SALES";
     public static final String MANUFACTURER = "ROLE_MANUFACTURER";
+    public static final String MANUFACTURER_NAME = "MANUFACTURER";
     public static final String USER = "ROLE_USER";
+    public static final String USER_NAME = "USER";
     public static final String DEVICE = "ROLE_DEVICE";
     public static final String DEVICE_NAME = "DEVICE";
 

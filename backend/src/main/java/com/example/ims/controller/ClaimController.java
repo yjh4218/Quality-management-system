@@ -114,11 +114,10 @@ public class ClaimController {
     }
 
     @GetMapping("/debug/status")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<java.util.Map<String, Object>> getDebugStatus() {
-        List<Claim> all = claimService.getClaims(null, null); 
-        long total = all.size();
-        long shared = all.stream().filter(Claim::isSharedWithManufacturer).count();
+        long total = claimService.countTotalClaims();
+        long shared = claimService.countSharedClaims();
         
         java.util.Map<String, Object> status = new java.util.HashMap<>();
         status.put("totalCount", total);
@@ -155,7 +154,7 @@ public class ClaimController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<Void> deleteClaim(
             @PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails) {

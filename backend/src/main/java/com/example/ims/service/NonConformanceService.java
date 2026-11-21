@@ -509,9 +509,9 @@ public class NonConformanceService {
     }
 
     /**
-     * NCR 자동 채번 생성기 (예: NCR-202610-001)
+     * NCR 자동 채번 생성기 (예: NCR-202610-001) - 동시성 경합 방어 (synchronized)
      */
-    private String generateNcrNumber() {
+    private synchronized String generateNcrNumber() {
         String yearMonth = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMM"));
         String prefix = "NCR-" + yearMonth + "-";
 

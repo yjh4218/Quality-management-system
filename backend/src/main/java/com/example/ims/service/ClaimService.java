@@ -47,6 +47,16 @@ public class ClaimService {
     }
 
     @Transactional(readOnly = true)
+    public long countTotalClaims() {
+        return claimRepository.count();
+    }
+
+    @Transactional(readOnly = true)
+    public long countSharedClaims() {
+        return claimRepository.countBySharedWithManufacturerTrue();
+    }
+
+    @Transactional(readOnly = true)
     public List<Claim> searchClaims(String role, String companyName, String startDate, String endDate, String itemCode,
             String productName, String lotNumber, String country, String qualityStatus, String claimNumber,
             String manufacturer, String sharedFilterStr, Boolean isCriticalClaim) {

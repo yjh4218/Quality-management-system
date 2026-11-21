@@ -28,6 +28,7 @@ public class AccessLogController {
     }
 
     @PostMapping("/page-move")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> logPageMove(@RequestBody Map<String, String> payload, 
                                           Authentication authentication, 
                                           HttpServletRequest request) {

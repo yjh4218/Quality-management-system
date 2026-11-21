@@ -6,6 +6,7 @@ import java.util.List;
 
 public interface PackagingSpecComponentRepository extends JpaRepository<PackagingSpecComponent, Long> {
     List<PackagingSpecComponent> findBySpecId(Long specId);
+    List<PackagingSpecComponent> findBySpecIdIn(java.util.Collection<Long> specIds);
     List<PackagingSpecComponent> findByBomCode(String bomCode);
     void deleteBySpecId(Long specId);
 }

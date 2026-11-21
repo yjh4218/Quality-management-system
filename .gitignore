@@ -19,6 +19,9 @@ temp/
 tmp/
 backend/mock_emails/
 mock_emails/
+backend/cookies.doc
+backend/products.json
+backend/response.json
 backend/h2_migration_data.json
 backend/DbTest.java
 backend/DbTest.class

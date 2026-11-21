@@ -1,5 +1,6 @@
 package com.example.ims.controller;
 
+import com.example.ims.config.RoleConstants;
 import com.example.ims.dto.dynamic.DynamicMenuBatchReorderDto;
 import com.example.ims.dto.dynamic.DynamicMenuRequest;
 import com.example.ims.dto.dynamic.DynamicMenuResponse;
@@ -45,26 +46,27 @@ public class DynamicMenuController {
     }
 
     @GetMapping("/tree")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<DynamicMenuResponse>> getAllMenusTree() {
         return ResponseEntity.ok(menuService.getAllMenusTree());
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN') or hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority(T(com.example.ims.config.RoleConstants).ADMIN) or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<DynamicMenuResponse> createMenu(@RequestBody DynamicMenuRequest req) {
         log.info("[DYNAMIC MENU] Creating menu: {}", req.getMenuName());
         return ResponseEntity.ok(menuService.createMenu(req));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN') or hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority(T(com.example.ims.config.RoleConstants).ADMIN) or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<DynamicMenuResponse> updateMenu(@PathVariable Long id, @RequestBody DynamicMenuRequest req) {
         log.info("[DYNAMIC MENU] Updating menu ID: {}, name: {}", id, req.getMenuName());
         return ResponseEntity.ok(menuService.updateMenu(id, req));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN') or hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority(T(com.example.ims.config.RoleConstants).ADMIN) or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<Void> deleteMenu(@PathVariable Long id) {
         log.info("[DYNAMIC MENU] Deleting menu ID: {}", id);
         menuService.deleteMenu(id);
@@ -72,12 +74,13 @@ public class DynamicMenuController {
     }
 
     @GetMapping("/screens")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<ScreenMenuMappingResponse>> getScreenMenuMappings() {
         return ResponseEntity.ok(menuService.getScreenMenuMappings());
     }
 
     @PutMapping("/screens/{screenId}/link")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN') or hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority(T(com.example.ims.config.RoleConstants).ADMIN) or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<ScreenMenuMappingResponse> linkScreenToMenu(
             @PathVariable Long screenId,
             @RequestBody DynamicMenuRequest req) {
@@ -86,7 +89,7 @@ public class DynamicMenuController {
     }
 
     @PutMapping("/batch-reorder")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN') or hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority(T(com.example.ims.config.RoleConstants).ADMIN) or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<Void> batchReorderMenus(@RequestBody List<DynamicMenuBatchReorderDto> items) {
         log.info("[DYNAMIC MENU] Batch reordering {} items", items != null ? items.size() : 0);
         menuService.batchReorderMenus(items);

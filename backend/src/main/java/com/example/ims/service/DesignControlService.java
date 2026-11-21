@@ -215,6 +215,12 @@ public class DesignControlService {
             }
         }
 
+        if (request.getParentInputItemCode() != null && !request.getParentInputItemCode().isBlank()) {
+            if (request.getParentInputItemCode().trim().equalsIgnoreCase(itemCode)) {
+                throw new IllegalArgumentException("자기 자신을 상위 입력 항목(parentInputItemCode)으로 지정할 수 없습니다: " + itemCode);
+            }
+        }
+
         DesignControlItem item = DesignControlItem.builder()
                 .project(project)
                 .itemCode(itemCode)
@@ -247,6 +253,12 @@ public class DesignControlService {
 
         if (!item.getProject().getId().equals(projectId)) {
             throw new IllegalArgumentException("프로젝트 ID가 일치하지 않습니다.");
+        }
+
+        if (request.getParentInputItemCode() != null && !request.getParentInputItemCode().isBlank()) {
+            if (request.getParentInputItemCode().trim().equalsIgnoreCase(item.getItemCode())) {
+                throw new IllegalArgumentException("자기 자신을 상위 입력 항목(parentInputItemCode)으로 지정할 수 없습니다: " + item.getItemCode());
+            }
         }
 
         item.setItemType(request.getItemType());

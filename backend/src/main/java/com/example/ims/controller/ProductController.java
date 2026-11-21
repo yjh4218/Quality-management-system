@@ -134,7 +134,7 @@ public class ProductController {
     }
 
     @PostMapping("/{id}/restore")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<Void> restoreProduct(@PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails) {
         productService.restoreProduct(id, userDetails.getUsername());
@@ -142,7 +142,7 @@ public class ProductController {
     }
 
     @DeleteMapping("/{id}/hard")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<Void> hardDeleteProduct(@PathVariable Long id,
             @AuthenticationPrincipal UserDetails userDetails) {
         productService.hardDeleteProduct(id, userDetails.getUsername());

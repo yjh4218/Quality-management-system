@@ -448,9 +448,9 @@ public class ComplaintSafetyService {
     }
 
     /**
-     * 일련번호 자동 생성: SAFE-yyyyMM-001
+     * 일련번호 자동 생성: SAFE-yyyyMM-001 - 동시성 경합 방어 (synchronized)
      */
-    private String generateEvaluationNumber() {
+    private synchronized String generateEvaluationNumber() {
         String prefix = "SAFE-" + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMM")) + "-";
         int seq = 1;
         while (true) {

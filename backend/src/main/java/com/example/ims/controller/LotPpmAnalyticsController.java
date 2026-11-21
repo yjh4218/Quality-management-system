@@ -20,7 +20,7 @@ public class LotPpmAnalyticsController {
     private final LotRootCauseAnalysisService lotRootCauseAnalysisService;
 
     @GetMapping("/lot-ppm")
-    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','QUALITY_TEAM')")
+    @PreAuthorize("hasAnyRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME, T(com.example.ims.config.RoleConstants).QUALITY_NAME, T(com.example.ims.config.RoleConstants).QUALITY_TEAM_NAME)")
     public ResponseEntity<List<LotPpmAnalysisDto>> getLotPpmAnalysis(
             @RequestParam(required = false) String itemCode,
             @RequestParam(required = false) String productName,
@@ -34,7 +34,7 @@ public class LotPpmAnalyticsController {
     }
 
     @GetMapping("/summary")
-    @PreAuthorize("hasAnyRole('ADMIN','QUALITY','QUALITY_TEAM')")
+    @PreAuthorize("hasAnyRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME, T(com.example.ims.config.RoleConstants).QUALITY_NAME, T(com.example.ims.config.RoleConstants).QUALITY_TEAM_NAME)")
     public ResponseEntity<QualityAnalyticsSummaryDto> getQualityAnalyticsSummary(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {

@@ -5,6 +5,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import com.example.ims.config.RoleConstants;
 import com.example.ims.repository.UserRepository;
 import com.example.ims.service.DashboardService;
 import com.example.ims.service.PackagingSpecExportService;
@@ -22,8 +23,8 @@ import java.io.PrintWriter;
 @RestController
 @RequestMapping("/api/debug")
 @RequiredArgsConstructor
-@org.springframework.context.annotation.Profile("local")
-@org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
+@org.springframework.context.annotation.Profile({"local", "dev"})
+@org.springframework.security.access.prepost.PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
 public class DebugController {
 
     private final JdbcTemplate jdbcTemplate;

@@ -67,7 +67,7 @@ public class TraceabilityController {
     }
 
     @PostMapping("/batches")
-    @PreAuthorize("@perm.can('traceabilityManagement', 'CREATE') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('traceabilityManagement', 'CREATE') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<TraceabilityBatchResponse> createBatch(
             @Valid @RequestBody TraceabilityBatchRequest request,
             Authentication authentication) {
@@ -76,7 +76,7 @@ public class TraceabilityController {
     }
 
     @PutMapping("/batches/{id}")
-    @PreAuthorize("@perm.can('traceabilityManagement', 'EDIT') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('traceabilityManagement', 'EDIT') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<TraceabilityBatchResponse> updateBatch(
             @PathVariable Long id,
             @Valid @RequestBody TraceabilityBatchRequest request,
@@ -86,7 +86,7 @@ public class TraceabilityController {
     }
 
     @DeleteMapping("/batches/{id}")
-    @PreAuthorize("@perm.can('traceabilityManagement', 'DELETE') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('traceabilityManagement', 'DELETE') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<Void> deleteBatch(@PathVariable Long id, Authentication authentication) {
         String username = authentication != null ? authentication.getName() : "system";
         service.deleteBatch(id, username);
@@ -105,7 +105,7 @@ public class TraceabilityController {
     }
 
     @PostMapping("/links")
-    @PreAuthorize("@perm.can('traceabilityManagement', 'CREATE') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('traceabilityManagement', 'CREATE') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<TraceabilityLinkResponse> createLink(
             @Valid @RequestBody TraceabilityLinkRequest request,
             Authentication authentication) {
@@ -114,7 +114,7 @@ public class TraceabilityController {
     }
 
     @DeleteMapping("/links/{id}")
-    @PreAuthorize("@perm.can('traceabilityManagement', 'DELETE') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('traceabilityManagement', 'DELETE') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<Void> deleteLink(@PathVariable Long id, Authentication authentication) {
         String username = authentication != null ? authentication.getName() : "system";
         service.deleteLink(id, username);
@@ -150,7 +150,7 @@ public class TraceabilityController {
     }
 
     @PostMapping("/integrations")
-    @PreAuthorize("@perm.can('traceabilityManagement', 'CREATE') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('traceabilityManagement', 'CREATE') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<ExternalIntegrationResponse> createIntegrationLog(
             @Valid @RequestBody ExternalIntegrationRequest request,
             Authentication authentication) {
@@ -159,7 +159,7 @@ public class TraceabilityController {
     }
 
     @PostMapping("/integrations/{id}/reconcile")
-    @PreAuthorize("@perm.can('traceabilityManagement', 'EDIT') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('traceabilityManagement', 'EDIT') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<ExternalIntegrationResponse> reconcileLog(
             @PathVariable Long id,
             @Valid @RequestBody ReconciliationActionRequest request,
@@ -185,7 +185,7 @@ public class TraceabilityController {
     }
 
     @PostMapping("/barcodes")
-    @PreAuthorize("@perm.can('traceabilityManagement', 'CREATE') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('traceabilityManagement', 'CREATE') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<BarcodeRecordResponse> issueBarcode(
             @Valid @RequestBody BarcodeIssueRequest request,
             Authentication authentication) {

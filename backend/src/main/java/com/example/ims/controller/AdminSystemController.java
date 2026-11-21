@@ -1,5 +1,6 @@
 package com.example.ims.controller;
 
+import com.example.ims.config.RoleConstants;
 import com.example.ims.dto.DataTransferDto;
 import com.example.ims.entity.SystemPageGuide;
 import com.example.ims.service.DataTransferService;
@@ -37,7 +38,7 @@ public class AdminSystemController {
      * 마이그레이션 진행 상태 조회 (ADMIN 권한 필요)
      */
     @GetMapping("/migration-status")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<Map<String, String>> getMigrationStatus() {
         Map<String, String> status = new HashMap<>();
         status.put("status", migrationService.getMigrationStatus());
@@ -49,7 +50,7 @@ public class AdminSystemController {
      * 전체 데이터 임포트 실행 (ADMIN 권한 필요)
      */
     @PostMapping("/import-from-file")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<Map<String, String>> importFromFile() {
         Map<String, String> response = new HashMap<>();
         String filePath = "h2_migration_data.json";
@@ -86,7 +87,7 @@ public class AdminSystemController {
     }
 
     @GetMapping("/page-guides")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<List<SystemPageGuide>> getPageGuides() {
         return ResponseEntity.ok(migrationService.getPageGuides());
     }
@@ -95,7 +96,7 @@ public class AdminSystemController {
      * 페이지 가이드 마이그레이션 (ADMIN 권한 필요)
      */
     @PostMapping("/page-guides/migrate")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<Map<String, Object>> migratePageGuides(@RequestBody List<SystemPageGuide> guides) {
         Map<String, Object> response = new HashMap<>();
         try {
@@ -112,7 +113,7 @@ public class AdminSystemController {
     }
 
     @PostMapping("/page-guides/upsert")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<Map<String, Object>> upsertPageGuides(@RequestBody List<SystemPageGuide> guides) {
         try {
             Map<String, Object> result = migrationService.upsertPageGuides(guides);
@@ -127,7 +128,7 @@ public class AdminSystemController {
     }
 
     @GetMapping("/diag")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<Map<String, Object>> getDiagnostics() {
         return ResponseEntity.ok(new HashMap<>());
     }

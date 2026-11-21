@@ -1,5 +1,6 @@
 package com.example.ims.service;
 
+import com.example.ims.config.RoleConstants;
 import com.example.ims.dto.RegisterRequestDto;
 import com.example.ims.entity.User;
 import com.example.ims.repository.ManufacturerRepository;
@@ -45,13 +46,13 @@ public class AuthService {
         }
 
         com.example.ims.entity.Manufacturer matchedManufacturer = null;
-        String initialRole = "ROLE_USER";
+        String initialRole = RoleConstants.USER;
 
         // 등록된 제조사 목록에 존재하는 경우 제조사 엔티티 매핑 및 기본 권한 스마트 지정
         if (dto.companyName() != null && !dto.companyName().isBlank()) {
             matchedManufacturer = manufacturerRepository.findByName(dto.companyName()).orElse(null);
             if (matchedManufacturer != null) {
-                initialRole = "ROLE_MANUFACTURER";
+                initialRole = RoleConstants.MANUFACTURER;
             }
         }
 

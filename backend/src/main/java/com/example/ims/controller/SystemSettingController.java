@@ -1,5 +1,6 @@
 package com.example.ims.controller;
 
+import com.example.ims.config.RoleConstants;
 import com.example.ims.entity.SystemSetting;
 import com.example.ims.service.EmailSender;
 import com.example.ims.service.SystemSettingService;
@@ -19,13 +20,13 @@ public class SystemSettingController {
     private final EmailSender emailSender;
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<Map<String, String>> getAllSettings() {
         return ResponseEntity.ok(service.getAllSettings());
     }
 
     @PostMapping("/test-email")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<Map<String, Object>> testEmail(@RequestBody Map<String, String> body) {
         String targetEmail = body != null ? body.get("targetEmail") : null;
         if (targetEmail == null || targetEmail.trim().isEmpty()) {
@@ -53,13 +54,14 @@ public class SystemSettingController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<Void> saveSettings(@RequestBody Map<String, String> settings) {
         service.saveSettings(settings);
         return ResponseEntity.ok().build();
     }
 
     @GetMapping("/{key}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<SystemSetting> getSetting(@PathVariable String key) {
         SystemSetting setting = SystemSetting.builder()
                 .settingKey(key)
@@ -69,7 +71,7 @@ public class SystemSettingController {
     }
 
     @PostMapping("/{key}")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN', 'GRID_SYSTEM_LEGEND_MANAGE')")
+    @PreAuthorize("hasAuthority(T(com.example.ims.config.RoleConstants).ADMIN) or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME) or hasAuthority('GRID_SYSTEM_LEGEND_MANAGE')")
     public ResponseEntity<Void> saveSettingByKey(@PathVariable String key, @RequestBody Map<String, String> body) {
         String value = body != null ? body.get("value") : "";
         service.saveSetting(key, value != null ? value : "", "Updated via Grid Legend/Settings API");
@@ -77,7 +79,7 @@ public class SystemSettingController {
     }
 
     @DeleteMapping("/{key}")
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN', 'GRID_SYSTEM_LEGEND_MANAGE')")
+    @PreAuthorize("hasAuthority(T(com.example.ims.config.RoleConstants).ADMIN) or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME) or hasAuthority('GRID_SYSTEM_LEGEND_MANAGE')")
     public ResponseEntity<Void> deleteSettingByKey(@PathVariable String key) {
         service.deleteSetting(key);
         return ResponseEntity.ok().build();

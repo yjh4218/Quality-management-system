@@ -50,7 +50,7 @@ public class ChangeControlController {
     }
 
     @PostMapping("/requests")
-    @PreAuthorize("@perm.can('changeControl', 'CREATE') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('changeControl', 'CREATE') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<ChangeRequestResponse> createChangeRequest(
             @Valid @RequestBody ChangeRequestRequest request,
             Authentication authentication) {
@@ -59,7 +59,7 @@ public class ChangeControlController {
     }
 
     @PutMapping("/requests/{id}")
-    @PreAuthorize("@perm.can('changeControl', 'EDIT') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('changeControl', 'EDIT') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<ChangeRequestResponse> updateChangeRequest(
             @PathVariable Long id,
             @Valid @RequestBody ChangeRequestRequest request,
@@ -69,7 +69,7 @@ public class ChangeControlController {
     }
 
     @DeleteMapping("/requests/{id}")
-    @PreAuthorize("@perm.can('changeControl', 'DELETE') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('changeControl', 'DELETE') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<Void> deleteChangeRequest(
             @PathVariable Long id,
             Authentication authentication) {
@@ -79,7 +79,7 @@ public class ChangeControlController {
     }
 
     @PostMapping("/requests/{id}/transition")
-    @PreAuthorize("@perm.can('changeControl', 'EDIT') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('changeControl', 'EDIT') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<ChangeRequestResponse> transitionStatus(
             @PathVariable Long id,
             @RequestParam ChangeStatus nextStatus,
@@ -93,7 +93,7 @@ public class ChangeControlController {
     // =========================================================================
 
     @PostMapping("/requests/{id}/ccb-review")
-    @PreAuthorize("@perm.can('changeControl', 'EDIT') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('changeControl', 'EDIT') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<ChangeRequestResponse> reviewCcb(
             @PathVariable Long id,
             @Valid @RequestBody CcbReviewRequest request,
@@ -103,7 +103,7 @@ public class ChangeControlController {
     }
 
     @PostMapping("/requests/{id}/effectiveness")
-    @PreAuthorize("@perm.can('changeControl', 'EDIT') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('changeControl', 'EDIT') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<ChangeRequestResponse> evaluateEffectiveness(
             @PathVariable Long id,
             @Valid @RequestBody ChangeEffectivenessRequest request,
@@ -123,7 +123,7 @@ public class ChangeControlController {
     }
 
     @PostMapping("/requests/{id}/action-items")
-    @PreAuthorize("@perm.can('changeControl', 'CREATE') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('changeControl', 'CREATE') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<ChangeActionItemResponse> addActionItem(
             @PathVariable Long id,
             @Valid @RequestBody ChangeActionItemRequest request,
@@ -133,7 +133,7 @@ public class ChangeControlController {
     }
 
     @PutMapping("/requests/{id}/action-items/{itemId}")
-    @PreAuthorize("@perm.can('changeControl', 'EDIT') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('changeControl', 'EDIT') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<ChangeActionItemResponse> updateActionItem(
             @PathVariable Long id,
             @PathVariable Long itemId,
@@ -144,7 +144,7 @@ public class ChangeControlController {
     }
 
     @DeleteMapping("/requests/{id}/action-items/{itemId}")
-    @PreAuthorize("@perm.can('changeControl', 'DELETE') or hasRole('ADMIN')")
+    @PreAuthorize("@perm.can('changeControl', 'DELETE') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<Void> deleteActionItem(
             @PathVariable Long id,
             @PathVariable Long itemId,

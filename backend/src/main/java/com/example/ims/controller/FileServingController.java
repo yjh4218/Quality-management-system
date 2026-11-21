@@ -61,8 +61,9 @@ public class FileServingController {
             } catch (Exception ignored) {}
         }
 
-        // 보안: Path Traversal 차단
-        if (relativePath.contains("..")) {
+        // 보안: Path Traversal 및 비인가 경로 이탈 엄격 차단
+        Path normalizedCheck = Paths.get(relativePath).normalize();
+        if (relativePath.contains("..") || normalizedCheck.startsWith("..") || normalizedCheck.isAbsolute()) {
             log.warn("[SECURITY] Path traversal blocked: {}", relativePath);
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }

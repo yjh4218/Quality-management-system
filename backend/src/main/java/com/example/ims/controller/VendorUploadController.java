@@ -24,6 +24,13 @@ public class VendorUploadController {
 
     private static final Logger log = LoggerFactory.getLogger(VendorUploadController.class);
 
+    private static final java.util.Set<String> ALLOWED_EXTENSIONS = java.util.Set.of(
+            ".pdf", ".xlsx", ".xls", ".doc", ".docx", ".hwp", ".jpg", ".jpeg", ".png", ".webp"
+    );
+    private static final java.util.Set<String> BLOCKED_EXTENSIONS = java.util.Set.of(
+            ".jsp", ".sh", ".exe", ".html", ".htm", ".js", ".bat", ".cmd", ".php"
+    );
+
     private final DocumentRequestService requestService;
     private final FileStorageService fileStorageService;
 
@@ -90,6 +97,21 @@ public class VendorUploadController {
     ) {
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().body("{\"message\": \"업로드할 파일이 비어 있습니다.\"}");
+        }
+
+        String originalFilename = file.getOriginalFilename();
+        if (originalFilename != null) {
+            String lowerName = originalFilename.toLowerCase();
+            if (BLOCKED_EXTENSIONS.stream().anyMatch(lowerName::endsWith)) {
+                log.warn("[SECURITY] Blocked malicious vendor upload attempt: {}", originalFilename);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body("{\"error\": \"Security Block\", \"message\": \"실행 파일 및 스크립트(.exe, .sh, .html, .jsp 등)는 업로드할 수 없습니다.\"}");
+            }
+            if (ALLOWED_EXTENSIONS.stream().noneMatch(lowerName::endsWith)) {
+                log.warn("[SECURITY] Unallowed file extension in vendor upload: {}", originalFilename);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body("{\"error\": \"Invalid Extension\", \"message\": \"허용된 파일 확장자(PDF, Excel, Word, HWP, 이미지)만 업로드 가능합니다.\"}");
+            }
         }
 
         try {

@@ -92,6 +92,7 @@ public class PackagingSpecificationController {
     }
 
     @PostMapping
+    @org.springframework.transaction.annotation.Transactional
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MENU_PRODUCTS_EDIT') or hasAuthority('MENU_PACKAGING_EDIT')")
     public ResponseEntity<PackagingSpecification> saveSpec(@jakarta.validation.Valid @RequestBody PackagingSpecification spec,
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -285,6 +286,7 @@ public class PackagingSpecificationController {
     }
 
     @PostMapping("/{specId}/method-images/batch-upload")
+    @org.springframework.transaction.annotation.Transactional
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MENU_PRODUCTS_EDIT') or hasAuthority('MENU_PACKAGING_EDIT')")
     public ResponseEntity<List<com.example.ims.entity.PackagingMethodImage>> batchUploadMethodImages(
             @PathVariable Long specId,
@@ -351,7 +353,7 @@ public class PackagingSpecificationController {
                 String storedFileName = fileStorageService.storeFile(file, com.example.ims.util.UploadType.GENERAL, "pkg_method");
                 String fileUrl = "/uploads/" + storedFileName;
 
-                String currentUsername = "admin";
+                String currentUsername = "system";
                 org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
                 if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
                     currentUsername = auth.getName();
@@ -424,17 +426,21 @@ public class PackagingSpecificationController {
     }
 
     @PostMapping("/{targetSpecId}/method-images/copy-from/{sourceSpecId}")
+    @org.springframework.transaction.annotation.Transactional
     @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY', 'QUALITY_TEAM', 'RESPONSIBLE_SALES', 'USER') or hasAuthority('MENU_PRODUCTS_EDIT') or hasAuthority('MENU_PACKAGING_EDIT')")
     public ResponseEntity<List<com.example.ims.entity.PackagingMethodImage>> copyFromMasterSpec(
             @PathVariable Long targetSpecId,
             @PathVariable Long sourceSpecId) {
         log.info(">>>> [METHOD-IMAGES] COPY-FROM-MASTER targetSpecId={}, sourceSpecId={}", targetSpecId, sourceSpecId);
+        if (targetSpecId.equals(sourceSpecId)) {
+            throw new IllegalArgumentException("동일한 포장사양서로는 복사할 수 없습니다.");
+        }
         List<com.example.ims.entity.PackagingMethodImage> sourceImages = methodImageRepository.findActiveBySpecId(sourceSpecId);
         if (sourceImages.isEmpty()) {
             return ResponseEntity.ok(java.util.Collections.emptyList());
         }
 
-        String currentUsername = "admin";
+        String currentUsername = "system";
         org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
             currentUsername = auth.getName();

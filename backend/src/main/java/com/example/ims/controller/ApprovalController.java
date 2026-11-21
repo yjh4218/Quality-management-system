@@ -1,5 +1,6 @@
 package com.example.ims.controller;
 
+import com.example.ims.config.RoleConstants;
 import com.example.ims.dto.*;
 import com.example.ims.entity.ApprovalDocument;
 import com.example.ims.repository.ApprovalDocumentRepository;
@@ -22,7 +23,7 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/approvals")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("!hasRole('MANUFACTURER')")
+@PreAuthorize("!hasRole(T(com.example.ims.config.RoleConstants).MANUFACTURER_NAME)")
 public class ApprovalController {
 
     private final ApprovalService approvalService;

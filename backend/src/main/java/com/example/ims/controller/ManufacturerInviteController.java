@@ -1,5 +1,6 @@
 package com.example.ims.controller;
 
+import com.example.ims.config.RoleConstants;
 import com.example.ims.dto.ApiResponse;
 import com.example.ims.entity.ManufacturerInviteToken;
 import com.example.ims.service.ManufacturerInviteService;
@@ -19,7 +20,7 @@ public class ManufacturerInviteController {
     private final ManufacturerInviteService inviteService;
 
     @PostMapping("/{id}/invite")
-    @PreAuthorize("hasAnyRole('ADMIN', 'QUALITY')")
+    @PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME) or hasRole(T(com.example.ims.config.RoleConstants).QUALITY_NAME)")
     public ResponseEntity<ApiResponse<Map<String, Object>>> createInvite(
             @PathVariable Long id,
             Authentication authentication) {

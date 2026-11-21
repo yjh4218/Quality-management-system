@@ -1,5 +1,6 @@
 package com.example.ims.controller;
 
+import com.example.ims.config.RoleConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
@@ -23,7 +24,8 @@ import java.util.Map;
 @RequestMapping("/api/internal")
 @RequiredArgsConstructor
 @Slf4j
-@PreAuthorize("hasRole('ADMIN')") // 클래스 레벨 권한 통제
+@Profile({"local", "dev"})
+@PreAuthorize("hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)") // 클래스 레벨 권한 통제 (운영 환경 노출 차단)
 public class InternalDebugController {
 
     private final JdbcTemplate jdbcTemplate;

@@ -21,6 +21,7 @@ public interface ClaimRepository extends JpaRepository<Claim, Long>, JpaSpecific
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"claimPhotos"})
     java.util.Optional<Claim> findByClaimNumber(String claimNumber);
     long countByReceiptDate(LocalDate date);
+    long countBySharedWithManufacturerTrue();
 
     // [신규] 제조사 품질 답변 완료 알림용
     List<Claim> findTop50ByMfrTerminationDateAfterOrderByMfrTerminationDateDesc(LocalDate date);

@@ -124,7 +124,7 @@ public class PerformanceLoggingFilter implements Filter {
                 log.debug("⚡ [PERF] [CID: {}] {} {} took {}ms (status: {}) | User: {}",
                         finalCorrelationId, method, fullPath, durationMs, httpResponse.getStatus(), username);
             }
-            org.slf4j.MDC.remove("correlationId");
+            org.slf4j.MDC.clear();
         }
     }
 
