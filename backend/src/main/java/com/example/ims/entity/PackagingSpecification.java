@@ -40,7 +40,7 @@ public class PackagingSpecification {
     private String approvalChainJson;   // 결재 라인 정보 (JSON String: 기획/디자인/구매/품질 + 검토일)
 
     // --- 개정 내역 및 구성품 리스트는 1:N 연관 엔티티로 분리 (bomItems는 하위 호환용으로 유지) ---
-    @OneToMany(mappedBy = "packagingSpec", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "packagingSpec", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private java.util.List<PackagingSpecBomItem> bomItems = new java.util.ArrayList<>();
 

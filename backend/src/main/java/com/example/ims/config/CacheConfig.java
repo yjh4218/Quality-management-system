@@ -67,6 +67,29 @@ public class CacheConfig {
                 .recordStats()
                 .build());
 
+        // 대시보드 및 통계 전용 격리 캐시 풀 (HF 인메모리 OOM 방지: 최대 100건, 5분)
+        cacheManager.registerCustomCache("dashboard", Caffeine.newBuilder()
+                .initialCapacity(10)
+                .maximumSize(100)
+                .expireAfterWrite(5, TimeUnit.MINUTES)
+                .recordStats()
+                .build());
+
+        cacheManager.registerCustomCache("dashboard_stats", Caffeine.newBuilder()
+                .initialCapacity(10)
+                .maximumSize(100)
+                .expireAfterWrite(5, TimeUnit.MINUTES)
+                .recordStats()
+                .build());
+
+        // LOT PPM 통계 전용 캐시 풀 (최대 100건, 5분)
+        cacheManager.registerCustomCache("lot_ppm_analysis", Caffeine.newBuilder()
+                .initialCapacity(10)
+                .maximumSize(100)
+                .expireAfterWrite(5, TimeUnit.MINUTES)
+                .recordStats()
+                .build());
+
         return cacheManager;
     }
 }

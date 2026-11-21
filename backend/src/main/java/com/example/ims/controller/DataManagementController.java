@@ -20,13 +20,13 @@ public class DataManagementController {
     private final DataManagementService dataManagementService;
 
     @GetMapping
-    @PreAuthorize("@perm.can('trashBin', 'VIEW')")
+    @PreAuthorize("@perm.can('trashBin', 'VIEW') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     public ResponseEntity<List<TrashItemDto>> getTrashItems() {
         return ResponseEntity.ok(dataManagementService.getTrashItems());
     }
 
     @PostMapping("/{type}/{id}/restore")
-    @PreAuthorize("@perm.can('trashBin', 'EDIT')")
+    @PreAuthorize("@perm.can('trashBin', 'EDIT') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public ResponseEntity<?> restoreItem(@PathVariable String type, @PathVariable Long id) {
         try {
@@ -39,9 +39,12 @@ public class DataManagementController {
     }
 
     @DeleteMapping("/{type}/{id}")
-    @PreAuthorize("@perm.can('trashBin', 'DELETE')")
+    @PreAuthorize("@perm.can('trashBin', 'DELETE') or hasRole(T(com.example.ims.config.RoleConstants).ADMIN_NAME)")
     @org.springframework.cache.annotation.CacheEvict(value = {"dashboard", "dashboard_stats"}, allEntries = true)
     public ResponseEntity<?> hardDelete(@PathVariable String type, @PathVariable Long id, java.security.Principal principal) {
+        if (principal == null) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).body(Map.of("error", "인증이 필요합니다."));
+        }
         try {
             dataManagementService.hardDelete(type, id, principal.getName());
             return ResponseEntity.ok(Map.of("message", "항목이 영구적으로 삭제되었습니다."));

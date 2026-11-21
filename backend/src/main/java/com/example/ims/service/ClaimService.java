@@ -351,7 +351,7 @@ public class ClaimService {
 
     @Transactional
     public Claim getClaim(Long id, User user, boolean fromEmail) {
-        Claim claim = claimRepository.findById(id).orElseThrow(() -> new RuntimeException("Claim not found"));
+        Claim claim = claimRepository.findById(id).orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("Claim not found with id: " + id));
 
         boolean isManufacturer = user.getRole() != null && (user.getRole().equals("ROLE_MANUFACTURER") || user.getRole().equals("MANUFACTURER"));
         if (isManufacturer) {

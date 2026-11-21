@@ -234,5 +234,12 @@ public class PasswordResetService {
         }
         return phone;
     }
+
+    @org.springframework.scheduling.annotation.Scheduled(fixedRate = 300000)
+    public void cleanupExpiredSessions() {
+        Instant now = Instant.now();
+        codeSessions.entrySet().removeIf(entry -> now.isAfter(entry.getValue().expiresAt()));
+        resetTokenSessions.entrySet().removeIf(entry -> now.isAfter(entry.getValue().expiresAt()));
+    }
 }
 

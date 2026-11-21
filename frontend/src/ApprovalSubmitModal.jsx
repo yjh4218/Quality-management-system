@@ -268,6 +268,10 @@ const ApprovalSubmitModal = ({
             showAlert?.("결재 문서 제목을 입력해 주세요.");
             return;
         }
+        if (!approverList || approverList.length === 0) {
+            showAlert?.("결재선을 지정해 주세요. 최소 1명 이상의 결재자가 필요합니다.", "warning");
+            return;
+        }
 
         try {
             setSubmitting(true);
@@ -299,6 +303,10 @@ const ApprovalSubmitModal = ({
     const handleResubmit = async () => {
         if (!title?.trim()) {
             showAlert?.("결재 문서 제목을 입력해 주세요.");
+            return;
+        }
+        if (!approverList || approverList.length === 0) {
+            showAlert?.("결재선을 지정해 주세요. 최소 1명 이상의 결재자가 필요합니다.", "warning");
             return;
         }
         if (!detail?.id) return;
