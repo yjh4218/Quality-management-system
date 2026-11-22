@@ -256,6 +256,44 @@ public class AuthService {
     }
 
     /**
+     * 사용자 본인 비밀번호 변경 (임시 비밀번호 필수 변경 또는 일반 변경)
+     */
+    @Transactional
+    public void changePassword(String username, String currentPassword, String newPassword) {
+        if (newPassword == null || newPassword.isBlank()) {
+            throw new IllegalArgumentException("새 비밀번호를 입력해 주세요.");
+        }
+        validatePasswordComplexity(newPassword);
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+        // 임시 비밀번호 변경이 아닐 경우 기존 비밀번호 일치 여부 확인
+        if (Boolean.FALSE.equals(user.getPasswordResetRequired()) && currentPassword != null && !currentPassword.isBlank()) {
+            if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
+                throw new IllegalArgumentException("현재 비밀번호가 일치하지 않습니다.");
+            }
+        }
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setPasswordResetRequired(false);
+        user.setLocked(false);
+        user.setFailedAttempts(0);
+        userRepository.save(user);
+
+        try {
+            auditLogService.logAction(
+                    username,
+                    "USER_PASSWORD_CHANGE",
+                    "비밀번호 변경",
+                    String.format("사용자 [%s] 비밀번호 변경 완료", username)
+            );
+        } catch (Exception e) {
+            log.warn("감사 로그 적재 실패 (비밀번호 변경): {}", e.getMessage());
+        }
+    }
+
+    /**
      * 비밀번호 복잡도 유효성 검사 (영문, 숫자, 특수기호 포함 8~64자리)
      */
     private void validatePasswordComplexity(String password) {

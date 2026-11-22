@@ -243,4 +243,22 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("비밀번호가 성공적으로 재설정되었습니다.", null));
     }
 
+    /**
+     * 사용자 본인 비밀번호 변경 (임시 비밀번호 또는 일반 비밀번호 변경)
+     */
+    @PostMapping("/change-password")
+    public ResponseEntity<ApiResponse<String>> changePassword(
+            @RequestBody Map<String, String> body,
+            org.springframework.security.core.Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("인증이 필요합니다."));
+        }
+        String currentPassword = body != null ? body.get("currentPassword") : null;
+        String newPassword = body != null ? body.get("newPassword") : null;
+
+        authService.changePassword(authentication.getName(), currentPassword, newPassword);
+        return ResponseEntity.ok(ApiResponse.success("비밀번호가 성공적으로 변경되었습니다.", "SUCCESS"));
+    }
+
 }

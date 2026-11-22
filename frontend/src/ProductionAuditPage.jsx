@@ -413,7 +413,7 @@ const ProductionAuditPage = ({ user, navigationData, onNavigated }) => {
                     </div>
 
                     <div style={{ display: 'flex', gap: '8px' }}>
-                        {isManufacturer && (
+                        {(isManufacturer || isAdmin) && (
                             <button 
                                 className="primary" 
                                 onClick={handleCreateNew} 

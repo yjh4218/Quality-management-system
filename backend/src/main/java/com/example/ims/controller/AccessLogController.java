@@ -28,11 +28,10 @@ public class AccessLogController {
     }
 
     @PostMapping("/page-move")
-    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> logPageMove(@RequestBody Map<String, String> payload, 
                                           Authentication authentication, 
                                           HttpServletRequest request) {
-        if (authentication != null) {
+        if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName())) {
             String username = authentication.getName();
             String pageKey = payload.get("pageKey");
             String pageTitle = payload.get("pageTitle");

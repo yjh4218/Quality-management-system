@@ -267,8 +267,8 @@ const LoginPage = ({ onLoginSuccess }) => {
 
             {/* 커스텀 Alert 모달 */}
             {alertModal.isOpen && (
-                <div style={modalOverlayStyle}>
-                    <div style={modalBoxStyle}>
+                <div className="modal-overlay alert-modal" style={modalOverlayStyle} role="dialog" aria-modal="true">
+                    <div className="modal-box" style={modalBoxStyle}>
                         <p style={{ fontSize: '15px', marginBottom: '20px', color: '#333', fontWeight: '500', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>
                             {alertModal.message}
                         </p>

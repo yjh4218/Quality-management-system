@@ -230,6 +230,7 @@ const ProductionAuditDrawer = ({ audit, onClose, user, onSaveSuccess }) => {
     };
 
     const handleSave = async () => {
+        setIsConfirmOpen(false);
         if (!formData.itemCode) {
             toast.error("품목을 선택해주세요.");
             return;

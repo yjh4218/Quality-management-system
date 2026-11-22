@@ -1435,7 +1435,11 @@ const MedicalDeviceManagementPage = ({ user, onNavigate }) => {
             {/* 5. 모달: 신규 등록 및 수정 (96vw x 92vh 최대화 표준) */}
             {/* ================================================================= */}
             {isModalOpen && (
-                <div style={{
+                <div 
+                    className="modal-overlay"
+                    role="dialog"
+                    aria-modal="true"
+                    style={{
                     position: 'fixed',
                     inset: 0,
                     backgroundColor: 'rgba(0, 0, 0, 0.55)',

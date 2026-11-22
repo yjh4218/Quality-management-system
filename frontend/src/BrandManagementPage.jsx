@@ -86,7 +86,8 @@ const BrandManagementPage = ({ user, onNavigate }) => {
             toast.success("브랜드가 삭제되었습니다.");
             fetchBrands();
         } catch (error) {
-            toast.error("삭제 실패: 사용 중인 데이터가 존재할 수 있습니다.");
+            const serverMsg = error.response?.data?.message || (typeof error.response?.data === 'string' ? error.response?.data : null);
+            toast.error(serverMsg || "삭제 실패: 사용 중인 데이터가 존재할 수 있습니다.");
         }
     };
 

@@ -26,7 +26,8 @@ const ChangePasswordModal = ({ isOpen, onClose, isForced = false }) => {
             alert("비밀번호가 성공적으로 변경되었습니다.");
             onClose();
         } catch (err) {
-            alert(err.response?.data || "비밀번호 변경 중 오류가 발생했습니다.");
+            const errorMsg = err.response?.data?.message || (typeof err.response?.data === 'string' ? err.response?.data : null) || "비밀번호 변경 중 오류가 발생했습니다.";
+            alert(errorMsg);
         } finally {
             setLoading(false);
         }

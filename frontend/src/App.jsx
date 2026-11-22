@@ -106,6 +106,7 @@ import ApprovalNotificationRulesPage from './ApprovalNotificationRulesPage.jsx';
 const PAGE_INFO = {
     dashboard: { title: '📊 시스템 대시보드' },
     notifications: { title: '🔔 수신 알림 확인' },
+    notificationSettings: { title: '🔔 알림 설정 관리' },
     users: { title: '👥 사용자 승인 관리' },
     logs: { title: '📜 시스템 변경 이력' },
     roles: { title: '🔐 권한 관리' },
@@ -1196,7 +1197,7 @@ const App = () => {
             pageTitle = page;
         }
         
-        const MAX_TABS = 12;
+        const MAX_TABS = 25;
         let canActivate = true;
         setTabs(prev => {
             const exists = prev.find(t => t.page === page);
@@ -1233,10 +1234,26 @@ const App = () => {
         });
     };
 
+    const handleNavigateRef = React.useRef(handleNavigate);
+    handleNavigateRef.current = handleNavigate;
+
+    const handleCloseOtherTabsRef = React.useRef(handleCloseOtherTabs);
+    handleCloseOtherTabsRef.current = handleCloseOtherTabs;
+
     useEffect(() => {
-        window.__QMS_NAVIGATE__ = handleNavigate;
+        window.__QMS_NAVIGATE__ = (page, data) => {
+            if (handleNavigateRef.current) {
+                handleNavigateRef.current(page, data);
+            }
+        };
+        window.__QMS_CLOSE_OTHER_TABS__ = (tabId) => {
+            if (handleCloseOtherTabsRef.current) {
+                handleCloseOtherTabsRef.current(tabId);
+            }
+        };
         return () => {
             delete window.__QMS_NAVIGATE__;
+            delete window.__QMS_CLOSE_OTHER_TABS__;
         };
     }, []);
 

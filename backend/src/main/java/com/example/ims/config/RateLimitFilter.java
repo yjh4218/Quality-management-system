@@ -110,9 +110,16 @@ public class RateLimitFilter implements Filter {
             return new BucketLimitConfig("UPLOAD", 10, "파일 업로드 요청 빈도가 너무 높습니다. 1분 뒤에 다시 업로드해 주십시오.");
         }
 
-        // 4. 이메일 발송 엔드포인트: 분당 10회 제한 (Claim 메일 발송 등 포함)
-        if (path.contains("/send-email") || path.contains("/re-request") || path.contains("/mail")) {
+        // 4. 이메일 실제 발송 엔드포인트: 분당 10회 제한 (Claim 메일 발송, 리마인드 등 쓰기 요청)
+        if ((path.contains("/send-email") || path.contains("/re-request") || path.contains("/send-reminder") || path.endsWith("/send") || path.endsWith("/remind"))
+                && "POST".equalsIgnoreCase(method)) {
             return new BucketLimitConfig("EMAIL", 10, "메일 발송 요청 한도를 초과했습니다. 1분 뒤에 다시 시도해 주십시오.");
+        }
+
+        // 4-1. 메일 템플릿/카테고리 수정/삭제: 분당 30회 제한 (설정 쓰기 작업 보호, GET 조회는 제한 분리)
+        if ((path.startsWith("/api/mail-templates") || path.startsWith("/api/mail-categories"))
+                && ("POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method) || "DELETE".equalsIgnoreCase(method))) {
+            return new BucketLimitConfig("MAIL_MUTATION", 30, "메일 설정 변경 요청 빈도가 너무 높습니다. 잠시 후 다시 시도해 주십시오.");
         }
 
         // 5. 버그 리포트 전송 엔드포인트: 분당 10회 제한

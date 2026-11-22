@@ -401,6 +401,13 @@ public class SystemInitializationService {
                 user.setEnabled(true);
                 updated = true;
             }
+            if (Boolean.TRUE.equals(user.getPasswordResetRequired())) {
+                user.setPasswordResetRequired(false);
+                updated = true;
+            }
+            // 테스트 계정 비밀번호 정합성 유지 (8자 이상, 영문+숫자+특수문자 규칙 충족)
+            user.setPassword(passwordEncoder.encode("Qc123456!"));
+            updated = true;
             if (updated) {
                 userRepository.save(user);
                 log.info(">>>> [SYSTEM INIT] Unlocked and refreshed test user '{}'.", username);
@@ -408,13 +415,14 @@ public class SystemInitializationService {
         }, () -> {
             userRepository.save(User.builder()
                     .username(username)
-                    .password(passwordEncoder.encode(username))
+                    .password(passwordEncoder.encode("Qc123456!"))
                     .name(name)
                     .companyName(company)
                     .role(role)
                     .enabled(true)
                     .locked(false)
                     .failedAttempts(0)
+                    .passwordResetRequired(false)
                     .build());
         });
     }
@@ -2082,9 +2090,9 @@ public class SystemInitializationService {
                 Integer.class
             );
             if (docTypesTableExists != null && docTypesTableExists > 0) {
-                // Ensure CLAIM_REPORT is active
+                // Ensure standard approval document types are active
                 try {
-                    jdbcTemplate.update("UPDATE approval_doc_types SET is_active = TRUE WHERE code = 'CLAIM_REPORT' AND is_active = FALSE");
+                    jdbcTemplate.update("UPDATE approval_doc_types SET is_active = TRUE WHERE code IN ('CLAIM_REPORT', 'MARKET_RELEASE', 'PROD_AUDIT', 'MFR_AUDIT', 'GENERAL') AND is_active = FALSE");
                 } catch (Exception ignored) {}
 
                 String[][] defaultDocTypes = {

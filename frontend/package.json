@@ -25,7 +25,9 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@vitejs/plugin-react": "^4.0.0",
+    "playwright": "^1.65.1",
     "vite": "^4.3.9"
   },
   "engines": {
