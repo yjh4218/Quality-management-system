@@ -16,6 +16,7 @@ export class TestWatcher {
         this.apiCallTimestamps = new Map(); // path -> Array<number>
         this.infiniteLoopAlerts = [];
         this.toastErrors = [];
+        this.rateLimit429Errors = [];
         this.ignoredStatusPatterns = options.ignoredStatusPatterns || [];
 
         this._setupWatchers();
@@ -73,6 +74,12 @@ export class TestWatcher {
             }
 
             // Check HTTP status (500+, 429, 404)
+            if (status === 429) {
+                const err429 = { url, status, timestamp: Date.now() };
+                this.rateLimit429Errors.push(err429);
+                console.error('  🚨 [WATCHER:429_RATE_LIMIT_ERROR]', url);
+            }
+
             if (status >= 500 || status === 429 || (status === 404 && url.includes('/api/'))) {
                 const isIgnored = this.ignoredStatusPatterns.some(p => url.includes(p));
                 if (!isIgnored) {

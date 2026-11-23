@@ -349,7 +349,7 @@ const PasswordResetModal = ({ isOpen, onClose, initialUsername = '', onSuccess }
     };
 
     return createPortal(
-        <div style={overlayStyle} onClick={onClose}>
+        <div className="modal-overlay password-reset-modal" style={overlayStyle} onClick={onClose}>
             <div style={modalContainerStyle} onClick={(e) => e.stopPropagation()}>
                 {/* Header */}
                 <div style={headerStyle}>
@@ -376,7 +376,10 @@ const PasswordResetModal = ({ isOpen, onClose, initialUsername = '', onSuccess }
                         </div>
                     </div>
                     <button
+                        type="button"
                         onClick={onClose}
+                        aria-label="닫기"
+                        className="modal-close-btn"
                         style={{
                             background: 'none',
                             border: 'none',

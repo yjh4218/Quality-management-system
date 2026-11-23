@@ -53,6 +53,14 @@ export default function VendorUploadPage({ token: propToken }) {
     const handleFileChange = (e) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
+            const blockedExtensions = ['.exe', '.html', '.htm', '.bat', '.cmd', '.sh', '.js', '.vbs'];
+            const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
+            if (blockedExtensions.includes(ext)) {
+                toast.error(`보안 정책상 ${ext} 확장자 파일은 업로드할 수 없습니다. (허용: PDF, PNG, JPG, DOC)`);
+                e.target.value = '';
+                setSelectedFile(null);
+                return;
+            }
             if (file.size > 20 * 1024 * 1024) {
                 toast.error("파일 크기는 최대 20MB까지 허용됩니다.");
                 return;
@@ -65,6 +73,12 @@ export default function VendorUploadPage({ token: propToken }) {
         e.preventDefault();
         if (!selectedFile) {
             toast.error("제출할 PDF 또는 이미지 파일(PNG/JPG)을 선택해 주십시오.");
+            return;
+        }
+        const blockedExtensions = ['.exe', '.html', '.htm', '.bat', '.cmd', '.sh', '.js', '.vbs'];
+        const ext = '.' + (selectedFile.name.split('.').pop() || '').toLowerCase();
+        if (blockedExtensions.includes(ext)) {
+            toast.error(`보안 정책상 ${ext} 확장자 파일은 업로드할 수 없습니다. (허용: PDF, PNG, JPG, DOC)`);
             return;
         }
         if (!uploaderName.trim()) {

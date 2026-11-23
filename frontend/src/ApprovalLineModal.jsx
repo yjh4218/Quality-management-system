@@ -221,7 +221,7 @@ const ApprovalLineModal = ({
 
     return (
         <div 
-            className="drawer-overlay"
+            className="approval-line-modal-overlay drawer-overlay modal-overlay"
             style={{ zIndex: 10500 }}
         >
             <div 
@@ -245,6 +245,8 @@ const ApprovalLineModal = ({
                         </h3>
                     </div>
                     <button
+                        type="button"
+                        className="line-modal-close-btn"
                         onClick={onClose}
                         style={{ background: 'none', border: 'none', fontSize: '20px', color: '#64748b', cursor: 'pointer' }}
                     >

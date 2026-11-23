@@ -1538,7 +1538,8 @@ function BatchRegistrationModal({ batch, batches, onClose, onSuccess }) {
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }
 
@@ -2138,6 +2139,7 @@ function ExternalSyncTriggerModal({ batches, onClose, onSuccess }) {
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

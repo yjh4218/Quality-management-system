@@ -34,6 +34,7 @@ public class AdminController {
     private final RoleService roleService;
     private final AuditLogService auditLogService;
     private final com.example.ims.service.AuthService authService;
+    private final com.example.ims.service.PermissionService permissionService;
 
     @GetMapping
     @PreAuthorize("@perm.can('users', 'VIEW')")
@@ -69,7 +70,9 @@ public class AdminController {
         return userRepository.findById(id)
                 .map(user -> {
                     user.setEnabled(true);
+                    user.setEmailVerified(true);
                     userRepository.save(user);
+                    permissionService.invalidateCache();
                     
                     if (user.getEmail() != null && !user.getEmail().isBlank()) {
                         mailService.sendApprovalEmail(user.getEmail(), user.getName());
@@ -119,6 +122,7 @@ public class AdminController {
                     String oldRole = user.getRole();
                     user.setRole(newRole);
                     userRepository.save(user);
+                    permissionService.invalidateCache();
 
                     String modifier = (userDetails != null) ? userDetails.getUsername() : "ADMIN";
                     try {
@@ -151,6 +155,7 @@ public class AdminController {
                     }
                     user.setEnabled(!user.isEnabled());
                     userRepository.save(user);
+                    permissionService.invalidateCache();
                     log.info("[ADMIN] User {} status toggled to {}", user.getUsername(), user.isEnabled());
 
                     String modifier = (userDetails != null) ? userDetails.getUsername() : "ADMIN";

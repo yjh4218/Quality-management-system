@@ -9,6 +9,7 @@ import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -30,6 +31,9 @@ import java.util.concurrent.TimeUnit;
 @Order(Ordered.HIGHEST_PRECEDENCE + 1)
 @Slf4j
 public class RateLimitFilter implements Filter {
+
+    @Value("${app.rate-limit.login-per-minute:20}")
+    private int loginLimit;
 
     // IP + Category 기준 Caffeine Cache 버킷
     private final Cache<String, Bucket> buckets = Caffeine.newBuilder()
@@ -99,9 +103,9 @@ public class RateLimitFilter implements Filter {
             return new BucketLimitConfig("VENDOR_UPLOAD", 10, "제조사 서류 제출/조회 요청 한도를 초과했습니다. 1분 뒤 다시 시도해 주십시오.");
         }
 
-        // 2. 로그인 엔드포인트: 분당 5회 제한
+        // 2. 로그인 엔드포인트: 설정값(기본 분당 20회) 제한
         if (path.equals("/api/auth/login") && "POST".equalsIgnoreCase(method)) {
-            return new BucketLimitConfig("LOGIN", 5, "로그인 시도 한도를 초과했습니다. 잠시 후(1분 뒤) 다시 시도해 주십시오.");
+            return new BucketLimitConfig("LOGIN", loginLimit, "로그인 시도 한도를 초과했습니다. 잠시 후(1분 뒤) 다시 시도해 주십시오.");
         }
 
         // 3. 일반 파일 업로드 엔드포인트: 분당 10회 제한

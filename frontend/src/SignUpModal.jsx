@@ -174,6 +174,16 @@ const SignUpModal = ({ isOpen, onClose }) => {
                                     required
                                     autoComplete="new-password"
                                 />
+                                {formData.confirmPassword && (
+                                    <p style={{
+                                        margin: '5px 0 0 0',
+                                        fontSize: '11px',
+                                        color: formData.password === formData.confirmPassword ? '#38a169' : '#e53e3e',
+                                        fontWeight: '600'
+                                    }}>
+                                        {formData.password === formData.confirmPassword ? '✓ 비밀번호가 일치합니다.' : '✗ 비밀번호가 일치하지 않습니다.'}
+                                    </p>
+                                )}
                             </div>
                         </div>
 

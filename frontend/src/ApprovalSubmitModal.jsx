@@ -405,7 +405,7 @@ const ApprovalSubmitModal = ({
     return (
         <>
             <div 
-                className="drawer-overlay"
+                className="drawer-overlay modal-overlay approval-submit-modal"
                 style={{ zIndex: 10050 }}
             >
                 <div 

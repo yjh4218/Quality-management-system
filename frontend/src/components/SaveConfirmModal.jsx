@@ -5,6 +5,7 @@ const SaveConfirmModal = ({ isOpen, onClose, onConfirm, title = "저장 확인",
 
     return (
         <div 
+            className="save-confirm-modal-overlay"
             onClick={e => e.stopPropagation()}
             style={{
                 position: 'fixed',

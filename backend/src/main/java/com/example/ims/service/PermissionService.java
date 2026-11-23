@@ -38,16 +38,13 @@ public class PermissionService {
         String username = auth.getName();
         if ("anonymousUser".equals(username)) return false;
 
-        // Admin checks using Authorities exact match
+        User user = userRepository.findByUsername(username).orElse(null);
+        if (user == null || !user.isEnabled() || user.getRole() == null) return false;
+
+        // Admin checks using Authorities exact match or User.role string
         boolean isAdmin = auth.getAuthorities().stream()
                 .anyMatch(a -> RoleConstants.ADMIN.equals(a.getAuthority()) || RoleConstants.ADMIN_NAME.equals(a.getAuthority()));
-        if (isAdmin) return true;
-
-        User user = userRepository.findByUsername(username).orElse(null);
-        if (user == null || user.getRole() == null) return false;
-
-        // Second check for User.role string
-        if (user.getRole().equals(RoleConstants.ADMIN_NAME) || user.getRole().equals(RoleConstants.ADMIN)) return true;
+        if (isAdmin || user.getRole().equals(RoleConstants.ADMIN_NAME) || user.getRole().equals(RoleConstants.ADMIN)) return true;
 
         String[] roleKeys = user.getRole().split(",");
         for (String key : roleKeys) {

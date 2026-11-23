@@ -571,37 +571,37 @@ export default function OfficialRecordPolicyPage() {
             {/* 6대 KPI 요약 카드 */}
             {/* ========================================================================= */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
-                <div style={{ backgroundColor: '#ffffff', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', borderLeft: '4px solid #2563eb' }}>
+                <div className="kpi-card card" style={{ backgroundColor: '#ffffff', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', borderLeft: '4px solid #2563eb' }}>
                     <div style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>총 전자서명 발행 수</div>
                     <div style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', marginTop: '4px' }}>
                         {kpi.totalSignatures} <span style={{ fontSize: '14px', fontWeight: '500' }}>건</span>
                     </div>
                 </div>
-                <div style={{ backgroundColor: '#ffffff', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', borderLeft: '4px solid #16a34a' }}>
+                <div className="kpi-card card" style={{ backgroundColor: '#ffffff', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', borderLeft: '4px solid #16a34a' }}>
                     <div style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>품질책임자 인가 서명</div>
                     <div style={{ fontSize: '24px', fontWeight: '800', color: '#16a34a', marginTop: '4px' }}>
                         {kpi.qualityAuthoritySignatures} <span style={{ fontSize: '14px', fontWeight: '500' }}>건</span>
                     </div>
                 </div>
-                <div style={{ backgroundColor: '#ffffff', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', borderLeft: '4px solid #7c3aed' }}>
+                <div className="kpi-card card" style={{ backgroundColor: '#ffffff', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', borderLeft: '4px solid #7c3aed' }}>
                     <div style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>21 CFR Part 11 적합률</div>
                     <div style={{ fontSize: '24px', fontWeight: '800', color: '#7c3aed', marginTop: '4px' }}>
                         {kpi.part11ComplianceRate}%
                     </div>
                 </div>
-                <div style={{ backgroundColor: '#ffffff', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', borderLeft: '4px solid #059669' }}>
+                <div className="kpi-card card" style={{ backgroundColor: '#ffffff', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', borderLeft: '4px solid #059669' }}>
                     <div style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>활성 원본 정책 수</div>
                     <div style={{ fontSize: '24px', fontWeight: '800', color: '#059669', marginTop: '4px' }}>
                         {kpi.activePolicies} <span style={{ fontSize: '14px', fontWeight: '500' }}>개 규정</span>
                     </div>
                 </div>
-                <div style={{ backgroundColor: '#ffffff', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', borderLeft: '4px solid #0284c7' }}>
+                <div className="kpi-card card" style={{ backgroundColor: '#ffffff', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', borderLeft: '4px solid #0284c7' }}>
                     <div style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>하이브리드 보존 비율</div>
                     <div style={{ fontSize: '24px', fontWeight: '800', color: '#0284c7', marginTop: '4px' }}>
                         {kpi.hybridPolicyRate}%
                     </div>
                 </div>
-                <div style={{ backgroundColor: '#ffffff', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', borderLeft: '4px solid #d97706' }}>
+                <div className="kpi-card card" style={{ backgroundColor: '#ffffff', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', borderLeft: '4px solid #d97706' }}>
                     <div style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>서명 무결성 검증 유효율</div>
                     <div style={{ fontSize: '24px', fontWeight: '800', color: '#d97706', marginTop: '4px' }}>
                         {kpi.integrityValidRate}%

@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationFailureHandler;
 import org.springframework.stereotype.Component;
@@ -24,11 +25,20 @@ public class CustomAuthenticationFailureHandler extends SimpleUrlAuthenticationF
 
     private final UserRepository userRepository;
 
+    @Value("${app.rate-limit.login-fail-per-ip:10}")
+    private int maxIpFailures;
+
     // IP별 실패 횟수 트래킹 (15분간 보관)
     private final Cache<String, Integer> ipFailureCache = Caffeine.newBuilder()
             .expireAfterWrite(15, TimeUnit.MINUTES)
             .maximumSize(10000)
             .build();
+
+    public void resetFailureCount(String ip) {
+        if (ip != null) {
+            ipFailureCache.invalidate(ip);
+        }
+    }
 
     @Override
     public void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response,
@@ -36,12 +46,12 @@ public class CustomAuthenticationFailureHandler extends SimpleUrlAuthenticationF
         String username = request.getParameter("username");
         String clientIp = getClientIp(request);
 
-        // IP 기반 DoS 방어: 동일 IP 10회 실패 시 계정 잠금 대신 IP 블록 429 응답
+        // IP 기반 DoS 방어: 동일 IP 실패 초과 시 계정 잠금 대신 IP 블록 429 응답
         Integer ipFailures = ipFailureCache.get(clientIp, k -> 0) + 1;
         ipFailureCache.put(clientIp, ipFailures);
 
-        if (ipFailures > 10) {
-            log.warn("IP DoS 감지: IP {}에서 10회 이상 로그인 실패", clientIp);
+        if (ipFailures > maxIpFailures) {
+            log.warn("IP DoS 감지: IP {}에서 {}회 이상 로그인 실패", clientIp, maxIpFailures);
             response.setStatus(429); // Too Many Requests
             response.setContentType("text/plain;charset=UTF-8");
             response.getWriter().write("해당 IP에서 로그인 실패 횟수가 초과되었습니다. 15분 후 다시 시도해 주세요.");

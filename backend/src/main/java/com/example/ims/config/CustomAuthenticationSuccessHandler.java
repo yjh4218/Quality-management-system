@@ -17,11 +17,15 @@ public class CustomAuthenticationSuccessHandler extends SimpleUrlAuthenticationS
 
     private final UserRepository userRepository;
     private final com.example.ims.service.AccessLogService accessLogService;
+    private final CustomAuthenticationFailureHandler failureHandler;
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
             Authentication authentication) throws IOException, ServletException {
         String username = authentication.getName();
+        String clientIp = getClientIp(request);
+        failureHandler.resetFailureCount(clientIp);
+
         userRepository.findByUsername(username).ifPresent(user -> {
             user.setFailedAttempts(0);
             user.setLastLogin(java.time.LocalDateTime.now()); // Update last login
@@ -32,5 +36,13 @@ public class CustomAuthenticationSuccessHandler extends SimpleUrlAuthenticationS
 
         response.setStatus(HttpServletResponse.SC_OK);
         response.getWriter().write("Login successful");
+    }
+
+    private String getClientIp(HttpServletRequest request) {
+        String xf = request.getHeader("X-Forwarded-For");
+        if (xf != null && !xf.isEmpty()) {
+            return xf.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }
